@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Upload Data</title>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #28a745;
+            --bg-color: #f8f9fa;
+            --card-bg: #ffffff;
+            --text-color: #343a40;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            --border-radius: 8px;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px; /* Lebar lebih kecil untuk halaman admin */
+            background-color: var(--card-bg);
+            padding: 30px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+
+        h2 {
+            color: var(--primary-color);
+            text-align: center;
+            margin-bottom: 25px;
+            border-bottom: 3px solid #eee;
+            padding-bottom: 10px;
+        }
+        
+        .upload-section {
+            border: 1px dashed #ced4da;
+            padding: 20px;
+            border-radius: var(--border-radius);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        /* Tombol & Notifikasi */
+        input[type="file"] { margin-bottom: 10px; }
+        .btn-upload {
+            background-color: var(--secondary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .btn-upload:hover { background-color: #1e7e34; }
+        #uploadStatus { margin-top: 15px; font-weight: 500; }
+        
+        /* Kontrol Header */
+        .header-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .btn-back {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            text-decoration: none;
+            transition: background-color 0.3s;
+        }
+        .btn-logout {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            text-decoration: none;
+            transition: background-color 0.3s;
+        }
+        
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header-controls">
+            <a href="{{ url_for('index') }}" class="btn-back">← Kembali ke Pencarian</a>
+            <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
+        </div>
+        
+        <h2>Admin: Unggah & Perbarui Data</h2>
+        
+        <div class="upload-section">
+            <h3>Perbarui Data Tagihan</h3>
+            <p>Unggah file CSV, XLSX, atau XLS baru Anda di sini. Data lama akan dihapus.</p>
+            <form id="uploadForm" action="{{ url_for('upload_data') }}" method="POST" enctype="multipart/form-data">
+                <input type="file" id="csvFile" name="file" accept=".csv, .xlsx, .xls" required>
+                <button type="submit" class="btn-upload">Upload dan Perbarui Data</button>
+            </form>
+            <div id="uploadStatus"></div>
+        </div>
+    </div>
+
+    <script>
+        const uploadForm = document.getElementById('uploadForm');
+        const uploadStatus = document.getElementById('uploadStatus');
+
+        uploadForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            uploadStatus.innerHTML = '<span style="color: orange;">Memproses... Harap tunggu.</span>';
+
+            try {
+                const response = await fetch('{{ url_for("upload_data") }}', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    uploadStatus.innerHTML = `<span style="color: var(--secondary-color);">✅ ${result.message}</span>`;
+                } else if (response.status === 401) {
+                    window.location.href = '{{ url_for("login") }}'; 
+                } else {
+                    uploadStatus.innerHTML = `<span style="color: #dc3545;">❌ Error: ${result.message}</span>`;
+                }
+            } catch (error) {
+                uploadStatus.innerHTML = `<span style="color: #dc3545;">❌ Gagal terhubung ke server atau terjadi error jaringan.</span>`;
+                console.error('Error:', error);
+            }
+        });
+    </script>
+
+</body>
+</html>
