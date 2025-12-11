@@ -1,196 +1,82 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pencarian Data Dinamis (MongoDB)</title>
+{% extends "base.html" %}
+
+{% block title %}Pencarian Data{% endblock %}
+
+{% block custom_styles %}
+/* Custom CSS Khusus untuk Halaman Pencarian */
+.input-group { 
+    margin-bottom: 20px; 
+    display: flex; 
+    flex-direction: column; 
+}
+label { 
+    font-weight: 600; 
+    margin-bottom: 8px; 
+}
+#nomenInput { 
+    padding: 12px 15px; 
+    border: 1px solid #ced4da; 
+    border-radius: var(--border-radius); /* Menggunakan variabel dari base.html */
+    font-size: 16px; 
+    width: 100%; 
+    box-sizing: border-box; 
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+#nomenInput:focus { 
+    border-color: var(--primary-color); 
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25); 
+    outline: none; 
+}
+
+#hasilPencarian { 
+    margin-top: 30px; 
+    transition: opacity 0.5s ease-in-out; 
+}
+.result-card { 
+    background-color: #f1f8ff; 
+    border-left: 5px solid var(--primary-color); 
+    padding: 15px; 
+    border-radius: var(--border-radius); 
+    margin-bottom: 15px; 
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); 
+}
+/* Grid untuk Detail Data */
+.result-detail { 
+    display: grid; 
+    grid-template-columns: 1fr 2fr; 
+    gap: 5px 15px; 
+    font-size: 15px; 
+}
+.detail-key { 
+    font-weight: 600; 
+    color: var(--text-color); 
+}
+.detail-value {
+    color: #555;
+}
+.no-result { 
+    color: #dc3545; 
+    padding: 15px; 
+    border: 1px dashed #dc3545; 
+    border-radius: var(--border-radius); 
+    text-align: center; 
+}
+{% endblock %}
+
+{% block content %}
+    <h2 style="text-align: left; border-bottom: none; margin-bottom: 20px; color: var(--primary-color);">
+        <i class="fas fa-search" style="margin-right: 10px;"></i> Pencarian Data Pelanggan
+    </h2>
     
-    <style>
-        :root {
-            --primary-color: #007bff;
-            --secondary-color: #28a745;
-            --bg-color: #f8f9fa;
-            --card-bg: #ffffff;
-            --text-color: #343a40;
-            --shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            --border-radius: 8px;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            min-height: 100vh;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 800px;
-            background-color: var(--card-bg);
-            padding: 30px;
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow);
-        }
-
-        h2 {
-            color: var(--primary-color);
-            text-align: center;
-            margin-bottom: 25px;
-            border-bottom: 3px solid #eee;
-            padding-bottom: 10px;
-        }
-        
-        .upload-section { 
-            border: 1px dashed #ced4da;
-            padding: 20px;
-            border-radius: var(--border-radius);
-            margin-bottom: 30px;
-            text-align: center;
-        }
-
-        /* Tombol & Input */
-        input[type="file"] { margin-bottom: 10px; }
-        .btn-upload {
-            background-color: var(--secondary-color);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: var(--border-radius);
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        .btn-upload:hover { background-color: #1e7e34; }
-        #uploadStatus { margin-top: 15px; font-weight: 500; }
-
-        .input-group {
-            margin-bottom: 20px;
-            display: flex;
-            flex-direction: column;
-        }
-        label {
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: var(--text-color);
-        }
-        #nomenInput {
-            padding: 12px 15px;
-            border: 1px solid #ced4da;
-            border-radius: var(--border-radius);
-            font-size: 16px;
-            transition: border-color 0.3s, box-shadow 0.3s;
-            width: 100%;
-            box-sizing: border-box;
-        }
-        #nomenInput:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
-            outline: none;
-        }
-        
-        /* Kartu Hasil Dinamis */
-        #hasilPencarian { margin-top: 30px; transition: opacity 0.5s ease-in-out; }
-        
-        .result-card {
-            background-color: #f1f8ff; 
-            border-left: 5px solid var(--primary-color);
-            padding: 15px;
-            border-radius: var(--border-radius);
-            margin-bottom: 15px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-            animation: fadeIn 0.5s ease-out;
-        }
-        
-        /* Grid untuk Detail Data */
-        .result-detail {
-            display: grid;
-            grid-template-columns: 1fr 2fr;
-            gap: 5px 15px;
-            font-size: 15px;
-        }
-        .detail-key { font-weight: 600; color: var(--text-color); }
-        .detail-value { color: #555; }
-
-        .no-result {
-            color: #dc3545;
-            padding: 15px;
-            border: 1px dashed #dc3545;
-            border-radius: var(--border-radius);
-            text-align: center;
-            font-weight: 500;
-            animation: bounceIn 0.5s ease-out;
-        }
-
-        /* Keyframes untuk Animasi Dinamis */
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes bounceIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
-        
-        /* Header dan Kontrol Logout */
-        .header-controls {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        .btn-logout {
-            background-color: #dc3545;
-            color: white;
-            border: none;
-            padding: 8px 15px;
-            border-radius: 4px;
-            text-decoration: none;
-            transition: background-color 0.3s;
-        }
-        .btn-logout:hover { background-color: #c82333; }
-        .alert-success {
-            background-color: #d4edda;
-            color: #155724;
-            padding: 10px;
-            margin-bottom: 15px;
-            border-radius: 4px;
-            text-align: center;
-        }
-    </style>
-</head>
-<body>
-
-    <div class="container">
-        <div class="header-controls">
-            <h2 style="margin: 0;">Pencarian Data Dinamis</h2>
-            
-            {% if current_user.is_admin %} 
-                <a href="{{ url_for('admin_upload_page') }}" class="btn-upload" style="margin-right: 10px;">Admin Upload</a>
-            {% endif %}
-            
-            <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
-        </div>
-        
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    {% if category == 'success' %}
-                        <div class="alert-success">{{ message }}</div>
-                    {% else %}
-                        <div class="no-result" style="color: #856404; background-color: #fff3cd; border-color: #ffeeba;">{{ message }}</div>
-                    {% endif %}
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-
-        <hr style="border: 0; border-top: 1px solid #eee; margin: 25px 0;">
-        
-        <div class="input-group">
-            <label for="nomenInput">Masukkan NOMEN (ID Pelanggan):</label>
-            <input type="text" id="nomenInput" placeholder="Ketik NOMEN di sini, misalnya: 60139500">
-        </div>
-        
-        <div id="hasilPencarian">
-            <p style="color: gray; text-align: center;">Mulai mengetik NOMEN.</p>
-        </div>
+    <div class="input-group">
+        <label for="nomenInput">Masukkan NOMEN (ID Pelanggan):</label>
+        <input type="text" id="nomenInput" placeholder="Ketik NOMEN di sini, misalnya: 60139500">
+    </div>
+    
+    <hr style="border: 0; border-top: 1px solid #eee; margin: 25px 0;">
+    
+    <div id="hasilPencarian">
+        <p style="color: gray; text-align: center;">Mulai mengetik NOMEN.</p>
     </div>
 
     <script>
@@ -213,6 +99,7 @@
                 const hasilFilter = await response.json();
                 
                 if (response.status === 401) {
+                    // Jika sesi habis
                     window.location.href = '/login'; 
                     return;
                 }
@@ -261,6 +148,4 @@
 
         inputElement.addEventListener('input', cariDataNomen);
     </script>
-
-</body>
-</html>
+{% endblock %}
