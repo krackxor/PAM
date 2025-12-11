@@ -60,7 +60,7 @@
 }
 .btn-upload-append:hover { background-color: #1e7e34; }
 
-#uploadStatusMC, #uploadStatusMB, #uploadStatusCID, #uploadStatusSBRS { margin-top: 15px; font-weight: 500; }
+#uploadStatusMC, #uploadStatusMB, #uploadStatusCID, #uploadStatusSBRS, #uploadStatusARDEBT { margin-top: 15px; font-weight: 500; }
 
 input[type="file"] {
     display: block;
@@ -97,6 +97,9 @@ input[type="file"] {
         </button>
         <button class="tab-button" onclick="showTab('sbrs')" id="tab-sbrs">
             <i class="fas fa-tachometer-alt"></i> SBRS (Baca Meter)
+        </button>
+        <button class="tab-button" onclick="showTab('ardebt')" id="tab-ardebt">
+            <i class="fas fa-file-invoice-dollar"></i> ARDEBT (Tunggakan)
         </button>
     </div>
 
@@ -149,6 +152,19 @@ input[type="file"] {
             <div id="uploadStatusSBRS"></div>
         </div>
     </div>
+    
+    <div id="content-ardebt" class="tab-content" style="display: none;">
+        <div class="upload-section" style="border: 1px dashed #dc3545;">
+            <h3>ARDEBT: DETAIL TUNGGAKAN (REPLACE)</h3>
+            <p style="font-weight: bold; color: #dc3545;">MENGHAPUS SEMUA DATA LAMA di koleksi AccountReceivable (ARDEBT).</p>
+            <p style="font-size: 0.9em; color: #666;">Data ini idealnya di-*upload* per periode (misal: akhir bulan).</p>
+            <form id="uploadFormARDEBT" action="{{ url_for('upload_ardebt_data') }}" method="POST" enctype="multipart/form-data">
+                <input type="file" id="csvFileARDEBT" name="file" accept=".csv, .xlsx, .xls" required>
+                <button type="submit" class="btn-upload-replace">HAPUS & GANTI DATA ARDEBT</button>
+            </form>
+            <div id="uploadStatusARDEBT"></div>
+        </div>
+    </div>
 
 
     <script>
@@ -156,11 +172,13 @@ input[type="file"] {
         const formMB = document.getElementById('uploadFormMB');
         const formCID = document.getElementById('uploadFormCID');
         const formSBRS = document.getElementById('uploadFormSBRS');
+        const formARDEBT = document.getElementById('uploadFormARDEBT');
 
         const statusMC = document.getElementById('uploadStatusMC');
         const statusMB = document.getElementById('uploadStatusMB');
         const statusCID = document.getElementById('uploadStatusCID');
         const statusSBRS = document.getElementById('uploadStatusSBRS');
+        const statusARDEBT = document.getElementById('uploadStatusARDEBT');
 
         function showTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(div => div.style.display = 'none');
@@ -202,6 +220,8 @@ input[type="file"] {
         formMB.addEventListener('submit', (e) => handleUpload(e, formMB, statusMB, 'var(--secondary-color)'));
         formCID.addEventListener('submit', (e) => handleUpload(e, formCID, statusCID, 'var(--secondary-color)'));
         formSBRS.addEventListener('submit', (e) => handleUpload(e, formSBRS, statusSBRS, 'var(--secondary-color)'));
+        formARDEBT.addEventListener('submit', (e) => handleUpload(e, formARDEBT, statusARDEBT, 'var(--secondary-color)'));
+
         
         // Tampilkan tab MC saat pertama kali dimuat
         document.addEventListener('DOMContentLoaded', () => {
