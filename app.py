@@ -154,32 +154,35 @@ def search_nomen():
     try:
         print(f"DEBUG: Mencari NOMEN dari input: '{query_nomen}'")
         
-        # 1. DATA STATIS (CID) - Master Data Pelanggan (Wajib ada)
-        cid_result = collection_cid.find_one({'NOMEN': query_nomen})
-        
-        if not cid_result:
-            print(f"DEBUG: GAGAL! NOMEN '{query_nomen}' TIDAK DITEMUKAN di koleksi CID.")
+        # 1. PERUBAHAN: CEK KEBERADAAN (GATEKEEPER) DARI MC (Master Cetak)
+        mc_check_result = collection_mc.find_one({'NOMEN': query_nomen})
+
+        if not mc_check_result:
+            print(f"DEBUG: GAGAL! NOMEN '{query_nomen}' TIDAK DITEMUKAN di koleksi MC (Bukan pelanggan dengan tagihan aktif).")
             return jsonify({
                 "status": "not_found",
-                "message": f"NOMEN {query_nomen} tidak ditemukan di Master Data Pelanggan (CID)."
+                "message": f"NOMEN {query_nomen} tidak ditemukan di Master Cetak (MC). Pencarian hanya mencakup pelanggan dengan tagihan bulan berjalan."
             }), 404
 
-        print(f"DEBUG: SUKSES! CID ditemukan untuk NOMEN: '{query_nomen}'. Melanjutkan pencarian data terintegrasi.")
-
-        # 2. PIUTANG BERJALAN (MC) - Snapshot Bulan Ini
+        print(f"DEBUG: SUKSES! MC ditemukan untuk NOMEN: '{query_nomen}'. Melanjutkan pencarian data terintegrasi.")
+        
+        # 2. DATA STATIS (CID) - DICARI SEKUNDER UNTUK DETAIL NAMA/ALAMAT
+        cid_result = collection_cid.find_one({'NOMEN': query_nomen})
+        
+        # 3. PIUTANG BERJALAN (MC) - Snapshot Bulan Ini
         mc_results = list(collection_mc.find({'NOMEN': query_nomen}))
         piutang_nominal_total = sum(item.get('NOMINAL', 0) for item in mc_results)
         
-        # 3. TUNGGAKAN DETAIL (ARDEBT)
+        # 4. TUNGGAKAN DETAIL (ARDEBT)
         ardebt_results = list(collection_ardebt.find({'NOMEN': query_nomen}))
         tunggakan_nominal_total = sum(item.get('JUMLAH', 0) for item in ardebt_results)
         
-        # 4. RIWAYAT PEMBAYARAN TERAKHIR (MB)
+        # 5. RIWAYAT PEMBAYARAN TERAKHIR (MB)
         mb_last_payment_cursor = collection_mb.find({'NOMEN': query_nomen}).sort('TGL_BAYAR', -1).limit(1)
         mb_payments = list(mb_last_payment_cursor)
         last_payment = mb_payments[0] if mb_payments else None
         
-        # 5. RIWAYAT BACA METER (SBRS)
+        # 6. RIWAYAT BACA METER (SBRS)
         sbrs_last_read_cursor = collection_sbrs.find({'CMR_ACCOUNT': query_nomen}).sort('CMR_RD_DATE', -1).limit(2)
         sbrs_history = list(sbrs_last_read_cursor)
         
@@ -212,12 +215,16 @@ def search_nomen():
                 status_pemakaian = f"NORMAL ({kubik_terakhir} m³)"
 
 
+        # Menggunakan data CID jika ditemukan, jika tidak gunakan placeholder sederhana 'N/A'
+        cid_found = cid_result is not None
+        
+        # PERBAIKAN: Mengganti placeholder menjadi 'N/A' saja
         health_summary = {
             "NOMEN": query_nomen,
-            "NAMA": cid_result.get('NAMA', 'N/A'),
-            "ALAMAT": cid_result.get('ALAMAT', 'N/A'),
-            "RAYON": cid_result.get('RAYON', 'N/A'),
-            "TIPE_PLGGN": cid_result.get('TIPEPLGGN', 'N/A'),
+            "NAMA": cid_result.get('NAMA', 'N/A') if cid_found else 'N/A',
+            "ALAMAT": cid_result.get('ALAMAT', 'N/A') if cid_found else 'N/A',
+            "RAYON": cid_result.get('RAYON', 'N/A') if cid_found else 'N/A',
+            "TIPE_PLGGN": cid_result.get('TIPEPLGGN', 'N/A') if cid_found else 'N/A',
             "STATUS_FINANSIAL": status_financial,
             "TOTAL_PIUTANG_NOMINAL": piutang_nominal_total + tunggakan_nominal_total,
             "PEMBAYARAN_TERAKHIR": last_payment_date,
@@ -229,10 +236,13 @@ def search_nomen():
             doc.pop('_id', None)
             return doc
 
+        # Tentukan output CID untuk respons JSON (Menggunakan pesan sederhana)
+        cid_data_response = clean_mongo_id(cid_result) if cid_found else {"message": "Data Master Pelanggan (CID) tidak tersedia."}
+
         return jsonify({
             "status": "success",
             "summary": health_summary,
-            "cid_data": clean_mongo_id(cid_result),
+            "cid_data": cid_data_response,
             "mc_data": [clean_mongo_id(doc) for doc in mc_results],
             "ardebt_data": [clean_mongo_id(doc) for doc in ardebt_results],
             "sbrs_data": [clean_mongo_id(doc) for doc in sbrs_history]
@@ -286,7 +296,6 @@ def collection_report_api():
     ]
     ardebt_total = list(collection_ardebt.aggregate(pipeline_ardebt_total))
     
-    # PERBAIKAN TYPO: Mengganti ardeb_total menjadi ardebt_total
     grand_total_debt = ardebt_total[0]['grand_total_debt'] if ardebt_total and ardebt_total[0].get('grand_total_debt') is not None else 0.0
 
     # --- 4. GABUNGKAN DATA DAN HITUNG TOTAL PER RAYON ---
@@ -407,7 +416,7 @@ def analyze_reports_landing():
     """Landing Page untuk Sub-menu Analisis."""
     return render_template('analyze_landing.html', is_admin=current_user.is_admin)
 
-# ENDPOINT BARU: Pemakaian Air Ekstrim (Implementasi Logika)
+# ENDPOINT DENGAN LOGIKA: Pemakaian Air Ekstrim
 @app.route('/analyze/extreme', methods=['GET'])
 @login_required
 def analyze_extreme_usage():
@@ -444,15 +453,14 @@ def api_analyze_extreme_usage():
                 'foreignField': 'NOMEN',
                 'as': 'cid_info'
             }},
-            { '$unwind': '$cid_info' },
+            { '$unwind': { 'path': '$cid_info', 'preserveNullAndEmptyArrays': True } }, # Join CID secara optional
             # 4. Proyeksi output yang bersih
             { '$project': {
                 '_id': 0,
                 'NOMEN': '$_id',
-                'NAMA': '$cid_info.NAMA',
-                'ALAMAT': '$cid_info.ALAMAT',
-                'RAYON': '$cid_info.RAYON',
-                'TIPEPLGGN': '$cid_info.TIPEPLGGN',
+                'NAMA': { '$ifNull': [ '$cid_info.NAMA', 'N/A' ] },
+                'ALAMAT': { '$ifNull': [ '$cid_info.ALAMAT', 'N/A' ] },
+                'RAYON': { '$ifNull': [ '$cid_info.RAYON', 'N/A' ] },
                 'KUBIK_EKSTRIM': '$CMR_KUBIK',
                 'TGL_BACA_TERAKHIR': '$CMR_RD_DATE'
             }},
