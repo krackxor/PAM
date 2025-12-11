@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Sub-Menu Analisis Lanjutan{% endblock %}
+
+{% block custom_styles %}
+/* CSS untuk Grid Kartu Laporan */
+.report-grid-menu {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-top: 30px;
+}
+
+.report-card-link {
+    text-decoration: none;
+    color: inherit;
+}
+
+.report-card {
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: var(--border-radius);
+    padding: 20px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+.report-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 12px rgba(0, 123, 255, 0.2);
+    border-color: var(--primary-color);
+}
+
+.report-card i {
+    font-size: 2.5em;
+    color: var(--primary-color);
+    margin-bottom: 10px;
+}
+
+.report-card h3 {
+    margin: 10px 0 5px 0;
+    color: var(--text-color);
+}
+
+.report-card p {
+    font-size: 0.9em;
+    color: #666;
+}
+
+/* Tombol Analisis Dinamis */
+.btn-dynamic-upload {
+    display: inline-block;
+    background-color: var(--secondary-color);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 4px;
+    text-decoration: none;
+    margin-top: 30px;
+}
+
+@media screen and (max-width: 600px) {
+    .report-grid-menu {
+        grid-template-columns: 1fr; /* Tampilkan satu kolom di mobile */
+    }
+}
+{% endblock %}
+
+{% block content %}
+    <h2 style="text-align: left; border-bottom: none; margin-bottom: 20px; color: var(--primary-color);">
+        <i class="fas fa-chart-line" style="margin-right: 10px;"></i> Sub-Menu Analisis Lanjutan
+    </h2>
+    
+    <p>Silakan pilih jenis laporan anomali yang ingin Anda analisis:</p>
+
+    <div class="report-grid-menu">
+        
+        <a href="{{ url_for('analyze_extreme_usage') }}" class="report-card-link">
+            <div class="report-card">
+                <i class="fas fa-exclamation-triangle" style="color: #ffc107;"></i>
+                <h3>Pemakaian Air Ekstrim</h3>
+                <p>Pelanggan dengan konsumsi air di atas batas normal.</p>
+            </div>
+        </a>
+        
+        <a href="{{ url_for('analyze_reduced_usage') }}" class="report-card-link">
+            <div class="report-card">
+                <i class="fas fa-arrow-down" style="color: #17a2b8;"></i>
+                <h3>Pemakaian Air Turun</h3>
+                <p>Pelanggan yang konsumsinya turun drastis (memerlukan perbandingan periode).</p>
+            </div>
+        </a>
+
+        <a href="{{ url_for('analyze_zero_usage') }}" class="report-card-link">
+            <div class="report-card">
+                <i class="fas fa-circle-notch" style="color: #343a40;"></i>
+                <h3>Tidak Ada Pemakaian (Zero)</h3>
+                <p>Pelanggan dengan pemakaian air nol di periode terakhir.</p>
+            </div>
+        </a>
+        
+        <a href="{{ url_for('analyze_stand_tungggu') }}" class="report-card-link">
+            <div class="report-card">
+                <i class="fas fa-pause-circle" style="color: #6c757d;"></i>
+                <h3>Stand Tunggu</h3>
+                <p>Pelanggan yang berstatus Stand Tunggu (Blokir/Freeze).</p>
+            </div>
+        </a>
+        
+    </div>
+
+    <div style="text-align: center;">
+        <a href="{{ url_for('analyze_data_page') }}" class="btn-dynamic-upload">
+            <i class="fas fa-file-upload"></i> Analisis File Dinamis (Upload Gabungan)
+        </a>
+    </div>
+{% endblock %}
