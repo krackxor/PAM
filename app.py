@@ -30,7 +30,7 @@ client = None
 collection_mc = None
 collection_mb = None
 collection_cid = None
-collection_sbrs = None # BARU: SBRS Meter Reading
+collection_sbrs = None
 
 try:
     client = MongoClient(MONGO_URI)
@@ -43,7 +43,6 @@ try:
     collection_cid = db['CustomerData'] # CID (Data Pelanggan Statis - REPLACE)
     collection_sbrs = db['MeterReading'] # SBRS (Baca Meter Harian/Parsial - APPEND)
     
-    # collection_data di-set ke MasterCetak (MC) untuk kompatibilitas endpoint lama
     collection_data = collection_mc
 
     print("Koneksi MongoDB berhasil!")
@@ -67,6 +66,13 @@ if user_list_str:
             }
         except ValueError as e:
             print(f"Peringatan: Format USER_LIST salah pada entry '{user_entry}'. Error: {e}")
+
+
+# --- KONFIGURASI FLASK-LOGIN ---
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login' 
+login_manager.login_message_category = 'info'
 
 # --- KELAS DAN DEKORATOR TETAP SAMA ---
 class User(UserMixin):
@@ -270,11 +276,10 @@ def analyze_reports_landing():
     """Landing Page untuk Sub-menu Analisis."""
     return render_template('analyze_landing.html', is_admin=current_user.is_admin)
 
-# Endpoint Laporan Anomali
+# Endpoint Laporan Anomali (Placeholder)
 @app.route('/analyze/extreme', methods=['GET'])
 @login_required
 def analyze_extreme_usage():
-    # Placeholder: Logika untuk pemakaian ekstrem
     return render_template('analyze_report_template.html', 
                            title="Pemakaian Air Ekstrim", 
                            description="Menampilkan pelanggan dengan konsumsi air di atas ambang batas (memerlukan join MC, CID, dan SBRS).",
@@ -283,7 +288,6 @@ def analyze_extreme_usage():
 @app.route('/analyze/reduced', methods=['GET'])
 @login_required
 def analyze_reduced_usage():
-    # Placeholder: Logika untuk pemakaian air turun
     return render_template('analyze_report_template.html', 
                            title="Pemakaian Air Turun", 
                            description="Menampilkan pelanggan dengan penurunan konsumsi air signifikan (memerlukan data MC dan SBRS historis).",
@@ -292,7 +296,6 @@ def analyze_reduced_usage():
 @app.route('/analyze/zero', methods=['GET'])
 @login_required
 def analyze_zero_usage():
-    # Placeholder: Logika untuk pemakaian nol
     return render_template('analyze_report_template.html', 
                            title="Tidak Ada Pemakaian (Zero)", 
                            description="Menampilkan pelanggan dengan konsumsi air nol (Zero) di periode tagihan terakhir.",
@@ -301,7 +304,6 @@ def analyze_zero_usage():
 @app.route('/analyze/standby', methods=['GET'])
 @login_required
 def analyze_stand_tungggu():
-    # Placeholder: Logika untuk stand tunggu
     return render_template('analyze_report_template.html', 
                            title="Stand Tunggu", 
                            description="Menampilkan pelanggan yang berstatus Stand Tunggu (Freeze/Blokir).",
