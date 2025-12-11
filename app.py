@@ -10,6 +10,7 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField 
 from wtforms.validators import DataRequired 
 from functools import wraps
+from bson.objectid import ObjectId
 
 load_dotenv() 
 
@@ -38,7 +39,7 @@ except Exception as e:
     print(f"Gagal terhubung ke MongoDB: {e}")
     client = None
 
-# --- PEMROSESAN DAFTAR PENGGUNA DARI .ENV ---
+# --- PEMROSESAN DAFTAR PENGGUNA DARI .ENV (STATIC LOGIN) ---
 STATIC_USERS = {}
 user_list_str = os.getenv("USER_LIST", "")
 
@@ -126,7 +127,135 @@ def logout():
     flash('Anda telah keluar.', 'success')
     return redirect(url_for('login'))
 
-# --- ENDPOINT ANALISIS (SEMUA PENGGUNA) ---
+# --- ENDPOINT KOLEKSI TERPADU (UNIFIED COLLECTION PAGE) ---
+@app.route('/daily_collection', methods=['GET'])
+@login_required 
+def daily_collection_unified_page():
+    """Menampilkan halaman tunggal yang menggabungkan Report dan Detail Koleksi."""
+    return render_template('collection_unified.html', is_admin=current_user.is_admin)
+
+@app.route('/api/collection/report', methods=['GET'])
+@login_required 
+def collection_report_api():
+    """Menghitung Nomen Bayar, Nominal Bayar, Total Nominal, dan Persentase per Rayon/PCEZ."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+
+    # 1. Agregasi Total Piutang (ASUMSI: Semua record adalah piutang)
+    pipeline_billed = [
+        { '$group': {
+            '_id': { 'rayon': '$RAYON', 'pcez': '$PCEZ' },
+            'total_nomen_all': { '$addToSet': '$NOMEN' },
+            'total_nominal': { '$sum': '$NOMINAL' } 
+        }}
+    ]
+    billed_data = list(collection_data.aggregate(pipeline_billed))
+
+    # 2. Agregasi Total Koleksi (Hanya STATUS='Payment')
+    pipeline_collected = [
+        { '$match': { 'STATUS': 'Payment' } }, 
+        { '$group': {
+            '_id': { 'rayon': '$RAYON', 'pcez': '$PCEZ' },
+            'collected_nomen': { '$addToSet': '$NOMEN' }, 
+            'collected_nominal': { '$sum': '$NOMINAL' } 
+        }}
+    ]
+    collected_data = list(collection_data.aggregate(pipeline_collected))
+
+    # 3. Gabungkan hasil Billed dan Collected
+    report_map = {}
+    
+    for item in billed_data:
+        key = (item['_id']['rayon'], item['_id']['pcez'])
+        report_map[key] = {
+            'RAYON': item['_id']['rayon'],
+            'PCEZ': item['_id']['pcez'],
+            'TotalNominal': float(item['total_nominal']),
+            'TotalNomen': len(item['total_nomen_all']),
+            'CollectedNominal': 0.0, 
+            'CollectedNomen': 0, 
+            'PercentNominal': 0.0,
+            'PercentNomenCount': 0.0
+        }
+
+    for item in collected_data:
+        key = (item['_id']['rayon'], item['_id']['pcez'])
+        if key in report_map:
+            report_map[key]['CollectedNominal'] = float(item['collected_nominal'])
+            report_map[key]['CollectedNomen'] = len(item['collected_nomen'])
+            
+            if report_map[key]['TotalNominal'] > 0:
+                report_map[key]['PercentNominal'] = (report_map[key]['CollectedNominal'] / report_map[key]['TotalNominal']) * 100
+            
+            if report_map[key]['TotalNomen'] > 0:
+                report_map[key]['PercentNomenCount'] = (report_map[key]['CollectedNomen'] / report_map[key]['TotalNomen']) * 100
+
+    # 4. Hitung Total Keseluruhan (Grand Total)
+    grand_total = {
+        'TotalNominal': sum(d['TotalNominal'] for d in report_map.values()),
+        'CollectedNominal': sum(d['CollectedNominal'] for d in report_map.values()),
+        'TotalNomen': sum(d['TotalNomen'] for d in report_map.values()),
+        'CollectedNomen': sum(d['CollectedNomen'] for d in report_map.values())
+    }
+    
+    grand_total['PercentNominal'] = (grand_total['CollectedNominal'] / grand_total['TotalNominal']) * 100 if grand_total['TotalNominal'] > 0 else 0
+    grand_total['PercentNomenCount'] = (grand_total['CollectedNomen'] / grand_total['TotalNomen']) * 100 if grand_total['TotalNomen'] > 0 else 0
+
+
+    return jsonify({
+        'report_data': list(report_map.values()),
+        'grand_total': grand_total
+    }), 200
+
+@app.route('/api/collection/detail', methods=['GET'])
+@login_required 
+def collection_detail_api():
+    """Endpoint API untuk mengambil data koleksi yang difilter dan diurutkan."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    query_str = request.args.get('q', '').strip()
+    
+    mongo_query = {'STATUS': 'Payment'}
+    
+    if query_str:
+        search_filter = {
+            '$or': [
+                {'RAYON': {'$regex': query_str, '$options': 'i'}},
+                {'PCEZ': {'$regex': query_str, '$options': 'i'}},
+                {'NOMEN': {'$regex': query_str, '$options': 'i'}}
+            ]
+        }
+        mongo_query.update(search_filter)
+
+    sort_order = [('PAY_DT', -1)] 
+
+    try:
+        results = list(collection_data.find(mongo_query)
+                                      .sort(sort_order)
+                                      .limit(1000))
+
+        cleaned_results = []
+        for doc in results:
+            # Pastikan NOMINAL dikonversi ke float untuk total di frontend
+            nominal_val = float(doc.get('NOMINAL', 0)) 
+            
+            cleaned_results.append({
+                'NOMEN': doc.get('NOMEN'),
+                'RAYON': doc.get('RAYON'),
+                'PCEZ': doc.get('PCEZ'),
+                'NOMINAL': nominal_val,
+                'PAY_DT': doc.get('PAY_DT')
+            })
+            
+        return jsonify(cleaned_results), 200
+
+    except Exception as e:
+        print(f"Error fetching detailed collection data: {e}")
+        return jsonify({"message": f"Gagal mengambil data detail koleksi: {e}"}), 500
+
+
+# --- ENDPOINT ANALISIS DATA DINAMIS (SEMUA PENGGUNA) ---
 @app.route('/analyze_data', methods=['GET'])
 @login_required 
 def analyze_data_page():
@@ -135,57 +264,76 @@ def analyze_data_page():
 @app.route('/api/analyze', methods=['POST'])
 @login_required 
 def analyze_data():
-    """Endpoint untuk mengunggah file dan menjalankan analisis data."""
-    if 'file' not in request.files:
-        return jsonify({"message": "Tidak ada file di permintaan"}), 400
+    """Endpoint untuk mengunggah file jamak, menggabungkannya, dan menjalankan analisis data."""
+    if not request.files:
+        return jsonify({"message": "Tidak ada file yang diunggah."}), 400
 
-    file = request.files['file']
-    filename = secure_filename(file.filename)
-    file_extension = filename.rsplit('.', 1)[1].lower()
-
-    if file.filename == '' or file_extension not in ALLOWED_EXTENSIONS:
-        return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
+    uploaded_files = request.files.getlist('file')
+    all_dfs = []
     
-    try:
-        if file_extension == 'csv':
-            df = pd.read_csv(file) 
-        elif file_extension in ['xlsx', 'xls']:
-            df = pd.read_excel(file, sheet_name=0) 
-        
-        # 1. Analisis Data Dasar
-        data_summary = {
-            "file_name": filename,
-            "row_count": len(df),
-            "column_count": len(df.columns),
-            "columns": df.columns.tolist() 
-        }
+    JOIN_KEY = 'NOMEN' 
+    
+    for file in uploaded_files:
+        filename = secure_filename(file.filename)
+        file_extension = filename.rsplit('.', 1)[1].lower()
 
-        # 2. Statistik Deskriptif
-        descriptive_stats = df.describe(include='all').to_json(orient='index')
-        
-        # 3. Mengirimkan Hasil Analisis
-        return jsonify({
-            "status": "success",
-            "summary": data_summary,
-            "stats": descriptive_stats,
-            "head": df.head().to_html(classes='table table-striped') 
-        }), 200
+        if file_extension not in ALLOWED_EXTENSIONS:
+            continue
 
-    except Exception as e:
-        print(f"Error saat menganalisis file: {e}")
-        return jsonify({"message": f"Gagal menganalisis file: {e}. Pastikan format data bersih."}), 500
+        try:
+            if file_extension == 'csv':
+                df = pd.read_csv(file) 
+            elif file_extension in ['xlsx', 'xls']:
+                df = pd.read_excel(file, sheet_name=0) 
+            
+            df.columns = [col.strip().upper() for col in df.columns]
+            
+            if JOIN_KEY in df.columns:
+                 df[JOIN_KEY] = df[JOIN_KEY].astype(str).str.strip() 
+                 all_dfs.append(df)
+            else:
+                 return jsonify({"message": f"Gagal: File '{filename}' tidak memiliki kolom kunci '{JOIN_KEY}'."}), 400
 
+        except Exception as e:
+            print(f"Error membaca file {filename}: {e}")
+            return jsonify({"message": f"Gagal membaca file {filename}: {e}"}), 500
 
-# --- ENDPOINT ADMIN (Hanya Upload) ---
+    if not all_dfs:
+        return jsonify({"message": "Tidak ada file yang valid untuk digabungkan."}), 400
+
+    merged_df = all_dfs[0]
+    
+    for i in range(1, len(all_dfs)):
+        merged_df = pd.merge(merged_df, all_dfs[i], on=JOIN_KEY, how='outer', suffixes=(f'_f{i}', f'_f{i+1}'))
+
+    # Analisis Data Gabungan
+    data_summary = {
+        "file_name": f"Gabungan ({len(uploaded_files)} files)",
+        "join_key": JOIN_KEY,
+        "row_count": len(merged_df),
+        "column_count": len(merged_df.columns),
+        "columns": merged_df.columns.tolist() 
+    }
+
+    descriptive_stats = merged_df.describe(include='all').to_json(orient='index')
+    
+    return jsonify({
+        "status": "success",
+        "summary": data_summary,
+        "stats": descriptive_stats,
+        "head": merged_df.head().to_html(classes='table table-striped') 
+    }), 200
+
+# --- ENDPOINT ADMIN & UTAMA ---
 @app.route('/admin/upload', methods=['GET'])
 @login_required 
-@admin_required # HANYA ADMIN YANG BISA
+@admin_required 
 def admin_upload_page():
     return render_template('upload_admin.html', is_admin=current_user.is_admin)
 
 @app.route('/upload', methods=['POST'])
 @login_required 
-@admin_required # HANYA ADMIN YANG BISA
+@admin_required 
 def upload_data():
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
@@ -228,7 +376,6 @@ def upload_data():
         print(f"Error saat memproses file: {e}")
         return jsonify({"message": f"Gagal memproses file: {e}. Pastikan format data benar dan kolom tersedia."}), 500
 
-# --- ENDPOINT APLIKASI UTAMA (DILINDUNGI) ---
 @app.route('/')
 @login_required 
 def index():
@@ -248,7 +395,7 @@ def search_nomen():
     try:
         mongo_query = { NOME_COLUMN_NAME: query_nomen }
         
-        results = list(collection_data.find(mongo_query)) 
+        results = list(collection_data.find(mongo_query).limit(50)) 
         
         for result in results:
             result.pop('_id', None) 
@@ -258,6 +405,7 @@ def search_nomen():
     except Exception as e:
         print(f"Error saat mencari data: {e}")
         return jsonify({"message": "Gagal mengambil data dari database."}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
