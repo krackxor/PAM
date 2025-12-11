@@ -13,10 +13,10 @@
             --secondary-color: #28a745;
             --bg-color: #f4f7f9; 
             --header-bg: #2c3e50;
-            --footer-height: 60px; /* Tinggi Navigasi Bawah */
+            --footer-height: 60px;
             --text-color-light: #ecf0f1;
             --text-color: #343a40;
-            --shadow: 0 -4px 12px rgba(0, 0, 0, 0.1); /* Shadow ke atas */
+            --shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
             --border-radius: 8px;
         }
 
@@ -25,15 +25,12 @@
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
-            padding-bottom: var(--footer-height); /* RUANG UNTUK FOOTER */
+            padding-bottom: var(--footer-height); 
             display: flex;
             flex-direction: column; 
             min-height: 100vh;
         }
         
-        /* ---------------------------------------------------- */
-        /* HEADER ATAS (Untuk Logo/Branding Sederhana) */
-        /* ---------------------------------------------------- */
         .header-brand {
             background-color: var(--header-bg);
             padding: 10px 20px;
@@ -46,22 +43,19 @@
             font-weight: 700;
         }
         
-        /* ---------------------------------------------------- */
-        /* FOOTER NAVIGASI (Menu Bawah Tetap) */
-        /* ---------------------------------------------------- */
         .footer-nav {
-            position: fixed; /* Membuat navigasi tetap di layar */
+            position: fixed; 
             bottom: 0;
             left: 0;
             right: 0;
             height: var(--footer-height);
-            background-color: white; /* Warna terang untuk kontras */
+            background-color: white; 
             border-top: 1px solid #ddd;
             box-shadow: var(--shadow);
             z-index: 1000;
             
             display: flex;
-            justify-content: space-around; /* Menyebar item secara merata */
+            justify-content: space-around; 
             align-items: center;
         }
         
@@ -73,7 +67,7 @@
             color: #777;
             font-size: 0.75em;
             padding: 5px 0;
-            flex-grow: 1; /* Item menu mengambil ruang yang sama */
+            flex-grow: 1; 
             transition: color 0.2s;
         }
 
@@ -91,16 +85,14 @@
             color: var(--primary-color);
         }
 
-        /* ---------------------------------------------------- */
-        /* KONTEN UTAMA */
-        /* ---------------------------------------------------- */
         .main-content {
             flex-grow: 1;
             padding: 20px;
             width: 100%;
             box-sizing: border-box;
-            /* Tambahkan padding-top untuk memberi ruang di bawah header brand */
             padding-top: 20px; 
+            display: flex;
+            justify-content: center;
         }
         
         .container {
@@ -113,20 +105,20 @@
             margin: 0 auto;
         }
 
-        /* Styling Flash Messages */
-        .flash-message { /* Tetap sama */ }
-        .flash-success { /* Tetap sama */ }
-        .flash-danger { /* Tetap sama */ }
-        .flash-info { /* Tetap sama */ }
+        .flash-message {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: 600;
+        }
+        .flash-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .flash-danger { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .flash-info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
 
-        /* --- MEDIA QUERIES (Responsivitas) --- */
         @media (max-width: 600px) {
-            .main-content {
-                padding: 10px; /* Kurangi padding di mobile */
-            }
-            .container {
-                padding: 15px;
-            }
+            .main-content { padding: 10px; }
+            .container { padding: 15px; }
         }
 
         {% block custom_styles %}{% endblock %}
@@ -163,6 +155,12 @@
            <span>Cari</span>
         </a>
         
+        <a href="{{ url_for('daily_collection_unified_page') }}" 
+           class="nav-item {% if request.endpoint == 'daily_collection_unified_page' %}active{% endif %}">
+           <i class="fas fa-chart-bar"></i>
+           <span>Koleksi Harian</span>
+        </a>
+
         <a href="{{ url_for('analyze_data_page') }}" 
            class="nav-item {% if request.endpoint == 'analyze_data_page' %}active{% endif %}">
            <i class="fas fa-chart-line"></i>
