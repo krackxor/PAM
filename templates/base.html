@@ -161,8 +161,8 @@
            <span>Koleksi Harian</span>
         </a>
 
-        <a href="{{ url_for('analyze_data_page') }}" 
-           class="nav-item {% if request.endpoint == 'analyze_data_page' %}active{% endif %}">
+        <a href="{{ url_for('analyze_reports_landing') }}" 
+           class="nav-item {% if 'analyze' in request.endpoint %}active{% endif %}">
            <i class="fas fa-chart-line"></i>
            <span>Analisis</span>
         </a>
