@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}Analisis File Dinamis{% endblock %}
+
+{% block custom_styles %}
+/* CSS Khusus untuk Halaman Upload Analisis */
+.upload-section { 
+    border: 1px dashed var(--primary-color);
+    padding: 20px;
+    border-radius: var(--border-radius);
+    margin-bottom: 30px;
+    text-align: center;
+}
+.btn-analyze { 
+    background-color: #ffc107; /* Kuning */
+    color: black; 
+    border: none; 
+    padding: 10px 20px; 
+    border-radius: var(--border-radius); 
+    cursor: pointer; 
+    transition: background-color 0.3s; 
+}
+.btn-analyze:hover { 
+    background-color: #e0a800; 
+}
+#analyzeStatus { 
+    margin-top: 15px; 
+    font-weight: 500; 
+}
+
+.analysis-result { 
+    margin-top: 30px; 
+    border-top: 1px solid #ddd; 
+    padding-top: 20px; 
+}
+.data-summary div { 
+    padding: 5px 0; 
+    border-bottom: 1px dashed #eee; 
+}
+
+/* Style Tabel Hasil Analisis */
+.result-table-wrapper { 
+    overflow-x: auto; /* Memastikan tabel dapat di-scroll horizontal */
+}
+table { 
+    width: 100%; 
+    border-collapse: collapse; 
+    font-size: 14px; 
+}
+th, td { 
+    border: 1px solid #ddd; 
+    padding: 8px; 
+    text-align: left; 
+    white-space: nowrap; /* Mencegah pemotongan teks */
+}
+th { 
+    background-color: #f2f2f2; 
+}
+
+/* Tombol Kembali ke Dashboard Analisis */
+.btn-back-analysis {
+    display: inline-block;
+    margin-bottom: 20px;
+    padding: 8px 15px;
+    background-color: #6c757d;
+    color: white;
+    border-radius: 4px;
+    text-decoration: none;
+}
+{% endblock %}
+
+{% block content %}
+    <h2 style="text-align: left; border-bottom: none; margin-bottom: 10px; color: var(--primary-color);">
+        <i class="fas fa-file-upload" style="margin-right: 10px;"></i> Analisis File Dinamis
+    </h2>
+    
+    <a href="{{ url_for('analyze_reports_landing') }}" class="btn-back-analysis">
+        ← Kembali ke Dashboard Analisis
+    </a>
+
+    <div class="upload-section">
+        <h3>Gabungkan dan Analisis File</h3>
+        <p>Unggah **dua atau lebih** file CSV/XLSX. Aplikasi akan menggabungkannya berdasarkan kolom **NOMEN** dan menyajikan ringkasan statistik.</p>
+        <form id="analyzeForm" enctype="multipart/form-data">
+            <input 
+                type="file" 
+                id="analyzeFile" 
+                name="file" 
+                accept=".csv, .xlsx, .xls" 
+                multiple 
+                required
+            >
+            <button type="submit" class="btn-analyze">Jalankan Analisis Gabungan</button>
+        </form>
+        <div id="analyzeStatus"></div>
+    </div>
+    
+    <div class="analysis-result" id="analysisResult">
+        <p style="text-align: center; color: gray;">Hasil analisis akan muncul di sini.</p>
+    </div>
+
+    <script>
+        const analyzeForm = document.getElementById('analyzeForm');
+        const analyzeStatus = document.getElementById('analyzeStatus');
+        const analysisResult = document.getElementById('analysisResult');
+
+        analyzeForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('analyzeFile');
+            if (fileInput.files.length < 1) {
+                analyzeStatus.innerHTML = '<span style="color: #dc3545;">❌ Harap pilih minimal satu file.</span>';
+                return;
+            }
+
+            const formData = new FormData(this);
+            analyzeStatus.innerHTML = '<span style="color: orange;"><i class="fas fa-spinner fa-spin"></i> Menganalisis file dan menggabungkan data...</span>';
+            analysisResult.innerHTML = '<p style="text-align: center;">Memuat...</p>';
+
+            try {
+                // Panggil endpoint POST /api/analyze
+                const response = await fetch('{{ url_for("analyze_data") }}', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.status === 'success') {
+                    analyzeStatus.innerHTML = `<span style="color: var(--secondary-color);">✅ Analisis Selesai: ${result.summary.file_name}</span>`;
+                    renderAnalysis(result);
+                } else if (response.status === 401) {
+                    window.location.href = '{{ url_for("login") }}'; 
+                } else {
+                    analyzeStatus.innerHTML = `<span style="color: #dc3545;">❌ Error: ${result.message}</span>`;
+                    analysisResult.innerHTML = `<p style="color: #dc3545; text-align: center;">${result.message}</p>`;
+                }
+            } catch (error) {
+                analyzeStatus.innerHTML = `<span style="color: #dc3545;">❌ Gagal terhubung ke server.</span>`;
+                analysisResult.innerHTML = '';
+                console.error('Error:', error);
+            }
+        });
+        
+        function renderAnalysis(data) {
+            
+            // 1. Ringkasan Dasar
+            let summaryHtml = `
+                <h3>Ringkasan Data Gabungan</h3>
+                <div class="data-summary">
+                    <div><strong>Nama File Hasil:</strong> ${data.summary.file_name}</div>
+                    <div><strong>Kunci Penggabungan:</strong> ${data.summary.join_key}</div>
+                    <div><strong>Jumlah Total Baris:</strong> ${data.summary.row_count}</div>
+                    <div><strong>Jumlah Kolom:</strong> ${data.summary.column_count}</div>
+                    <div><strong>Kolom Ditemukan:</strong> ${data.summary.columns.join(', ')}</div>
+                </div>
+                
+                <h3 style="margin-top: 30px;">5 Baris Data Pertama (Head)</h3>
+                <div class="result-table-wrapper">${data.head}</div>
+                
+                <h3 style="margin-top: 30px;">Statistik Deskriptif</h3>
+                <div id="stats-table"></div>
+            `;
+            analysisResult.innerHTML = summaryHtml;
+            
+            // 2. Statistik Deskriptif (Tabel Pandas Describe)
+            const stats = JSON.parse(data.stats);
+            const statsElement = document.getElementById('stats-table');
+            
+            let statsTableHtml = '<div class="result-table-wrapper"><table><thead><tr><th>Statistik</th>';
+            
+            const columnNames = Object.keys(stats);
+            columnNames.forEach(col => {
+                statsTableHtml += `<th>${col}</th>`;
+            });
+            statsTableHtml += '</tr></thead><tbody>';
+            
+            const statNames = Object.keys(stats[columnNames[0]]);
+            
+            statNames.forEach(stat => {
+                statsTableHtml += `<tr><td><strong>${stat.charAt(0).toUpperCase() + stat.slice(1)}</strong></td>`;
+                columnNames.forEach(col => {
+                    let value = stats[col][stat];
+                    if (value === null || isNaN(value)) {
+                         statsTableHtml += `<td>-</td>`;
+                    } else {
+                         statsTableHtml += `<td>${typeof value === 'number' && stat !== 'top' && stat !== 'freq' ? value.toFixed(2) : value}</td>`;
+                    }
+                });
+                statsTableHtml += `</tr>`;
+            });
+            
+            statsTableHtml += '</tbody></table></div>';
+            statsElement.innerHTML = statsTableHtml;
+        }
+
+    </script>
+{% endblock %}
