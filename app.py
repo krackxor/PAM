@@ -690,12 +690,12 @@ def search_nomen():
         tunggakan_nominal_total = sum(item.get('JUMLAH', 0) for item in ardebt_results)
         
         # 4. RIWAYAT PEMBAYARAN TERAKHIR (MB)
-        mb_last_payment = collection_mb.find({'NOMEN': query_nomen}).sort('TGL_BAYAR', -1).limit(1)
-        last_payment = list(mb_last_payment)[0] if list(mb_last_payment) else None
+        mb_last_payment_cursor = collection_mb.find({'NOMEN': query_nomen}).sort('TGL_BAYAR', -1).limit(1)
+        last_payment = list(mb_last_payment_cursor)[0] if list(mb_last_payment_cursor) else None
         
         # 5. RIWAYAT BACA METER (SBRS)
-        sbrs_last_read = collection_sbrs.find({'CMR_ACCOUNT': query_nomen}).sort('CMR_RD_DATE', -1).limit(2)
-        sbrs_history = list(sbrs_last_read)
+        sbrs_last_read_cursor = collection_sbrs.find({'CMR_ACCOUNT': query_nomen}).sort('CMR_RD_DATE', -1).limit(2)
+        sbrs_history = list(sbrs_last_read_cursor)
         
         # --- LOGIKA KECERDASAN (INTEGRASI & DIAGNOSTIK) ---
         
@@ -757,13 +757,118 @@ def search_nomen():
         return jsonify({"message": f"Gagal mengambil data terintegrasi: {e}"}), 500
 
 
-# --- ENDPOINT UTAMA ---
+# --- ENDPOINT UTAMA (lainnya) ---
 @app.route('/')
 @login_required 
 def index():
     return render_template('index.html', is_admin=current_user.is_admin)
 
-# ... (Endpoint analyze_data, upload/mc, upload/mb, upload/cid, upload/sbrs, upload/ardebt tetap sama) ...
+@app.route('/analyze/extreme', methods=['GET'])
+@login_required
+def analyze_extreme_usage():
+    return render_template('analyze_report_template.html', 
+                           title="Pemakaian Air Ekstrim", 
+                           description="Menampilkan pelanggan dengan konsumsi air di atas ambang batas (memerlukan join MC, CID, dan SBRS).",
+                           is_admin=current_user.is_admin)
+
+@app.route('/analyze/reduced', methods=['GET'])
+@login_required
+def analyze_reduced_usage():
+    return render_template('analyze_report_template.html', 
+                           title="Pemakaian Air Turun", 
+                           description="Menampilkan pelanggan dengan penurunan konsumsi air signifikan (memerlukan data MC dan SBRS historis).",
+                           is_admin=current_user.is_admin)
+
+@app.route('/analyze/zero', methods=['GET'])
+@login_required
+def analyze_zero_usage():
+    return render_template('analyze_report_template.html', 
+                           title="Tidak Ada Pemakaian (Zero)", 
+                           description="Menampilkan pelanggan dengan konsumsi air nol (Zero) di periode tagihan terakhir.",
+                           is_admin=current_user.is_admin)
+
+@app.route('/analyze/standby', methods=['GET'])
+@login_required
+def analyze_stand_tungggu():
+    return render_template('analyze_report_template.html', 
+                           title="Stand Tunggu", 
+                           description="Menampilkan pelanggan yang berstatus Stand Tunggu (Freeze/Blokir).",
+                           is_admin=current_user.is_admin)
+
+@app.route('/analyze/upload', methods=['GET'])
+@login_required 
+def analyze_data_page():
+    return render_template('analyze_upload.html', is_admin=current_user.is_admin)
+
+@app.route('/api/analyze', methods=['POST'])
+@login_required 
+def analyze_data():
+    """Endpoint untuk mengunggah file jamak, menggabungkannya, dan menjalankan analisis data."""
+    if not request.files:
+        return jsonify({"message": "Tidak ada file yang diunggah."}), 400
+
+    uploaded_files = request.files.getlist('file')
+    all_dfs = []
+    
+    JOIN_KEY = 'NOMEN' 
+    
+    for file in uploaded_files:
+        filename = secure_filename(file.filename)
+        file_extension = filename.rsplit('.', 1)[1].lower()
+
+        if file_extension not in ALLOWED_EXTENSIONS:
+            continue
+
+        try:
+            if file_extension == 'csv':
+                df = pd.read_csv(file) 
+            elif file_extension in ['xlsx', 'xls']:
+                df = pd.read_excel(file, sheet_name=0) 
+            
+            df.columns = [col.strip().upper() for col in df.columns]
+            
+            if JOIN_KEY in df.columns:
+                 df[JOIN_KEY] = df[JOIN_KEY].astype(str).str.strip() 
+                 all_dfs.append(df)
+            else:
+                 return jsonify({"message": f"Gagal: File '{filename}' tidak memiliki kolom kunci '{JOIN_KEY}'."}), 400
+
+        except Exception as e:
+            print(f"Error membaca file {filename}: {e}")
+            return jsonify({"message": f"Gagal membaca file {filename}: {e}"}), 500
+
+    if not all_dfs:
+        return jsonify({"message": "Tidak ada file yang valid untuk digabungkan."}), 400
+
+    merged_df = all_dfs[0]
+    
+    for i in range(1, len(all_dfs)):
+        merged_df = pd.merge(merged_df, all_dfs[i], on=JOIN_KEY, how='outer', suffixes=(f'_f{i}', f'_f{i+1}'))
+
+    # Analisis Data Gabungan
+    data_summary = {
+        "file_name": f"Gabungan ({len(uploaded_files)} files)",
+        "join_key": JOIN_KEY,
+        "row_count": len(merged_df),
+        "column_count": len(merged_df.columns),
+        "columns": merged_df.columns.tolist() 
+    }
+
+    descriptive_stats = merged_df.describe(include='all').to_json(orient='index')
+    
+    return jsonify({
+        "status": "success",
+        "summary": data_summary,
+        "stats": descriptive_stats,
+        "head": merged_df.head().to_html(classes='table table-striped') 
+    }), 200
+
+# --- ENDPOINT KELOLA UPLOAD (ADMIN) ---
+@app.route('/admin/upload', methods=['GET'])
+@login_required 
+@admin_required 
+def admin_upload_unified_page():
+    return render_template('upload_admin_unified.html', is_admin=current_user.is_admin)
 
 @app.route('/upload/mc', methods=['POST'])
 @login_required 
@@ -1134,21 +1239,6 @@ def search_nomen():
     except Exception as e:
         print(f"Error saat mencari data terintegrasi: {e}")
         return jsonify({"message": f"Gagal mengambil data terintegrasi: {e}"}), 500
-
-
-# --- ENDPOINT UTAMA (lainnya) ---
-@app.route('/')
-@login_required 
-def index():
-    return render_template('index.html', is_admin=current_user.is_admin)
-
-@app.route('/analyze', methods=['GET'])
-@login_required
-def analyze_reports_landing():
-    return render_template('analyze_landing.html', is_admin=current_user.is_admin)
-
-# ... (Endpoint analyze_data, upload/mc, upload/mb, upload/cid, upload/sbrs, upload/ardebt tetap sama) ...
-# [Semua fungsi upload di app.py tetap sama]
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
