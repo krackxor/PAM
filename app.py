@@ -38,7 +38,7 @@ try:
     client.admin.command('ping') 
     db = client[DB_NAME]
     
-    # 🚨 KOLEKSI DIPISAH BERDASARKAN SUMBER DATA
+    # KOLEKSI DIPISAH BERDASARKAN SUMBER DATA
     collection_mc = db['MasterCetak']   # MC (Piutang/Tagihan Bulanan - REPLACE)
     collection_mb = db['MasterBayar']   # MB (Koleksi Harian - APPEND)
     collection_cid = db['CustomerData'] # CID (Data Pelanggan Statis - REPLACE)
@@ -76,7 +76,7 @@ login_manager.init_app(app)
 login_manager.login_view = 'login' 
 login_manager.login_message_category = 'info'
 
-# --- KELAS DAN DEKORATOR TETAP SAMA ---
+# --- KELAS DAN DEKORATOR ---
 class User(UserMixin):
     def __init__(self, user_data):
         self.id = user_data['id']
@@ -171,7 +171,9 @@ def search_nomen():
         # 4. RIWAYAT PEMBAYARAN TERAKHIR (MB)
         # Mencari berdasarkan NOMEN di MB
         mb_last_payment_cursor = collection_mb.find({'NOMEN': query_nomen}).sort('TGL_BAYAR', -1).limit(1)
-        last_payment = list(mb_last_payment_cursor)[0] if list(mb_last_payment_cursor) else None
+        # Menggunakan list() di luar if, dan memeriksa hasilnya setelahnya
+        mb_payments = list(mb_last_payment_cursor)
+        last_payment = mb_payments[0] if mb_payments else None
         
         # 5. RIWAYAT BACA METER (SBRS)
         sbrs_last_read_cursor = collection_sbrs.find({'CMR_ACCOUNT': query_nomen}).sort('CMR_RD_DATE', -1).limit(2)
