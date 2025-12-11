@@ -45,7 +45,7 @@
             padding-bottom: 10px;
         }
         
-        .upload-section {
+        .upload-section { 
             border: 1px dashed #ced4da;
             padding: 20px;
             border-radius: var(--border-radius);
@@ -54,9 +54,7 @@
         }
 
         /* Tombol & Input */
-        input[type="file"] {
-            margin-bottom: 10px;
-        }
+        input[type="file"] { margin-bottom: 10px; }
         .btn-upload {
             background-color: var(--secondary-color);
             color: white;
@@ -66,15 +64,8 @@
             cursor: pointer;
             transition: background-color 0.3s;
         }
-        .btn-upload:hover {
-            background-color: #1e7e34;
-        }
-        
-        /* Area Notifikasi */
-        #uploadStatus {
-            margin-top: 15px;
-            font-weight: 500;
-        }
+        .btn-upload:hover { background-color: #1e7e34; }
+        #uploadStatus { margin-top: 15px; font-weight: 500; }
 
         .input-group {
             margin-bottom: 20px;
@@ -102,10 +93,7 @@
         }
         
         /* Kartu Hasil Dinamis */
-        #hasilPencarian {
-            margin-top: 30px;
-            transition: opacity 0.5s ease-in-out;
-        }
+        #hasilPencarian { margin-top: 30px; transition: opacity 0.5s ease-in-out; }
         
         .result-card {
             background-color: #f1f8ff; 
@@ -124,13 +112,8 @@
             gap: 5px 15px;
             font-size: 15px;
         }
-        .detail-key {
-            font-weight: 600;
-            color: var(--text-color);
-        }
-        .detail-value {
-            color: #555;
-        }
+        .detail-key { font-weight: 600; color: var(--text-color); }
+        .detail-value { color: #555; }
 
         .no-result {
             color: #dc3545;
@@ -143,14 +126,8 @@
         }
 
         /* Keyframes untuk Animasi Dinamis */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes bounceIn {
-            from { opacity: 0; transform: scale(0.9); }
-            to { opacity: 1; transform: scale(1); }
-        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes bounceIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
         
         /* Header dan Kontrol Logout */
         .header-controls {
@@ -168,9 +145,7 @@
             text-decoration: none;
             transition: background-color 0.3s;
         }
-        .btn-logout:hover {
-            background-color: #c82333;
-        }
+        .btn-logout:hover { background-color: #c82333; }
         .alert-success {
             background-color: #d4edda;
             color: #155724;
@@ -186,6 +161,11 @@
     <div class="container">
         <div class="header-controls">
             <h2 style="margin: 0;">Pencarian Data Dinamis</h2>
+            
+            {% if current_user.is_admin %} 
+                <a href="{{ url_for('admin_upload_page') }}" class="btn-upload" style="margin-right: 10px;">Admin Upload</a>
+            {% endif %}
+            
             <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
         </div>
         
@@ -194,20 +174,12 @@
                 {% for category, message in messages %}
                     {% if category == 'success' %}
                         <div class="alert-success">{{ message }}</div>
+                    {% else %}
+                        <div class="no-result" style="color: #856404; background-color: #fff3cd; border-color: #ffeeba;">{{ message }}</div>
                     {% endif %}
                 {% endfor %}
             {% endif %}
         {% endwith %}
-
-        <div class="upload-section">
-            <h3>Perbarui Data Tagihan</h3>
-            <p>Unggah file CSV, XLSX, atau XLS baru Anda di sini. Data lama akan dihapus.</p>
-            <form id="uploadForm">
-                <input type="file" id="csvFile" name="file" accept=".csv, .xlsx, .xls" required>
-                <button type="submit" class="btn-upload">Upload dan Perbarui Data</button>
-            </form>
-            <div id="uploadStatus"></div>
-        </div>
 
         <hr style="border: 0; border-top: 1px solid #eee; margin: 25px 0;">
         
@@ -217,46 +189,14 @@
         </div>
         
         <div id="hasilPencarian">
-            <p style="color: gray; text-align: center;">Unggah data terlebih dahulu, lalu mulai mengetik NOMEN.</p>
+            <p style="color: gray; text-align: center;">Mulai mengetik NOMEN.</p>
         </div>
     </div>
 
     <script>
         const inputElement = document.getElementById('nomenInput');
         const hasilElement = document.getElementById('hasilPencarian');
-        const uploadForm = document.getElementById('uploadForm');
-        const uploadStatus = document.getElementById('uploadStatus');
 
-        // --- Logika Upload CSV/Excel ---
-        uploadForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(this);
-            uploadStatus.innerHTML = '<span style="color: orange;">Memproses... Harap tunggu.</span>';
-
-            try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const result = await response.json();
-
-                if (response.ok) {
-                    uploadStatus.innerHTML = `<span style="color: var(--secondary-color);">✅ ${result.message}</span>`;
-                } else if (response.status === 401) {
-                    // Jika sesi hilang, arahkan ke login
-                    window.location.href = '/login'; 
-                } else {
-                    uploadStatus.innerHTML = `<span style="color: #dc3545;">❌ Error: ${result.message}</span>`;
-                }
-            } catch (error) {
-                uploadStatus.innerHTML = `<span style="color: #dc3545;">❌ Gagal terhubung ke server atau terjadi error jaringan.</span>`;
-                console.error('Error:', error);
-            }
-        });
-
-        // --- Logika Pencarian Dinamis ---
         async function cariDataNomen() {
             const query = inputElement.value.trim();
             hasilElement.innerHTML = '';
@@ -266,16 +206,13 @@
                 return;
             }
 
-            // Tampilkan pesan loading
             hasilElement.innerHTML = '<p style="text-align: center; color: var(--primary-color);">Mencari data...</p>';
 
             try {
-                // Panggil API Pencarian di Flask Backend
                 const response = await fetch(`/api/search?nomen=${query}`);
                 const hasilFilter = await response.json();
                 
                 if (response.status === 401) {
-                    // Jika sesi habis saat mencari data, arahkan ke login
                     window.location.href = '/login'; 
                     return;
                 }
@@ -317,14 +254,12 @@
                 }
 
             } catch (error) {
-                hasilElement.innerHTML = `<p class="no-result">❌ Terjadi kesalahan saat mencari data.</p>`;
+                hasilElement.innerHTML = `<p class="no-result">❌ Terjadi kesalahan saat mencari data. Cek koneksi server/DB.</p>`;
                 console.error('Pencarian Error:', error);
             }
         }
 
-        // Event Listener untuk Pencarian Real-time
         inputElement.addEventListener('input', cariDataNomen);
-
     </script>
 
 </body>
