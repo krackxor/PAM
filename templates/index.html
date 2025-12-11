@@ -1,151 +1,273 @@
 {% extends "base.html" %}
 
-{% block title %}Pencarian Data{% endblock %}
+{% block title %}Pencarian Terintegrasi{% endblock %}
 
 {% block custom_styles %}
-/* Custom CSS Khusus untuk Halaman Pencarian */
-.input-group { 
-    margin-bottom: 20px; 
-    display: flex; 
-    flex-direction: column; 
+/* CSS Khusus untuk Halaman Pencarian */
+.search-box {
+    margin-bottom: 30px;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: var(--border-radius);
+    text-align: center;
 }
-label { 
-    font-weight: 600; 
-    margin-bottom: 8px; 
+#nomenInput {
+    padding: 10px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    width: 100%;
+    max-width: 300px;
+    margin-bottom: 10px;
+    font-size: 16px;
+    box-sizing: border-box;
 }
-#nomenInput { 
-    padding: 12px 15px; 
-    border: 1px solid #ced4da; 
-    border-radius: var(--border-radius); /* Menggunakan variabel dari base.html */
-    font-size: 16px; 
-    width: 100%; 
-    box-sizing: border-box; 
-    transition: border-color 0.3s, box-shadow 0.3s;
+.btn-search {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
 }
-#nomenInput:focus { 
-    border-color: var(--primary-color); 
-    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25); 
-    outline: none; 
+.btn-search:hover {
+    background-color: #0056b3;
 }
 
-#hasilPencarian { 
-    margin-top: 30px; 
-    transition: opacity 0.5s ease-in-out; 
+/* Status Summary Grid */
+.summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+    margin-bottom: 30px;
 }
-.result-card { 
-    background-color: #f1f8ff; 
-    border-left: 5px solid var(--primary-color); 
-    padding: 15px; 
-    border-radius: var(--border-radius); 
-    margin-bottom: 15px; 
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); 
+.summary-card {
+    background-color: #e9ecef;
+    padding: 15px;
+    border-radius: var(--border-radius);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
-/* Grid untuk Detail Data */
-.result-detail { 
-    display: grid; 
-    grid-template-columns: 1fr 2fr; 
-    gap: 5px 15px; 
-    font-size: 15px; 
+.summary-card h4 { margin: 0 0 5px 0; font-size: 1.1em; color: var(--primary-color); }
+.summary-card p { margin: 0; font-size: 1.5em; font-weight: bold; }
+.status-ok { color: var(--secondary-color); }
+.status-warning { color: #ffc107; }
+.status-danger { color: #dc3545; }
+
+/* Detail Data Table */
+.data-table-wrapper {
+    overflow-x: auto;
+    margin-top: 15px;
+    border: 1px solid #ddd;
+    border-radius: var(--border-radius);
 }
-.detail-key { 
-    font-weight: 600; 
-    color: var(--text-color); 
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 600px; 
 }
-.detail-value {
-    color: #555;
+.data-table th, .data-table td {
+    border: 1px solid #eee;
+    padding: 8px;
+    text-align: left;
+    white-space: nowrap;
 }
-.no-result { 
-    color: #dc3545; 
-    padding: 15px; 
-    border: 1px dashed #dc3545; 
-    border-radius: var(--border-radius); 
-    text-align: center; 
+.data-table th {
+    background-color: #f2f2f2;
+    text-align: center;
+}
+
+/* Mobile Layout for Tables/Details (Card View) */
+@media screen and (max-width: 600px) {
+    .data-table-wrapper {
+        border: none;
+    }
+    .data-table {
+        min-width: 100%;
+    }
+    .data-table thead {
+        display: none;
+    }
+    .data-table tr {
+        display: block;
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        border-radius: var(--border-radius);
+    }
+    .data-table td {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 12px;
+        border: none;
+        border-bottom: 1px solid #eee;
+    }
+    .data-table td:before {
+        content: attr(data-label);
+        font-weight: bold;
+        text-align: left;
+        width: 50%;
+        padding-right: 10px;
+    }
 }
 {% endblock %}
 
 {% block content %}
     <h2 style="text-align: left; border-bottom: none; margin-bottom: 20px; color: var(--primary-color);">
-        <i class="fas fa-search" style="margin-right: 10px;"></i> Pencarian Data Pelanggan
+        <i class="fas fa-search" style="margin-right: 10px;"></i> Pencarian Pelanggan Terintegrasi
     </h2>
     
-    <div class="input-group">
-        <label for="nomenInput">Masukkan NOMEN (ID Pelanggan):</label>
-        <input type="text" id="nomenInput" placeholder="Ketik NOMEN di sini, misalnya: 60139500">
+    <div class="search-box">
+        <input type="text" id="nomenInput" placeholder="Masukkan NOMEN Pelanggan">
+        <button id="searchBtn" class="btn-search">Cari Data Lengkap</button>
+        <div id="searchStatus" style="margin-top: 10px;"></div>
+    </div>
+
+    <div id="resultsArea" style="display: none;">
+        <h3>Status Kesehatan Pelanggan <span id="nomenTitle"></span></h3>
+        <div class="summary-grid" id="healthSummary">
+            </div>
+
+        <div id="detailsContainer">
+            </div>
     </div>
     
-    <hr style="border: 0; border-top: 1px solid #eee; margin: 25px 0;">
-    
-    <div id="hasilPencarian">
-        <p style="color: gray; text-align: center;">Mulai mengetik NOMEN.</p>
+    <div id="initialMessage" style="text-align: center; color: #6c757d;">
+        <p>Gunakan NOMEN untuk mencari semua data pelanggan dari Master Cetak, Tunggakan, CID, dan Riwayat Baca Meter secara bersamaan.</p>
     </div>
 
     <script>
-        const inputElement = document.getElementById('nomenInput');
-        const hasilElement = document.getElementById('hasilPencarian');
+        const nomenInput = document.getElementById('nomenInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const searchStatus = document.getElementById('searchStatus');
+        const resultsArea = document.getElementById('resultsArea');
+        const healthSummary = document.getElementById('healthSummary');
+        const detailsContainer = document.getElementById('detailsContainer');
+        const nomenTitle = document.getElementById('nomenTitle');
+        const initialMessage = document.getElementById('initialMessage');
 
-        async function cariDataNomen() {
-            const query = inputElement.value.trim();
-            hasilElement.innerHTML = '';
+        function formatCurrency(amount) {
+            if (typeof amount === 'number') {
+                 return `Rp ${amount.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+            }
+            return amount;
+        }
+
+        function determineStatusClass(statusText) {
+            if (statusText.includes('EKSTRIM') || statusText.includes('TUNGGAKAN')) return 'status-danger';
+            if (statusText.includes('ZERO') || statusText.includes('PIUTANG AKTIF')) return 'status-warning';
+            return 'status-ok';
+        }
+        
+        function renderTable(title, data, targetElementId) {
+            if (!data || data.length === 0) {
+                return `<h4>${title}</h4><p>Tidak ada data ditemukan.</p>`;
+            }
+
+            const headers = Object.keys(data[0]);
             
-            if (query === "") {
-                hasilElement.innerHTML = '<p style="color: gray; text-align: center;">Mulai mengetik NOMEN di atas untuk melihat data.</p>';
+            let tableHtml = `<h4 style="margin-top: 20px; color: #2c3e50;">${title} (${data.length} baris)</h4>`;
+            tableHtml += '<div class="data-table-wrapper"><table class="data-table"><thead><tr>';
+            
+            headers.forEach(h => {
+                tableHtml += `<th>${h.replace(/_/g, ' ')}</th>`;
+            });
+            tableHtml += '</tr></thead><tbody>';
+
+            data.forEach(item => {
+                tableHtml += '<tr>';
+                headers.forEach(h => {
+                    let cellValue = item[h];
+                    if (h.includes('NOMINAL') || h.includes('JUMLAH')) {
+                        cellValue = formatCurrency(cellValue);
+                    }
+                    tableHtml += `<td data-label="${h.replace(/_/g, ' ')}">${cellValue}</td>`;
+                });
+                tableHtml += '</tr>';
+            });
+
+            tableHtml += '</tbody></table></div>';
+            return tableHtml;
+        }
+
+        function renderResults(data) {
+            // 1. Render Health Summary
+            healthSummary.innerHTML = `
+                <div class="summary-card">
+                    <h4>NOMEN</h4>
+                    <p class="status-ok">${data.summary.NOMEN}</p>
+                </div>
+                <div class="summary-card">
+                    <h4>NAMA PELANGGAN</h4>
+                    <p>${data.summary.NAMA}</p>
+                </div>
+                <div class="summary-card">
+                    <h4>STATUS TUNGGAKAN</h4>
+                    <p class="${determineStatusClass(data.summary.STATUS_TUNGGAKAN)}">${data.summary.STATUS_TUNGGAKAN}</p>
+                </div>
+                <div class="summary-card">
+                    <h4>STATUS PEMAKAIAN</h4>
+                    <p class="${determineStatusClass(data.summary.STATUS_PEMAKAIAN)}">${data.summary.STATUS_PEMAKAIAN}</p>
+                </div>
+            `;
+            
+            // 2. Render Detail Tables
+            detailsContainer.innerHTML = '';
+            
+            // CID Data (Master Statis)
+            detailsContainer.innerHTML += renderTable("Master Data Pelanggan (CID)", data.cid_data ? [data.cid_data] : null);
+
+            // MC Data (Piutang Berjalan Bulan Ini)
+            detailsContainer.innerHTML += renderTable("Piutang Berjalan (MC - Bulan Ini)", data.mc_data);
+            
+            // ARDEBT Data (Tunggakan Historis)
+            detailsContainer.innerHTML += renderTable("Detail Tunggakan (ARDEBT)", data.ardebt_data);
+
+            // SBRS Data (Riwayat Baca Meter)
+            detailsContainer.innerHTML += renderTable("Riwayat Baca Meter (SBRS - Terakhir)", data.sbrs_data);
+            
+            resultsArea.style.display = 'block';
+            initialMessage.style.display = 'none';
+        }
+
+        async function performSearch() {
+            const nomen = nomenInput.value.trim();
+            if (!nomen) {
+                searchStatus.innerHTML = '<span class="status-danger">Masukkan NOMEN yang valid.</span>';
+                resultsArea.style.display = 'none';
                 return;
             }
 
-            hasilElement.innerHTML = '<p style="text-align: center; color: var(--primary-color);">Mencari data...</p>';
-
+            searchStatus.innerHTML = '<span style="color: orange;"><i class="fas fa-spinner fa-spin"></i> Mencari data terintegrasi...</span>';
+            nomenTitle.textContent = nomen;
+            resultsArea.style.display = 'none';
+            initialMessage.style.display = 'none';
+            
             try {
-                const response = await fetch(`/api/search?nomen=${query}`);
-                const hasilFilter = await response.json();
-                
-                if (response.status === 401) {
-                    // Jika sesi habis
-                    window.location.href = '/login'; 
-                    return;
-                }
-                
-                if (response.status !== 200) {
-                     hasilElement.innerHTML = `<p class="no-result">❌ ${hasilFilter.message || 'Gagal terhubung ke API pencarian.'}</p>`;
-                     return;
-                }
+                const response = await fetch(`{{ url_for('search_nomen') }}?nomen=${nomen}`);
+                const result = await response.json();
 
-                if (hasilFilter.length > 0) {
-                    let cardsHTML = '';
-                    
-                    hasilFilter.forEach((data, index) => {
-                        let detailHTML = '<div class="result-detail">';
-                        const headers = Object.keys(data); 
-                        
-                        headers.forEach(header => {
-                             detailHTML += `
-                                <div class="detail-key">${header.replace(/_/g, ' ')}</div> 
-                                <div class="detail-value">${data[header]}</div>
-                            `;
-                        });
-                        
-                        detailHTML += '</div>';
-                        
-                        const cardTitle = data['NAMA_PEL'] ? data['NAMA_PEL'] : `Detail Hasil ${index + 1}`;
-
-                        cardsHTML += `
-                            <div class="result-card">
-                                <h3 style="color: var(--secondary-color); margin-top: 0;">${cardTitle}</h3>
-                                ${detailHTML}
-                            </div>
-                        `;
-                    });
-                    
-                    hasilElement.innerHTML = cardsHTML;
+                if (response.status === 200 && result.status === 'success') {
+                    searchStatus.innerHTML = `<span class="status-ok">✅ Ditemukan. Klik tombol 'Cari' lagi untuk NOMEN lain.</span>`;
+                    renderResults(result);
+                } else if (response.status === 404 || result.status === 'not_found') {
+                    searchStatus.innerHTML = `<span class="status-danger">❌ NOMEN ${nomen} tidak ditemukan di Master Data.</span>`;
+                    detailsContainer.innerHTML = '';
+                    resultsArea.style.display = 'none';
                 } else {
-                    hasilElement.innerHTML = `<p class="no-result">❌ Data untuk NOMEN: <strong>${query}</strong> tidak ditemukan.</p>`;
+                    searchStatus.innerHTML = `<span class="status-danger">❌ Error Server: ${result.message || 'Gagal memuat data.'}</span>`;
                 }
-
             } catch (error) {
-                hasilElement.innerHTML = `<p class="no-result">❌ Terjadi kesalahan saat mencari data. Cek koneksi server/DB.</p>`;
-                console.error('Pencarian Error:', error);
+                searchStatus.innerHTML = `<span class="status-danger">❌ Error Jaringan.</span>`;
+                console.error('Fetch Error:', error);
             }
         }
 
-        inputElement.addEventListener('input', cariDataNomen);
+        searchBtn.addEventListener('click', performSearch);
+        nomenInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+        
     </script>
 {% endblock %}
