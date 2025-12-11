@@ -11,7 +11,7 @@
     gap: 20px;
     margin-bottom: 30px;
 }
-.summary-card { background-color: #e9ecef; padding: 15px; border-radius: var(--border-radius); text-align: center; }
+.summary-card { background-color: white; padding: 15px; border-radius: var(--border-radius); text-align: center; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05); }
 .summary-card h4 { margin: 0 0 5px 0; font-size: 1em; color: #666; }
 .summary-card p { margin: 0; font-size: 1.5em; font-weight: bold; }
 .filter-input-group { 
@@ -129,9 +129,8 @@
             return (parseFloat(number) || 0).toFixed(2) + '%';
         }
 
-        // --- FUNGSI 1: MEMUAT REPORT RINGKAS ---
+        // --- FUNGSI 1: MEMUAT REPORT RINGKAS (MENGGUNAKAN MC, MB, ARDEBT) ---
         async function fetchCollectionReport() {
-            // ... (Fungsi fetchCollectionReport tetap sama) ...
             try {
                 const response = await fetch('{{ url_for("collection_report_api") }}');
                 const result = await response.json();
@@ -150,31 +149,41 @@
         }
         
         function renderReport(data, grandTotal) {
-            // ... (Fungsi renderReport tetap sama) ...
+            
+            // Perombakan Grid Summary
             let summaryHTML = `
                 <div class="report-header">
-                    <h3>Ringkasan Total Koleksi</h3>
+                    <h3>Ringkasan Total Koleksi, Tagihan & Tunggakan</h3>
                 </div>
                 <div class="report-grid">
                     <div class="summary-card" style="border: 2px solid #007bff;">
-                        <h4>Total Nominal Piutang</h4>
-                        <p>${formatRupiah(grandTotal.TotalNominal)}</p>
+                        <h4>TOTAL TAGIHAN (MC)</h4>
+                        <p>${formatRupiah(grandTotal.TotalNominalBilled)}</p>
                     </div>
                     <div class="summary-card" style="border: 2px solid #28a745;">
-                        <h4>Total Nominal Koleksi</h4>
+                        <h4>TOTAL KOLEKSI (MB)</h4>
                         <p>${formatRupiah(grandTotal.CollectedNominal)}</p>
                     </div>
+                    <div class="summary-card" style="border: 2px solid #dc3545;">
+                        <h4>TOTAL TUNGGAKAN (ARDEBT)</h4>
+                        <p>${formatRupiah(grandTotal.TotalDebtNominal)}</p>
+                    </div>
                     <div class="summary-card" style="border: 2px solid #ffc107;">
-                        <h4>Persentase Nominal</h4>
+                        <h4>% NOMINAL KOLEKSI</h4>
                         <p>${formatPercent(grandTotal.PercentNominal)}</p>
                     </div>
                     <div class="summary-card" style="border: 2px solid #17a2b8;">
-                        <h4>Pelanggan Terbayar</h4>
+                        <h4>TOTAL NOMEN TAGIHAN (MC)</h4>
+                        <p>${grandTotal.TotalNomenBilled.toLocaleString('id-ID')}</p>
+                    </div>
+                    <div class="summary-card" style="border: 2px solid #17a2b8;">
+                        <h4>NOMEN SUDAH BAYAR (MB)</h4>
                         <p>${grandTotal.CollectedNomen.toLocaleString('id-ID')}</p>
                     </div>
                 </div>
             `;
             
+            // Perombakan Tabel Detail
             let tableHTML = `
                 <h3 style="margin-top: 30px;">Detail Koleksi per Rayon / PCEZ</h3>
                 <div class="report-table-wrapper">
@@ -183,11 +192,11 @@
                         <tr>
                             <th>RAYON</th>
                             <th>PCEZ</th>
-                            <th>TOTAL NOMINAL PIUTANG</th>
-                            <th>NOMINAL KOLEKSI</th>
+                            <th>TOTAL TAGIHAN (MC)</th>
+                            <th>NOMINAL KOLEKSI (MB)</th>
                             <th>% NOMINAL</th>
-                            <th>TOTAL NOMEN</th>
-                            <th>NOMEN TERBAYAR</th>
+                            <th>TOTAL NOMEN TAGIHAN (MC)</th>
+                            <th>NOMEN SUDAH BAYAR (MB)</th>
                             <th>% NOMEN</th>
                         </tr>
                     </thead>
@@ -199,11 +208,11 @@
                     <tr>
                         <td data-label="Rayon">${item.RAYON}</td>
                         <td data-label="PCEZ">${item.PCEZ}</td>
-                        <td data-label="Piutang">${formatRupiah(item.TotalNominal)}</td>
-                        <td data-label="Koleksi">${formatRupiah(item.CollectedNominal)}</td>
+                        <td data-label="Tagihan">${formatRupiah(item.TotalNominalMC)}</td>
+                        <td data-label="Koleksi">${formatRupiah(item.CollectedNominalMB)}</td>
                         <td data-label="% Nom" class="percentage-cell">${formatPercent(item.PercentNominal)}</td>
-                        <td data-label="Total Nomen">${item.TotalNomen.toLocaleString('id-ID')}</td>
-                        <td data-label="Nomen Bayar">${item.CollectedNomen.toLocaleString('id-ID')}</td>
+                        <td data-label="Total Nomen">${item.TotalNomenMC.toLocaleString('id-ID')}</td>
+                        <td data-label="Nomen Bayar">${item.CollectedNomenMB.toLocaleString('id-ID')}</td>
                         <td data-label="% Nomen" class="percentage-cell">${formatPercent(item.PercentNomenCount)}</td>
                     </tr>
                 `;
@@ -213,10 +222,10 @@
                 <tr class="grand-total-row">
                     <td>GRAND TOTAL</td>
                     <td>-</td>
-                    <td>${formatRupiah(grandTotal.TotalNominal)}</td>
+                    <td>${formatRupiah(grandTotal.TotalNominalBilled)}</td>
                     <td>${formatRupiah(grandTotal.CollectedNominal)}</td>
                     <td class="percentage-cell">${formatPercent(grandTotal.PercentNominal)}</td>
-                    <td>${grandTotal.TotalNomen.toLocaleString('id-ID')}</td>
+                    <td>${grandTotal.TotalNomenBilled.toLocaleString('id-ID')}</td>
                     <td>${grandTotal.CollectedNomen.toLocaleString('id-ID')}</td>
                     <td class="percentage-cell">${formatPercent(grandTotal.PercentNomenCount)}</td>
                 </tr>
@@ -233,7 +242,6 @@
 
         // --- FUNGSI 2: MEMUAT DETAIL TRANSAKSIONAL ---
         async function fetchCollectionDetails(query = '') {
-            // ... (Fungsi fetchCollectionDetails tetap sama) ...
             detailsArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Detail Transaksi...</p>';
             
             try {
@@ -246,7 +254,7 @@
                 }
                 
                 if (data.length === 0) {
-                    detailsArea.innerHTML = '<p class="no-results">Tidak ada data koleksi yang ditemukan dengan filter tersebut.</p>';
+                    detailsArea.innerHTML = '<p class="no-results">Tidak ada data koleksi yang ditemukan dengan filter tersebut (Maksimal 1000 baris).</p>';
                     return;
                 }
 
