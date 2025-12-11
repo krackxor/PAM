@@ -133,7 +133,110 @@ def logout():
     flash('Anda telah keluar.', 'success')
     return redirect(url_for('login'))
 
-# --- ENDPOINT KOLEKSI TERPADU (UNIFIED COLLECTION PAGE) ---
+# --- ENDPOINT UTAMA (MENU CARI) ---
+@app.route('/')
+@login_required 
+def index():
+    return render_template('index.html', is_admin=current_user.is_admin)
+
+@app.route('/api/search', methods=['GET'])
+@login_required 
+def search_nomen():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    query_nomen = request.args.get('nomen', '').strip()
+
+    if not query_nomen:
+        return jsonify({"status": "fail", "message": "Masukkan NOMEN untuk memulai pencarian terintegrasi."}), 400
+
+    try:
+        # 1. DATA STATIS (CID) - Master Data Pelanggan
+        cid_result = collection_cid.find_one({'NOMEN': query_nomen})
+        
+        if not cid_result:
+            return jsonify({
+                "status": "not_found",
+                "message": f"NOMEN {query_nomen} tidak ditemukan di Master Data Pelanggan (CID)."
+            }), 404
+
+        # 2. PIUTANG BERJALAN (MC) - Snapshot Bulan Ini
+        mc_results = list(collection_mc.find({'NOMEN': query_nomen}))
+        piutang_nominal_total = sum(item.get('NOMINAL', 0) for item in mc_results)
+        
+        # 3. TUNGGAKAN DETAIL (ARDEBT)
+        ardebt_results = list(collection_ardebt.find({'NOMEN': query_nomen}))
+        tunggakan_nominal_total = sum(item.get('JUMLAH', 0) for item in ardebt_results)
+        
+        # 4. RIWAYAT PEMBAYARAN TERAKHIR (MB)
+        # Mencari berdasarkan NOMEN di MB
+        mb_last_payment_cursor = collection_mb.find({'NOMEN': query_nomen}).sort('TGL_BAYAR', -1).limit(1)
+        last_payment = list(mb_last_payment_cursor)[0] if list(mb_last_payment_cursor) else None
+        
+        # 5. RIWAYAT BACA METER (SBRS)
+        sbrs_last_read_cursor = collection_sbrs.find({'CMR_ACCOUNT': query_nomen}).sort('CMR_RD_DATE', -1).limit(2)
+        sbrs_history = list(sbrs_last_read_cursor)
+        
+        # --- LOGIKA KECERDASAN (INTEGRASI & DIAGNOSTIK) ---
+        
+        # A. Status Tunggakan/Piutang
+        if tunggakan_nominal_total > 0:
+            status_financial = f"TUNGGAKAN AKTIF ({len(ardebt_results)} Bulan)"
+        elif piutang_nominal_total > 0:
+            status_financial = f"PIUTANG BULAN BERJALAN"
+        else:
+            status_financial = "LUNAS / TIDAK ADA TAGIHAN"
+            
+        # B. Status Pembayaran
+        last_payment_date = last_payment.get('TGL_BAYAR', 'N/A') if last_payment else 'BELUM ADA PEMBAYARAN MB'
+
+        # C. Status Pemakaian (Anomaly Check)
+        status_pemakaian = "DATA SBRS KURANG"
+        kubik_terakhir = 0
+        if len(sbrs_history) >= 1:
+            kubik_terakhir = sbrs_history[0].get('CMR_KUBIK', 0)
+            
+            if kubik_terakhir > 100: # Threshold Ekstrim
+                status_pemakaian = f"EKSTRIM ({kubik_terakhir} m³)"
+            elif kubik_terakhir <= 5 and kubik_terakhir > 0: # Threshold Rendah
+                status_pemakaian = f"TURUN DRASITS / RENDAH ({kubik_terakhir} m³)"
+            elif kubik_terakhir == 0:
+                status_pemakaian = "ZERO (0 m³) / NON-AKTIF"
+            else:
+                status_pemakaian = f"NORMAL ({kubik_terakhir} m³)"
+
+
+        health_summary = {
+            "NOMEN": query_nomen,
+            "NAMA": cid_result.get('NAMA', 'N/A'),
+            "ALAMAT": cid_result.get('ALAMAT', 'N/A'),
+            "RAYON": cid_result.get('RAYON', 'N/A'),
+            "TIPE_PLGGN": cid_result.get('TIPEPLGGN', 'N/A'),
+            "STATUS_FINANSIAL": status_financial,
+            "TOTAL_PIUTANG_NOMINAL": piutang_nominal_total + tunggakan_nominal_total,
+            "PEMBAYARAN_TERAKHIR": last_payment_date,
+            "STATUS_PEMAKAIAN": status_pemakaian
+        }
+        
+        # Hapus _id dari semua hasil
+        def clean_mongo_id(doc):
+            doc.pop('_id', None)
+            return doc
+
+        return jsonify({
+            "status": "success",
+            "summary": health_summary,
+            "cid_data": clean_mongo_id(cid_result),
+            "mc_data": [clean_mongo_id(doc) for doc in mc_results],
+            "ardebt_data": [clean_mongo_id(doc) for doc in ardebt_results],
+            "sbrs_data": [clean_mongo_id(doc) for doc in sbrs_history]
+        }), 200
+
+    except Exception as e:
+        print(f"Error saat mencari data terintegrasi: {e}")
+        return jsonify({"message": f"Gagal mengambil data terintegrasi: {e}"}), 500
+
+# --- ENDPOINT KOLEKSI DAN ANALISIS LAINNYA ---
 @app.route('/daily_collection', methods=['GET'])
 @login_required 
 def daily_collection_unified_page():
@@ -756,7 +859,6 @@ def search_nomen():
     except Exception as e:
         print(f"Error saat mencari data terintegrasi: {e}")
         return jsonify({"message": f"Gagal mengambil data terintegrasi: {e}"}), 500
-
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
