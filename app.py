@@ -143,8 +143,8 @@ def collection_report_api():
     # Pipeline Awal: Memastikan Rayon dan PCEZ selalu ada untuk menghindari KeyError
     initial_project = {
         '$project': {
-            'RAYON': { '$ifNull': [ '$RAYON', 'N/A' ] }, # Jika RAYON null, gunakan 'N/A'
-            'PCEZ': { '$ifNull': [ '$PCEZ', 'N/A' ] },   # Jika PCEZ null, gunakan 'N/A'
+            'RAYON': { '$ifNull': [ '$RAYON', 'N/A' ] }, 
+            'PCEZ': { '$ifNull': [ '$PCEZ', 'N/A' ] },   
             'NOMEN': 1,
             'NOMINAL': 1,
             'STATUS': 1
@@ -153,7 +153,7 @@ def collection_report_api():
     
     # 1. Agregasi Total Piutang (ASUMSI: Semua record adalah piutang)
     pipeline_billed = [
-        initial_project, # <-- PERBAIKAN KEYERROR
+        initial_project, 
         { '$group': {
             '_id': { 'rayon': '$RAYON', 'pcez': '$PCEZ' },
             'total_nomen_all': { '$addToSet': '$NOMEN' },
@@ -164,7 +164,7 @@ def collection_report_api():
 
     # 2. Agregasi Total Koleksi (Hanya STATUS='Payment')
     pipeline_collected = [
-        initial_project, # <-- PERBAIKAN KEYERROR
+        initial_project, 
         { '$match': { 'STATUS': 'Payment' } }, 
         { '$group': {
             '_id': { 'rayon': '$RAYON', 'pcez': '$PCEZ' },
@@ -229,7 +229,6 @@ def collection_detail_api():
     mongo_query = {'STATUS': 'Payment'}
     
     if query_str:
-        # PERBAIKAN FILTER: Mengamankan input query menggunakan re.escape
         safe_query_str = re.escape(query_str)
         
         search_filter = {
@@ -241,7 +240,7 @@ def collection_detail_api():
         }
         mongo_query.update(search_filter)
 
-    sort_order = [('PAY_DT', -1)] # Mengurutkan berdasarkan Tanggal Bayar terbaru dahulu
+    sort_order = [('PAY_DT', -1)] 
 
     try:
         results = list(collection_data.find(mongo_query)
@@ -371,7 +370,7 @@ def upload_billed_data():
         # --- PEMBERSIHAN DATA AMAN ---
         if NOME_COLUMN_NAME in df.columns:
             df[NOME_COLUMN_NAME] = df[NOME_COLUMN_NAME].astype(str).str.strip() 
-
+        
         for col in df.columns:
             # Hanya jalankan strip() jika tipe data adalah object (string)
             if df[col].dtype == 'object':
