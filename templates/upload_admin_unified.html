@@ -8,7 +8,7 @@
     border-bottom: 2px solid #ddd;
     margin-bottom: 20px;
     display: flex;
-    overflow-x: auto; /* Memastikan tab bisa di-scroll di mobile */
+    overflow-x: auto; 
     white-space: nowrap;
 }
 .tab-button {
@@ -21,7 +21,7 @@
     font-weight: 600;
     color: #555;
     transition: all 0.3s;
-    flex-shrink: 0; /* Mencegah tombol menyusut di mobile */
+    flex-shrink: 0; 
 }
 .tab-button.active {
     background-color: white;
@@ -60,9 +60,8 @@
 }
 .btn-upload-append:hover { background-color: #1e7e34; }
 
-#uploadStatusBilled, #uploadStatusCollection { margin-top: 15px; font-weight: 500; }
+#uploadStatusMC, #uploadStatusMB, #uploadStatusCID, #uploadStatusSBRS { margin-top: 15px; font-weight: 500; }
 
-/* Styling input file agar lebih mudah diklik di mobile */
 input[type="file"] {
     display: block;
     width: 100%;
@@ -83,48 +82,85 @@ input[type="file"] {
 
 {% block content %}
     <h2 style="text-align: left; border-bottom: none; margin-bottom: 20px; color: var(--primary-color);">
-        <i class="fas fa-upload" style="margin-right: 10px;"></i> Kelola Data Piutang & Koleksi
+        <i class="fas fa-upload" style="margin-right: 10px;"></i> Kelola Data Sumber
     </h2>
     
     <div class="tab-menu">
-        <button class="tab-button active" onclick="showTab('billed')" id="tab-billed">
-            <i class="fas fa-file-invoice"></i> GANTI Data Piutang
+        <button class="tab-button active" onclick="showTab('mc')" id="tab-mc">
+            <i class="fas fa-print"></i> MC (Master Cetak)
         </button>
-        <button class="tab-button" onclick="showTab('collection')" id="tab-collection">
-            <i class="fas fa-hand-holding-usd"></i> TAMBAH Data Koleksi
+        <button class="tab-button" onclick="showTab('mb')" id="tab-mb">
+            <i class="fas fa-money-check-alt"></i> MB (Master Bayar)
+        </button>
+        <button class="tab-button" onclick="showTab('cid')" id="tab-cid">
+            <i class="fas fa-users"></i> CID (Data Pelanggan)
+        </button>
+        <button class="tab-button" onclick="showTab('sbrs')" id="tab-sbrs">
+            <i class="fas fa-tachometer-alt"></i> SBRS (Baca Meter)
         </button>
     </div>
 
-    <div id="content-billed" class="tab-content">
+    <div id="content-mc" class="tab-content">
         <div class="upload-section" style="border: 1px dashed #dc3545;">
-            <h3>PERINGATAN! Mode GANTI (REPLACE)</h3>
-            <p style="font-weight: bold; color: #dc3545;">Mengunggah file ini akan MENGHAPUS SEMUA DATA LAMA di database dan menggantinya. Gunakan hanya untuk Piutang Bulanan.</p>
-            <form id="uploadFormBilled" action="{{ url_for('upload_billed_data') }}" method="POST" enctype="multipart/form-data">
-                <input type="file" id="csvFileBilled" name="file" accept=".csv, .xlsx, .xls" required>
-                <button type="submit" class="btn-upload-replace">HAPUS & GANTI DATA</button>
+            <h3>MC: MASTER CETAK (REPLACE)</h3>
+            <p style="font-weight: bold; color: #dc3545;">MENGHAPUS SEMUA DATA LAMA di koleksi MasterCetak (MC).</p>
+            <form id="uploadFormMC" action="{{ url_for('upload_mc_data') }}" method="POST" enctype="multipart/form-data">
+                <input type="file" id="csvFileMC" name="file" accept=".csv, .xlsx, .xls" required>
+                <button type="submit" class="btn-upload-replace">HAPUS & GANTI DATA MC</button>
             </form>
-            <div id="uploadStatusBilled"></div>
+            <div id="uploadStatusMC"></div>
         </div>
     </div>
 
-    <div id="content-collection" class="tab-content" style="display: none;">
+    <div id="content-mb" class="tab-content" style="display: none;">
         <div class="upload-section" style="border: 1px dashed var(--secondary-color);">
-            <h3>Mode TAMBAH (APPEND)</h3>
-            <p style="font-weight: bold; color: var(--secondary-color);">Mengunggah file ini akan MENAMBAHKAN data transaksi baru. Duplikasi akan diabaikan secara otomatis.</p>
-            <p style="font-size: 0.9em; color: #666;">File harus memiliki kolom kunci unik: NOMEN, NOTAG, NOMINAL, dan PAY_DT.</p>
-            <form id="uploadFormCollection" action="{{ url_for('upload_collection_data') }}" method="POST" enctype="multipart/form-data">
-                <input type="file" id="csvFileCollection" name="file" accept=".csv, .xlsx, .xls" required>
-                <button type="submit" class="btn-upload-append">TAMBAH DATA KOLEKSI</button>
+            <h3>MB: MASTER BAYAR (APPEND)</h3>
+            <p style="font-weight: bold; color: var(--secondary-color);">MENAMBAHKAN data transaksi baru. Duplikasi diabaikan.</p>
+            <p style="font-size: 0.9em; color: #666;">Kunci unik: NOTAGIHAN, TGL_BAYAR, NOMINAL.</p>
+            <form id="uploadFormMB" action="{{ url_for('upload_mb_data') }}" method="POST" enctype="multipart/form-data">
+                <input type="file" id="csvFileMB" name="file" accept=".csv, .xlsx, .xls" required>
+                <button type="submit" class="btn-upload-append">TAMBAH DATA MB</button>
             </form>
-            <div id="uploadStatusCollection"></div>
+            <div id="uploadStatusMB"></div>
         </div>
     </div>
+    
+    <div id="content-cid" class="tab-content" style="display: none;">
+        <div class="upload-section" style="border: 1px dashed #dc3545;">
+            <h3>CID: CUSTOMER DATA (REPLACE)</h3>
+            <p style="font-weight: bold; color: #dc3545;">MENGHAPUS SEMUA DATA LAMA di koleksi CustomerData (CID).</p>
+            <form id="uploadFormCID" action="{{ url_for('upload_cid_data') }}" method="POST" enctype="multipart/form-data">
+                <input type="file" id="csvFileCID" name="file" accept=".csv, .xlsx, .xls" required>
+                <button type="submit" class="btn-upload-replace">HAPUS & GANTI DATA CID</button>
+            </form>
+            <div id="uploadStatusCID"></div>
+        </div>
+    </div>
+
+    <div id="content-sbrs" class="tab-content" style="display: none;">
+        <div class="upload-section" style="border: 1px dashed var(--secondary-color);">
+            <h3>SBRS: RIWAYAT BACA METER (APPEND)</h3>
+            <p style="font-weight: bold; color: var(--secondary-color);">MENAMBAHKAN riwayat baca meter baru. Duplikasi diabaikan.</p>
+            <p style="font-size: 0.9em; color: #666;">Kunci unik: CMR_ACCOUNT, CMR_RD_DATE.</p>
+            <form id="uploadFormSBRS" action="{{ url_for('upload_sbrs_data') }}" method="POST" enctype="multipart/form-data">
+                <input type="file" id="csvFileSBRS" name="file" accept=".csv, .xlsx, .xls" required>
+                <button type="submit" class="btn-upload-append">TAMBAH DATA SBRS</button>
+            </form>
+            <div id="uploadStatusSBRS"></div>
+        </div>
+    </div>
+
 
     <script>
-        const formBilled = document.getElementById('uploadFormBilled');
-        const formCollection = document.getElementById('uploadFormCollection');
-        const statusBilled = document.getElementById('uploadStatusBilled');
-        const statusCollection = document.getElementById('uploadStatusCollection');
+        const formMC = document.getElementById('uploadFormMC');
+        const formMB = document.getElementById('uploadFormMB');
+        const formCID = document.getElementById('uploadFormCID');
+        const formSBRS = document.getElementById('uploadFormSBRS');
+
+        const statusMC = document.getElementById('uploadStatusMC');
+        const statusMB = document.getElementById('uploadStatusMB');
+        const statusCID = document.getElementById('uploadStatusCID');
+        const statusSBRS = document.getElementById('uploadStatusSBRS');
 
         function showTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(div => div.style.display = 'none');
@@ -161,13 +197,15 @@ input[type="file"] {
             }
         }
         
-        // Event Listeners untuk kedua Form
-        formBilled.addEventListener('submit', (e) => handleUpload(e, formBilled, statusBilled, 'var(--secondary-color)'));
-        formCollection.addEventListener('submit', (e) => handleUpload(e, formCollection, statusCollection, 'var(--secondary-color)'));
+        // Event Listeners untuk semua Form
+        formMC.addEventListener('submit', (e) => handleUpload(e, formMC, statusMC, 'var(--secondary-color)'));
+        formMB.addEventListener('submit', (e) => handleUpload(e, formMB, statusMB, 'var(--secondary-color)'));
+        formCID.addEventListener('submit', (e) => handleUpload(e, formCID, statusCID, 'var(--secondary-color)'));
+        formSBRS.addEventListener('submit', (e) => handleUpload(e, formSBRS, statusSBRS, 'var(--secondary-color)'));
         
-        // Tampilkan tab Piutang saat pertama kali dimuat
+        // Tampilkan tab MC saat pertama kali dimuat
         document.addEventListener('DOMContentLoaded', () => {
-            showTab('billed');
+            showTab('mc');
         });
     </script>
 {% endblock %}
