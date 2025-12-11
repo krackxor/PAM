@@ -8,6 +8,8 @@
     border-bottom: 2px solid #ddd;
     margin-bottom: 20px;
     display: flex;
+    overflow-x: auto; /* Memastikan tab bisa di-scroll di mobile */
+    white-space: nowrap;
 }
 .tab-button {
     padding: 10px 20px;
@@ -19,6 +21,7 @@
     font-weight: 600;
     color: #555;
     transition: all 0.3s;
+    flex-shrink: 0; /* Mencegah tombol menyusut di mobile */
 }
 .tab-button.active {
     background-color: white;
@@ -33,7 +36,7 @@
 }
 .upload-section { 
     padding: 20px; 
-    border-radius: 8px; 
+    border-radius: var(--border-radius); 
     margin-bottom: 30px; 
     text-align: center; 
 }
@@ -45,6 +48,8 @@
     border-radius: 8px; 
     transition: all 0.3s;
 }
+.btn-upload-replace:hover { background-color: #c82333; }
+
 .btn-upload-append { 
     background-color: var(--secondary-color); 
     color: white; 
@@ -53,7 +58,27 @@
     border-radius: 8px; 
     transition: all 0.3s;
 }
+.btn-upload-append:hover { background-color: #1e7e34; }
+
 #uploadStatusBilled, #uploadStatusCollection { margin-top: 15px; font-weight: 500; }
+
+/* Styling input file agar lebih mudah diklik di mobile */
+input[type="file"] {
+    display: block;
+    width: 100%;
+    margin: 15px auto;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+@media (max-width: 480px) {
+    .tab-button {
+        padding: 8px 12px;
+        font-size: 0.9em;
+    }
+}
 {% endblock %}
 
 {% block content %}
@@ -75,7 +100,7 @@
             <h3>PERINGATAN! Mode GANTI (REPLACE)</h3>
             <p style="font-weight: bold; color: #dc3545;">Mengunggah file ini akan MENGHAPUS SEMUA DATA LAMA di database dan menggantinya. Gunakan hanya untuk Piutang Bulanan.</p>
             <form id="uploadFormBilled" action="{{ url_for('upload_billed_data') }}" method="POST" enctype="multipart/form-data">
-                <input type="file" id="csvFileBilled" name="file" accept=".csv, .xlsx, .xls" required style="margin-bottom: 15px;">
+                <input type="file" id="csvFileBilled" name="file" accept=".csv, .xlsx, .xls" required>
                 <button type="submit" class="btn-upload-replace">HAPUS & GANTI DATA</button>
             </form>
             <div id="uploadStatusBilled"></div>
@@ -88,7 +113,7 @@
             <p style="font-weight: bold; color: var(--secondary-color);">Mengunggah file ini akan MENAMBAHKAN data transaksi baru. Duplikasi akan diabaikan secara otomatis.</p>
             <p style="font-size: 0.9em; color: #666;">File harus memiliki kolom kunci unik: NOMEN, NOTAG, NOMINAL, dan PAY_DT.</p>
             <form id="uploadFormCollection" action="{{ url_for('upload_collection_data') }}" method="POST" enctype="multipart/form-data">
-                <input type="file" id="csvFileCollection" name="file" accept=".csv, .xlsx, .xls" required style="margin-bottom: 15px;">
+                <input type="file" id="csvFileCollection" name="file" accept=".csv, .xlsx, .xls" required>
                 <button type="submit" class="btn-upload-append">TAMBAH DATA KOLEKSI</button>
             </form>
             <div id="uploadStatusCollection"></div>
@@ -126,7 +151,7 @@
                 if (response.ok) {
                     statusElement.innerHTML = `<span style="color: ${successColor};">✅ ${result.message}</span>`;
                 } else if (response.status === 401) {
-                    window.location.href = '/login'; 
+                    window.location.href = '{{ url_for("login") }}'; 
                 } else {
                     statusElement.innerHTML = `<span style="color: #dc3545;">❌ Error: ${result.message}</span>`;
                 }
