@@ -17,6 +17,7 @@ DB_NAME = os.getenv("MONGO_DB_NAME")
 COLLECTION_NAME = os.getenv("MONGO_COLLECTION_NAME")
 
 # Kolom pencarian: Harus sesuai dengan nama kolom di CSV Anda (setelah dikonversi ke huruf besar)
+# KARENA NOMEN ADALAH ID, KITA AKAN SELALU MENGGUNAKANNYA SEBAGAI STRING
 NOME_COLUMN_NAME = 'NOMEN' 
 
 # Ekstensi file yang diizinkan untuk diupload
@@ -31,7 +32,7 @@ try:
     print("Koneksi MongoDB berhasil!")
 except Exception as e:
     print(f"Gagal terhubung ke MongoDB: {e}")
-    # Anda mungkin ingin keluar atau menangani error di sini
+    # Jika gagal koneksi, set client ke None agar fungsi lain bisa mengecek status koneksi
     client = None
 
 # --- Fungsi Utility ---
@@ -51,7 +52,7 @@ def index():
 def upload_data():
     """Endpoint untuk mengunggah file (CSV atau Excel) dan memperbarui MongoDB."""
     if client is None:
-        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        return jsonify({"message": "Server tidak terhubung ke Database. Cek MONGO_URI Anda."}), 500
 
     if 'file' not in request.files:
         return jsonify({"message": "Tidak ada file di permintaan"}), 400
@@ -71,10 +72,16 @@ def upload_data():
             df = pd.read_excel(file, sheet_name=0) 
         
         # 2. Pembersihan dan Konversi Data
+        
         # Konversi nama kolom menjadi huruf besar dan bersihkan spasi
         df.columns = [col.strip().upper() for col in df.columns]
         
-        # Bersihkan spasi di nilai data (penting untuk pencarian NOMEN)
+        # 🚨 SOLUSI TIPE DATA: Paksa kolom NOME_COLUMN_NAME menjadi string sebelum dimasukkan ke Mongo
+        # Ini memastikan pencarian dari web (selalu string) akan cocok.
+        if NOME_COLUMN_NAME in df.columns:
+            df[NOME_COLUMN_NAME] = df[NOME_COLUMN_NAME].astype(str).str.strip() 
+
+        # Bersihkan spasi di nilai data lainnya (hanya untuk kolom string/object)
         df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x) 
         
         # Konversi ke format list of dictionaries
@@ -98,7 +105,7 @@ def upload_data():
 def search_nomen():
     """Endpoint API untuk mencari data di MongoDB berdasarkan NOMEN."""
     if client is None:
-        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        return jsonify({"message": "Server tidak terhubung ke Database. Cek MONGO_URI Anda."}), 500
         
     query_nomen = request.args.get('nomen', '').strip()
 
@@ -107,6 +114,7 @@ def search_nomen():
 
     try:
         # Query MongoDB: Mencari NOMEN yang cocok secara eksak
+        # NOMEN di database sudah distringkan saat upload, dan query_nomen dari web adalah string.
         mongo_query = { NOME_COLUMN_NAME: query_nomen }
         
         results = list(collection.find(mongo_query))
