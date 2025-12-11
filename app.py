@@ -31,6 +31,7 @@ collection_mc = None
 collection_mb = None
 collection_cid = None
 collection_sbrs = None
+collection_ardebt = None
 
 try:
     client = MongoClient(MONGO_URI)
@@ -42,6 +43,7 @@ try:
     collection_mb = db['MasterBayar']   # MB (Koleksi Harian - APPEND)
     collection_cid = db['CustomerData'] # CID (Data Pelanggan Statis - REPLACE)
     collection_sbrs = db['MeterReading'] # SBRS (Baca Meter Harian/Parsial - APPEND)
+    collection_ardebt = db['AccountReceivable'] # ARDEBT (Tunggakan Detail - REPLACE)
     
     collection_data = collection_mc
 
@@ -601,6 +603,56 @@ def upload_sbrs_data():
         print(f"Error saat memproses file SBRS: {e}")
         return jsonify({"message": f"Gagal memproses file SBRS: {e}. Pastikan format data benar."}), 500
 
+@app.route('/upload/ardebt', methods=['POST'])
+@login_required 
+@admin_required 
+def upload_ardebt_data():
+    """Mode GANTI: Untuk data Detail Tunggakan (ARDEBT)."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    if 'file' not in request.files:
+        return jsonify({"message": "Tidak ada file di permintaan"}), 400
+
+    file = request.files['file']
+    if file.filename == '' or not allowed_file(file.filename):
+        return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
+
+    filename = secure_filename(file.filename)
+    file_extension = filename.rsplit('.', 1)[1].lower()
+
+    try:
+        if file_extension == 'csv':
+            df = pd.read_csv(file)
+        elif file_extension in ['xlsx', 'xls']:
+            df = pd.read_excel(file, sheet_name=0) 
+        
+        df.columns = [col.strip().upper() for col in df.columns]
+
+        # PEMBERSIHAN DATA AMAN
+        for col in df.columns:
+            if df[col].dtype == 'object':
+                df[col] = df[col].astype(str).str.strip()
+            # Kolom numerik penting
+            if col in ['JUMLAH', 'VOLUME']: 
+                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        data_to_insert = df.to_dict('records')
+        
+        if not data_to_insert:
+            return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
+        
+        # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE)
+        collection_ardebt.delete_many({})
+        collection_ardebt.insert_many(data_to_insert)
+        count = len(data_to_insert)
+        
+        return jsonify({"message": f"Sukses! {count} baris Detail Tunggakan (ARDEBT) berhasil MENGGANTI data lama."}), 200
+
+    except Exception as e:
+        print(f"Error saat memproses file ARDEBT: {e}")
+        return jsonify({"message": f"Gagal memproses file ARDEBT: {e}. Pastikan format data benar."}), 500
+
 
 # --- ENDPOINT UTAMA ---
 @app.route('/')
@@ -628,7 +680,8 @@ def search_nomen():
         for result in results:
             result.pop('_id', None) 
 
-        return jsonify(results), 200
+        return jsonify(results), 0 # Mengembalikan status 0 untuk konsistensi API
+
 
     except Exception as e:
         print(f"Error saat mencari data: {e}")
