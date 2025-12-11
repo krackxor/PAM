@@ -1,3 +1,5 @@
+# GANTI SELURUH ISI FILE PAM-main (1)/PAM-main/app.py DENGAN KODE BERIKUT
+
 import os
 import pandas as pd
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
@@ -145,7 +147,8 @@ def search_nomen():
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
-    query_nomen = request.args.get('nomen', '').strip()
+    # PERBAIKAN: Konversi input NOMEN ke Huruf Besar untuk sinkronisasi dengan data yang tersimpan
+    query_nomen = request.args.get('nomen', '').strip().upper()
 
     if not query_nomen:
         return jsonify({"status": "fail", "message": "Masukkan NOMEN untuk memulai pencarian terintegrasi."}), 400
@@ -155,6 +158,7 @@ def search_nomen():
         cid_result = collection_cid.find_one({'NOMEN': query_nomen})
         
         if not cid_result:
+            # Pesan Not Found yang akurat (memakai query yang sudah di-upper)
             return jsonify({
                 "status": "not_found",
                 "message": f"NOMEN {query_nomen} tidak ditemukan di Master Data Pelanggan (CID)."
@@ -176,6 +180,7 @@ def search_nomen():
         last_payment = mb_payments[0] if mb_payments else None
         
         # 5. RIWAYAT BACA METER (SBRS)
+        # SBRS menggunakan 'CMR_ACCOUNT' sebagai NOMEN
         sbrs_last_read_cursor = collection_sbrs.find({'CMR_ACCOUNT': query_nomen}).sort('CMR_RD_DATE', -1).limit(2)
         sbrs_history = list(sbrs_last_read_cursor)
         
