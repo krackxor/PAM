@@ -542,7 +542,7 @@ def upload_mc_data():
 @login_required 
 @admin_required 
 def upload_mb_data():
-    """Mode APPEND: Untuk Master Bayar (MB) / Koleksi Harian."""
+    """Mode APPEND: Untuk Master Bayar (MB) / Koleksi Harian. Dipercepat dengan Bulk Insert."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -576,26 +576,44 @@ def upload_mb_data():
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
-        # OPERASI KRITIS: APPEND DATA BARU DENGAN PENCEGAHAN DUPLIKASI
-        inserted_count = 0
-        skipped_count = 0
-        
-        # Kunci unik: NOTAGIHAN (dari MB) + TGL_BAYAR
+        # Kunci unik: NOTAGIHAN (dari MB) + TGL_BAYAR + NOMINAL
         UNIQUE_KEYS = ['NOTAGIHAN', 'TGL_BAYAR', 'NOMINAL'] 
         
         if not all(key in df.columns for key in UNIQUE_KEYS):
             return jsonify({"message": f"Gagal Append: File MB harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)}. Cek file Anda."}), 400
-
-        for record in data_to_insert:
-            filter_query = {key: record.get(key) for key in UNIQUE_KEYS}
             
-            if collection_mb.find_one(filter_query):
-                skipped_count += 1
-            else:
-                collection_mb.insert_one(record)
-                inserted_count += 1
+        # 1. Pastikan index unik ada untuk mencegah duplikasi secara efisien
+        collection_mb.create_index(
+            [("NOTAGIHAN", 1), ("TGL_BAYAR", 1), ("NOMINAL", 1)],
+            unique=True,
+            name='unique_mb_entry'
+        )
         
-        return jsonify({"message": f"Sukses Append! {inserted_count} baris Master Bayar (MB) baru ditambahkan. ({skipped_count} duplikat diabaikan)."}), 200
+        # OPERASI KRITIS: APPEND DATA BARU MENGGUNAKAN BULK INSERT
+        try:
+            # ordered=False: Lanjutkan menyisipkan meskipun ada duplikat (DuplicateKeyError)
+            result = collection_mb.insert_many(data_to_insert, ordered=False)
+            inserted_count = len(result.inserted_ids)
+            skipped_count = len(data_to_insert) - inserted_count
+            
+            return jsonify({"message": f"Sukses Append! {inserted_count} baris Master Bayar (MB) baru ditambahkan. ({skipped_count} duplikat diabaikan)."}), 200
+
+        except Exception as e:
+            # Tangani BulkWriteError (yang terjadi saat ada duplikat)
+            inserted_count = 0
+            skipped_count = 0
+            if hasattr(e, 'details') and 'writeErrors' in e.details:
+                # Menghitung sisipan yang berhasil/gagal dari error
+                skipped_count = len(e.details['writeErrors'])
+                inserted_count = len(data_to_insert) - skipped_count
+                
+                if inserted_count > 0 or skipped_count > 0:
+                     return jsonify({"message": f"Sukses Append! {inserted_count} baris Master Bayar (MB) baru ditambahkan. ({skipped_count} duplikat diabaikan oleh DB)."}), 200
+            
+            # Jika error lain
+            print(f"Error saat memproses file MB: {e}")
+            return jsonify({"message": f"Gagal memproses file MB: {e}. Pastikan format data dan koneksi DB benar."}), 500
+
 
     except Exception as e:
         print(f"Error saat memproses file MB: {e}")
@@ -648,7 +666,7 @@ def upload_cid_data():
 @login_required 
 @admin_required 
 def upload_sbrs_data():
-    """Mode APPEND: Untuk data Baca Meter (SBRS) / Riwayat Stand Meter."""
+    """Mode APPEND: Untuk data Baca Meter (SBRS) / Riwayat Stand Meter. Dipercepat dengan Bulk Insert."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -683,26 +701,44 @@ def upload_sbrs_data():
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
-        # OPERASI KRITIS: APPEND DATA BARU DENGAN PENCEGAHAN DUPLIKASI
-        inserted_count = 0
-        skipped_count = 0
-        
         # Kunci unik: cmr_account (NOMEN) + cmr_rd_date (Tanggal Baca)
         UNIQUE_KEYS = ['CMR_ACCOUNT', 'CMR_RD_DATE'] 
         
         if not all(key in df.columns for key in UNIQUE_KEYS):
             return jsonify({"message": f"Gagal Append: File SBRS harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)}. Cek file Anda."}), 400
-
-        for record in data_to_insert:
-            filter_query = {key: record.get(key) for key in UNIQUE_KEYS}
-            
-            if collection_sbrs.find_one(filter_query):
-                skipped_count += 1
-            else:
-                collection_sbrs.insert_one(record)
-                inserted_count += 1
         
-        return jsonify({"message": f"Sukses Append! {inserted_count} baris Riwayat Baca Meter (SBRS) baru ditambahkan. ({skipped_count} duplikat diabaikan)."}), 200
+        # 1. Pastikan index unik ada untuk mencegah duplikasi secara efisien
+        collection_sbrs.create_index(
+            [("CMR_ACCOUNT", 1), ("CMR_RD_DATE", 1)],
+            unique=True,
+            name='unique_sbrs_entry'
+        )
+
+        # OPERASI KRITIS: APPEND DATA BARU MENGGUNAKAN BULK INSERT
+        try:
+            # ordered=False: Lanjutkan menyisipkan meskipun ada duplikat (DuplicateKeyError)
+            result = collection_sbrs.insert_many(data_to_insert, ordered=False)
+            inserted_count = len(result.inserted_ids)
+            skipped_count = len(data_to_insert) - inserted_count
+            
+            return jsonify({"message": f"Sukses Append! {inserted_count} baris Riwayat Baca Meter (SBRS) baru ditambahkan. ({skipped_count} duplikat diabaikan)."}), 200
+
+        except Exception as e:
+            # Tangani BulkWriteError (yang terjadi saat ada duplikat)
+            inserted_count = 0
+            skipped_count = 0
+            if hasattr(e, 'details') and 'writeErrors' in e.details:
+                # Menghitung sisipan yang berhasil/gagal dari error
+                skipped_count = len(e.details['writeErrors'])
+                inserted_count = len(data_to_insert) - skipped_count
+                
+                if inserted_count > 0 or skipped_count > 0:
+                     return jsonify({"message": f"Sukses Append! {inserted_count} baris Riwayat Baca Meter (SBRS) baru ditambahkan. ({skipped_count} duplikat diabaikan oleh DB)."}), 200
+
+            # Jika error lain
+            print(f"Error saat memproses file SBRS: {e}")
+            return jsonify({"message": f"Gagal memproses file SBRS: {e}. Pastikan format data dan koneksi DB benar."}), 500
+
 
     except Exception as e:
         print(f"Error saat memproses file SBRS: {e}")
