@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}Laporan: {{ title }}{% endblock %}
+
+{% block custom_styles %}
+/* CSS Khusus untuk Laporan Detail (Dinamis) */
+.report-info {
+    padding: 15px;
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeeba;
+    border-radius: var(--border-radius);
+    margin-bottom: 20px;
+}
+
+.report-actions {
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Wrapper scroll untuk responsivitas tabel */
+.result-table-wrapper { 
+    overflow-x: auto; 
+    margin-top: 20px; 
+}
+
+/* Style Tabel */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+.data-table th, .data-table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    white-space: nowrap; 
+}
+.data-table th {
+    background-color: #f2f2f2;
+}
+
+/* Mobile Layout Fix */
+@media screen and (max-width: 600px) {
+    .data-table thead {
+        display: none;
+    }
+    .data-table tr {
+        display: block;
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        border-radius: var(--border-radius);
+    }
+    .data-table td {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 12px;
+        border: none;
+        border-bottom: 1px solid #eee;
+    }
+    .data-table td:before {
+        content: attr(data-label);
+        font-weight: bold;
+        text-align: left;
+        width: 50%;
+        color: var(--text-color);
+        padding-right: 10px;
+    }
+}
+{% endblock %}
+
+{% block content %}
+    <h2 style="text-align: left; border-bottom: none; margin-bottom: 10px; color: var(--primary-color);">
+        <i class="fas fa-list-alt" style="margin-right: 10px;"></i> Laporan Anomali: {{ title }}
+    </h2>
+    
+    <div class="report-info">
+        <p>{{ description }}</p>
+    </div>
+
+    <div class="report-actions">
+        <button onclick="window.history.back()" class="btn-primary" style="background-color: #6c757d; color: white; padding: 8px 15px; border-radius: 4px; border: none;">
+            ← Kembali ke Analisis
+        </button>
+        <button class="btn-primary" onclick="fetchReportData('{{ title }}')" style="background-color: var(--secondary-color); color: white; padding: 8px 15px; border-radius: 4px; border: none;">
+            Muat Data Laporan
+        </button>
+    </div>
+
+    <div id="reportDataArea">
+        <p style="text-align: center;">Tekan "Muat Data Laporan" untuk menampilkan hasil dari MongoDB.</p>
+    </div>
+
+    <script>
+        function fetchReportData(reportName) {
+            const dataArea = document.getElementById('reportDataArea');
+            dataArea.innerHTML = `<p style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Menghubungkan ke MongoDB untuk ${reportName}...</p>`;
+            
+            // --- LOGIKA UTAMA PERLU DITAMBAHKAN DI SINI ---
+            // Karena tidak ada endpoint API spesifik untuk 4 laporan ini, 
+            // di sini hanyalah demonstrasi tampilan hasil.
+            
+            setTimeout(() => {
+                const dummyData = [
+                    { NOMEN: '30012345', RAYON: '35', PCEZ: '094/06', KONDISI: 'Pemakaian 150 > 100', VOL_COLLECT: 150 },
+                    { NOMEN: '30056789', RAYON: '12', PCEZ: '091/01', KONDISI: 'Pemakaian 0 (Zero)', VOL_COLLECT: 0 },
+                    { NOMEN: '30099999', RAYON: '35', PCEZ: '094/06', KONDISI: 'Status Stand Tunggu', VOL_COLLECT: 25 }
+                ];
+                
+                renderDynamicTable(dummyData, reportName);
+            }, 1500); 
+            // ---------------------------------------------
+        }
+
+        function renderDynamicTable(data, title) {
+            const dataArea = document.getElementById('reportDataArea');
+            if (data.length === 0) {
+                dataArea.innerHTML = `<p style="text-align: center;">Tidak ada data ditemukan untuk laporan ${title}.</p>`;
+                return;
+            }
+
+            const headers = Object.keys(data[0]);
+            
+            let tableHTML = `<div class="result-table-wrapper"><table class="data-table"><thead><tr>`;
+            headers.forEach(h => {
+                tableHTML += `<th>${h.replace(/_/g, ' ')}</th>`;
+            });
+            tableHTML += `</tr></thead><tbody>`;
+
+            data.forEach(item => {
+                tableHTML += `<tr>`;
+                headers.forEach(h => {
+                    // PENTING: Tambahkan data-label untuk mobile view
+                    tableHTML += `<td data-label="${h.replace(/_/g, ' ')}">${item[h]}</td>`;
+                });
+                tableHTML += `</tr>`;
+            });
+
+            tableHTML += `</tbody></table></div>`;
+            dataArea.innerHTML = tableHTML;
+        }
+
+    </script>
+{% endblock %}
