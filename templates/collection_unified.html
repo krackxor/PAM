@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+
+{% block title %}Koleksi Harian Terpadu{% endblock %}
+
+{% block custom_styles %}
+/* Custom CSS dari Report dan Detail (digabungkan) */
+.report-header { text-align: center; margin-bottom: 20px; }
+.report-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+.summary-card {
+    background-color: #e9ecef;
+    padding: 15px;
+    border-radius: var(--border-radius);
+    text-align: center;
+}
+.summary-card h4 { margin: 0 0 5px 0; font-size: 1em; color: #666; }
+.summary-card p { margin: 0; font-size: 1.5em; font-weight: bold; }
+
+/* Filter Detail */
+.filter-input-group { 
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px dashed #ddd;
+    display: flex; 
+    align-items: center;
+    gap: 10px;
+}
+#filterInput { 
+    padding: 10px; 
+    border: 1px solid #ced4da; 
+    border-radius: var(--border-radius); 
+    font-size: 16px; 
+    flex-grow: 1;
+}
+
+/* Tabel Report */
+.report-table-wrapper { overflow-x: auto; margin-top: 20px; }
+.report-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.report-table th, .report-table td { border: 1px solid #ddd; padding: 8px; text-align: right; white-space: nowrap; }
+.report-table th { background-color: #f2f2f2; text-align: center; }
+.report-table td:first-child, .report-table td:nth-child(2) { text-align: left; } /* Rayon dan PCEZ di kiri */
+.grand-total-row { font-weight: bold; background-color: #cfe2ff; }
+.percentage-cell { font-weight: bold; color: var(--secondary-color); }
+
+/* Tabel Detail */
+.collection-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.collection-table th, .collection-table td { border: 1px solid #ddd; padding: 8px; text-align: left; white-space: nowrap; }
+.collection-table th { background-color: #f2f2f2; }
+
+.no-results { text-align: center; color: #555; padding: 20px; }
+{% endblock %}
+
+{% block content %}
+    <h2 style="text-align: left; border-bottom: none; margin-bottom: 20px; color: var(--primary-color);">
+        <i class="fas fa-chart-bar" style="margin-right: 10px;"></i> Koleksi Harian Terpadu
+    </h2>
+    
+    <div id="reportArea">
+        <p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Laporan Ringkas...</p>
+    </div>
+
+    <div class="filter-input-group">
+        <input type="text" id="filterInput" placeholder="Filter Detail (Rayon, PCEZ, NOMEN)...">
+        <button id="searchBtn" class="btn-primary" style="background-color: var(--primary-color); color: white; padding: 10px 15px; border: none; border-radius: 4px;">
+            <i class="fas fa-filter"></i> Filter Detail
+        </button>
+    </div>
+
+    <div id="detailsArea">
+        <p class="no-results">Memuat data transaksi...</p>
+    </div>
+
+    <script>
+        const reportArea = document.getElementById('reportArea');
+        const filterInput = document.getElementById('filterInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const detailsArea = document.getElementById('detailsArea');
+        
+        function formatRupiah(number) {
+            return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+        }
+        
+        function formatPercent(number) {
+            return (parseFloat(number) || 0).toFixed(2) + '%';
+        }
+
+        // --- FUNGSI 1: MEMUAT REPORT RINGKAS ---
+        async function fetchCollectionReport() {
+            try {
+                const response = await fetch('/api/collection/report');
+                const result = await response.json();
+                
+                if (response.status !== 200) {
+                     reportArea.innerHTML = `<p class="no-results" style="color: red;">❌ Gagal memuat report: ${result.message}</p>`;
+                     return;
+                }
+                
+                renderReport(result.report_data, result.grand_total);
+
+            } catch (error) {
+                reportArea.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data report dari server.</p>';
+                console.error('Report Error:', error);
+            }
+        }
+        
+        function renderReport(data, grandTotal) {
+            
+            let summaryHTML = `
+                <div class="report-header">
+                    <h3>Ringkasan Total Koleksi</h3>
+                </div>
+                <div class="report-grid">
+                    <div class="summary-card" style="border: 2px solid #007bff;">
+                        <h4>Total Nominal Piutang</h4>
+                        <p>${formatRupiah(grandTotal.TotalNominal)}</p>
+                    </div>
+                    <div class="summary-card" style="border: 2px solid #28a745;">
+                        <h4>Total Nominal Koleksi</h4>
+                        <p>${formatRupiah(grandTotal.CollectedNominal)}</p>
+                    </div>
+                    <div class="summary-card" style="border: 2px solid #ffc107;">
+                        <h4>Persentase Nominal</h4>
+                        <p>${formatPercent(grandTotal.PercentNominal)}</p>
+                    </div>
+                    <div class="summary-card" style="border: 2px solid #17a2b8;">
+                        <h4>Pelanggan Terbayar</h4>
+                        <p>${grandTotal.CollectedNomen.toLocaleString('id-ID')}</p>
+                    </div>
+                </div>
+            `;
+            
+            let tableHTML = `
+                <h3 style="margin-top: 30px;">Detail Koleksi per Rayon / PCEZ</h3>
+                <div class="report-table-wrapper">
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th>RAYON</th>
+                            <th>PCEZ</th>
+                            <th>TOTAL NOMINAL PIUTANG</th>
+                            <th>NOMINAL KOLEKSI</th>
+                            <th>% NOMINAL</th>
+                            <th>TOTAL NOMEN</th>
+                            <th>NOMEN TERBAYAR</th>
+                            <th>% NOMEN</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            data.forEach(item => {
+                tableHTML += `
+                    <tr>
+                        <td>${item.RAYON}</td>
+                        <td>${item.PCEZ}</td>
+                        <td>${formatRupiah(item.TotalNominal)}</td>
+                        <td>${formatRupiah(item.CollectedNominal)}</td>
+                        <td class="percentage-cell">${formatPercent(item.PercentNominal)}</td>
+                        <td>${item.TotalNomen.toLocaleString('id-ID')}</td>
+                        <td>${item.CollectedNomen.toLocaleString('id-ID')}</td>
+                        <td class="percentage-cell">${formatPercent(item.PercentNomenCount)}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                <tr class="grand-total-row">
+                    <td>GRAND TOTAL</td>
+                    <td>-</td>
+                    <td>${formatRupiah(grandTotal.TotalNominal)}</td>
+                    <td>${formatRupiah(grandTotal.CollectedNominal)}</td>
+                    <td class="percentage-cell">${formatPercent(grandTotal.PercentNominal)}</td>
+                    <td>${grandTotal.TotalNomen.toLocaleString('id-ID')}</td>
+                    <td>${grandTotal.CollectedNomen.toLocaleString('id-ID')}</td>
+                    <td class="percentage-cell">${formatPercent(grandTotal.PercentNomenCount)}</td>
+                </tr>
+            `;
+            
+            tableHTML += `
+                    </tbody>
+                </table>
+                </div>
+            `;
+            
+            reportArea.innerHTML = summaryHTML + tableHTML;
+        }
+
+        // --- FUNGSI 2: MEMUAT DETAIL TRANSAKSIONAL ---
+        async function fetchCollectionDetails(query = '') {
+            detailsArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Detail Transaksi...</p>';
+            
+            try {
+                const response = await fetch(`/api/collection/detail?q=${query}`);
+                const data = await response.json();
+                
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                
+                if (data.length === 0) {
+                    detailsArea.innerHTML = '<p class="no-results">Tidak ada data koleksi yang ditemukan dengan filter tersebut.</p>';
+                    return;
+                }
+
+                renderDetailTable(data);
+
+            } catch (error) {
+                detailsArea.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data detail dari server.</p>';
+                console.error('Detail Error:', error);
+            }
+        }
+        
+        function renderDetailTable(data) {
+            let tableHTML = `
+                <h3 style="margin-top: 20px;">Listing Transaksi (${data.length} Transaksi)</h3>
+                <div class="result-table-wrapper">
+                <table class="collection-table">
+                    <thead>
+                        <tr>
+                            <th>NOMEN</th>
+                            <th>RAYON</th>
+                            <th>PCEZ</th>
+                            <th>TGL BAYAR</th>
+                            <th>NOMINAL</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            let totalNominal = 0;
+            
+            data.forEach(item => {
+                const nominal = parseFloat(item.NOMINAL || 0);
+                totalNominal += nominal;
+                
+                tableHTML += `
+                    <tr>
+                        <td>${item.NOMEN}</td>
+                        <td>${item.RAYON}</td>
+                        <td>${item.PCEZ}</td>
+                        <td>${item.PAY_DT || '-'}</td>
+                        <td>Rp ${nominal.toLocaleString('id-ID')}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                <tr style="font-weight: bold; background-color: #e9ecef;">
+                    <td colspan="4">TOTAL FILTER</td>
+                    <td>Rp ${totalNominal.toLocaleString('id-ID')}</td>
+                </tr>
+            `;
+            
+            tableHTML += `
+                    </tbody>
+                </table>
+                </div>
+            `;
+            
+            detailsArea.innerHTML = tableHTML;
+        }
+
+        // Event Listeners
+        searchBtn.addEventListener('click', () => {
+            fetchCollectionDetails(filterInput.value.trim());
+        });
+        
+        filterInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchBtn.click();
+            }
+        });
+        
+        // Muat kedua bagian saat halaman dimuat
+        document.addEventListener('DOMContentLoaded', () => {
+             fetchCollectionReport(); 
+             fetchCollectionDetails(''); // Muat data tanpa filter awal
+        });
+
+    </script>
+{% endblock %}
