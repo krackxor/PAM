@@ -10,7 +10,6 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField 
 from wtforms.validators import DataRequired 
 from functools import wraps
-from bson.objectid import ObjectId
 
 load_dotenv() 
 
@@ -26,7 +25,7 @@ COLLECTION_NAME = os.getenv("MONGO_COLLECTION_NAME")
 NOME_COLUMN_NAME = 'NOMEN' 
 ALLOWED_EXTENSIONS = {'csv', 'xlsx', 'xls'} 
 
-# Koneksi ke MongoDB (Hanya untuk Data Tagihan)
+# Koneksi ke MongoDB
 client = None
 collection_data = None
 try:
@@ -127,11 +126,11 @@ def logout():
     flash('Anda telah keluar.', 'success')
     return redirect(url_for('login'))
 
-# --- ENDPOINT KOLEKSI TERPADU (UNIFIED COLLECTION PAGE) ---
+
+# --- ENDPOINT KOLEKSI TERPADU (DAILY COLLECTION UNIFIED) ---
 @app.route('/daily_collection', methods=['GET'])
 @login_required 
 def daily_collection_unified_page():
-    """Menampilkan halaman tunggal yang menggabungkan Report dan Detail Koleksi."""
     return render_template('collection_unified.html', is_admin=current_user.is_admin)
 
 @app.route('/api/collection/report', methods=['GET'])
@@ -141,7 +140,6 @@ def collection_report_api():
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
 
-    # 1. Agregasi Total Piutang (ASUMSI: Semua record adalah piutang)
     pipeline_billed = [
         { '$group': {
             '_id': { 'rayon': '$RAYON', 'pcez': '$PCEZ' },
@@ -151,7 +149,6 @@ def collection_report_api():
     ]
     billed_data = list(collection_data.aggregate(pipeline_billed))
 
-    # 2. Agregasi Total Koleksi (Hanya STATUS='Payment')
     pipeline_collected = [
         { '$match': { 'STATUS': 'Payment' } }, 
         { '$group': {
@@ -162,7 +159,6 @@ def collection_report_api():
     ]
     collected_data = list(collection_data.aggregate(pipeline_collected))
 
-    # 3. Gabungkan hasil Billed dan Collected
     report_map = {}
     
     for item in billed_data:
@@ -190,7 +186,6 @@ def collection_report_api():
             if report_map[key]['TotalNomen'] > 0:
                 report_map[key]['PercentNomenCount'] = (report_map[key]['CollectedNomen'] / report_map[key]['TotalNomen']) * 100
 
-    # 4. Hitung Total Keseluruhan (Grand Total)
     grand_total = {
         'TotalNominal': sum(d['TotalNominal'] for d in report_map.values()),
         'CollectedNominal': sum(d['CollectedNominal'] for d in report_map.values()),
@@ -237,7 +232,6 @@ def collection_detail_api():
 
         cleaned_results = []
         for doc in results:
-            # Pastikan NOMINAL dikonversi ke float untuk total di frontend
             nominal_val = float(doc.get('NOMINAL', 0)) 
             
             cleaned_results.append({
@@ -254,8 +248,7 @@ def collection_detail_api():
         print(f"Error fetching detailed collection data: {e}")
         return jsonify({"message": f"Gagal mengambil data detail koleksi: {e}"}), 500
 
-
-# --- ENDPOINT ANALISIS DATA DINAMIS (SEMUA PENGGUNA) ---
+# --- ENDPOINT ANALISIS DATA DINAMIS ---
 @app.route('/analyze_data', methods=['GET'])
 @login_required 
 def analyze_data_page():
@@ -324,17 +317,18 @@ def analyze_data():
         "head": merged_df.head().to_html(classes='table table-striped') 
     }), 200
 
-# --- ENDPOINT ADMIN & UTAMA ---
+# --- ENDPOINT KELOLA UPLOAD (ADMIN) ---
 @app.route('/admin/upload', methods=['GET'])
 @login_required 
 @admin_required 
-def admin_upload_page():
-    return render_template('upload_admin.html', is_admin=current_user.is_admin)
+def admin_upload_unified_page():
+    return render_template('upload_admin_unified.html', is_admin=current_user.is_admin)
 
-@app.route('/upload', methods=['POST'])
+@app.route('/upload/billed', methods=['POST'])
 @login_required 
 @admin_required 
-def upload_data():
+def upload_billed_data():
+    """Mode HAPUS/GANTI: Untuk data Piutang Bulanan."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
     
@@ -363,19 +357,79 @@ def upload_data():
         
         data_to_insert = df.to_dict('records')
         
+        # OPERASI KRITIS: HAPUS SEMUA DATA LAMA
         collection_data.delete_many({})
-        
-        if data_to_insert:
-            collection_data.insert_many(data_to_insert)
-            count = len(data_to_insert)
-            return jsonify({"message": f"Sukses! {count} baris data dari {file_extension.upper()} berhasil diperbarui ke MongoDB."}), 200
-        else:
-            return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
+        collection_data.insert_many(data_to_insert)
+        count = len(data_to_insert)
+        return jsonify({"message": f"Sukses! {count} baris Piutang BARU berhasil MENGGANTI seluruh data lama di MongoDB."}), 200
 
     except Exception as e:
-        print(f"Error saat memproses file: {e}")
-        return jsonify({"message": f"Gagal memproses file: {e}. Pastikan format data benar dan kolom tersedia."}), 500
+        print(f"Error saat memproses file Piutang: {e}")
+        return jsonify({"message": f"Gagal memproses file Piutang: {e}. Pastikan format data benar."}), 500
 
+
+@app.route('/upload/collection', methods=['POST'])
+@login_required 
+@admin_required 
+def upload_collection_data():
+    """Mode APPEND: Untuk data Koleksi Harian."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    if 'file' not in request.files:
+        return jsonify({"message": "Tidak ada file di permintaan"}), 400
+
+    file = request.files['file']
+    if file.filename == '' or not allowed_file(file.filename):
+        return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
+
+    filename = secure_filename(file.filename)
+    file_extension = filename.rsplit('.', 1)[1].lower()
+
+    try:
+        if file_extension == 'csv':
+            df = pd.read_csv(file)
+        elif file_extension in ['xlsx', 'xls']:
+            df = pd.read_excel(file, sheet_name=0) 
+        
+        df.columns = [col.strip().upper() for col in df.columns]
+        
+        if NOME_COLUMN_NAME in df.columns:
+            df[NOME_COLUMN_NAME] = df[NOME_COLUMN_NAME].astype(str).str.strip() 
+
+        df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x) 
+        
+        data_to_insert = df.to_dict('records')
+        
+        if not data_to_insert:
+            return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
+        
+        # OPERASI KRITIS: APPEND DATA BARU DENGAN PENCEGAHAN DUPLIKASI
+        inserted_count = 0
+        skipped_count = 0
+        
+        # Kolom kunci transaksi unik (Pastikan NOMINAL, PAY_DT, NOTAG ada di file koleksi)
+        UNIQUE_KEYS = ['NOMEN', 'NOTAG', 'NOMINAL', 'PAY_DT']
+        
+        if not all(key in df.columns for key in UNIQUE_KEYS):
+            return jsonify({"message": f"Gagal Append: File Koleksi harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)}. Cek file Anda."}), 400
+
+        for record in data_to_insert:
+            filter_query = {key: record.get(key) for key in UNIQUE_KEYS}
+            
+            if collection_data.find_one(filter_query):
+                skipped_count += 1
+            else:
+                collection_data.insert_one(record)
+                inserted_count += 1
+        
+        return jsonify({"message": f"Sukses Append! {inserted_count} baris data Koleksi baru ditambahkan. ({skipped_count} baris duplikat diabaikan)."}), 200
+
+    except Exception as e:
+        print(f"Error saat memproses file Koleksi: {e}")
+        return jsonify({"message": f"Gagal memproses file Koleksi: {e}. Pastikan format data benar."}), 500
+
+# --- ENDPOINT UTAMA ---
 @app.route('/')
 @login_required 
 def index():
