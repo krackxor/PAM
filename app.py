@@ -10,7 +10,7 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField 
 from wtforms.validators import DataRequired 
 from functools import wraps
-import re # <-- BARU: Diperlukan untuk pengamanan Regex
+import re # Diperlukan untuk pengamanan Regex
 
 load_dotenv() 
 
@@ -140,7 +140,20 @@ def collection_report_api():
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
 
+    # Pipeline Awal: Memastikan Rayon dan PCEZ selalu ada untuk menghindari KeyError
+    initial_project = {
+        '$project': {
+            'RAYON': { '$ifNull': [ '$RAYON', 'N/A' ] }, # Jika RAYON null, gunakan 'N/A'
+            'PCEZ': { '$ifNull': [ '$PCEZ', 'N/A' ] },   # Jika PCEZ null, gunakan 'N/A'
+            'NOMEN': 1,
+            'NOMINAL': 1,
+            'STATUS': 1
+        }
+    }
+    
+    # 1. Agregasi Total Piutang (ASUMSI: Semua record adalah piutang)
     pipeline_billed = [
+        initial_project, # <-- PERBAIKAN KEYERROR
         { '$group': {
             '_id': { 'rayon': '$RAYON', 'pcez': '$PCEZ' },
             'total_nomen_all': { '$addToSet': '$NOMEN' },
@@ -149,7 +162,9 @@ def collection_report_api():
     ]
     billed_data = list(collection_data.aggregate(pipeline_billed))
 
+    # 2. Agregasi Total Koleksi (Hanya STATUS='Payment')
     pipeline_collected = [
+        initial_project, # <-- PERBAIKAN KEYERROR
         { '$match': { 'STATUS': 'Payment' } }, 
         { '$group': {
             '_id': { 'rayon': '$RAYON', 'pcez': '$PCEZ' },
@@ -219,7 +234,6 @@ def collection_detail_api():
         
         search_filter = {
             '$or': [
-                # Menggunakan safe_query_str di Regex
                 {'RAYON': {'$regex': safe_query_str, '$options': 'i'}},
                 {'PCEZ': {'$regex': safe_query_str, '$options': 'i'}},
                 {'NOMEN': {'$regex': safe_query_str, '$options': 'i'}}
@@ -354,7 +368,7 @@ def upload_billed_data():
         
         df.columns = [col.strip().upper() for col in df.columns]
         
-        # --- PERBAIKAN PEMBERSIHAN DATA AMAN ---
+        # --- PEMBERSIHAN DATA AMAN ---
         if NOME_COLUMN_NAME in df.columns:
             df[NOME_COLUMN_NAME] = df[NOME_COLUMN_NAME].astype(str).str.strip() 
 
@@ -406,7 +420,7 @@ def upload_collection_data():
         
         df.columns = [col.strip().upper() for col in df.columns]
 
-        # --- PERBAIKAN PEMBERSIHAN DATA AMAN ---
+        # --- PEMBERSIHAN DATA AMAN ---
         if NOME_COLUMN_NAME in df.columns:
             df[NOME_COLUMN_NAME] = df[NOME_COLUMN_NAME].astype(str).str.strip() 
         
