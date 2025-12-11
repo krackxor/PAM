@@ -3,76 +3,112 @@ import pandas as pd
 from flask import Flask, request, jsonify, render_template
 from pymongo import MongoClient
 from dotenv import load_dotenv
+from werkzeug.utils import secure_filename
 
-load_dotenv() # Muat variabel dari file .env
+# Muat variabel dari file .env
+load_dotenv() 
 
+# --- Konfigurasi Awal ---
 app = Flask(__name__)
 
 # Konfigurasi Database dari .env
 MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = os.getenv("MONGO_DB_NAME")
 COLLECTION_NAME = os.getenv("MONGO_COLLECTION_NAME")
-NOME_COLUMN_NAME = 'NOMEN' # Nama kolom untuk pencarian (sesuai data Anda)
+
+# Kolom pencarian: Harus sesuai dengan nama kolom di CSV Anda (setelah dikonversi ke huruf besar)
+NOME_COLUMN_NAME = 'NOMEN' 
+
+# Ekstensi file yang diizinkan untuk diupload
+ALLOWED_EXTENSIONS = {'csv', 'xlsx', 'xls'} 
 
 # Koneksi ke MongoDB
-client = MongoClient(MONGO_URI)
-db = client[DB_NAME]
-collection = db[COLLECTION_NAME]
+try:
+    client = MongoClient(MONGO_URI)
+    client.admin.command('ping') # Tes koneksi
+    db = client[DB_NAME]
+    collection = db[COLLECTION_NAME]
+    print("Koneksi MongoDB berhasil!")
+except Exception as e:
+    print(f"Gagal terhubung ke MongoDB: {e}")
+    # Anda mungkin ingin keluar atau menangani error di sini
+    client = None
+
+# --- Fungsi Utility ---
+def allowed_file(filename):
+    """Mengecek apakah ekstensi file diizinkan."""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# --- Endpoint Routing ---
 
 @app.route('/')
 def index():
-    """Tampilkan halaman utama (tempat upload dan pencarian)."""
+    """Tampilkan halaman utama (index.html)."""
     return render_template('index.html')
 
 @app.route('/upload', methods=['POST'])
-def upload_csv():
-    """Endpoint untuk mengunggah file CSV, menghapus data lama, dan memasukkan data baru ke MongoDB."""
+def upload_data():
+    """Endpoint untuk mengunggah file (CSV atau Excel) dan memperbarui MongoDB."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+
     if 'file' not in request.files:
         return jsonify({"message": "Tidak ada file di permintaan"}), 400
 
     file = request.files['file']
-    if file.filename == '' or not file.filename.endswith('.csv'):
-        return jsonify({"message": "Format file tidak valid. Harap unggah CSV."}), 400
+    if file.filename == '' or not allowed_file(file.filename):
+        return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
+
+    filename = secure_filename(file.filename)
+    file_extension = filename.rsplit('.', 1)[1].lower()
 
     try:
-        # Baca file CSV menggunakan pandas
-        df = pd.read_csv(file)
+        # 1. Membaca file menggunakan Pandas
+        if file_extension == 'csv':
+            df = pd.read_csv(file)
+        elif file_extension in ['xlsx', 'xls']:
+            df = pd.read_excel(file, sheet_name=0) 
         
-        # Konversi nama kolom menjadi huruf besar dan bersihkan spasi agar konsisten dengan pencarian
+        # 2. Pembersihan dan Konversi Data
+        # Konversi nama kolom menjadi huruf besar dan bersihkan spasi
         df.columns = [col.strip().upper() for col in df.columns]
         
-        # Konversi DataFrame ke format list of dictionaries (yang diterima MongoDB)
+        # Bersihkan spasi di nilai data (penting untuk pencarian NOMEN)
+        df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x) 
+        
+        # Konversi ke format list of dictionaries
         data_to_insert = df.to_dict('records')
         
-        # 1. Hapus data lama
+        # 3. Hapus data lama dan masukkan data baru
         collection.delete_many({})
         
-        # 2. Masukkan data baru
         if data_to_insert:
             collection.insert_many(data_to_insert)
             count = len(data_to_insert)
-            return jsonify({"message": f"Sukses! {count} baris data berhasil diperbarui ke MongoDB."}), 200
+            return jsonify({"message": f"Sukses! {count} baris data dari {file_extension.upper()} berhasil diperbarui ke MongoDB."}), 200
         else:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
 
     except Exception as e:
-        print(f"Error saat memproses CSV: {e}")
-        return jsonify({"message": f"Gagal memproses file: {e}"}), 500
+        print(f"Error saat memproses file: {e}")
+        return jsonify({"message": f"Gagal memproses file: {e}. Pastikan format data benar dan kolom tersedia."}), 500
 
 @app.route('/api/search', methods=['GET'])
 def search_nomen():
     """Endpoint API untuk mencari data di MongoDB berdasarkan NOMEN."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
     query_nomen = request.args.get('nomen', '').strip()
 
     if not query_nomen:
-        return jsonify([]) # Kembalikan array kosong jika input kosong
+        return jsonify([])
 
     try:
         # Query MongoDB: Mencari NOMEN yang cocok secara eksak
-        # $regex dan $options 'i' bisa digunakan untuk pencarian case-insensitive, tapi untuk ID lebih baik eksak.
         mongo_query = { NOME_COLUMN_NAME: query_nomen }
         
-        # Ambil hasil dari MongoDB
         results = list(collection.find(mongo_query))
         
         # Bersihkan ID Mongo sebelum dikirim ke klien
@@ -87,5 +123,6 @@ def search_nomen():
 
 
 if __name__ == '__main__':
-    # Pastikan server Flask berjalan di port yang bisa diakses
+    # Jalankan Flask
+    # Ganti debug=False dan host='0.0.0.0' jika deploy di VPS
     app.run(debug=True, host='0.0.0.0', port=5000)
