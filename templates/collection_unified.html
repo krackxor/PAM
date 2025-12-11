@@ -39,15 +39,15 @@
 
 /* Tabel Report */
 .report-table-wrapper { overflow-x: auto; margin-top: 20px; }
-.report-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.report-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 700px; }
 .report-table th, .report-table td { border: 1px solid #ddd; padding: 8px; text-align: right; white-space: nowrap; }
 .report-table th { background-color: #f2f2f2; text-align: center; }
-.report-table td:first-child, .report-table td:nth-child(2) { text-align: left; } /* Rayon dan PCEZ di kiri */
+.report-table td:first-child, .report-table td:nth-child(2) { text-align: left; } 
 .grand-total-row { font-weight: bold; background-color: #cfe2ff; }
 .percentage-cell { font-weight: bold; color: var(--secondary-color); }
 
 /* Tabel Detail */
-.collection-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.collection-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 600px; } 
 .collection-table th, .collection-table td { border: 1px solid #ddd; padding: 8px; text-align: left; white-space: nowrap; }
 .collection-table th { background-color: #f2f2f2; }
 
@@ -91,11 +91,11 @@
         // --- FUNGSI 1: MEMUAT REPORT RINGKAS ---
         async function fetchCollectionReport() {
             try {
-                const response = await fetch('/api/collection/report');
+                const response = await fetch('{{ url_for("collection_report_api") }}');
                 const result = await response.json();
                 
                 if (response.status !== 200) {
-                     reportArea.innerHTML = `<p class="no-results" style="color: red;">❌ Gagal memuat report: ${result.message}</p>`;
+                     reportArea.innerHTML = `<p class="no-results" style="color: red;">❌ Gagal memuat report: ${result.message || 'Error Server'}</p>`;
                      return;
                 }
                 
@@ -194,11 +194,11 @@
             detailsArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Detail Transaksi...</p>';
             
             try {
-                const response = await fetch(`/api/collection/detail?q=${query}`);
+                const response = await fetch('{{ url_for("collection_detail_api") }}' + `?q=${query}`);
                 const data = await response.json();
                 
                 if (response.status === 401) {
-                    window.location.href = '/login';
+                    window.location.href = '{{ url_for("login") }}';
                     return;
                 }
                 
@@ -216,6 +216,19 @@
         }
         
         function renderDetailTable(data) {
+            
+            // Hitung Nominal dan NOMEN Unik
+            let totalNominal = 0;
+            const uniqueNomen = new Set();
+            
+            data.forEach(item => {
+                const nominal = parseFloat(item.NOMINAL || 0);
+                totalNominal += nominal;
+                uniqueNomen.add(item.NOMEN); 
+            });
+
+            const uniqueNomenCount = uniqueNomen.size;
+
             let tableHTML = `
                 <h3 style="margin-top: 20px;">Listing Transaksi (${data.length} Transaksi)</h3>
                 <div class="result-table-wrapper">
@@ -232,11 +245,8 @@
                     <tbody>
             `;
             
-            let totalNominal = 0;
-            
             data.forEach(item => {
                 const nominal = parseFloat(item.NOMINAL || 0);
-                totalNominal += nominal;
                 
                 tableHTML += `
                     <tr>
@@ -249,10 +259,15 @@
                 `;
             });
             
+            // Baris Ringkasan Total
             tableHTML += `
-                <tr style="font-weight: bold; background-color: #e9ecef;">
-                    <td colspan="4">TOTAL FILTER</td>
+                <tr style="font-weight: bold; background-color: #f0f8ff;">
+                    <td colspan="4" style="text-align: left;">Total NOMINAL Terfilter</td>
                     <td>Rp ${totalNominal.toLocaleString('id-ID')}</td>
+                </tr>
+                <tr style="font-weight: bold; background-color: #f0f8ff;">
+                    <td colspan="4" style="text-align: left;">Total NOMEN Unik (Count)</td>
+                    <td>${uniqueNomenCount.toLocaleString('id-ID')}</td>
                 </tr>
             `;
             
@@ -279,7 +294,7 @@
         // Muat kedua bagian saat halaman dimuat
         document.addEventListener('DOMContentLoaded', () => {
              fetchCollectionReport(); 
-             fetchCollectionDetails(''); // Muat data tanpa filter awal
+             fetchCollectionDetails(''); 
         });
 
     </script>
