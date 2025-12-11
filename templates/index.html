@@ -3,282 +3,108 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pencarian Data Dinamis (MongoDB)</title>
-    
+    <title>Login - Akses Data</title>
     <style>
         :root {
             --primary-color: #007bff;
-            --secondary-color: #28a745;
             --bg-color: #f8f9fa;
             --card-bg: #ffffff;
             --text-color: #343a40;
-            --shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             --border-radius: 8px;
         }
-
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            padding: 20px;
             display: flex;
             justify-content: center;
-            align-items: flex-start;
+            align-items: center;
             min-height: 100vh;
+            margin: 0;
         }
-
-        .container {
+        .login-container {
             width: 100%;
-            max-width: 800px;
+            max-width: 400px;
             background-color: var(--card-bg);
-            padding: 30px;
+            padding: 40px;
             border-radius: var(--border-radius);
             box-shadow: var(--shadow);
+            text-align: center;
         }
-
         h2 {
             color: var(--primary-color);
-            text-align: center;
-            margin-bottom: 25px;
-            border-bottom: 3px solid #eee;
-            padding-bottom: 10px;
-        }
-        
-        .upload-section {
-            border: 1px dashed #ced4da;
-            padding: 20px;
-            border-radius: var(--border-radius);
             margin-bottom: 30px;
-            text-align: center;
         }
-
-        /* Tombol & Input */
-        input[type="file"] {
-            margin-bottom: 10px;
-        }
-        .btn-upload {
-            background-color: var(--secondary-color);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: var(--border-radius);
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        .btn-upload:hover {
-            background-color: #1e7e34;
-        }
-        
-        /* Area Notifikasi */
-        #uploadStatus {
-            margin-top: 15px;
-            font-weight: 500;
-        }
-
-        .input-group {
+        .form-group {
             margin-bottom: 20px;
-            display: flex;
-            flex-direction: column;
+            text-align: left;
         }
-        label {
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
             font-weight: 600;
-            margin-bottom: 8px;
-            color: var(--text-color);
         }
-        #nomenInput {
-            padding: 12px 15px;
-            border: 1px solid #ced4da;
-            border-radius: var(--border-radius);
-            font-size: 16px;
-            transition: border-color 0.3s, box-shadow 0.3s;
+        .form-control {
             width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
             box-sizing: border-box;
         }
-        #nomenInput:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
-            outline: none;
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+            transition: background-color 0.3s;
         }
-        
-        /* Kartu Hasil Dinamis */
-        #hasilPencarian {
-            margin-top: 30px;
-            transition: opacity 0.5s ease-in-out;
+        .btn-primary:hover {
+            background-color: #0056b3;
         }
-        
-        .result-card {
-            background-color: #f1f8ff; 
-            border-left: 5px solid var(--primary-color);
-            padding: 15px;
-            border-radius: var(--border-radius);
+        .alert {
+            padding: 10px;
             margin-bottom: 15px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-            animation: fadeIn 0.5s ease-out;
+            border-radius: 4px;
+            text-align: left;
         }
-        
-        /* Grid untuk Detail Data */
-        .result-detail {
-            display: grid;
-            grid-template-columns: 1fr 2fr;
-            gap: 5px 15px;
-            font-size: 15px;
-        }
-        .detail-key {
-            font-weight: 600;
-            color: var(--text-color);
-        }
-        .detail-value {
-            color: #555;
-        }
-
-        .no-result {
-            color: #dc3545;
-            padding: 15px;
-            border: 1px dashed #dc3545;
-            border-radius: var(--border-radius);
-            text-align: center;
-            font-weight: 500;
-            animation: bounceIn 0.5s ease-out;
-        }
-
-        /* Keyframes untuk Animasi Dinamis */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes bounceIn {
-            from { opacity: 0; transform: scale(0.9); }
-            to { opacity: 1; transform: scale(1); }
+        .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
         }
     </style>
 </head>
 <body>
+    <div class="login-container">
+        <h2>Akses Sistem Data</h2>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
 
-    <div class="container">
-        <h2>Pencarian Data Dinamis (MongoDB)</h2>
-        
-        <div class="upload-section">
-            <h3>Perbarui Data Tagihan</h3>
-            <p>Unggah file CSV, XLSX, atau XLS baru Anda di sini. Data lama akan dihapus.</p>
-            <form id="uploadForm">
-                <input type="file" id="csvFile" name="file" accept=".csv, .xlsx, .xls" required>
-                <button type="submit" class="btn-upload">Upload dan Perbarui Data</button>
-            </form>
-            <div id="uploadStatus"></div>
-        </div>
+        <form method="POST" action="{{ url_for('login') }}">
+            {{ form.hidden_tag() }} 
 
-        <hr style="border: 0; border-top: 1px solid #eee; margin: 25px 0;">
-        
-        <div class="input-group">
-            <label for="nomenInput">Masukkan NOMEN (ID Pelanggan):</label>
-            <input type="text" id="nomenInput" placeholder="Ketik NOMEN di sini, misalnya: 60139500">
-        </div>
-        
-        <div id="hasilPencarian">
-            <p style="color: gray; text-align: center;">Unggah data terlebih dahulu, lalu mulai mengetik NOMEN.</p>
-        </div>
+            <div class="form-group">
+                {{ form.username.label(class="form-label") }}
+                {{ form.username(class="form-control", placeholder="test_admin") }}
+            </div>
+
+            <div class="form-group">
+                {{ form.password.label(class="form-label") }}
+                {{ form.password(class="form-control", placeholder="test_password") }}
+            </div>
+
+            {{ form.submit(class="btn-primary") }}
+        </form>
     </div>
-
-    <script>
-        const inputElement = document.getElementById('nomenInput');
-        const hasilElement = document.getElementById('hasilPencarian');
-        const uploadForm = document.getElementById('uploadForm');
-        const uploadStatus = document.getElementById('uploadStatus');
-
-        // --- Logika Upload CSV/Excel ---
-        uploadForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(this);
-            uploadStatus.innerHTML = '<span style="color: orange;">Memproses... Harap tunggu.</span>';
-
-            try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const result = await response.json();
-
-                if (response.ok) {
-                    uploadStatus.innerHTML = `<span style="color: var(--secondary-color);">✅ ${result.message}</span>`;
-                } else {
-                    uploadStatus.innerHTML = `<span style="color: #dc3545;">❌ Error: ${result.message}</span>`;
-                }
-            } catch (error) {
-                uploadStatus.innerHTML = `<span style="color: #dc3545;">❌ Gagal terhubung ke server atau terjadi error jaringan.</span>`;
-                console.error('Error:', error);
-            }
-        });
-
-        // --- Logika Pencarian Dinamis ---
-        async function cariDataNomen() {
-            const query = inputElement.value.trim();
-            hasilElement.innerHTML = '';
-            
-            if (query === "") {
-                hasilElement.innerHTML = '<p style="color: gray; text-align: center;">Mulai mengetik NOMEN di atas untuk melihat data.</p>';
-                return;
-            }
-
-            // Tampilkan pesan loading
-            hasilElement.innerHTML = '<p style="text-align: center; color: var(--primary-color);">Mencari data...</p>';
-
-            try {
-                // Panggil API Pencarian di Flask Backend
-                const response = await fetch(`/api/search?nomen=${query}`);
-                const hasilFilter = await response.json();
-                
-                if (response.status !== 200) {
-                    // Tangani error dari server (misal: MongoDB tidak terhubung)
-                     hasilElement.innerHTML = `<p class="no-result">❌ ${hasilFilter.message || 'Gagal terhubung ke API pencarian.'}</p>`;
-                     return;
-                }
-
-                if (hasilFilter.length > 0) {
-                    let cardsHTML = '';
-                    
-                    hasilFilter.forEach((data, index) => {
-                        let detailHTML = '<div class="result-detail">';
-                        const headers = Object.keys(data); 
-                        
-                        headers.forEach(header => {
-                            // Format header: Ganti underscore menjadi spasi
-                             detailHTML += `
-                                <div class="detail-key">${header.replace(/_/g, ' ')}</div> 
-                                <div class="detail-value">${data[header]}</div>
-                            `;
-                        });
-                        
-                        detailHTML += '</div>';
-                        
-                        // Gunakan NAMA_PEL sebagai judul kartu jika tersedia
-                        const cardTitle = data['NAMA_PEL'] ? data['NAMA_PEL'] : `Detail Hasil ${index + 1}`;
-
-                        cardsHTML += `
-                            <div class="result-card">
-                                <h3 style="color: var(--secondary-color); margin-top: 0;">${cardTitle}</h3>
-                                ${detailHTML}
-                            </div>
-                        `;
-                    });
-                    
-                    hasilElement.innerHTML = cardsHTML;
-                } else {
-                    hasilElement.innerHTML = `<p class="no-result">❌ Data untuk NOMEN: <strong>${query}</strong> tidak ditemukan.</p>`;
-                }
-
-            } catch (error) {
-                hasilElement.innerHTML = `<p class="no-result">❌ Terjadi kesalahan saat mencari data.</p>`;
-                console.error('Pencarian Error:', error);
-            }
-        }
-
-        // Event Listener untuk Pencarian Real-time
-        inputElement.addEventListener('input', cariDataNomen);
-
-    </script>
-
 </body>
 </html>
