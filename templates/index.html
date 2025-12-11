@@ -153,27 +153,30 @@
         }
 
         function determineStatusClass(statusText) {
-            if (statusText.includes('EKSTRIM') || statusText.includes('TUNGGAKAN')) return 'status-danger';
-            if (statusText.includes('ZERO') || statusText.includes('PIUTANG AKTIF')) return 'status-warning';
+            if (statusText.includes('TUNGGAKAN') || statusText.includes('EKSTRIM')) return 'status-danger';
+            if (statusText.includes('PIUTANG') || statusText.includes('ZERO') || statusText.includes('TURUN')) return 'status-warning';
             return 'status-ok';
         }
         
-        function renderTable(title, data, targetElementId) {
-            if (!data || data.length === 0) {
+        function renderTable(title, data, singleRow = false) {
+            if (!data || (Array.isArray(data) && data.length === 0)) {
                 return `<h4>${title}</h4><p>Tidak ada data ditemukan.</p>`;
             }
-
-            const headers = Object.keys(data[0]);
             
-            let tableHtml = `<h4 style="margin-top: 20px; color: #2c3e50;">${title} (${data.length} baris)</h4>`;
+            const listData = Array.isArray(data) ? data : [data];
+            const headers = Object.keys(listData[0]);
+            
+            let tableHtml = `<h4 style="margin-top: 20px; color: #2c3e50;">${title} (${listData.length} baris)</h4>`;
             tableHtml += '<div class="data-table-wrapper"><table class="data-table"><thead><tr>';
             
+            // Header Row
             headers.forEach(h => {
                 tableHtml += `<th>${h.replace(/_/g, ' ')}</th>`;
             });
             tableHtml += '</tr></thead><tbody>';
 
-            data.forEach(item => {
+            // Data Rows
+            listData.forEach(item => {
                 tableHtml += '<tr>';
                 headers.forEach(h => {
                     let cellValue = item[h];
@@ -191,6 +194,10 @@
 
         function renderResults(data) {
             // 1. Render Health Summary
+            const totalPiutang = formatCurrency(data.summary.TOTAL_PIUTANG_NOMINAL);
+            const statusFinansial = data.summary.STATUS_FINANSIAL;
+            const statusPemakaian = data.summary.STATUS_PEMAKAIAN;
+
             healthSummary.innerHTML = `
                 <div class="summary-card">
                     <h4>NOMEN</h4>
@@ -201,12 +208,20 @@
                     <p>${data.summary.NAMA}</p>
                 </div>
                 <div class="summary-card">
-                    <h4>STATUS TUNGGAKAN</h4>
-                    <p class="${determineStatusClass(data.summary.STATUS_TUNGGAKAN)}">${data.summary.STATUS_TUNGGAKAN}</p>
+                    <h4>TOTAL PIUTANG</h4>
+                    <p class="${determineStatusClass(statusFinansial)}">${totalPiutang}</p>
+                </div>
+                <div class="summary-card">
+                    <h4>STATUS FINANSIAL</h4>
+                    <p class="${determineStatusClass(statusFinansial)}">${statusFinansial}</p>
                 </div>
                 <div class="summary-card">
                     <h4>STATUS PEMAKAIAN</h4>
-                    <p class="${determineStatusClass(data.summary.STATUS_PEMAKAIAN)}">${data.summary.STATUS_PEMAKAIAN}</p>
+                    <p class="${determineStatusClass(statusPemakaian)}">${statusPemakaian}</p>
+                </div>
+                <div class="summary-card">
+                    <h4>PEMBAYARAN TERAKHIR</h4>
+                    <p>${data.summary.PEMBAYARAN_TERAKHIR}</p>
                 </div>
             `;
             
@@ -214,7 +229,7 @@
             detailsContainer.innerHTML = '';
             
             // CID Data (Master Statis)
-            detailsContainer.innerHTML += renderTable("Master Data Pelanggan (CID)", data.cid_data ? [data.cid_data] : null);
+            detailsContainer.innerHTML += renderTable("Master Data Pelanggan (CID)", data.cid_data);
 
             // MC Data (Piutang Berjalan Bulan Ini)
             detailsContainer.innerHTML += renderTable("Piutang Berjalan (MC - Bulan Ini)", data.mc_data);
