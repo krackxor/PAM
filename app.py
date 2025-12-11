@@ -152,14 +152,19 @@ def search_nomen():
         return jsonify({"status": "fail", "message": "Masukkan NOMEN untuk memulai pencarian terintegrasi."}), 400
 
     try:
+        print(f"DEBUG: Mencari NOMEN dari input: '{query_nomen}'")
+        
         # 1. DATA STATIS (CID) - Master Data Pelanggan (Wajib ada)
         cid_result = collection_cid.find_one({'NOMEN': query_nomen})
         
         if not cid_result:
+            print(f"DEBUG: GAGAL! NOMEN '{query_nomen}' TIDAK DITEMUKAN di koleksi CID.")
             return jsonify({
                 "status": "not_found",
                 "message": f"NOMEN {query_nomen} tidak ditemukan di Master Data Pelanggan (CID)."
             }), 404
+
+        print(f"DEBUG: SUKSES! CID ditemukan untuk NOMEN: '{query_nomen}'. Melanjutkan pencarian data terintegrasi.")
 
         # 2. PIUTANG BERJALAN (MC) - Snapshot Bulan Ini
         mc_results = list(collection_mc.find({'NOMEN': query_nomen}))
@@ -246,76 +251,97 @@ def daily_collection_unified_page():
 @app.route('/api/collection/report', methods=['GET'])
 @login_required 
 def collection_report_api():
-    """Menghitung Nomen Bayar, Nominal Bayar, Total Nominal, dan Persentase per Rayon/PCEZ."""
+    """PEROMBAKAN: Menghitung total tagihan (MC), total koleksi (MB), dan total tunggakan (ARDEBT)."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
-
-    # Pipeline Awal: Memastikan Rayon dan PCEZ selalu ada untuk menghindari KeyError
-    initial_project = {
-        '$project': {
-            'RAYON': { '$ifNull': [ '$RAYON', 'N/A' ] }, 
-            'PCEZ': { '$ifNull': [ '$PCEZ', 'N/A' ] },   
-            'NOMEN': 1,
-            'NOMINAL': 1,
-            'STATUS': 1
-        }
-    }
     
-    # MENGGUNAKAN collection_mc SEBAGAI SUMBER PIUTANG UTAMA
-    pipeline_billed = [
-        initial_project, 
+    # --- 1. DATA TAGIHAN (BILLED) dari MC ---
+    # Sumber untuk Total Tagihan (Nominal) dan Total Pelanggan (Nomen)
+    pipeline_mc = [
+        { '$match': { 'NOMEN': { '$exists': True } } }, 
         { '$group': {
             '_id': { 'rayon': '$RAYON', 'pcez': '$PCEZ' },
-            'total_nomen_all': { '$addToSet': '$NOMEN' },
-            'total_nominal': { '$sum': '$NOMINAL' } 
+            'total_nomen_mc': { '$addToSet': '$NOMEN' },
+            'total_nominal_mc': { '$sum': '$NOMINAL' } 
         }}
     ]
-    billed_data = list(collection_mc.aggregate(pipeline_billed))
+    mc_data = list(collection_mc.aggregate(pipeline_mc))
 
-    pipeline_collected = [
-        initial_project, 
-        { '$match': { 'STATUS': 'Payment' } }, 
+    # --- 2. DATA KOLEKSI (PAID) dari MB ---
+    # Sumber untuk Total Nominal Bayar dan Total Sudah Bayar (Nomen)
+    pipeline_mb = [
+        { '$match': { 'NOMEN': { '$exists': True } } }, 
         { '$group': {
             '_id': { 'rayon': '$RAYON', 'pcez': '$PCEZ' },
-            'collected_nomen': { '$addToSet': '$NOMEN' }, 
-            'collected_nominal': { '$sum': '$NOMINAL' } 
+            'collected_nomen_mb': { '$addToSet': '$NOMEN' }, 
+            'collected_nominal_mb': { '$sum': '$NOMINAL' } 
         }}
     ]
-    collected_data = list(collection_mc.aggregate(pipeline_collected))
+    mb_data = list(collection_mb.aggregate(pipeline_mb)) 
 
+    # --- 3. DATA TUNGGAKAN (DEBT) - GRAND TOTAL ---
+    # Total Tunggakan Keseluruhan dari ARDEBT (menggunakan kolom 'JUMLAH')
+    pipeline_ardebt_total = [
+        { '$group': {
+            '_id': None,
+            'grand_total_debt': { '$sum': '$JUMLAH' }
+        }}
+    ]
+    ardebt_total = list(collection_ardebt.aggregate(pipeline_ardebt_total))
+    grand_total_debt = ardebt_total[0]['grand_total_debt'] if ardeb_total and ardeb_total[0].get('grand_total_debt') is not None else 0.0
+
+    # --- 4. GABUNGKAN DATA DAN HITUNG TOTAL PER RAYON ---
     report_map = {}
     
-    for item in billed_data:
-        key = (item['_id']['rayon'], item['_id']['pcez'])
+    # Inisialisasi dari MC (Data Tagihan Dasar)
+    for item in mc_data:
+        key = (item['_id'].get('rayon', 'N/A'), item['_id'].get('pcez', 'N/A'))
         report_map[key] = {
-            'RAYON': item['_id']['rayon'],
-            'PCEZ': item['_id']['pcez'],
-            'TotalNominal': float(item['total_nominal']),
-            'TotalNomen': len(item['total_nomen_all']),
-            'CollectedNominal': 0.0, 'CollectedNomen': 0, 'PercentNominal': 0.0, 'PercentNomenCount': 0.0
+            'RAYON': key[0],
+            'PCEZ': key[1],
+            'TotalNominalMC': float(item['total_nominal_mc']),
+            'TotalNomenMC': len(item['total_nomen_mc']),
+            # Inisialisasi koleksi
+            'CollectedNominalMB': 0.0, 'CollectedNomenMB': 0, 
+            'PercentNominal': 0.0, 'PercentNomenCount': 0.0
         }
 
-    for item in collected_data:
-        key = (item['_id']['rayon'], item['_id']['pcez'])
-        if key in report_map:
-            report_map[key]['CollectedNominal'] = float(item['collected_nominal'])
-            report_map[key]['CollectedNomen'] = len(item['collected_nomen'])
+    # Tambahkan data koleksi dari MB
+    for item in mb_data:
+        key = (item['_id'].get('rayon', 'N/A'), item['_id'].get('pcez', 'N/A'))
+        
+        # Jika rayon/pcez ini ada di MC, kita update datanya. Jika tidak, kita inisialisasi dengan Total Tagihan 0
+        if key not in report_map:
+             report_map[key] = {
+                'RAYON': key[0],
+                'PCEZ': key[1],
+                'TotalNominalMC': 0.0, 'TotalNomenMC': 0, 
+                'CollectedNominalMB': 0.0, 'CollectedNomenMB': 0, 
+                'PercentNominal': 0.0, 'PercentNomenCount': 0.0
+            }
             
-            if report_map[key]['TotalNominal'] > 0:
-                report_map[key]['PercentNominal'] = (report_map[key]['CollectedNominal'] / report_map[key]['TotalNominal']) * 100
-            
-            if report_map[key]['TotalNomen'] > 0:
-                report_map[key]['PercentNomenCount'] = (report_map[key]['CollectedNomen'] / report_map[key]['TotalNomen']) * 100
+        report_map[key]['CollectedNominalMB'] = float(item['collected_nominal_mb'])
+        report_map[key]['CollectedNomenMB'] = len(item['collected_nomen_mb'])
+        
+        # Hitung Persentase
+        if report_map[key]['TotalNominalMC'] > 0:
+            report_map[key]['PercentNominal'] = (report_map[key]['CollectedNominalMB'] / report_map[key]['TotalNominalMC']) * 100
+        
+        if report_map[key]['TotalNomenMC'] > 0:
+            report_map[key]['PercentNomenCount'] = (report_map[key]['CollectedNomenMB'] / report_map[key]['TotalNomenMC']) * 100
 
+    # Hitung Grand Total (Konsolidasi)
     grand_total = {
-        'TotalNominal': sum(d['TotalNominal'] for d in report_map.values()),
-        'CollectedNominal': sum(d['CollectedNominal'] for d in report_map.values()),
-        'TotalNomen': sum(d['TotalNomen'] for d in report_map.values()),
-        'CollectedNomen': sum(d['CollectedNomen'] for d in report_map.values())
+        'TotalNominalBilled': sum(d['TotalNominalMC'] for d in report_map.values()),
+        'CollectedNominal': sum(d['CollectedNominalMB'] for d in report_map.values()),
+        'TotalNomenBilled': sum(d['TotalNomenMC'] for d in report_map.values()),
+        'CollectedNomen': sum(d['CollectedNomenMB'] for d in report_map.values()),
+        'TotalDebtNominal': grand_total_debt # Tambahkan data tunggakan
     }
     
-    grand_total['PercentNominal'] = (grand_total['CollectedNominal'] / grand_total['TotalNominal']) * 100 if grand_total['TotalNominal'] > 0 else 0
-    grand_total['PercentNomenCount'] = (grand_total['CollectedNomen'] / grand_total['TotalNomen']) * 100 if grand_total['TotalNomen'] > 0 else 0
+    # Hitung Persentase Grand Total
+    grand_total['PercentNominal'] = (grand_total['CollectedNominal'] / grand_total['TotalNominalBilled']) * 100 if grand_total['TotalNominalBilled'] > 0 else 0
+    grand_total['PercentNomenCount'] = (grand_total['CollectedNomen'] / grand_total['TotalNomenBilled']) * 100 if grand_total['TotalNomenBilled'] > 0 else 0
 
 
     return jsonify({
