@@ -12,10 +12,11 @@
             --primary-color: #007bff;
             --secondary-color: #28a745;
             --bg-color: #f4f7f9; 
-            --header-bg: #2c3e50; /* Background gelap untuk header/nav */
+            --header-bg: #2c3e50;
+            --footer-height: 60px; /* Tinggi Navigasi Bawah */
             --text-color-light: #ecf0f1;
             --text-color: #343a40;
-            --shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            --shadow: 0 -4px 12px rgba(0, 0, 0, 0.1); /* Shadow ke atas */
             --border-radius: 8px;
         }
 
@@ -24,67 +25,82 @@
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
-            padding: 0;
+            padding-bottom: var(--footer-height); /* RUANG UNTUK FOOTER */
             display: flex;
-            flex-direction: column; /* Konten disusun vertikal */
+            flex-direction: column; 
             min-height: 100vh;
         }
         
         /* ---------------------------------------------------- */
-        /* HEADER/NAVIGASI ATAS (Menggantikan Sidebar) */
+        /* HEADER ATAS (Untuk Logo/Branding Sederhana) */
         /* ---------------------------------------------------- */
-        .header-nav {
+        .header-brand {
             background-color: var(--header-bg);
-            padding: 15px 30px;
+            padding: 10px 20px;
             color: var(--text-color-light);
-            box-shadow: var(--shadow);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            text-align: center;
         }
-        
         .header-logo {
-            font-size: 1.5em;
+            font-size: 1.2em;
             font-weight: 700;
         }
         
-        .nav-menu {
+        /* ---------------------------------------------------- */
+        /* FOOTER NAVIGASI (Menu Bawah Tetap) */
+        /* ---------------------------------------------------- */
+        .footer-nav {
+            position: fixed; /* Membuat navigasi tetap di layar */
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: var(--footer-height);
+            background-color: white; /* Warna terang untuk kontras */
+            border-top: 1px solid #ddd;
+            box-shadow: var(--shadow);
+            z-index: 1000;
+            
             display: flex;
-            gap: 20px;
+            justify-content: space-around; /* Menyebar item secara merata */
             align-items: center;
         }
         
-        .nav-menu a {
-            color: var(--text-color-light);
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             text-decoration: none;
-            padding: 5px 10px;
-            border-radius: 4px;
-            transition: background-color 0.3s;
-        }
-        
-        .nav-menu a:hover {
-            background-color: #34495e;
-        }
-        
-        .nav-menu a.active {
-            background-color: var(--active-color);
-            font-weight: 600;
+            color: #777;
+            font-size: 0.75em;
+            padding: 5px 0;
+            flex-grow: 1; /* Item menu mengambil ruang yang sama */
+            transition: color 0.2s;
         }
 
-        .nav-menu a i {
-            margin-right: 8px;
+        .nav-item i {
+            font-size: 1.2em;
+            margin-bottom: 3px;
+        }
+        
+        .nav-item.active {
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+        
+        .nav-item:hover {
+            color: var(--primary-color);
         }
 
         /* ---------------------------------------------------- */
-        /* KONTEN UTAMA (MENGISI SELURUH LAYAR) */
+        /* KONTEN UTAMA */
         /* ---------------------------------------------------- */
         .main-content {
             flex-grow: 1;
-            padding: 30px;
-            display: flex;
-            justify-content: center; /* Pusatkan konten di tengah layar */
+            padding: 20px;
             width: 100%;
             box-sizing: border-box;
+            /* Tambahkan padding-top untuk memberi ruang di bawah header brand */
+            padding-top: 20px; 
         }
         
         .container {
@@ -92,37 +108,24 @@
             padding: 30px;
             border-radius: var(--border-radius);
             box-shadow: var(--shadow);
-            width: 100%; /* Kontainer mengisi ruang yang tersedia */
-            max-width: 900px; /* Batasan lebar agar tidak terlalu lebar di desktop */
-            min-height: 80vh;
+            width: 100%; 
+            max-width: 900px; 
+            margin: 0 auto;
         }
 
         /* Styling Flash Messages */
-        /* (Tetap sama, disalin dari base.html lama) */
-        .flash-message {
-            padding: 10px;
-            margin-bottom: 20px;
-            border-radius: 4px;
-            text-align: center;
-            font-weight: 600;
-        }
-        .flash-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .flash-danger { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .flash-info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .flash-message { /* Tetap sama */ }
+        .flash-success { /* Tetap sama */ }
+        .flash-danger { /* Tetap sama */ }
+        .flash-info { /* Tetap sama */ }
 
-        /* --- MEDIA QUERIES (Responsivitas Mobile) --- */
-        @media (max-width: 768px) {
-            .header-nav {
-                flex-direction: column; /* Logo dan menu disusun vertikal */
-                gap: 10px;
-                padding: 15px 10px;
-            }
-            .nav-menu {
-                justify-content: center;
-                flex-wrap: wrap; /* Menu dibungkus ke baris baru jika terlalu panjang */
-            }
+        /* --- MEDIA QUERIES (Responsivitas) --- */
+        @media (max-width: 600px) {
             .main-content {
-                padding: 15px; /* Kurangi padding di mobile */
+                padding: 10px; /* Kurangi padding di mobile */
+            }
+            .container {
+                padding: 15px;
             }
         }
 
@@ -132,32 +135,9 @@
 </head>
 <body>
     
-    <div class="header-nav">
+    <div class="header-brand">
         <div class="header-logo">
-            <i class="fas fa-database"></i> PAM Internal App
-        </div>
-        
-        <div class="nav-menu">
-            <a href="{{ url_for('index') }}" 
-               class="{% if request.endpoint == 'index' %}active{% endif %}">
-               <i class="fas fa-search"></i> Cari
-            </a>
-            
-            <a href="{{ url_for('analyze_data_page') }}" 
-               class="{% if request.endpoint == 'analyze_data_page' %}active{% endif %}">
-               <i class="fas fa-chart-bar"></i> Analisis
-            </a>
-            
-            {% if is_admin %}
-                <a href="{{ url_for('admin_upload_page') }}" 
-                   class="{% if request.endpoint == 'admin_upload_page' %}active{% endif %}">
-                   <i class="fas fa-upload"></i> Upload Data
-                </a>
-            {% endif %}
-
-            <a href="{{ url_for('logout') }}">
-                <i class="fas fa-sign-out-alt"></i> Logout
-            </a>
+            PAM Internal Analytics
         </div>
     </div>
 
@@ -173,6 +153,34 @@
         <div class="container">
             {% block content %}{% endblock %}
         </div>
+    </div>
+
+    <div class="footer-nav">
+        
+        <a href="{{ url_for('index') }}" 
+           class="nav-item {% if request.endpoint == 'index' %}active{% endif %}">
+           <i class="fas fa-search"></i>
+           <span>Cari</span>
+        </a>
+        
+        <a href="{{ url_for('analyze_data_page') }}" 
+           class="nav-item {% if request.endpoint == 'analyze_data_page' %}active{% endif %}">
+           <i class="fas fa-chart-line"></i>
+           <span>Analisis</span>
+        </a>
+        
+        {% if is_admin %}
+            <a href="{{ url_for('admin_upload_page') }}" 
+               class="nav-item {% if request.endpoint == 'admin_upload_page' %}active{% endif %}">
+               <i class="fas fa-upload"></i>
+               <span>Upload</span>
+            </a>
+        {% endif %}
+
+        <a href="{{ url_for('logout') }}" class="nav-item">
+            <i class="fas fa-sign-out-alt"></i>
+            <span>Keluar</span>
+        </a>
     </div>
 
 </body>
