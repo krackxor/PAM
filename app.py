@@ -42,17 +42,14 @@ except Exception as e:
 STATIC_USERS = {}
 user_list_str = os.getenv("USER_LIST", "")
 
-# Membuat hash password statis saat aplikasi dimulai
 if user_list_str:
     for user_entry in user_list_str.split(','):
         try:
             username, plain_password, is_admin_str = user_entry.strip().split(':')
             
-            # Hash password untuk keamanan
             hashed_password = generate_password_hash(plain_password)
             is_admin = is_admin_str.lower() == 'true'
             
-            # Gunakan username sebagai ID unik (untuk Flask-Login)
             STATIC_USERS[username] = {
                 'id': username, 
                 'password_hash': hashed_password,
@@ -60,7 +57,6 @@ if user_list_str:
                 'username': username
             }
         except ValueError as e:
-            # Jika format di .env salah, cetak peringatan
             print(f"Peringatan: Format USER_LIST salah pada entry '{user_entry}'. Error: {e}")
 
 
@@ -80,7 +76,6 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    """Callback yang digunakan Flask-Login untuk memuat pengguna dari ID sesi."""
     user_data = STATIC_USERS.get(user_id)
     if user_data:
         return User(user_data)
@@ -94,7 +89,6 @@ class LoginForm(FlaskForm):
 
 # --- DEKORATOR OTORISASI ADMIN ---
 def admin_required(f):
-    """Dekorator untuk membatasi akses hanya kepada pengguna yang memiliki is_admin=True."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated or not current_user.is_admin:
@@ -112,11 +106,9 @@ def allowed_file(filename):
 def login():
     form = LoginForm()
     if form.validate_on_submit():
-        
         user_data_entry = STATIC_USERS.get(form.username.data)
 
         if user_data_entry and check_password_hash(user_data_entry['password_hash'], form.password.data):
-            # Login berhasil: buat objek User dari data statis
             user = User(user_data_entry) 
             login_user(user)
             flash('Login berhasil.', 'success')
@@ -134,21 +126,62 @@ def logout():
     flash('Anda telah keluar.', 'success')
     return redirect(url_for('login'))
 
+# --- ENDPOINT ANALISIS (SEMUA PENGGUNA) ---
+@app.route('/analyze_data', methods=['GET'])
+@login_required 
+def analyze_data_page():
+    return render_template('analyze.html', is_admin=current_user.is_admin)
+
+@app.route('/api/analyze', methods=['POST'])
+@login_required 
+def analyze_data():
+    """Endpoint untuk mengunggah file dan menjalankan analisis data."""
+    if 'file' not in request.files:
+        return jsonify({"message": "Tidak ada file di permintaan"}), 400
+
+    file = request.files['file']
+    filename = secure_filename(file.filename)
+    file_extension = filename.rsplit('.', 1)[1].lower()
+
+    if file.filename == '' or file_extension not in ALLOWED_EXTENSIONS:
+        return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
+    
+    try:
+        if file_extension == 'csv':
+            df = pd.read_csv(file) 
+        elif file_extension in ['xlsx', 'xls']:
+            df = pd.read_excel(file, sheet_name=0) 
+        
+        # 1. Analisis Data Dasar
+        data_summary = {
+            "file_name": filename,
+            "row_count": len(df),
+            "column_count": len(df.columns),
+            "columns": df.columns.tolist() 
+        }
+
+        # 2. Statistik Deskriptif
+        descriptive_stats = df.describe(include='all').to_json(orient='index')
+        
+        # 3. Mengirimkan Hasil Analisis
+        return jsonify({
+            "status": "success",
+            "summary": data_summary,
+            "stats": descriptive_stats,
+            "head": df.head().to_html(classes='table table-striped') 
+        }), 200
+
+    except Exception as e:
+        print(f"Error saat menganalisis file: {e}")
+        return jsonify({"message": f"Gagal menganalisis file: {e}. Pastikan format data bersih."}), 500
+
 
 # --- ENDPOINT ADMIN (Hanya Upload) ---
 @app.route('/admin/upload', methods=['GET'])
 @login_required 
 @admin_required # HANYA ADMIN YANG BISA
 def admin_upload_page():
-    """Menampilkan halaman admin untuk upload data."""
-    return render_template('upload_admin.html')
-
-
-# --- ENDPOINT APLIKASI UTAMA (DILINDUNGI) ---
-@app.route('/')
-@login_required 
-def index():
-    return render_template('index.html')
+    return render_template('upload_admin.html', is_admin=current_user.is_admin)
 
 @app.route('/upload', methods=['POST'])
 @login_required 
@@ -195,10 +228,15 @@ def upload_data():
         print(f"Error saat memproses file: {e}")
         return jsonify({"message": f"Gagal memproses file: {e}. Pastikan format data benar dan kolom tersedia."}), 500
 
+# --- ENDPOINT APLIKASI UTAMA (DILINDUNGI) ---
+@app.route('/')
+@login_required 
+def index():
+    return render_template('index.html', is_admin=current_user.is_admin)
+
 @app.route('/api/search', methods=['GET'])
 @login_required 
 def search_nomen():
-    # API pencarian ini bisa diakses oleh siapa saja yang sudah login (Admin atau Pengguna Biasa)
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
