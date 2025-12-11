@@ -98,19 +98,19 @@
             dataArea.innerHTML = `<p style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Menghubungkan ke MongoDB untuk ${reportName}...</p>`;
             
             // --- LOGIKA UTAMA PERLU DITAMBAHKAN DI SINI ---
-            // Karena tidak ada endpoint API spesifik untuk 4 laporan ini, 
-            // di sini hanyalah demonstrasi tampilan hasil.
-            
+            // Di implementasi nyata, Anda akan memanggil API endpoint yang berbeda untuk setiap laporan.
+            // Contoh API call: fetch('/api/analyze/get_extreme_users')
+
+            // Untuk saat ini, kita gunakan data dummy untuk demonstrasi UI dan responsivitas
             setTimeout(() => {
                 const dummyData = [
-                    { NOMEN: '30012345', RAYON: '35', PCEZ: '094/06', KONDISI: 'Pemakaian 150 > 100', VOL_COLLECT: 150 },
-                    { NOMEN: '30056789', RAYON: '12', PCEZ: '091/01', KONDISI: 'Pemakaian 0 (Zero)', VOL_COLLECT: 0 },
-                    { NOMEN: '30099999', RAYON: '35', PCEZ: '094/06', KONDISI: 'Status Stand Tunggu', VOL_COLLECT: 25 }
+                    { NOMEN: '30012345', NAMA: 'Pelanggan A', RAYON: '35', TARIFF: 'R1', KUBIK: 150, KONDISI: 'Ekstrim' },
+                    { NOMEN: '30056789', NAMA: 'Pelanggan B', RAYON: '12', TARIFF: 'R2', KUBIK: 0, KONDISI: 'Zero' },
+                    { NOMEN: '30099999', NAMA: 'Pelanggan C', RAYON: '35', TARIFF: 'R1', KUBIK: 25, KONDISI: 'Turun' }
                 ];
                 
                 renderDynamicTable(dummyData, reportName);
             }, 1500); 
-            // ---------------------------------------------
         }
 
         function renderDynamicTable(data, title) {
@@ -120,6 +120,7 @@
                 return;
             }
 
+            // Pastikan semua key diubah menjadi UPPERCASE
             const headers = Object.keys(data[0]);
             
             let tableHTML = `<div class="result-table-wrapper"><table class="data-table"><thead><tr>`;
