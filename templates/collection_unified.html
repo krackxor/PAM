@@ -37,18 +37,41 @@
     flex-grow: 1;
 }
 
-/* Tabel Report */
-.report-table-wrapper { overflow-x: auto; margin-top: 20px; }
-.report-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 700px; }
-.report-table th, .report-table td { border: 1px solid #ddd; padding: 8px; text-align: right; white-space: nowrap; }
+/* Tabel Wrapper untuk Scroll Horizontal */
+.report-table-wrapper { 
+    overflow-x: auto; /* Kunci untuk scroll horizontal */
+    margin-top: 20px; 
+}
+
+/* Tabel Report Styles */
+.report-table { 
+    width: 100%; /* Lebar 100% dari wrapper */
+    border-collapse: collapse; 
+    font-size: 14px; 
+}
+.report-table th, .report-table td { 
+    border: 1px solid #ddd; 
+    padding: 8px; 
+    text-align: right; 
+    white-space: nowrap; /* Mencegah sel memotong teks, memaksa tabel melebar */
+}
 .report-table th { background-color: #f2f2f2; text-align: center; }
 .report-table td:first-child, .report-table td:nth-child(2) { text-align: left; } 
 .grand-total-row { font-weight: bold; background-color: #cfe2ff; }
 .percentage-cell { font-weight: bold; color: var(--secondary-color); }
 
-/* Tabel Detail */
-.collection-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 600px; } 
-.collection-table th, .collection-table td { border: 1px solid #ddd; padding: 8px; text-align: left; white-space: nowrap; }
+/* Tabel Detail Styles */
+.collection-table { 
+    width: 100%; /* Lebar 100% dari wrapper */
+    border-collapse: collapse; 
+    font-size: 14px; 
+}
+.collection-table th, .collection-table td { 
+    border: 1px solid #ddd; 
+    padding: 8px; 
+    text-align: left; 
+    white-space: nowrap; /* Kunci: Memaksa baris tetap satu baris */
+}
 .collection-table th { background-color: #f2f2f2; }
 
 .no-results { text-align: center; color: #555; padding: 20px; }
