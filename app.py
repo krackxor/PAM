@@ -10,6 +10,7 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField 
 from wtforms.validators import DataRequired 
 from functools import wraps
+import re # <-- BARU: Diperlukan untuk pengamanan Regex
 
 load_dotenv() 
 
@@ -25,7 +26,7 @@ COLLECTION_NAME = os.getenv("MONGO_COLLECTION_NAME")
 NOME_COLUMN_NAME = 'NOMEN' 
 ALLOWED_EXTENSIONS = {'csv', 'xlsx', 'xls'} 
 
-# Koneksi ke MongoDB (Hanya untuk Data Tagihan)
+# Koneksi ke MongoDB
 client = None
 collection_data = None
 try:
@@ -126,7 +127,7 @@ def logout():
     flash('Anda telah keluar.', 'success')
     return redirect(url_for('login'))
 
-# --- ENDPOINT KOLEKSI TERPADU (DAILY COLLECTION UNIFIED) ---
+# --- ENDPOINT KOLEKSI TERPADU (UNIFIED COLLECTION PAGE) ---
 @app.route('/daily_collection', methods=['GET'])
 @login_required 
 def daily_collection_unified_page():
@@ -213,16 +214,20 @@ def collection_detail_api():
     mongo_query = {'STATUS': 'Payment'}
     
     if query_str:
+        # PERBAIKAN FILTER: Mengamankan input query menggunakan re.escape
+        safe_query_str = re.escape(query_str)
+        
         search_filter = {
             '$or': [
-                {'RAYON': {'$regex': query_str, '$options': 'i'}},
-                {'PCEZ': {'$regex': query_str, '$options': 'i'}},
-                {'NOMEN': {'$regex': query_str, '$options': 'i'}}
+                # Menggunakan safe_query_str di Regex
+                {'RAYON': {'$regex': safe_query_str, '$options': 'i'}},
+                {'PCEZ': {'$regex': safe_query_str, '$options': 'i'}},
+                {'NOMEN': {'$regex': safe_query_str, '$options': 'i'}}
             ]
         }
         mongo_query.update(search_filter)
 
-    sort_order = [('PAY_DT', -1)] 
+    sort_order = [('PAY_DT', -1)] # Mengurutkan berdasarkan Tanggal Bayar terbaru dahulu
 
     try:
         results = list(collection_data.find(mongo_query)
