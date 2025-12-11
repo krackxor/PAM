@@ -168,8 +168,8 @@
         </a>
         
         {% if is_admin %}
-            <a href="{{ url_for('admin_upload_page') }}" 
-               class="nav-item {% if request.endpoint == 'admin_upload_page' %}active{% endif %}">
+            <a href="{{ url_for('admin_upload_unified_page') }}" 
+               class="nav-item {% if request.endpoint == 'admin_upload_unified_page' %}active{% endif %}">
                <i class="fas fa-upload"></i>
                <span>Upload</span>
             </a>
