@@ -10,7 +10,7 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField 
 from wtforms.validators import DataRequired 
 from functools import wraps
-import re # Diperlukan untuk pengamanan Regex
+import re 
 
 load_dotenv() 
 
@@ -151,7 +151,6 @@ def collection_report_api():
         }
     }
     
-    # 1. Agregasi Total Piutang (ASUMSI: Semua record adalah piutang)
     pipeline_billed = [
         initial_project, 
         { '$group': {
@@ -162,7 +161,6 @@ def collection_report_api():
     ]
     billed_data = list(collection_data.aggregate(pipeline_billed))
 
-    # 2. Agregasi Total Koleksi (Hanya STATUS='Payment')
     pipeline_collected = [
         initial_project, 
         { '$match': { 'STATUS': 'Payment' } }, 
@@ -265,11 +263,63 @@ def collection_detail_api():
         print(f"Error fetching detailed collection data: {e}")
         return jsonify({"message": f"Gagal mengambil data detail koleksi: {e}"}), 500
 
-# --- ENDPOINT ANALISIS DATA DINAMIS ---
-@app.route('/analyze_data', methods=['GET'])
+# --- ENDPOINT ANALISIS DATA LANJUTAN (SUB-MENU DASHBOARD) ---
+
+@app.route('/analyze', methods=['GET'])
+@login_required
+def analyze_reports_landing():
+    """Landing Page untuk Sub-menu Analisis."""
+    return render_template('analyze_landing.html', is_admin=current_user.is_admin)
+
+# Endpoint 1: Pemakaian Air Ekstrim
+@app.route('/analyze/extreme', methods=['GET'])
+@login_required
+def analyze_extreme_usage():
+    # Placeholder: Logika MongoDB untuk memfilter pemakaian air di atas batas normal
+    # report_data = list(collection_data.find({'VOL_COLLECT': {'$gt': 100}}).limit(100))
+    return render_template('analyze_report_template.html', 
+                           title="Pemakaian Air Ekstrim", 
+                           description="Menampilkan pelanggan dengan konsumsi air di atas ambang batas (misal > 100).",
+                           is_admin=current_user.is_admin)
+
+# Endpoint 2: Pemakaian Air Turun
+@app.route('/analyze/reduced', methods=['GET'])
+@login_required
+def analyze_reduced_usage():
+    # Placeholder: Logika MongoDB untuk memfilter pemakaian air yang turun drastis
+    return render_template('analyze_report_template.html', 
+                           title="Pemakaian Air Turun", 
+                           description="Menampilkan pelanggan dengan penurunan konsumsi air signifikan (memerlukan data historis).",
+                           is_admin=current_user.is_admin)
+
+# Endpoint 3: Tidak Ada Pemakaian (Zero)
+@app.route('/analyze/zero', methods=['GET'])
+@login_required
+def analyze_zero_usage():
+    # Placeholder: Logika MongoDB untuk memfilter pemakaian air = 0
+    # report_data = list(collection_data.find({'VOL_COLLECT': 0}).limit(100))
+    return render_template('analyze_report_template.html', 
+                           title="Tidak Ada Pemakaian (Zero)", 
+                           description="Menampilkan pelanggan dengan konsumsi air nol (Zero) di periode tagihan terakhir.",
+                           is_admin=current_user.is_admin)
+
+# Endpoint 4: Stand Tunggu
+@app.route('/analyze/standby', methods=['GET'])
+@login_required
+def analyze_stand_tungggu():
+    # Placeholder: Logika MongoDB untuk memfilter pelanggan dengan kondisi Stand Tunggu (FREEZE_DTTM ada, dll)
+    # report_data = list(collection_data.find({'FREEZE_DTTM': {'$ne': None}}).limit(100))
+    return render_template('analyze_report_template.html', 
+                           title="Stand Tunggu", 
+                           description="Menampilkan pelanggan yang berstatus Stand Tunggu (Freeze/Blokir).",
+                           is_admin=current_user.is_admin)
+
+
+# Endpoint File Upload/Merge (Dinamis)
+@app.route('/analyze/upload', methods=['GET'])
 @login_required 
 def analyze_data_page():
-    return render_template('analyze.html', is_admin=current_user.is_admin)
+    return render_template('analyze_upload.html', is_admin=current_user.is_admin)
 
 @app.route('/api/analyze', methods=['POST'])
 @login_required 
@@ -372,10 +422,8 @@ def upload_billed_data():
             df[NOME_COLUMN_NAME] = df[NOME_COLUMN_NAME].astype(str).str.strip() 
         
         for col in df.columns:
-            # Hanya jalankan strip() jika tipe data adalah object (string)
             if df[col].dtype == 'object':
                 df[col] = df[col].astype(str).str.strip()
-            # Paksa kolom nominal penting menjadi numerik
             if col in ['NOMINAL', 'AMT_COLLECT']:
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         # ---------------------------------------
