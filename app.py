@@ -4,12 +4,26 @@ from flask import Flask, request, jsonify, render_template
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
+from flask_httpauth import HTTPBasicAuth # <-- PUSTAKA AUTENTIKASI
 
 # Muat variabel dari file .env
 load_dotenv() 
 
-# --- Konfigurasi Awal ---
+# --- Konfigurasi Awal & Autentikasi ---
 app = Flask(__name__)
+auth = HTTPBasicAuth()
+
+# Kredensial Pengguna dari .env
+USERS = {
+    os.getenv("WEB_USERNAME"): os.getenv("WEB_PASSWORD")
+}
+
+@auth.verify_password
+def verify_password(username, password):
+    """Fungsi verifikasi kredensial pengguna."""
+    if username in USERS and USERS[username] == password:
+        return username
+    return None
 
 # Konfigurasi Database dari .env
 MONGO_URI = os.getenv("MONGO_URI")
@@ -17,13 +31,13 @@ DB_NAME = os.getenv("MONGO_DB_NAME")
 COLLECTION_NAME = os.getenv("MONGO_COLLECTION_NAME")
 
 # Kolom pencarian: Harus sesuai dengan nama kolom di CSV Anda (setelah dikonversi ke huruf besar)
-# KARENA NOMEN ADALAH ID, KITA AKAN SELALU MENGGUNAKANNYA SEBAGAI STRING
 NOME_COLUMN_NAME = 'NOMEN' 
 
 # Ekstensi file yang diizinkan untuk diupload
 ALLOWED_EXTENSIONS = {'csv', 'xlsx', 'xls'} 
 
 # Koneksi ke MongoDB
+client = None
 try:
     client = MongoClient(MONGO_URI)
     client.admin.command('ping') # Tes koneksi
@@ -32,8 +46,6 @@ try:
     print("Koneksi MongoDB berhasil!")
 except Exception as e:
     print(f"Gagal terhubung ke MongoDB: {e}")
-    # Jika gagal koneksi, set client ke None agar fungsi lain bisa mengecek status koneksi
-    client = None
 
 # --- Fungsi Utility ---
 def allowed_file(filename):
@@ -44,11 +56,13 @@ def allowed_file(filename):
 # --- Endpoint Routing ---
 
 @app.route('/')
+@auth.login_required # <-- Wajib Login
 def index():
     """Tampilkan halaman utama (index.html)."""
     return render_template('index.html')
 
 @app.route('/upload', methods=['POST'])
+@auth.login_required # <-- Wajib Login
 def upload_data():
     """Endpoint untuk mengunggah file (CSV atau Excel) dan memperbarui MongoDB."""
     if client is None:
@@ -76,9 +90,9 @@ def upload_data():
         # Konversi nama kolom menjadi huruf besar dan bersihkan spasi
         df.columns = [col.strip().upper() for col in df.columns]
         
-        # 🚨 SOLUSI TIPE DATA: Paksa kolom NOME_COLUMN_NAME menjadi string sebelum dimasukkan ke Mongo
-        # Ini memastikan pencarian dari web (selalu string) akan cocok.
+        # SOLUSI TIPE DATA: Paksa kolom NOME_COLUMN_NAME menjadi string sebelum dimasukkan ke Mongo
         if NOME_COLUMN_NAME in df.columns:
+            # Mengonversi ke string dan membersihkan spasi awal/akhir
             df[NOME_COLUMN_NAME] = df[NOME_COLUMN_NAME].astype(str).str.strip() 
 
         # Bersihkan spasi di nilai data lainnya (hanya untuk kolom string/object)
@@ -102,6 +116,7 @@ def upload_data():
         return jsonify({"message": f"Gagal memproses file: {e}. Pastikan format data benar dan kolom tersedia."}), 500
 
 @app.route('/api/search', methods=['GET'])
+@auth.login_required # <-- Wajib Login
 def search_nomen():
     """Endpoint API untuk mencari data di MongoDB berdasarkan NOMEN."""
     if client is None:
@@ -114,7 +129,7 @@ def search_nomen():
 
     try:
         # Query MongoDB: Mencari NOMEN yang cocok secara eksak
-        # NOMEN di database sudah distringkan saat upload, dan query_nomen dari web adalah string.
+        # NOMEN di database dan query_nomen dari web sudah distringkan
         mongo_query = { NOME_COLUMN_NAME: query_nomen }
         
         results = list(collection.find(mongo_query))
@@ -132,5 +147,5 @@ def search_nomen():
 
 if __name__ == '__main__':
     # Jalankan Flask
-    # Ganti debug=False dan host='0.0.0.0' jika deploy di VPS
+    # Ganti debug=False dan host='0.0.0.0' jika deploy di VPS/Production
     app.run(debug=True, host='0.0.0.0', port=5000)
