@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Aplikasi Data Dinamis{% endblock %}</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #28a745;
+            --bg-color: #f4f7f9;
+            --sidebar-width: 250px;
+            --sidebar-bg: #2c3e50;
+            --text-color-light: #ecf0f1;
+            --text-color: #343a40;
+            --hover-color: #34495e;
+            --active-color: #3498db;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            --border-radius: 8px;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* ---------------------------------------------------- */
+        /* SIDEBAR / MENU NAVIGASI DINAMIS */
+        /* ---------------------------------------------------- */
+        .sidebar {
+            width: var(--sidebar-width);
+            background-color: var(--sidebar-bg);
+            color: var(--text-color-light);
+            padding: 20px 0;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo {
+            text-align: center;
+            padding: 10px 0 30px 0;
+            font-size: 1.5em;
+            font-weight: 700;
+            color: white;
+            border-bottom: 1px solid var(--hover-color);
+            margin-bottom: 20px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+            text-decoration: none;
+            color: var(--text-color-light);
+            transition: background-color 0.3s, color 0.3s;
+            font-size: 1.05em;
+        }
+
+        .nav-link i {
+            margin-right: 15px;
+            width: 20px;
+            text-align: center;
+        }
+
+        .nav-link:hover {
+            background-color: var(--hover-color);
+            color: white;
+        }
+
+        .nav-link.active {
+            background-color: var(--active-color);
+            color: white;
+            border-left: 5px solid white;
+            padding-left: 15px;
+        }
+        
+        .nav-logout {
+            margin-top: auto; 
+        }
+        
+        /* ---------------------------------------------------- */
+        /* KONTEN UTAMA */
+        /* ---------------------------------------------------- */
+        .main-content {
+            flex-grow: 1;
+            padding: 20px;
+            overflow-y: auto; /* Memastikan konten utama bisa di-scroll */
+        }
+        
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        /* Styling Flash Messages */
+        .flash-message {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: 600;
+        }
+        .flash-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .flash-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .flash-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        {% block custom_styles %}{% endblock %}
+
+    </style>
+</head>
+<body>
+    
+    <div class="sidebar">
+        <div class="logo">
+            <i class="fas fa-database"></i> PAM Analytics
+        </div>
+        
+        <a href="{{ url_for('index') }}" 
+           class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">
+           <i class="fas fa-search"></i> Pencarian Data
+        </a>
+        
+        <a href="{{ url_for('analyze_data_page') }}" 
+           class="nav-link {% if request.endpoint == 'analyze_data_page' %}active{% endif %}">
+           <i class="fas fa-chart-bar"></i> Analisis Data
+        </a>
+        
+        {% if is_admin %}
+            <a href="{{ url_for('admin_upload_page') }}" 
+               class="nav-link {% if request.endpoint == 'admin_upload_page' %}active{% endif %}">
+               <i class="fas fa-upload"></i> Kelola Upload
+            </a>
+        {% endif %}
+
+        <a href="{{ url_for('logout') }}" class="nav-link nav-logout">
+            <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
+    </div>
+
+    <div class="main-content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-message flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <div class="container">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+</body>
+</html>
