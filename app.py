@@ -21,53 +21,54 @@ app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
 # Konfigurasi MongoDB
 MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = os.getenv("MONGO_DB_NAME")
-COLLECTION_NAME = os.getenv("MONGO_COLLECTION_NAME")
 
 NOME_COLUMN_NAME = 'NOMEN' 
 ALLOWED_EXTENSIONS = {'csv', 'xlsx', 'xls'} 
 
 # Koneksi ke MongoDB
 client = None
-collection_data = None
+collection_mc = None
+collection_mb = None
+collection_cid = None
+collection_sbrs = None # BARU: SBRS Meter Reading
+
 try:
     client = MongoClient(MONGO_URI)
     client.admin.command('ping') 
     db = client[DB_NAME]
-    collection_data = db[COLLECTION_NAME] 
+    
+    # 🚨 KOLEKSI DIPISAH BERDASARKAN SUMBER DATA
+    collection_mc = db['MasterCetak']   # MC (Piutang/Tagihan Bulanan - REPLACE)
+    collection_mb = db['MasterBayar']   # MB (Koleksi Harian - APPEND)
+    collection_cid = db['CustomerData'] # CID (Data Pelanggan Statis - REPLACE)
+    collection_sbrs = db['MeterReading'] # SBRS (Baca Meter Harian/Parsial - APPEND)
+    
+    # collection_data di-set ke MasterCetak (MC) untuk kompatibilitas endpoint lama
+    collection_data = collection_mc
+
     print("Koneksi MongoDB berhasil!")
 except Exception as e:
     print(f"Gagal terhubung ke MongoDB: {e}")
     client = None
 
+
 # --- PEMROSESAN DAFTAR PENGGUNA DARI .ENV (STATIC LOGIN) ---
 STATIC_USERS = {}
 user_list_str = os.getenv("USER_LIST", "")
-
 if user_list_str:
     for user_entry in user_list_str.split(','):
         try:
             username, plain_password, is_admin_str = user_entry.strip().split(':')
-            
             hashed_password = generate_password_hash(plain_password)
             is_admin = is_admin_str.lower() == 'true'
-            
             STATIC_USERS[username] = {
-                'id': username, 
-                'password_hash': hashed_password,
-                'is_admin': is_admin,
-                'username': username
+                'id': username, 'password_hash': hashed_password,
+                'is_admin': is_admin, 'username': username
             }
         except ValueError as e:
             print(f"Peringatan: Format USER_LIST salah pada entry '{user_entry}'. Error: {e}")
 
-
-# --- KONFIGURASI FLASK-LOGIN ---
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login' 
-login_manager.login_message_category = 'info'
-
-# --- MODEL PENGGUNA (User Model) ---
+# --- KELAS DAN DEKORATOR TETAP SAMA ---
 class User(UserMixin):
     def __init__(self, user_data):
         self.id = user_data['id']
@@ -82,13 +83,11 @@ def load_user(user_id):
         return User(user_data)
     return None
 
-# --- FORMULIR LOGIN (Flask-WTF) ---
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
     password = PasswordField('Password', validators=[DataRequired()])
     submit = SubmitField('Masuk')
 
-# --- DEKORATOR OTORISASI ADMIN ---
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -98,7 +97,6 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- Fungsi Utility ---
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -151,6 +149,7 @@ def collection_report_api():
         }
     }
     
+    # MENGGUNAKAN collection_mc SEBAGAI SUMBER PIUTANG UTAMA
     pipeline_billed = [
         initial_project, 
         { '$group': {
@@ -159,7 +158,7 @@ def collection_report_api():
             'total_nominal': { '$sum': '$NOMINAL' } 
         }}
     ]
-    billed_data = list(collection_data.aggregate(pipeline_billed))
+    billed_data = list(collection_mc.aggregate(pipeline_billed))
 
     pipeline_collected = [
         initial_project, 
@@ -170,7 +169,7 @@ def collection_report_api():
             'collected_nominal': { '$sum': '$NOMINAL' } 
         }}
     ]
-    collected_data = list(collection_data.aggregate(pipeline_collected))
+    collected_data = list(collection_mc.aggregate(pipeline_collected))
 
     report_map = {}
     
@@ -181,10 +180,7 @@ def collection_report_api():
             'PCEZ': item['_id']['pcez'],
             'TotalNominal': float(item['total_nominal']),
             'TotalNomen': len(item['total_nomen_all']),
-            'CollectedNominal': 0.0, 
-            'CollectedNomen': 0, 
-            'PercentNominal': 0.0,
-            'PercentNomenCount': 0.0
+            'CollectedNominal': 0.0, 'CollectedNomen': 0, 'PercentNominal': 0.0, 'PercentNomenCount': 0.0
         }
 
     for item in collected_data:
@@ -224,37 +220,39 @@ def collection_detail_api():
         
     query_str = request.args.get('q', '').strip()
     
-    mongo_query = {'STATUS': 'Payment'}
+    mongo_query = {} 
     
     if query_str:
         safe_query_str = re.escape(query_str)
         
+        # Kolom yang mungkin ada di MB untuk filtering
         search_filter = {
             '$or': [
-                {'RAYON': {'$regex': safe_query_str, '$options': 'i'}},
+                {'RAYON': {'$regex': safe_query_str, '$options': 'i'}}, 
                 {'PCEZ': {'$regex': safe_query_str, '$options': 'i'}},
-                {'NOMEN': {'$regex': safe_query_str, '$options': 'i'}}
+                {'NOMEN': {'$regex': safe_query_str, '$options': 'i'}},
+                {'ZONA_NOREK': {'$regex': safe_query_str, '$options': 'i'}} # Kolom alternatif di MB
             ]
         }
         mongo_query.update(search_filter)
 
-    sort_order = [('PAY_DT', -1)] 
+    sort_order = [('TGL_BAYAR', -1)] # Sortasi berdasarkan TGL_BAYAR (dari MB)
 
     try:
-        results = list(collection_data.find(mongo_query)
-                                      .sort(sort_order)
-                                      .limit(1000))
+        # MENGGUNAKAN collection_mb UNTUK DETAIL TRANSAKSI KOLEKSI
+        results = list(collection_mb.find(mongo_query).sort(sort_order).limit(1000))
 
         cleaned_results = []
         for doc in results:
             nominal_val = float(doc.get('NOMINAL', 0)) 
             
             cleaned_results.append({
-                'NOMEN': doc.get('NOMEN'),
-                'RAYON': doc.get('RAYON'),
-                'PCEZ': doc.get('PCEZ'),
+                'NOMEN': doc.get('NOMEN', 'N/A'),
+                # Mapping kolom MB ke nama kolom Frontend
+                'RAYON': doc.get('RAYON', doc.get('ZONA_NOREK', 'N/A')), 
+                'PCEZ': doc.get('PCEZ', doc.get('LKS_BAYAR', 'N/A')),
                 'NOMINAL': nominal_val,
-                'PAY_DT': doc.get('PAY_DT')
+                'PAY_DT': doc.get('TGL_BAYAR', 'N/A')
             })
             
         return jsonify(cleaned_results), 200
@@ -262,6 +260,7 @@ def collection_detail_api():
     except Exception as e:
         print(f"Error fetching detailed collection data: {e}")
         return jsonify({"message": f"Gagal mengambil data detail koleksi: {e}"}), 500
+
 
 # --- ENDPOINT ANALISIS DATA LANJUTAN (SUB-MENU DASHBOARD) ---
 
@@ -271,49 +270,42 @@ def analyze_reports_landing():
     """Landing Page untuk Sub-menu Analisis."""
     return render_template('analyze_landing.html', is_admin=current_user.is_admin)
 
-# Endpoint 1: Pemakaian Air Ekstrim
+# Endpoint Laporan Anomali
 @app.route('/analyze/extreme', methods=['GET'])
 @login_required
 def analyze_extreme_usage():
-    # Placeholder: Logika MongoDB untuk memfilter pemakaian air di atas batas normal
-    # report_data = list(collection_data.find({'VOL_COLLECT': {'$gt': 100}}).limit(100))
+    # Placeholder: Logika untuk pemakaian ekstrem
     return render_template('analyze_report_template.html', 
                            title="Pemakaian Air Ekstrim", 
-                           description="Menampilkan pelanggan dengan konsumsi air di atas ambang batas (misal > 100).",
+                           description="Menampilkan pelanggan dengan konsumsi air di atas ambang batas (memerlukan join MC, CID, dan SBRS).",
                            is_admin=current_user.is_admin)
 
-# Endpoint 2: Pemakaian Air Turun
 @app.route('/analyze/reduced', methods=['GET'])
 @login_required
 def analyze_reduced_usage():
-    # Placeholder: Logika MongoDB untuk memfilter pemakaian air yang turun drastis
+    # Placeholder: Logika untuk pemakaian air turun
     return render_template('analyze_report_template.html', 
                            title="Pemakaian Air Turun", 
-                           description="Menampilkan pelanggan dengan penurunan konsumsi air signifikan (memerlukan data historis).",
+                           description="Menampilkan pelanggan dengan penurunan konsumsi air signifikan (memerlukan data MC dan SBRS historis).",
                            is_admin=current_user.is_admin)
 
-# Endpoint 3: Tidak Ada Pemakaian (Zero)
 @app.route('/analyze/zero', methods=['GET'])
 @login_required
 def analyze_zero_usage():
-    # Placeholder: Logika MongoDB untuk memfilter pemakaian air = 0
-    # report_data = list(collection_data.find({'VOL_COLLECT': 0}).limit(100))
+    # Placeholder: Logika untuk pemakaian nol
     return render_template('analyze_report_template.html', 
                            title="Tidak Ada Pemakaian (Zero)", 
                            description="Menampilkan pelanggan dengan konsumsi air nol (Zero) di periode tagihan terakhir.",
                            is_admin=current_user.is_admin)
 
-# Endpoint 4: Stand Tunggu
 @app.route('/analyze/standby', methods=['GET'])
 @login_required
 def analyze_stand_tungggu():
-    # Placeholder: Logika MongoDB untuk memfilter pelanggan dengan kondisi Stand Tunggu (FREEZE_DTTM ada, dll)
-    # report_data = list(collection_data.find({'FREEZE_DTTM': {'$ne': None}}).limit(100))
+    # Placeholder: Logika untuk stand tunggu
     return render_template('analyze_report_template.html', 
                            title="Stand Tunggu", 
                            description="Menampilkan pelanggan yang berstatus Stand Tunggu (Freeze/Blokir).",
                            is_admin=current_user.is_admin)
-
 
 # Endpoint File Upload/Merge (Dinamis)
 @app.route('/analyze/upload', methods=['GET'])
@@ -391,11 +383,11 @@ def analyze_data():
 def admin_upload_unified_page():
     return render_template('upload_admin_unified.html', is_admin=current_user.is_admin)
 
-@app.route('/upload/billed', methods=['POST'])
+@app.route('/upload/mc', methods=['POST'])
 @login_required 
 @admin_required 
-def upload_billed_data():
-    """Mode HAPUS/GANTI: Untuk data Piutang Bulanan."""
+def upload_mc_data():
+    """Mode GANTI: Untuk Master Cetak (Piutang Bulanan)."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
     
@@ -417,35 +409,31 @@ def upload_billed_data():
         
         df.columns = [col.strip().upper() for col in df.columns]
         
-        # --- PEMBERSIHAN DATA AMAN ---
-        if NOME_COLUMN_NAME in df.columns:
-            df[NOME_COLUMN_NAME] = df[NOME_COLUMN_NAME].astype(str).str.strip() 
-        
+        # PEMBERSIHAN DATA AMAN
         for col in df.columns:
             if df[col].dtype == 'object':
                 df[col] = df[col].astype(str).str.strip()
-            if col in ['NOMINAL', 'AMT_COLLECT']:
+            # Kolom finansial MC
+            if col in ['NOMINAL', 'NOMINAL_AKHIR', 'KUBIK', 'SUBNOMINAL', 'ANG_BP', 'DENDA', 'PPN']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        # ---------------------------------------
         
         data_to_insert = df.to_dict('records')
         
-        # OPERASI KRITIS: HAPUS SEMUA DATA LAMA
-        collection_data.delete_many({})
-        collection_data.insert_many(data_to_insert)
+        # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE)
+        collection_mc.delete_many({})
+        collection_mc.insert_many(data_to_insert)
         count = len(data_to_insert)
-        return jsonify({"message": f"Sukses! {count} baris Piutang BARU berhasil MENGGANTI seluruh data lama di MongoDB."}), 200
+        return jsonify({"message": f"Sukses! {count} baris Master Cetak (MC) berhasil MENGGANTI data lama."}), 200
 
     except Exception as e:
-        print(f"Error saat memproses file Piutang: {e}")
-        return jsonify({"message": f"Gagal memproses file Piutang: {e}. Pastikan format data benar."}), 500
+        print(f"Error saat memproses file MC: {e}")
+        return jsonify({"message": f"Gagal memproses file MC: {e}. Pastikan format data benar."}), 500
 
-
-@app.route('/upload/collection', methods=['POST'])
+@app.route('/upload/mb', methods=['POST'])
 @login_required 
 @admin_required 
-def upload_collection_data():
-    """Mode APPEND: Untuk data Koleksi Harian."""
+def upload_mb_data():
+    """Mode APPEND: Untuk Master Bayar (MB) / Koleksi Harian."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -467,16 +455,12 @@ def upload_collection_data():
         
         df.columns = [col.strip().upper() for col in df.columns]
 
-        # --- PEMBERSIHAN DATA AMAN ---
-        if NOME_COLUMN_NAME in df.columns:
-            df[NOME_COLUMN_NAME] = df[NOME_COLUMN_NAME].astype(str).str.strip() 
-        
+        # PEMBERSIHAN DATA AMAN
         for col in df.columns:
             if df[col].dtype == 'object':
                 df[col] = df[col].astype(str).str.strip()
-            if col in ['NOMINAL', 'AMT_COLLECT']:
+            if col in ['NOMINAL', 'SUBNOMINAL', 'BEATETAP', 'BEA_SEWA']: # Kolom finansial MB
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        # ---------------------------------------
         
         data_to_insert = df.to_dict('records')
         
@@ -487,26 +471,134 @@ def upload_collection_data():
         inserted_count = 0
         skipped_count = 0
         
-        # Kolom kunci transaksi unik 
-        UNIQUE_KEYS = ['NOMEN', 'NOTAG', 'NOMINAL', 'PAY_DT']
+        # Kunci unik: NOTAGIHAN (dari MB) + TGL_BAYAR
+        UNIQUE_KEYS = ['NOTAGIHAN', 'TGL_BAYAR', 'NOMINAL'] 
         
         if not all(key in df.columns for key in UNIQUE_KEYS):
-            return jsonify({"message": f"Gagal Append: File Koleksi harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)}. Cek file Anda."}), 400
+            return jsonify({"message": f"Gagal Append: File MB harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)}. Cek file Anda."}), 400
 
         for record in data_to_insert:
             filter_query = {key: record.get(key) for key in UNIQUE_KEYS}
             
-            if collection_data.find_one(filter_query):
+            if collection_mb.find_one(filter_query):
                 skipped_count += 1
             else:
-                collection_data.insert_one(record)
+                collection_mb.insert_one(record)
                 inserted_count += 1
         
-        return jsonify({"message": f"Sukses Append! {inserted_count} baris data Koleksi baru ditambahkan. ({skipped_count} baris duplikat diabaikan)."}), 200
+        return jsonify({"message": f"Sukses Append! {inserted_count} baris Master Bayar (MB) baru ditambahkan. ({skipped_count} duplikat diabaikan)."}), 200
 
     except Exception as e:
-        print(f"Error saat memproses file Koleksi: {e}")
-        return jsonify({"message": f"Gagal memproses file Koleksi: {e}. Pastikan format data benar."}), 500
+        print(f"Error saat memproses file MB: {e}")
+        return jsonify({"message": f"Gagal memproses file MB: {e}. Pastikan format data benar."}), 500
+
+@app.route('/upload/cid', methods=['POST'])
+@login_required 
+@admin_required 
+def upload_cid_data():
+    """Mode GANTI: Untuk Customer Data (CID) / Data Pelanggan Statis."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    if 'file' not in request.files:
+        return jsonify({"message": "Tidak ada file di permintaan"}), 400
+
+    file = request.files['file']
+    if file.filename == '' or not allowed_file(file.filename):
+        return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
+
+    filename = secure_filename(file.filename)
+    file_extension = filename.rsplit('.', 1)[1].lower()
+
+    try:
+        if file_extension == 'csv':
+            df = pd.read_csv(file)
+        elif file_extension in ['xlsx', 'xls']:
+            df = pd.read_excel(file, sheet_name=0) 
+        
+        df.columns = [col.strip().upper() for col in df.columns]
+
+        # PEMBERSIHAN DATA AMAN
+        for col in df.columns:
+            if df[col].dtype == 'object':
+                df[col] = df[col].astype(str).str.strip()
+        
+        data_to_insert = df.to_dict('records')
+        
+        # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE)
+        collection_cid.delete_many({})
+        collection_cid.insert_many(data_to_insert)
+        count = len(data_to_insert)
+        return jsonify({"message": f"Sukses! {count} baris Customer Data (CID) berhasil MENGGANTI data lama."}), 200
+
+    except Exception as e:
+        print(f"Error saat memproses file CID: {e}")
+        return jsonify({"message": f"Gagal memproses file CID: {e}. Pastikan format data benar."}), 500
+
+@app.route('/upload/sbrs', methods=['POST'])
+@login_required 
+@admin_required 
+def upload_sbrs_data():
+    """Mode APPEND: Untuk data Baca Meter (SBRS) / Riwayat Stand Meter."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    if 'file' not in request.files:
+        return jsonify({"message": "Tidak ada file di permintaan"}), 400
+
+    file = request.files['file']
+    if file.filename == '' or not allowed_file(file.filename):
+        return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
+
+    filename = secure_filename(file.filename)
+    file_extension = filename.rsplit('.', 1)[1].lower()
+
+    try:
+        if file_extension == 'csv':
+            df = pd.read_csv(file)
+        elif file_extension in ['xlsx', 'xls']:
+            df = pd.read_excel(file, sheet_name=0) 
+        
+        df.columns = [col.strip().upper() for col in df.columns]
+
+        # PEMBERSIHAN DATA AMAN
+        for col in df.columns:
+            if df[col].dtype == 'object':
+                df[col] = df[col].astype(str).str.strip()
+            # Kolom numerik penting untuk SBRS
+            if col in ['CMR_PREV_READ', 'CMR_READING', 'CMR_KUBIK']: 
+                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        data_to_insert = df.to_dict('records')
+        
+        if not data_to_insert:
+            return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
+        
+        # OPERASI KRITIS: APPEND DATA BARU DENGAN PENCEGAHAN DUPLIKASI
+        inserted_count = 0
+        skipped_count = 0
+        
+        # Kunci unik: cmr_account (NOMEN) + cmr_rd_date (Tanggal Baca)
+        UNIQUE_KEYS = ['CMR_ACCOUNT', 'CMR_RD_DATE'] 
+        
+        if not all(key in df.columns for key in UNIQUE_KEYS):
+            return jsonify({"message": f"Gagal Append: File SBRS harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)}. Cek file Anda."}), 400
+
+        for record in data_to_insert:
+            filter_query = {key: record.get(key) for key in UNIQUE_KEYS}
+            
+            if collection_sbrs.find_one(filter_query):
+                skipped_count += 1
+            else:
+                collection_sbrs.insert_one(record)
+                inserted_count += 1
+        
+        return jsonify({"message": f"Sukses Append! {inserted_count} baris Riwayat Baca Meter (SBRS) baru ditambahkan. ({skipped_count} duplikat diabaikan)."}), 200
+
+    except Exception as e:
+        print(f"Error saat memproses file SBRS: {e}")
+        return jsonify({"message": f"Gagal memproses file SBRS: {e}. Pastikan format data benar."}), 500
+
 
 # --- ENDPOINT UTAMA ---
 @app.route('/')
@@ -528,7 +620,8 @@ def search_nomen():
     try:
         mongo_query = { NOME_COLUMN_NAME: query_nomen }
         
-        results = list(collection_data.find(mongo_query).limit(50)) 
+        # PENCARIAN DI MC (Master Cetak)
+        results = list(collection_mc.find(mongo_query).limit(50)) 
         
         for result in results:
             result.pop('_id', None) 
@@ -537,7 +630,7 @@ def search_nomen():
 
     except Exception as e:
         print(f"Error saat mencari data: {e}")
-        return jsonify({"message": "Gagal mengambil data dari database."}), 500
+        return jsonify({"message": f"Gagal mengambil data dari database: {e}"}), 500
 
 
 if __name__ == '__main__':
