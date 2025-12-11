@@ -1,5 +1,3 @@
-# GANTI SELURUH ISI FILE PAM-main (1)/PAM-main/app.py DENGAN KODE BERIKUT
-
 import os
 import pandas as pd
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
@@ -42,9 +40,9 @@ try:
     
     # KOLEKSI DIPISAH BERDASARKAN SUMBER DATA
     collection_mc = db['MasterCetak']   # MC (Piutang/Tagihan Bulanan - REPLACE)
-    collection_mb = db['MasterBayar']   # MB (Koleksi Harian - APPEND)
+    collection_mb = db['MasterBayar']   # MB (Koleksi Harian - APPEND, BULK INSERT)
     collection_cid = db['CustomerData'] # CID (Data Pelanggan Statis - REPLACE)
-    collection_sbrs = db['MeterReading'] # SBRS (Baca Meter Harian/Parsial - APPEND)
+    collection_sbrs = db['MeterReading'] # SBRS (Baca Meter Harian/Parsial - APPEND, BULK INSERT)
     collection_ardebt = db['AccountReceivable'] # ARDEBT (Tunggakan Detail - REPLACE)
     
     collection_data = collection_mc
@@ -147,18 +145,17 @@ def search_nomen():
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
-    # PERBAIKAN: Konversi input NOMEN ke Huruf Besar untuk sinkronisasi dengan data yang tersimpan
+    # SINKRONISASI PENCARIAN: Konversi input NOMEN ke Huruf Besar
     query_nomen = request.args.get('nomen', '').strip().upper()
 
     if not query_nomen:
         return jsonify({"status": "fail", "message": "Masukkan NOMEN untuk memulai pencarian terintegrasi."}), 400
 
     try:
-        # 1. DATA STATIS (CID) - Master Data Pelanggan
+        # 1. DATA STATIS (CID) - Master Data Pelanggan (Wajib ada)
         cid_result = collection_cid.find_one({'NOMEN': query_nomen})
         
         if not cid_result:
-            # Pesan Not Found yang akurat (memakai query yang sudah di-upper)
             return jsonify({
                 "status": "not_found",
                 "message": f"NOMEN {query_nomen} tidak ditemukan di Master Data Pelanggan (CID)."
@@ -173,14 +170,11 @@ def search_nomen():
         tunggakan_nominal_total = sum(item.get('JUMLAH', 0) for item in ardebt_results)
         
         # 4. RIWAYAT PEMBAYARAN TERAKHIR (MB)
-        # Mencari berdasarkan NOMEN di MB
         mb_last_payment_cursor = collection_mb.find({'NOMEN': query_nomen}).sort('TGL_BAYAR', -1).limit(1)
-        # Menggunakan list() di luar if, dan memeriksa hasilnya setelahnya
         mb_payments = list(mb_last_payment_cursor)
         last_payment = mb_payments[0] if mb_payments else None
         
         # 5. RIWAYAT BACA METER (SBRS)
-        # SBRS menggunakan 'CMR_ACCOUNT' sebagai NOMEN
         sbrs_last_read_cursor = collection_sbrs.find({'CMR_ACCOUNT': query_nomen}).sort('CMR_RD_DATE', -1).limit(2)
         sbrs_history = list(sbrs_last_read_cursor)
         
@@ -455,7 +449,8 @@ def analyze_data():
             df.columns = [col.strip().upper() for col in df.columns]
             
             if JOIN_KEY in df.columns:
-                 df[JOIN_KEY] = df[JOIN_KEY].astype(str).str.strip() 
+                 # SINKRONISASI: Pastikan data NOMEN di-uppercase saat bergabung
+                 df[JOIN_KEY] = df[JOIN_KEY].astype(str).str.strip().str.upper() 
                  all_dfs.append(df)
             else:
                  return jsonify({"message": f"Gagal: File '{filename}' tidak memiliki kolom kunci '{JOIN_KEY}'."}), 400
@@ -527,6 +522,9 @@ def upload_mc_data():
         for col in df.columns:
             if df[col].dtype == 'object':
                 df[col] = df[col].astype(str).str.strip()
+                # SINKRONISASI: Pastikan NOMEN selalu di-uppercase
+                if col == 'NOMEN':
+                     df[col] = df[col].str.upper()
             # Kolom finansial MC
             if col in ['NOMINAL', 'NOMINAL_AKHIR', 'KUBIK', 'SUBNOMINAL', 'ANG_BP', 'DENDA', 'PPN']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
@@ -573,6 +571,9 @@ def upload_mb_data():
         for col in df.columns:
             if df[col].dtype == 'object':
                 df[col] = df[col].astype(str).str.strip()
+                # SINKRONISASI: Pastikan NOMEN selalu di-uppercase
+                if col == 'NOMEN':
+                     df[col] = df[col].str.upper()
             if col in ['NOMINAL', 'SUBNOMINAL', 'BEATETAP', 'BEA_SEWA']: # Kolom finansial MB
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
@@ -655,6 +656,10 @@ def upload_cid_data():
             if df[col].dtype == 'object':
                 df[col] = df[col].astype(str).str.strip()
         
+        # SINKRONISASI KRITIS: Pastikan data NOMEN di-uppercase
+        if 'NOMEN' in df.columns:
+            df['NOMEN'] = df['NOMEN'].astype(str).str.upper() 
+
         data_to_insert = df.to_dict('records')
         
         # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE)
@@ -701,6 +706,10 @@ def upload_sbrs_data():
             if col in ['CMR_PREV_READ', 'CMR_READING', 'CMR_KUBIK']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
+        # SINKRONISASI KRITIS: Pastikan data CMR_ACCOUNT (NOMEN) di-uppercase
+        if 'CMR_ACCOUNT' in df.columns:
+            df['CMR_ACCOUNT'] = df['CMR_ACCOUNT'].astype(str).str.upper() 
+
         data_to_insert = df.to_dict('records')
         
         if not data_to_insert:
@@ -779,6 +788,9 @@ def upload_ardebt_data():
         for col in df.columns:
             if df[col].dtype == 'object':
                 df[col] = df[col].astype(str).str.strip()
+                # SINKRONISASI: Pastikan NOMEN selalu di-uppercase
+                if col == 'NOMEN':
+                     df[col] = df[col].str.upper()
             # Kolom numerik penting
             if col in ['JUMLAH', 'VOLUME']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
