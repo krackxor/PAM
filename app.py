@@ -3,7 +3,8 @@ import pandas as pd
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
 from pymongo import MongoClient
 from dotenv import load_dotenv
-from werkzeug.utils import secure_filename, check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
+from werkzeug.security import check_password_hash, generate_password_hash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required
 from flask_wtf import FlaskForm 
 from wtforms import StringField, PasswordField, SubmitField 
@@ -48,12 +49,10 @@ class User(UserMixin):
         self.username = username
         self.password_hash = password_hash
 
-# Membuat User data (untuk testing)
+# Membuat User data dari .env
 TEST_USERNAME = os.getenv("WEB_USERNAME")
 TEST_PASSWORD = os.getenv("WEB_PASSWORD")
-# Menghasilkan ID unik dari username
 TEST_USER_ID = int(TEST_USERNAME.encode('utf-8').hex(), 16) 
-# Menghasilkan hash password dari nilai di .env
 PASSWORD_HASH = generate_password_hash(TEST_PASSWORD)
 
 USER_DATA = {
@@ -86,7 +85,7 @@ def login():
     if form.validate_on_submit():
         user = next((u for u in USER_DATA.values() if u.username == form.username.data), None)
         
-        # Memverifikasi password
+        # Memverifikasi password menggunakan hash
         if user and check_password_hash(user.password_hash, form.password.data):
             login_user(user)
             flash('Login berhasil.', 'success')
