@@ -6,7 +6,6 @@
     <title>Pencarian Data Dinamis (MongoDB)</title>
     
     <style>
-        /* [ ... Salin semua kode CSS dari respons sebelumnya di sini ... ] */
         :root {
             --primary-color: #007bff;
             --secondary-color: #28a745;
@@ -161,9 +160,9 @@
         
         <div class="upload-section">
             <h3>Perbarui Data Tagihan</h3>
-            <p>Unggah file CSV (`.csv`) baru Anda di sini. Data lama akan dihapus.</p>
+            <p>Unggah file CSV, XLSX, atau XLS baru Anda di sini. Data lama akan dihapus.</p>
             <form id="uploadForm">
-                <input type="file" id="csvFile" name="file" accept=".csv" required>
+                <input type="file" id="csvFile" name="file" accept=".csv, .xlsx, .xls" required>
                 <button type="submit" class="btn-upload">Upload dan Perbarui Data</button>
             </form>
             <div id="uploadStatus"></div>
@@ -187,7 +186,7 @@
         const uploadForm = document.getElementById('uploadForm');
         const uploadStatus = document.getElementById('uploadStatus');
 
-        // --- Logika Upload CSV ---
+        // --- Logika Upload CSV/Excel ---
         uploadForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
@@ -208,7 +207,7 @@
                     uploadStatus.innerHTML = `<span style="color: #dc3545;">❌ Error: ${result.message}</span>`;
                 }
             } catch (error) {
-                uploadStatus.innerHTML = `<span style="color: #dc3545;">❌ Gagal terhubung ke server.</span>`;
+                uploadStatus.innerHTML = `<span style="color: #dc3545;">❌ Gagal terhubung ke server atau terjadi error jaringan.</span>`;
                 console.error('Error:', error);
             }
         });
@@ -223,6 +222,7 @@
                 return;
             }
 
+            // Tampilkan pesan loading
             hasilElement.innerHTML = '<p style="text-align: center; color: var(--primary-color);">Mencari data...</p>';
 
             try {
@@ -230,6 +230,12 @@
                 const response = await fetch(`/api/search?nomen=${query}`);
                 const hasilFilter = await response.json();
                 
+                if (response.status !== 200) {
+                    // Tangani error dari server (misal: MongoDB tidak terhubung)
+                     hasilElement.innerHTML = `<p class="no-result">❌ ${hasilFilter.message || 'Gagal terhubung ke API pencarian.'}</p>`;
+                     return;
+                }
+
                 if (hasilFilter.length > 0) {
                     let cardsHTML = '';
                     
@@ -238,6 +244,7 @@
                         const headers = Object.keys(data); 
                         
                         headers.forEach(header => {
+                            // Format header: Ganti underscore menjadi spasi
                              detailHTML += `
                                 <div class="detail-key">${header.replace(/_/g, ' ')}</div> 
                                 <div class="detail-value">${data[header]}</div>
@@ -246,6 +253,7 @@
                         
                         detailHTML += '</div>';
                         
+                        // Gunakan NAMA_PEL sebagai judul kartu jika tersedia
                         const cardTitle = data['NAMA_PEL'] ? data['NAMA_PEL'] : `Detail Hasil ${index + 1}`;
 
                         cardsHTML += `
