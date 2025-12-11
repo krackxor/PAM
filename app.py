@@ -25,7 +25,7 @@ COLLECTION_NAME = os.getenv("MONGO_COLLECTION_NAME")
 NOME_COLUMN_NAME = 'NOMEN' 
 ALLOWED_EXTENSIONS = {'csv', 'xlsx', 'xls'} 
 
-# Koneksi ke MongoDB
+# Koneksi ke MongoDB (Hanya untuk Data Tagihan)
 client = None
 collection_data = None
 try:
@@ -125,7 +125,6 @@ def logout():
     logout_user()
     flash('Anda telah keluar.', 'success')
     return redirect(url_for('login'))
-
 
 # --- ENDPOINT KOLEKSI TERPADU (DAILY COLLECTION UNIFIED) ---
 @app.route('/daily_collection', methods=['GET'])
@@ -350,10 +349,18 @@ def upload_billed_data():
         
         df.columns = [col.strip().upper() for col in df.columns]
         
+        # --- PERBAIKAN PEMBERSIHAN DATA AMAN ---
         if NOME_COLUMN_NAME in df.columns:
             df[NOME_COLUMN_NAME] = df[NOME_COLUMN_NAME].astype(str).str.strip() 
 
-        df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x) 
+        for col in df.columns:
+            # Hanya jalankan strip() jika tipe data adalah object (string)
+            if df[col].dtype == 'object':
+                df[col] = df[col].astype(str).str.strip()
+            # Paksa kolom nominal penting menjadi numerik
+            if col in ['NOMINAL', 'AMT_COLLECT']:
+                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        # ---------------------------------------
         
         data_to_insert = df.to_dict('records')
         
@@ -393,11 +400,17 @@ def upload_collection_data():
             df = pd.read_excel(file, sheet_name=0) 
         
         df.columns = [col.strip().upper() for col in df.columns]
-        
+
+        # --- PERBAIKAN PEMBERSIHAN DATA AMAN ---
         if NOME_COLUMN_NAME in df.columns:
             df[NOME_COLUMN_NAME] = df[NOME_COLUMN_NAME].astype(str).str.strip() 
-
-        df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x) 
+        
+        for col in df.columns:
+            if df[col].dtype == 'object':
+                df[col] = df[col].astype(str).str.strip()
+            if col in ['NOMINAL', 'AMT_COLLECT']:
+                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        # ---------------------------------------
         
         data_to_insert = df.to_dict('records')
         
@@ -408,7 +421,7 @@ def upload_collection_data():
         inserted_count = 0
         skipped_count = 0
         
-        # Kolom kunci transaksi unik (Pastikan NOMINAL, PAY_DT, NOTAG ada di file koleksi)
+        # Kolom kunci transaksi unik 
         UNIQUE_KEYS = ['NOMEN', 'NOTAG', 'NOMINAL', 'PAY_DT']
         
         if not all(key in df.columns for key in UNIQUE_KEYS):
