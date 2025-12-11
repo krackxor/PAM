@@ -4,5 +4,7 @@ pymongo
 python-dotenv
 gunicorn
 requests
+Flask-Login
+Flask-WTF
 openpyxl
-xlrd 
+xlrd
