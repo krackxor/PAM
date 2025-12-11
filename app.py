@@ -251,12 +251,11 @@ def daily_collection_unified_page():
 @app.route('/api/collection/report', methods=['GET'])
 @login_required 
 def collection_report_api():
-    """PEROMBAKAN: Menghitung total tagihan (MC), total koleksi (MB), dan total tunggakan (ARDEBT)."""
+    """Menghitung total tagihan (MC), total koleksi (MB), dan total tunggakan (ARDEBT)."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
     
     # --- 1. DATA TAGIHAN (BILLED) dari MC ---
-    # Sumber untuk Total Tagihan (Nominal) dan Total Pelanggan (Nomen)
     pipeline_mc = [
         { '$match': { 'NOMEN': { '$exists': True } } }, 
         { '$group': {
@@ -268,7 +267,6 @@ def collection_report_api():
     mc_data = list(collection_mc.aggregate(pipeline_mc))
 
     # --- 2. DATA KOLEKSI (PAID) dari MB ---
-    # Sumber untuk Total Nominal Bayar dan Total Sudah Bayar (Nomen)
     pipeline_mb = [
         { '$match': { 'NOMEN': { '$exists': True } } }, 
         { '$group': {
@@ -280,7 +278,6 @@ def collection_report_api():
     mb_data = list(collection_mb.aggregate(pipeline_mb)) 
 
     # --- 3. DATA TUNGGAKAN (DEBT) - GRAND TOTAL ---
-    # Total Tunggakan Keseluruhan dari ARDEBT (menggunakan kolom 'JUMLAH')
     pipeline_ardebt_total = [
         { '$group': {
             '_id': None,
@@ -288,7 +285,9 @@ def collection_report_api():
         }}
     ]
     ardebt_total = list(collection_ardebt.aggregate(pipeline_ardebt_total))
-    grand_total_debt = ardebt_total[0]['grand_total_debt'] if ardeb_total and ardeb_total[0].get('grand_total_debt') is not None else 0.0
+    
+    # PERBAIKAN TYPO: Mengganti ardeb_total menjadi ardebt_total
+    grand_total_debt = ardebt_total[0]['grand_total_debt'] if ardebt_total and ardebt_total[0].get('grand_total_debt') is not None else 0.0
 
     # --- 4. GABUNGKAN DATA DAN HITUNG TOTAL PER RAYON ---
     report_map = {}
@@ -408,14 +407,69 @@ def analyze_reports_landing():
     """Landing Page untuk Sub-menu Analisis."""
     return render_template('analyze_landing.html', is_admin=current_user.is_admin)
 
-# Endpoint Laporan Anomali (Placeholder)
+# ENDPOINT BARU: Pemakaian Air Ekstrim (Implementasi Logika)
 @app.route('/analyze/extreme', methods=['GET'])
 @login_required
 def analyze_extreme_usage():
     return render_template('analyze_report_template.html', 
                            title="Pemakaian Air Ekstrim", 
-                           description="Menampilkan pelanggan dengan konsumsi air di atas ambang batas (memerlukan join MC, CID, dan SBRS).",
+                           description="Menampilkan pelanggan dengan konsumsi air di atas ambang batas (memerlukan join CID dan SBRS).",
+                           api_endpoint=url_for('api_analyze_extreme_usage'),
                            is_admin=current_user.is_admin)
+
+@app.route('/api/analyze/extreme_usage', methods=['GET'])
+@login_required
+def api_analyze_extreme_usage():
+    """API untuk mengambil data pelanggan dengan pemakaian air ekstrim (> 100 m³)."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    EXTREME_THRESHOLD = 100 # m³
+
+    try:
+        pipeline = [
+            # 1. Filter SBRS: Hanya yang Kubiknya Ekstrim
+            { '$match': { 'CMR_KUBIK': { '$gt': EXTREME_THRESHOLD } } },
+            # 2. Ambil data baca meter terakhir per pelanggan (agar tidak duplikat)
+            { '$sort': { 'CMR_ACCOUNT': 1, 'CMR_RD_DATE': -1 } },
+            { '$group': {
+                '_id': '$CMR_ACCOUNT',
+                'CMR_KUBIK': { '$first': '$CMR_KUBIK' },
+                'CMR_RD_DATE': { '$first': '$CMR_RD_DATE' }
+            }},
+            # 3. Join dengan CID (Master Data Pelanggan)
+            { '$lookup': {
+                'from': 'CustomerData', 
+                'localField': '_id',
+                'foreignField': 'NOMEN',
+                'as': 'cid_info'
+            }},
+            { '$unwind': '$cid_info' },
+            # 4. Proyeksi output yang bersih
+            { '$project': {
+                '_id': 0,
+                'NOMEN': '$_id',
+                'NAMA': '$cid_info.NAMA',
+                'ALAMAT': '$cid_info.ALAMAT',
+                'RAYON': '$cid_info.RAYON',
+                'TIPEPLGGN': '$cid_info.TIPEPLGGN',
+                'KUBIK_EKSTRIM': '$CMR_KUBIK',
+                'TGL_BACA_TERAKHIR': '$CMR_RD_DATE'
+            }},
+            { '$limit': 500 } # Batasi output
+        ]
+        
+        results = list(collection_sbrs.aggregate(pipeline))
+        
+        if not results:
+            return jsonify({"message": f"Tidak ada pelanggan yang ditemukan dengan pemakaian di atas {EXTREME_THRESHOLD} m³."}), 200
+
+        return jsonify(results), 200
+
+    except Exception as e:
+        print(f"Error fetching extreme usage data: {e}")
+        return jsonify({"message": f"Gagal mengambil data pemakaian ekstrim: {e}"}), 500
+
 
 @app.route('/analyze/reduced', methods=['GET'])
 @login_required
@@ -423,6 +477,7 @@ def analyze_reduced_usage():
     return render_template('analyze_report_template.html', 
                            title="Pemakaian Air Turun", 
                            description="Menampilkan pelanggan dengan penurunan konsumsi air signifikan (memerlukan data MC dan SBRS historis).",
+                           api_endpoint='/api/analyze/reduced_usage_placeholder', # Placeholder API
                            is_admin=current_user.is_admin)
 
 @app.route('/analyze/zero', methods=['GET'])
@@ -431,6 +486,7 @@ def analyze_zero_usage():
     return render_template('analyze_report_template.html', 
                            title="Tidak Ada Pemakaian (Zero)", 
                            description="Menampilkan pelanggan dengan konsumsi air nol (Zero) di periode tagihan terakhir.",
+                           api_endpoint='/api/analyze/zero_usage_placeholder', # Placeholder API
                            is_admin=current_user.is_admin)
 
 @app.route('/analyze/standby', methods=['GET'])
@@ -439,6 +495,7 @@ def analyze_stand_tungggu():
     return render_template('analyze_report_template.html', 
                            title="Stand Tunggu", 
                            description="Menampilkan pelanggan yang berstatus Stand Tunggu (Freeze/Blokir).",
+                           api_endpoint='/api/analyze/standby_placeholder', # Placeholder API
                            is_admin=current_user.is_admin)
 
 # Endpoint File Upload/Merge (Dinamis)
