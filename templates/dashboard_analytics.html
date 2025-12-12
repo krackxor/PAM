@@ -65,10 +65,16 @@
 {% endblock %}
 
 {% block content %}
-    <h2 style="text-align: left; border-bottom: none; margin-bottom: 20px; color: var(--primary-color);">
+    <h2 style="text-align: left; border-bottom: none; margin-bottom: 10px; color: var(--primary-color);">
         <i class="fas fa-tachometer-alt" style="margin-right: 10px;"></i> Dashboard Analytics Terpadu
     </h2>
     
+    <div style="text-align: right; margin-bottom: 20px;">
+        <a href="{{ url_for('export_dashboard_data') }}" class="btn-primary" style="background-color: var(--secondary-color); text-decoration: none;">
+            <i class="fas fa-file-excel"></i> Export Laporan ke Excel
+        </a>
+    </div>
+
     <div id="loadingStatus" style="text-align: center; padding: 30px;"><i class="fas fa-spinner fa-spin"></i> Memuat data dashboard...</div>
 
     <div id="dashboardContent" style="display: none;">
@@ -106,6 +112,7 @@
         const topRayonTable = document.getElementById('topRayonTable');
         const loadingStatus = document.getElementById('loadingStatus');
         const dashboardContent = document.getElementById('dashboardContent');
+        const alertBadge = document.getElementById('criticalAlertBadge');
         
         function formatRupiah(number) {
             return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
@@ -196,6 +203,12 @@
             const labels = data.map(item => new Date(item.tanggal).toLocaleDateString('id-ID', { month: 'short', day: 'numeric' }));
             const trendData = data.map(item => item.total);
 
+            // Destroy existing chart instance if it exists
+            const existingChart = Chart.getChart("collectionTrendChart");
+            if (existingChart) {
+                existingChart.destroy();
+            }
+
             new Chart(document.getElementById('collectionTrendChart'), {
                 type: 'line',
                 data: {
@@ -264,7 +277,34 @@
                 console.error('Fetch Error:', error);
             }
         }
+        
+        // ======================================================
+        // === NEW: Critical Alert and Notification Functions ===
+        // ======================================================
+        
+        async function checkCriticalAlerts() {
+            try {
+                const response = await fetch('{{ url_for("critical_alerts_api") }}');
+                const alerts = await response.json();
+                
+                if (alerts.length > 0) {
+                    alertBadge.textContent = alerts.length;
+                    alertBadge.style.display = 'inline-block';
+                } else {
+                    alertBadge.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Error checking alerts:', error);
+                alertBadge.style.display = 'none';
+            }
+        }
 
-        document.addEventListener('DOMContentLoaded', fetchDashboardData);
+
+        document.addEventListener('DOMContentLoaded', () => {
+             fetchDashboardData(); 
+             checkCriticalAlerts(); // Cek pertama kali
+             // Check setiap 5 menit (300000 ms)
+             setInterval(checkCriticalAlerts, 300000); 
+        });
     </script>
 {% endblock %}
