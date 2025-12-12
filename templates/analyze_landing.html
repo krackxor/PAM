@@ -66,6 +66,23 @@
     background-color: #1e7e34;
 }
 
+/* New Export Button Style */
+.btn-export-anomali {
+    display: inline-block;
+    background-color: var(--accent-color);
+    color: var(--text-color);
+    padding: 10px 20px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: 600;
+    margin-bottom: 20px;
+    transition: background-color 0.3s;
+}
+.btn-export-anomali:hover {
+    background-color: #e0a800;
+}
+
+
 @media screen and (max-width: 600px) {
     .report-grid-menu {
         grid-template-columns: 1fr; 
@@ -77,6 +94,12 @@
     <h2 style="text-align: left; border-bottom: none; margin-bottom: 20px; color: var(--primary-color);">
         <i class="fas fa-chart-line" style="margin-right: 10px;"></i> Sub-Menu Analisis Lanjutan
     </h2>
+    
+    <div style="text-align: right;">
+        <a href="{{ url_for('export_anomalies_data') }}" class="btn-export-anomali">
+            <i class="fas fa-file-excel"></i> Export Semua Anomali ke Excel
+        </a>
+    </div>
     
     <p>Silakan pilih jenis laporan anomali pemakaian air yang ingin Anda analisis:</p>
 
