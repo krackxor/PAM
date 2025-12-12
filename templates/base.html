@@ -188,9 +188,14 @@
     <div class="footer-nav">
         
         <a href="{{ url_for('analytics_dashboard') }}" 
-           class="nav-item {% if request.endpoint == 'analytics_dashboard' %}active{% endif %}">
+           class="nav-item {% if request.endpoint == 'analytics_dashboard' %}active{% endif %}"
+           style="position: relative;"> 
            <i class="fas fa-tachometer-alt"></i>
            <span>Dashboard</span>
+           <span id="criticalAlertBadge" 
+                 style="position: absolute; top: 0px; right: 10px; background-color: #dc3545; color: white; border-radius: 50%; padding: 0 5px; font-size: 0.7em; font-weight: bold; display: none;">
+               0
+           </span>
         </a>
 
         <a href="{{ url_for('index') }}" 
