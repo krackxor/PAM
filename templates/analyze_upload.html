@@ -5,19 +5,21 @@
 {% block custom_styles %}
 /* CSS Khusus untuk Halaman Upload Analisis */
 .upload-section { 
-    border: 1px dashed var(--primary-color);
-    padding: 20px;
+    border: 2px dashed var(--primary-color); 
+    padding: 30px; 
     border-radius: var(--border-radius);
     margin-bottom: 30px;
     text-align: center;
+    background-color: #f0f8ff; 
 }
 .btn-analyze { 
-    background-color: #ffc107; /* Kuning */
-    color: black; 
+    background-color: var(--accent-color); 
+    color: var(--text-color); 
     border: none; 
-    padding: 10px 20px; 
-    border-radius: var(--border-radius); 
+    padding: 12px 25px; 
+    border-radius: 4px; 
     cursor: pointer; 
+    font-weight: 600;
     transition: background-color 0.3s; 
 }
 .btn-analyze:hover { 
@@ -25,22 +27,37 @@
 }
 #analyzeStatus { 
     margin-top: 15px; 
-    font-weight: 500; 
+    font-weight: 600; 
+    font-size: 1.1em;
 }
 
 .analysis-result { 
     margin-top: 30px; 
-    border-top: 1px solid #ddd; 
+    border-top: 2px solid #ddd; 
     padding-top: 20px; 
 }
+.data-summary {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: var(--border-radius);
+    padding: 15px;
+    margin-bottom: 20px;
+}
 .data-summary div { 
-    padding: 5px 0; 
-    border-bottom: 1px dashed #eee; 
+    padding: 8px 0; 
+    border-bottom: 1px dashed #ced4da; 
+}
+.data-summary div:last-child {
+    border-bottom: none;
 }
 
 /* Style Tabel Hasil Analisis */
 .result-table-wrapper { 
-    overflow-x: auto; /* Memastikan tabel dapat di-scroll horizontal */
+    overflow-x: auto; 
+    margin-top: 20px;
+    box-shadow: var(--shadow-light);
+    border-radius: var(--border-radius);
+    overflow: hidden;
 }
 table { 
     width: 100%; 
@@ -48,24 +65,64 @@ table {
     font-size: 14px; 
 }
 th, td { 
-    border: 1px solid #ddd; 
-    padding: 8px; 
+    border: 1px solid #f0f0f0; 
+    padding: 10px; 
     text-align: left; 
-    white-space: nowrap; /* Mencegah pemotongan teks */
+    white-space: nowrap; 
 }
 th { 
-    background-color: #f2f2f2; 
+    background-color: #e9ecef; 
+    font-weight: 600;
 }
 
 /* Tombol Kembali ke Dashboard Analisis */
 .btn-back-analysis {
     display: inline-block;
     margin-bottom: 20px;
-    padding: 8px 15px;
+    padding: 10px 18px;
     background-color: #6c757d;
     color: white;
     border-radius: 4px;
     text-decoration: none;
+    font-weight: 600;
+    transition: background-color 0.3s;
+}
+.btn-back-analysis:hover {
+    background-color: #5a6268;
+}
+
+/* Mobile Layout for Tables (Card View) */
+@media screen and (max-width: 600px) {
+    .result-table-wrapper {
+        box-shadow: none;
+        border: none;
+    }
+    table {
+        min-width: 100%;
+    }
+    table thead {
+        display: none;
+    }
+    table tr {
+        display: block;
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        border-radius: var(--border-radius);
+    }
+    table td {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 12px;
+        border: none;
+        border-bottom: 1px solid #eee;
+    }
+    table td:before {
+        content: attr(data-label);
+        font-weight: 600;
+        text-align: left;
+        width: 50%;
+        padding-right: 10px;
+    }
 }
 {% endblock %}
 
@@ -115,10 +172,9 @@ th {
 
             const formData = new FormData(this);
             analyzeStatus.innerHTML = '<span style="color: orange;"><i class="fas fa-spinner fa-spin"></i> Menganalisis file dan menggabungkan data...</span>';
-            analysisResult.innerHTML = '<p style="text-align: center;">Memuat...</p>';
+            analysisResult.innerHTML = '<p style="text-align: center; color: #6c757d;">Memuat...</p>';
 
             try {
-                // Panggil endpoint POST /api/analyze
                 const response = await fetch('{{ url_for("analyze_data") }}', {
                     method: 'POST',
                     body: formData
@@ -146,19 +202,19 @@ th {
             
             // 1. Ringkasan Dasar
             let summaryHtml = `
-                <h3>Ringkasan Data Gabungan</h3>
+                <h3 style="color: var(--primary-color);">Ringkasan Data Gabungan</h3>
                 <div class="data-summary">
                     <div><strong>Nama File Hasil:</strong> ${data.summary.file_name}</div>
                     <div><strong>Kunci Penggabungan:</strong> ${data.summary.join_key}</div>
-                    <div><strong>Jumlah Total Baris:</strong> ${data.summary.row_count}</div>
+                    <div><strong>Jumlah Total Baris:</strong> ${data.summary.row_count.toLocaleString('id-ID')}</div>
                     <div><strong>Jumlah Kolom:</strong> ${data.summary.column_count}</div>
                     <div><strong>Kolom Ditemukan:</strong> ${data.summary.columns.join(', ')}</div>
                 </div>
                 
-                <h3 style="margin-top: 30px;">5 Baris Data Pertama (Head)</h3>
+                <h3 style="margin-top: 30px; color: var(--primary-color);">5 Baris Data Pertama (Head)</h3>
                 <div class="result-table-wrapper">${data.head}</div>
                 
-                <h3 style="margin-top: 30px;">Statistik Deskriptif</h3>
+                <h3 style="margin-top: 30px; color: var(--primary-color);">Statistik Deskriptif</h3>
                 <div id="stats-table"></div>
             `;
             analysisResult.innerHTML = summaryHtml;
@@ -178,14 +234,24 @@ th {
             const statNames = Object.keys(stats[columnNames[0]]);
             
             statNames.forEach(stat => {
-                statsTableHtml += `<tr><td><strong>${stat.charAt(0).toUpperCase() + stat.slice(1)}</strong></td>`;
+                statsTableHtml += `<tr><td data-label="Statistik"><strong>${stat.charAt(0).toUpperCase() + stat.slice(1)}</strong></td>`;
                 columnNames.forEach(col => {
                     let value = stats[col][stat];
-                    if (value === null || isNaN(value)) {
-                         statsTableHtml += `<td>-</td>`;
+                    let displayValue;
+                    
+                    if (value === null || typeof value === 'undefined') {
+                         displayValue = `-`;
+                    } else if (typeof value === 'number' && stat !== 'top' && stat !== 'freq') {
+                         // Format angka besar dengan pemisah ribuan, dan float dengan 2 desimal
+                         if (Math.abs(value) >= 1000) {
+                            displayValue = value.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+                         } else {
+                            displayValue = value.toFixed(2);
+                         }
                     } else {
-                         statsTableHtml += `<td>${typeof value === 'number' && stat !== 'top' && stat !== 'freq' ? value.toFixed(2) : value}</td>`;
+                        displayValue = value;
                     }
+                    statsTableHtml += `<td data-label="${col}">${displayValue}</td>`;
                 });
                 statsTableHtml += `</tr>`;
             });
