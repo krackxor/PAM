@@ -52,6 +52,99 @@ except Exception as e:
     print(f"Gagal terhubung ke MongoDB: {e}")
     client = None
 
+# --- FUNGSI UTILITY INTERNAL: ANALISIS SBRS ---
+def _get_sbrs_anomalies(collection_sbrs, collection_cid):
+    """
+    Menjalankan pipeline agregasi untuk menemukan anomali pemakaian (Naik/Turun/Zero/Ekstrim) 
+    dengan membandingkan 2 riwayat SBRS terakhir dan melakukan JOIN ke CID.
+    """
+    if collection_sbrs is None or collection_cid is None:
+        return []
+        
+    pipeline_sbrs_history = [
+        {'$sort': {'CMR_ACCOUNT': 1, 'CMR_RD_DATE': -1}},
+        {'$group': {
+            '_id': '$CMR_ACCOUNT',
+            'history': {
+                '$push': {
+                    'kubik': {'$toDouble': {'$ifNull': ['$CMR_KUBIK', 0]}}, 
+                    'tanggal': '$CMR_RD_DATE'
+                }
+            }
+        }},
+        {'$project': {
+            'NOMEN': '$_id',
+            'latest': {'$arrayElemAt': ['$history', 0]},
+            'previous': {'$arrayElemAt': ['$history', 1]},
+            '_id': 0
+        }},
+        {'$match': {
+            'previous': {'$ne': None},
+            'latest': {'$ne': None},
+            'latest.kubik': {'$ne': None},
+            'previous.kubik': {'$ne': None}
+        }},
+        {'$project': {
+            'NOMEN': 1,
+            'KUBIK_TERBARU': '$latest.kubik',
+            'KUBIK_SEBELUMNYA': '$previous.kubik',
+            'SELISIH_KUBIK': {'$subtract': ['$latest.kubik', '$previous.kubik']},
+            'PERSEN_SELISIH': {
+                '$cond': {
+                    'if': {'$gt': ['$previous.kubik', 0]},
+                    'then': {'$multiply': [{'$divide': [{'$subtract': ['$latest.kubik', '$previous.kubik']}, '$previous.kubik']}, 100]},
+                    'else': 0 
+                }
+            }
+        }},
+        {'$addFields': {
+            'STATUS_PEMAKAIAN': {
+                '$switch': {
+                    'branches': [
+                        { 'case': {'$gte': ['$KUBIK_TERBARU', 150]}, 'then': 'EKSTRIM (>150 m³)' }, # Threshold Ekstrim Tinggi
+                        { 'case': {'$gte': ['$PERSEN_SELISIH', 50]}, 'then': 'NAIK EKSTRIM (>=50%)' }, 
+                        { 'case': {'$gte': ['$PERSEN_SELISIH', 10]}, 'then': 'NAIK SIGNIFIKAN (>=10%)' }, 
+                        { 'case': {'$lte': ['$PERSEN_SELISIH', -50]}, 'then': 'TURUN EKSTRIM (<= -50%)' }, 
+                        { 'case': {'$lte': ['$PERSEN_SELISIH', -10]}, 'then': 'TURUN SIGNIFIKAN (<= -10%)' }, 
+                        { 'case': {'$eq': ['$KUBIK_TERBARU', 0]}, 'then': 'ZERO / NOL' },
+                    ],
+                    'default': 'STABIL / NORMAL'
+                }
+            }
+        }},
+        {'$lookup': {
+           'from': 'CustomerData', 
+           'localField': 'NOMEN',
+           'foreignField': 'NOMEN',
+           'as': 'customer_info'
+        }},
+        {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+        {'$project': {
+            'NOMEN': 1,
+            'NAMA': {'$ifNull': ['$customer_info.NAMA', 'N/A']},
+            'RAYON': {'$ifNull': ['$customer_info.RAYON', 'N/A']},
+            'KUBIK_TERBARU': {'$round': ['$KUBIK_TERBARU', 0]},
+            'KUBIK_SEBELUMNYA': {'$round': ['$KUBIK_SEBELUMNYA', 0]},
+            'SELISIH_KUBIK': {'$round': ['$SELISIH_KUBIK', 0]},
+            'PERSEN_SELISIH': {'$round': ['$PERSEN_SELISIH', 2]},
+            'STATUS_PEMAKAIAN': 1
+        }},
+        {'$match': { 
+           '$or': [ # Filter hanya yang anomali
+               {'STATUS_PEMAKAIAN': {'$ne': 'STABIL / NORMAL'}},
+           ]
+        }},
+        {'$limit': 100} # Batasi output untuk performa
+    ]
+
+    anomalies = list(collection_sbrs.aggregate(pipeline_sbrs_history))
+    
+    # Clean up _id
+    for doc in anomalies:
+        doc.pop('_id', None)
+        
+    return anomalies
+
 
 # --- PEMROSESAN DAFTAR PENGGUNA DARI .ENV (STATIC LOGIN) ---
 STATIC_USERS = {}
@@ -420,140 +513,90 @@ def analyze_stand_tungggu():
 @app.route('/api/analyze/volume_fluctuation', methods=['GET'])
 @login_required 
 def analyze_volume_fluctuation_api():
-    """Analisis Fluktuasi Pemakaian (Volume Naik/Turun) dengan membandingkan 2 riwayat SBRS terakhir."""
+    """API untuk menu Analisis Volume. Memanggil fungsi internal _get_sbrs_anomalies."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
 
     try:
-        # Pipeline untuk analisis volume Naik/Turun
-        pipeline_sbrs_history = [
-            {
-                # Sortasi data per account berdasarkan tanggal baca terbaru
-                '$sort': {'CMR_ACCOUNT': 1, 'CMR_RD_DATE': -1} 
-            },
-            {
-                # Kelompokkan berdasarkan CMR_ACCOUNT (NOMEN)
-                '$group': {
-                    '_id': '$CMR_ACCOUNT',
-                    'history': {
-                        '$push': {
-                            # Konversi eksplisit ke double untuk memastikan operasi matematika berhasil
-                            'kubik': {'$toDouble': {'$ifNull': ['$CMR_KUBIK', 0]}}, 
-                            'tanggal': '$CMR_RD_DATE'
-                        }
-                    }
-                }
-            },
-            {
-                # Ambil hanya 2 entri pertama (riwayat kubikasi terbaru dan sebelumnya)
-                '$project': {
-                    'NOMEN': '$_id',
-                    'latest': {'$arrayElemAt': ['$history', 0]},
-                    'previous': {'$arrayElemAt': ['$history', 1]},
-                    '_id': 0
-                }
-            },
-            {
-                # Filter hanya yang punya 2 data riwayat untuk perbandingan, dan pastikan nilai kubik ada
-                '$match': {
-                    'previous': {'$ne': None},
-                    'latest': {'$ne': None},
-                    'latest.kubik': {'$ne': None},
-                    'previous.kubik': {'$ne': None}
-                }
-            },
-            {
-                # Kalkulasi Fluktuasi dan Status
-                '$project': {
-                    'NOMEN': 1,
-                    'KUBIK_TERBARU': 1,
-                    'KUBIK_SEBELUMNYA': 1,
-                    'SELISIH_KUBIK': {'$subtract': ['$latest.kubik', '$previous.kubik']},
-                    'PERSEN_SELISIH': {
-                        '$cond': {
-                            # Jika kubik sebelumnya > 0, lakukan perhitungan persentase
-                            'if': {'$gt': ['$previous.kubik', 0]},
-                            'then': {'$multiply': [{'$divide': [{'$subtract': ['$latest.kubik', '$previous.kubik']}, '$previous.kubik']}, 100]},
-                            # Jika 0, set persentase ke 0 (karena tidak ada basis perbandingan)
-                            'else': 0 
-                        }
-                    }
-                }
-            },
-            {
-                # Tentukan Status Fluktuasi
-                '$addFields': {
-                    'STATUS_PEMAKAIAN': {
-                        '$switch': {
-                            'branches': [
-                                { 'case': {'$gte': ['$PERSEN_SELISIH', 50]}, 'then': 'NAIK EKSTRIM (>=50%)' }, 
-                                { 'case': {'$gte': ['$PERSEN_SELISIH', 10]}, 'then': 'NAIK SIGNIFIKAN (>=10%)' }, 
-                                { 'case': {'$lte': ['$PERSEN_SELISIH', -50]}, 'then': 'TURUN EKSTRIM (<= -50%)' }, 
-                                { 'case': {'$lte': ['$PERSEN_SELISIH', -10]}, 'then': 'TURUN SIGNIFIKAN (<= -10%)' }, 
-                                { 'case': {'$eq': ['$KUBIK_TERBARU', 0]}, 'then': 'ZERO / NOL' },
-                            ],
-                            'default': 'STABIL / NORMAL'
-                        }
-                    }
-                }
-            },
-            {
-                 # Gabungkan (Join) dengan CID untuk mendapatkan Nama dan Rayon (Lookup)
-                 '$lookup': {
-                    'from': 'CustomerData', 
-                    'localField': 'NOMEN',
-                    'foreignField': 'NOMEN',
-                    'as': 'customer_info'
-                 }
-            },
-            {
-                '$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}
-            },
-            {
-                # Proyeksi Akhir
-                '$project': {
-                    'NOMEN': 1,
-                    'NAMA': {'$ifNull': ['$customer_info.NAMA', 'N/A']},
-                    'RAYON': {'$ifNull': ['$customer_info.RAYON', 'N/A']},
-                    'KUBIK_TERBARU': 1,
-                    'KUBIK_SEBELUMNYA': 1,
-                    'SELISIH_KUBIK': 1,
-                    'PERSEN_SELISIH': {'$round': ['$PERSEN_SELISIH', 2]},
-                    'STATUS_PEMAKAIAN': 1
-                }
-            },
-            {
-                 # Filter hanya yang anomali untuk ditampilkan di laporan ini
-                 '$match': {
-                    '$or': [
-                        {'STATUS_PEMAKAIAN': 'NAIK EKSTRIM (>=50%)'},
-                        {'STATUS_PEMAKAIAN': 'NAIK SIGNIFIKAN (>=10%)'},
-                        {'STATUS_PEMAKAIAN': 'TURUN EKSTRIM (<= -50%)'},
-                        {'STATUS_PEMAKAIAN': 'TURUN SIGNIFIKAN (<= -10%)'},
-                        {'STATUS_PEMAKAIAN': 'ZERO / NOL'}
-                    ]
-                 }
-            }
-        ]
-        
-        # Eksekusi pipeline
-        fluctuation_data = list(collection_sbrs.aggregate(pipeline_sbrs_history))
-        
-        # Hapus _id
-        cleaned_data = []
-        for doc in fluctuation_data:
-            doc.pop('_id', None)
-            cleaned_data.append(doc)
-
-        return jsonify(cleaned_data), 200
+        fluctuation_data = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        return jsonify(fluctuation_data), 200
 
     except Exception as e:
         # Pesan error yang lebih membantu jika pipeline gagal
         print(f"Error saat menganalisis fluktuasi volume: {e}")
-        return jsonify({"message": f"Gagal mengambil data fluktuasi volume. Pastikan Anda sudah mengunggah data SBRS yang valid dan memiliki minimal 2 riwayat baca meter per pelanggan. Detail teknis error: {e}"}), 500
+        return jsonify({"message": f"Gagal mengambil data fluktuasi volume. Detail teknis error: {e}"}), 500
 # =========================================================================
 # === END API BARU ===
 # =========================================================================
+
+# Endpoint File Upload/Merge (Dinamis)
+@app.route('/analyze/upload', methods=['GET'])
+@login_required 
+def analyze_data_page():
+    return render_template('analyze_upload.html', is_admin=current_user.is_admin)
+
+@app.route('/api/analyze', methods=['POST'])
+@login_required 
+def analyze_data():
+    """Endpoint untuk mengunggah file jamak, menggabungkannya, dan menjalankan analisis data."""
+    if not request.files:
+        return jsonify({"message": "Tidak ada file yang diunggah."}), 400
+
+    uploaded_files = request.files.getlist('file')
+    all_dfs = []
+    
+    JOIN_KEY = 'NOMEN' 
+    
+    for file in uploaded_files:
+        filename = secure_filename(file.filename)
+        file_extension = filename.rsplit('.', 1)[1].lower()
+
+        if file_extension not in ALLOWED_EXTENSIONS:
+            continue
+
+        try:
+            if file_extension == 'csv':
+                df = pd.read_csv(file) 
+            elif file_extension in ['xlsx', 'xls']:
+                df = pd.read_excel(file, sheet_name=0) 
+            
+            df.columns = [col.strip().upper() for col in df.columns]
+            
+            if JOIN_KEY in df.columns:
+                 df[JOIN_KEY] = df[JOIN_KEY].astype(str).str.strip() 
+                 all_dfs.append(df)
+            else:
+                 return jsonify({"message": f"Gagal: File '{filename}' tidak memiliki kolom kunci '{JOIN_KEY}'."}), 400
+
+        except Exception as e:
+            print(f"Error membaca file {filename}: {e}")
+            return jsonify({"message": f"Gagal membaca file {filename}: {e}"}), 500
+
+    if not all_dfs:
+        return jsonify({"message": "Tidak ada file yang valid untuk digabungkan."}), 400
+
+    merged_df = all_dfs[0]
+    
+    for i in range(1, len(all_dfs)):
+        merged_df = pd.merge(merged_df, all_dfs[i], on=JOIN_KEY, how='outer', suffixes=(f'_f{i}', f'_f{i+1}'))
+
+    # Analisis Data Gabungan
+    data_summary = {
+        "file_name": f"Gabungan ({len(uploaded_files)} files)",
+        "join_key": JOIN_KEY,
+        "row_count": len(merged_df),
+        "column_count": len(merged_df.columns),
+        "columns": merged_df.columns.tolist() 
+    }
+
+    descriptive_stats = merged_df.describe(include='all').to_json(orient='index')
+    
+    return jsonify({
+        "status": "success",
+        "summary": data_summary,
+        "stats": descriptive_stats,
+        "head": merged_df.head().to_html(classes='table table-striped') 
+    }), 200
 
 # --- ENDPOINT KELOLA UPLOAD (ADMIN) ---
 @app.route('/admin/upload', methods=['GET'])
@@ -602,7 +645,19 @@ def upload_mc_data():
         collection_mc.delete_many({})
         collection_mc.insert_many(data_to_insert)
         count = len(data_to_insert)
-        return jsonify({"message": f"Sukses! {count} baris Master Cetak (MC) berhasil MENGGANTI data lama."}), 200
+        
+        # --- RETURN REPORT ---
+        return jsonify({
+            "status": "success",
+            "message": f"Sukses! {count} baris Master Cetak (MC) berhasil MENGGANTI data lama.",
+            "summary_report": {
+                "total_rows": count,
+                "type": "REPLACE",
+                "replaced_count": count
+            },
+            "anomaly_list": []
+        }), 200
+        # --- END RETURN REPORT ---
 
     except Exception as e:
         print(f"Error saat memproses file MC: {e}")
@@ -649,6 +704,7 @@ def upload_mb_data():
         # OPERASI KRITIS: APPEND DATA BARU DENGAN PENCEGAHAN DUPLIKASI
         inserted_count = 0
         skipped_count = 0
+        total_rows = len(data_to_insert)
         
         # Kunci unik: NOTAGIHAN (dari MB) + TGL_BAYAR
         UNIQUE_KEYS = ['NOTAGIHAN', 'TGL_BAYAR', 'NOMINAL'] 
@@ -665,7 +721,19 @@ def upload_mb_data():
                 collection_mb.insert_one(record)
                 inserted_count += 1
         
-        return jsonify({"message": f"Sukses Append! {inserted_count} baris Master Bayar (MB) baru ditambahkan. ({skipped_count} duplikat diabaikan)."}), 200
+        # --- RETURN REPORT ---
+        return jsonify({
+            "status": "success",
+            "message": f"Sukses Append! {inserted_count} baris Master Bayar (MB) baru ditambahkan. ({skipped_count} duplikat diabaikan).",
+            "summary_report": {
+                "total_rows": total_rows,
+                "type": "APPEND",
+                "inserted_count": inserted_count,
+                "skipped_count": skipped_count
+            },
+            "anomaly_list": []
+        }), 200
+        # --- END RETURN REPORT ---
 
     except Exception as e:
         print(f"Error saat memproses file MB: {e}")
@@ -708,7 +776,19 @@ def upload_cid_data():
         collection_cid.delete_many({})
         collection_cid.insert_many(data_to_insert)
         count = len(data_to_insert)
-        return jsonify({"message": f"Sukses! {count} baris Customer Data (CID) berhasil MENGGANTI data lama."}), 200
+
+        # --- RETURN REPORT ---
+        return jsonify({
+            "status": "success",
+            "message": f"Sukses! {count} baris Customer Data (CID) berhasil MENGGANTI data lama.",
+            "summary_report": {
+                "total_rows": count,
+                "type": "REPLACE",
+                "replaced_count": count
+            },
+            "anomaly_list": []
+        }), 200
+        # --- END RETURN REPORT ---
 
     except Exception as e:
         print(f"Error saat memproses file CID: {e}")
@@ -718,7 +798,7 @@ def upload_cid_data():
 @login_required 
 @admin_required 
 def upload_sbrs_data():
-    """Mode APPEND: Untuk data Baca Meter (SBRS) / Riwayat Stand Meter."""
+    """Mode APPEND: Untuk data Baca Meter (SBRS) / Riwayat Stand Meter. Menjalankan Analisis Anomali setelah upload."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -733,6 +813,7 @@ def upload_sbrs_data():
     file_extension = filename.rsplit('.', 1)[1].lower()
 
     try:
+        # Load data
         if file_extension == 'csv':
             df = pd.read_csv(file)
         elif file_extension in ['xlsx', 'xls']:
@@ -756,6 +837,7 @@ def upload_sbrs_data():
         # OPERASI KRITIS: APPEND DATA BARU DENGAN PENCEGAHAN DUPLIKASI
         inserted_count = 0
         skipped_count = 0
+        total_rows = len(data_to_insert)
         
         # Kunci unik: cmr_account (NOMEN) + cmr_rd_date (Tanggal Baca)
         UNIQUE_KEYS = ['CMR_ACCOUNT', 'CMR_RD_DATE'] 
@@ -772,7 +854,30 @@ def upload_sbrs_data():
                 collection_sbrs.insert_one(record)
                 inserted_count += 1
         
-        return jsonify({"message": f"Sukses Append! {inserted_count} baris Riwayat Baca Meter (SBRS) baru ditambahkan. ({skipped_count} duplikat diabaikan)."}), 200
+        # === ANALISIS ANOMALI INSTAN SETELAH INSERT ===
+        anomaly_list = []
+        try:
+            if inserted_count > 0:
+                # Dapatkan anomali dari SBRS yang baru diupdate
+                anomaly_list = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        except Exception as e:
+            # Jika analisis gagal, jangan hentikan respons sukses upload
+            print(f"Peringatan: Gagal menjalankan analisis anomali instan: {e}")
+        # ============================================
+
+        # --- RETURN REPORT ---
+        return jsonify({
+            "status": "success",
+            "message": f"Sukses Append! {inserted_count} baris Riwayat Baca Meter (SBRS) baru ditambahkan. ({skipped_count} duplikat diabaikan).",
+            "summary_report": {
+                "total_rows": total_rows,
+                "type": "APPEND",
+                "inserted_count": inserted_count,
+                "skipped_count": skipped_count
+            },
+            "anomaly_list": anomaly_list
+        }), 200
+        # --- END RETURN REPORT ---
 
     except Exception as e:
         print(f"Error saat memproses file SBRS: {e}")
@@ -822,7 +927,18 @@ def upload_ardebt_data():
         collection_ardebt.insert_many(data_to_insert)
         count = len(data_to_insert)
         
-        return jsonify({"message": f"Sukses! {count} baris Detail Tunggakan (ARDEBT) berhasil MENGGANTI data lama."}), 200
+        # --- RETURN REPORT ---
+        return jsonify({
+            "status": "success",
+            "message": f"Sukses! {count} baris Detail Tunggakan (ARDEBT) berhasil MENGGANTI data lama.",
+            "summary_report": {
+                "total_rows": count,
+                "type": "REPLACE",
+                "replaced_count": count
+            },
+            "anomaly_list": []
+        }), 200
+        # --- END RETURN REPORT ---
 
     except Exception as e:
         print(f"Error saat memproses file ARDEBT: {e}")
