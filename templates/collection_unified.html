@@ -129,7 +129,24 @@
         </a>
     </div>
 
+    <h3 style="margin-top: 40px; color: #17a2b8; border-top: 1px solid #17a2b8; padding-top: 20px;">
+        <i class="fas fa-list-ol"></i> Distribusi Pelanggan Berdasarkan TARIF (Rayon 34/35 Reguler)
+    </h3>
+    
+    <div id="tarifBreakdownArea">
+        <p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat data breakdown tarif...</p>
+    </div>
+    <h3 style="margin-top: 40px; color: #dc3545; border-top: 1px solid #dc3545; padding-top: 20px;">
+        <i class="fas fa-layer-group"></i> Laporan Grouping MC Kustom (Rayon 34/35 Reguler)
+    </h3>
+    
+    <button id="fetchCustomReportBtn" class="btn-primary" style="background-color: #dc3545; color: white; margin-bottom: 20px;">
+        <i class="fas fa-sync"></i> Muat Laporan Kustom
+    </button>
 
+    <div id="customReportArea">
+        <p class="no-results">Tekan "Muat Laporan Kustom" untuk melihat hasil agregasi.</p>
+    </div>
     <div class="filter-input-group">
         <input type="text" id="filterInput" placeholder="Filter Detail (Rayon, PCEZ, NOMEN)...">
         <button id="searchBtn" class="btn-primary" style="background-color: var(--primary-color); color: white; padding: 12px 18px; border: none; border-radius: 4px;">
@@ -147,6 +164,9 @@
         const searchBtn = document.getElementById('searchBtn');
         const detailsArea = document.getElementById('detailsArea');
         const exportReportBtn = document.getElementById('exportReportBtn');
+        const fetchCustomBtn = document.getElementById('fetchCustomReportBtn'); // Tombol kustom baru
+        const customReportArea = document.getElementById('customReportArea');
+        const tarifBreakdownArea = document.getElementById('tarifBreakdownArea');
         
         function formatRupiah(number) {
             return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
@@ -163,14 +183,24 @@
         // --- FUNGSI 1: MEMUAT REPORT RINGKAS ---
         async function fetchCollectionReport() {
             try {
+                // 1. Fetch Main Report Data (MC vs MB)
                 const response = await fetch('{{ url_for("collection_report_api") }}');
                 const result = await response.json();
                 
+                // 2. NEW: Fetch Custom MC Grouping Summary Data
+                const customSummaryResponse = await fetch('{{ url_for("analyze_mc_grouping_summary_api") }}');
+                const customSummaryResult = await customSummaryResponse.json();
+
                 if (response.status !== 200) {
                      reportArea.innerHTML = `<p class="no-results" style="color: red;">❌ Gagal memuat report: ${result.message || 'Error Server'}</p>`;
                      return;
                 }
                 
+                // NEW: Merge custom summary data ke dalam objek grandTotal utama
+                result.grand_total.TotalPiutangKustomNominal = customSummaryResult.TotalPiutangKustomNominal || 0;
+                result.grand_total.TotalPiutangKustomKubik = customSummaryResult.TotalPiutangKustomKubik || 0;
+                result.grand_total.TotalNomenKustom = customSummaryResult.TotalNomenKustom || 0;
+
                 renderReport(result.report_data, result.grand_total);
 
             } catch (error) {
@@ -189,6 +219,10 @@
                         <h4>Total Pelanggan (CID)</h4>
                         <p>${grandTotal.TotalPelanggan.toLocaleString('id-ID')}</p>
                     </div>
+                    <div class="summary-card" style="border-left-color: var(--primary-color);">
+                        <h4>Total Pelanggan MC (Count Nomen)</h4>
+                        <p>${formatNumber(grandTotal.MC_TotalNomen)}</p>
+                    </div>
                     <div class="summary-card" style="border-left-color: #ffc107;">
                         <h4>Total Piutang MC (Nominal)</h4>
                         <p>${formatRupiah(grandTotal.MC_TotalNominal)}</p>
@@ -196,6 +230,19 @@
                     <div class="summary-card" style="border-left-color: #dc3545;">
                         <h4>Total Piutang MC (Kubik)</h4>
                         <p>${formatNumber(grandTotal.MC_TotalKubik)} m³</p>
+                    </div>
+                    
+                    <div class="summary-card" style="border-left-color: #dc3545;">
+                        <h4>Piutang Kustom (Rayon 34/35 Reg)</h4>
+                        <p>${formatRupiah(grandTotal.TotalPiutangKustomNominal)}</p>
+                    </div>
+                    <div class="summary-card" style="border-left-color: #dc3545;">
+                        <h4>Kubik Kustom (Rayon 34/35 Reg)</h4>
+                        <p>${formatNumber(grandTotal.TotalPiutangKustomKubik)} m³</p>
+                    </div>
+                    <div class="summary-card" style="border-left-color: #dc3545;">
+                        <h4>Nomen Kustom (Rayon 34/35 Reg)</h4>
+                        <p>${formatNumber(grandTotal.TotalNomenKustom)}</p>
                     </div>
                     <div class="summary-card" style="border-left-color: #28a745;">
                         <h4>Total Koleksi MC (Nominal)</h4>
@@ -280,6 +327,75 @@
             `;
             
             reportArea.innerHTML = summaryHTML + tableHTML;
+        }
+
+        // --- FUNGSI BARU: MEMUAT BREAKDOWN TARIF ---
+        async function fetchTarifBreakdown() {
+            tarifBreakdownArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Breakdown Tarif...</p>';
+            
+            try {
+                // Panggil API baru untuk breakdown tarif
+                const response = await fetch('{{ url_for("analyze_mc_tarif_breakdown_api") }}'); 
+                const data = await response.json();
+                
+                if (response.status !== 200 || data.length === 0) {
+                     tarifBreakdownArea.innerHTML = `<p class="no-results" style="color: #6c757d;">Tidak ada data pelanggan yang cocok dengan kriteria kustom (Rayon 34/35 Reguler).</p>`;
+                     return;
+                }
+                
+                renderTarifBreakdownTable(data);
+
+            } catch (error) {
+                tarifBreakdownArea.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data breakdown tarif dari server.</p>';
+                console.error('Tarif Breakdown Error:', error);
+            }
+        }
+        
+        function renderTarifBreakdownTable(data) {
+            let totalPelanggan = data.reduce((sum, item) => sum + item.JumlahPelanggan, 0);
+
+            // Perbesar lebar untuk kolom Rayon
+            let tableHTML = `
+                <div class="report-table-wrapper" style="max-width: 600px; margin-left: 0;"> 
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left;">RAYON</th>
+                            <th style="text-align: left;">TARIF</th>
+                            <th>JML Pelanggan</th>
+                            <th>Persentase (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            data.forEach(item => {
+                const percentage = (item.JumlahPelanggan / totalPelanggan) * 100;
+                tableHTML += `
+                    <tr>
+                        <td data-label="RAYON" style="text-align: left;">${item.RAYON}</td>
+                        <td data-label="TARIF" style="text-align: left;">${item.TARIF}</td>
+                        <td data-label="JML Pelanggan">${formatNumber(item.JumlahPelanggan)}</td>
+                        <td data-label="Persentase">${formatPercent(percentage)}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                <tr class="grand-total-row">
+                    <td style="text-align: left;">TOTAL</td>
+                    <td>-</td> 
+                    <td>${formatNumber(totalPelanggan)}</td>
+                    <td>100.00%</td>
+                </tr>
+            `;
+            
+            tableHTML += `
+                    </tbody>
+                </table>
+                </div>
+            `;
+            tarifBreakdownArea.innerHTML = tableHTML;
         }
 
         // --- FUNGSI 2: MEMUAT DETAIL TRANSAKSIONAL ---
@@ -383,6 +499,70 @@
             
             detailsArea.innerHTML = tableHTML;
         }
+        
+        // --- FUNGSI 3: MEMUAT LAPORAN KUSTOM BARU (Detail Grouping) ---
+        async function fetchCustomReport() {
+            customReportArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Menghubungkan ke MongoDB untuk Laporan Kustom...</p>';
+            
+            try {
+                // Endpoint ini harus dibuat di app.py
+                const response = await fetch('{{ url_for("analyze_mc_grouping_api") }}'); 
+                const data = await response.json();
+                
+                if (response.status !== 200 || data.length === 0) {
+                     customReportArea.innerHTML = `<p class="no-results" style="color: red;">❌ Gagal memuat report: ${data.message || 'Tidak ada data kustom ditemukan.'}</p>`;
+                     return;
+                }
+                
+                renderCustomReportTable(data);
+
+            } catch (error) {
+                customReportArea.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data report kustom dari server.</p>';
+                console.error('Custom Report Error:', error);
+            }
+        }
+        
+        function renderCustomReportTable(data) {
+            const customArea = document.getElementById('customReportArea');
+            if (data.length === 0) return;
+
+            const headers = Object.keys(data[0]);
+            
+            let tableHTML = `
+                <div class="report-table-wrapper">
+                <table class="report-table" style="min-width: 1200px;">
+                    <thead>
+                        <tr>
+            `;
+            // Render Headers
+            headers.forEach(h => {
+                const cleanHeader = h.replace(/_/g, ' ').replace('SumOf', '').replace('CountOf', 'Count ');
+                tableHTML += `<th>${cleanHeader}</th>`;
+            });
+            tableHTML += `</tr></thead><tbody>`;
+
+            // Render Rows
+            data.forEach(item => {
+                tableHTML += `<tr>`;
+                headers.forEach(h => {
+                    let cellValue = item[h];
+                    
+                    if (h.includes('NOMINAL')) {
+                        cellValue = formatRupiah(cellValue);
+                    } else if (h.includes('KUBIK') || h.includes('CountOf')) {
+                        cellValue = formatNumber(cellValue);
+                    }
+                    
+                    // PENTING: Tambahkan data-label untuk mobile view
+                    const dataLabel = h.replace(/_/g, ' ').replace('SumOf', '').replace('CountOf', 'Count ');
+                    tableHTML += `<td data-label="${dataLabel}" style="text-align: left;">${cellValue}</td>`;
+                });
+                tableHTML += `</tr>`;
+            });
+
+            tableHTML += `</tbody></table></div>`;
+            customReportArea.innerHTML = tableHTML;
+        }
 
         // Export button handler
         exportReportBtn.addEventListener('click', (e) => {
@@ -401,10 +581,13 @@
             }
         });
         
-        // Muat kedua bagian saat halaman dimuat
+        fetchCustomBtn.addEventListener('click', fetchCustomReport);
+        
+        // Muat semua bagian saat halaman dimuat
         document.addEventListener('DOMContentLoaded', () => {
              fetchCollectionReport(); 
              fetchCollectionDetails(''); 
+             fetchTarifBreakdown(); // Panggil fungsi baru
         });
 
     </script>
