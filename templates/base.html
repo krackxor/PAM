@@ -150,6 +150,20 @@
             background-color: #0056b3;
         }
 
+        /* Badge Notifikasi */
+        .badge {
+            position: absolute; 
+            top: 0px; 
+            right: 10px; 
+            background-color: #dc3545; 
+            color: white; 
+            border-radius: 50%; 
+            padding: 0 5px; 
+            font-size: 0.7em; 
+            font-weight: bold; 
+            display: none;
+        }
+
         @media (max-width: 600px) {
             .main-content { padding: 10px; }
             .container { padding: 15px; }
@@ -192,10 +206,7 @@
            style="position: relative;"> 
            <i class="fas fa-tachometer-alt"></i>
            <span>Dashboard</span>
-           <span id="criticalAlertBadge" 
-                 style="position: absolute; top: 0px; right: 10px; background-color: #dc3545; color: white; border-radius: 50%; padding: 0 5px; font-size: 0.7em; font-weight: bold; display: none;">
-               0
-           </span>
+           <span id="criticalAlertBadge" class="badge">0</span>
         </a>
 
         <a href="{{ url_for('index') }}" 
@@ -207,7 +218,7 @@
         <a href="{{ url_for('daily_collection_unified_page') }}" 
            class="nav-item {% if request.endpoint == 'daily_collection_unified_page' %}active{% endif %}">
            <i class="fas fa-chart-bar"></i>
-           <span>Koleksi Harian</span>
+           <span>Report</span>
         </a>
 
         <a href="{{ url_for('analyze_reports_landing') }}" 
@@ -229,6 +240,34 @@
             <span>Keluar</span>
         </a>
     </div>
+    
+    <script>
+        // Global function to check alerts for the badge
+        async function checkCriticalAlertsGlobal() {
+            const alertBadge = document.getElementById('criticalAlertBadge');
+            try {
+                const response = await fetch('{{ url_for("critical_alerts_api") }}');
+                const alerts = await response.json();
+                
+                if (alerts.length > 0) {
+                    alertBadge.textContent = alerts.length;
+                    alertBadge.style.display = 'inline-block';
+                } else {
+                    alertBadge.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Error checking alerts:', error);
+                alertBadge.style.display = 'none';
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+             // Run check on load
+             checkCriticalAlertsGlobal(); 
+             // Run check every 5 minutes (300000 ms)
+             setInterval(checkCriticalAlertsGlobal, 300000); 
+        });
+    </script>
 
 </body>
 </html>
