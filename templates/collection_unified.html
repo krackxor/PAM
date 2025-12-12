@@ -34,6 +34,24 @@
 
 .no-results { text-align: center; color: #555; padding: 20px; }
 
+/* --- CUSTOM RAW DATA SECTION --- */
+.raw-data-section {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 2px solid var(--primary-color);
+}
+.raw-data-grid {
+    display: grid;
+    grid-template-columns: 1fr; /* Default ke satu kolom di mobile */
+    gap: 30px;
+}
+@media screen and (min-width: 900px) {
+    .raw-data-grid {
+        grid-template-columns: repeat(3, 1fr); /* Tiga kolom di desktop */
+    }
+}
+
+
 /* -------------------------------------------------------------------------- */
 /* --- ROMBAK TOTAL UI: LAYOUT MOBILE (LIST TRANSAKSI) --- */
 /* -------------------------------------------------------------------------- */
@@ -107,13 +125,29 @@
     <div class="filter-input-group">
         <input type="text" id="filterInput" placeholder="Filter Detail (Rayon, PCEZ, NOMEN)...">
         <button id="searchBtn" class="btn-primary" style="background-color: var(--primary-color); color: white; padding: 10px 15px; border: none; border-radius: 4px;">
-            <i class="fas fa-filter"></i> Filter Detail
+            <i class="fas fa-filter"></i> Filter Transaksi Detail
         </button>
     </div>
 
     <div id="detailsArea">
         <p class="no-results">Memuat data transaksi...</p>
     </div>
+    
+    <div class="raw-data-section">
+        <h3 style="margin-bottom: 20px; color: var(--primary-color);">Data Master Terakhir (50 Baris)</h3>
+        <div class="raw-data-grid">
+            <div id="rawMCTable">
+                <p style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Memuat Data MC...</p>
+            </div>
+            <div id="rawMBTable">
+                <p style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Memuat Data MB...</p>
+            </div>
+            <div id="rawCIDTable">
+                <p style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Memuat Data CID...</p>
+            </div>
+        </div>
+    </div>
+
 
     <script>
         const reportArea = document.getElementById('reportArea');
@@ -125,11 +159,80 @@
             return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
         }
         
+        function formatRupiahSimple(number) {
+            return (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+        }
+
         function formatPercent(number) {
             return (parseFloat(number) || 0).toFixed(2) + '%';
         }
 
-        // --- FUNGSI 1: MEMUAT REPORT RINGKAS (MENGGUNAKAN MC, MB, ARDEBT) ---
+        // --- FUNGSI UTILITY UNTUK MERENDER TABEL RAW ---
+        function renderRawTable(title, data, targetElementId) {
+            const targetElement = document.getElementById(targetElementId);
+
+            if (!data || data.length === 0) {
+                targetElement.innerHTML = `<h4>${title}</h4><p class="no-results">Tidak ada data ${title} ditemukan.</p>`;
+                return;
+            }
+
+            // Kolom yang diminta: Nomen, Nominal, Kubikasi + Status/Tipe
+            const requestedHeaders = [
+                { key: 'NOMEN', label: 'NOMEN' },
+                { key: 'NOMINAL', label: 'NOMINAL' },
+                { key: 'KUBIK', label: 'KUBIKASI' },
+                { key: 'STATUS_CID', label: 'STATUS TD' }, // Untuk CID
+                { key: 'TIPEPLGGN', label: 'STATUS PD' }   // Untuk CID
+            ];
+
+            // Filter header yang benar-benar ada di data
+            let headers = [];
+            
+            // Logika khusus untuk menentukan header mana yang akan ditampilkan (hanya yang diminta user)
+            if (targetElementId === 'rawMCTable') {
+                headers = requestedHeaders.slice(0, 3); // NOMEN, NOMINAL, KUBIK
+            } else if (targetElementId === 'rawMBTable') {
+                headers = requestedHeaders.slice(0, 3).filter(h => h.key !== 'KUBIK').concat({ key: 'TGL_BAYAR', label: 'TGL BAYAR' });
+            } else if (targetElementId === 'rawCIDTable') {
+                headers = [
+                    { key: 'NOMEN', label: 'NOMEN' },
+                    { key: 'TIPEPLGGN', label: 'STATUS PD' },
+                    { key: 'STATUS_CID', label: 'STATUS TD' }
+                ];
+            }
+
+
+            let tableHtml = `<h4>${title} (${data.length} baris)</h4>`;
+            tableHtml += '<div class="data-table-wrapper"><table class="collection-table"><thead><tr>';
+            
+            // Header Row
+            headers.forEach(h => {
+                tableHtml += `<th>${h.label}</th>`;
+            });
+            tableHtml += '</tr></thead><tbody>';
+
+            // Data Rows
+            data.forEach(item => {
+                tableHtml += '<tr>';
+                headers.forEach(h => {
+                    let cellValue = item[h.key] || 'N/A';
+                    
+                    if (h.key === 'NOMINAL') {
+                        cellValue = formatRupiahSimple(cellValue);
+                    } else if (h.key === 'KUBIK' && typeof item[h.key] === 'number') {
+                        cellValue = item[h.key].toLocaleString('id-ID') + ' m³';
+                    }
+                    
+                    tableHtml += `<td data-label="${h.label}">${cellValue}</td>`;
+                });
+                tableHtml += '</tr>';
+            });
+
+            tableHtml += '</tbody></table></div>';
+            targetElement.innerHTML = tableHtml;
+        }
+
+        // --- FUNGSI 1: MEMUAT REPORT RINGKAS (AGREGASI) ---
         async function fetchCollectionReport() {
             try {
                 const response = await fetch('{{ url_for("collection_report_api") }}');
@@ -183,7 +286,7 @@
                 </div>
             `;
             
-            // Perombakan Tabel Detail
+            // Tabel Detail Rayon (Logika lama, tetap dipertahankan)
             let tableHTML = `
                 <h3 style="margin-top: 30px;">Detail Koleksi per Rayon / PCEZ</h3>
                 <div class="report-table-wrapper">
@@ -240,7 +343,7 @@
             reportArea.innerHTML = summaryHTML + tableHTML;
         }
 
-        // --- FUNGSI 2: MEMUAT DETAIL TRANSAKSIONAL ---
+        // --- FUNGSI 2: MEMUAT DETAIL TRANSAKSIONAL (LOGIKA LAMA FILTER) ---
         async function fetchCollectionDetails(query = '') {
             detailsArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Detail Transaksi...</p>';
             
@@ -266,9 +369,9 @@
             }
         }
         
+        // Fungsi rendering untuk transaksi detail (Logika lama)
         function renderDetailTable(data) {
             
-            // Hitung Nominal dan NOMEN Unik
             let totalNominal = 0;
             const uniqueNomen = new Set();
             
@@ -299,7 +402,6 @@
             data.forEach(item => {
                 const nominal = parseFloat(item.NOMINAL || 0);
                 
-                // PENTING: Tambahkan data-label untuk mobile view
                 tableHTML += `
                     <tr>
                         <td data-label="NOMEN">${item.NOMEN}</td>
@@ -311,7 +413,6 @@
                 `;
             });
             
-            // Baris Ringkasan Total
             tableHTML += `
                 <tr class="total-row">
                     <td colspan="4" style="text-align: left;">Total NOMINAL Terfilter</td>
@@ -332,6 +433,34 @@
             detailsArea.innerHTML = tableHTML;
         }
 
+        // --- FUNGSI 3: MEMUAT DATA MASTER RAW ---
+        async function fetchRawDetails() {
+            try {
+                const [mcResponse, mbResponse, cidResponse] = await Promise.all([
+                    fetch('{{ url_for("api_get_mc_details") }}'),
+                    fetch('{{ url_for("api_get_mb_details_raw") }}'),
+                    fetch('{{ url_for("api_get_cid_details") }}')
+                ]);
+
+                const [mcData, mbData, cidData] = await Promise.all([
+                    mcResponse.json(),
+                    mbResponse.json(),
+                    cidResponse.json()
+                ]);
+
+                // Render per tabel
+                renderRawTable("MC - Piutang", mcData, 'rawMCTable');
+                renderRawTable("MB - Koleksi", mbData, 'rawMBTable');
+                renderRawTable("CID - Pelanggan", cidData, 'rawCIDTable');
+
+            } catch (error) {
+                console.error("Error fetching raw data details:", error);
+                document.getElementById('rawMCTable').innerHTML = '<p class="no-results" style="color: red;">Gagal memuat Data MC.</p>';
+                document.getElementById('rawMBTable').innerHTML = '<p class="no-results" style="color: red;">Gagal memuat Data MB.</p>';
+                document.getElementById('rawCIDTable').innerHTML = '<p class="no-results" style="color: red;">Gagal memuat Data CID.</p>';
+            }
+        }
+
         // Event Listeners
         searchBtn.addEventListener('click', () => {
             fetchCollectionDetails(filterInput.value.trim());
@@ -343,10 +472,11 @@
             }
         });
         
-        // Muat kedua bagian saat halaman dimuat
+        // Muat semua bagian saat halaman dimuat
         document.addEventListener('DOMContentLoaded', () => {
              fetchCollectionReport(); 
              fetchCollectionDetails(''); 
+             fetchRawDetails(); // Panggil fungsi baru
         });
 
     </script>
