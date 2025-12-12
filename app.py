@@ -34,7 +34,8 @@ collection_sbrs = None
 collection_ardebt = None
 
 try:
-    client = MongoClient(MONGO_URI)
+    # FIX: Menambahkan timeout pada koneksi MongoDB untuk stabilitas
+    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000) 
     client.admin.command('ping') 
     db = client[DB_NAME]
     
