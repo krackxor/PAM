@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
+from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, make_response
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
@@ -12,6 +12,7 @@ from wtforms.validators import DataRequired
 from functools import wraps
 import re 
 from datetime import datetime, timedelta # <-- PENAMBAHAN IMPORT BARU
+import io # <-- PENAMBAHAN IMPORT BARU
 
 load_dotenv() 
 
@@ -1192,8 +1193,137 @@ def anomaly_summary_api():
         return jsonify({"message": f"Gagal mengambil summary anomali: {e}"}), 500
 
 # =========================================================================
-# === END NEW DASHBOARD ANALYTICS ENDPOINTS ===
+# === NEW DASHBOARD ANALYTICS ENDPOINTS (CRITICAL ALERTS & EXPORT) ===
 # =========================================================================
+
+@app.route('/api/dashboard/critical_alerts', methods=['GET'])
+@login_required
+def critical_alerts_api():
+    """API untuk mengambil notifikasi anomali paling kritis (Ekstrim dan Tunggakan Kritis)."""
+    if client is None:
+        return jsonify([]), 200
+        
+    try:
+        alerts = []
+        
+        # 1. Cek Anomali Volume Ekstrim (Menggunakan fungsi yang sudah ada)
+        anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        ekstrim_alerts = [
+            {'nomen': a['NOMEN'], 'status': a['STATUS_PEMAKAIAN'], 'ray': a['RAYON'], 'category': 'VOLUME_EKSTRIM'}
+            for a in anomalies if 'EKSTRIM' in a['STATUS_PEMAKAIAN'] or 'ZERO' in a['STATUS_PEMAKAIAN']
+        ]
+        alerts.extend(ekstrim_alerts[:20]) # Limit to top 20 extreme alerts
+
+        # 2. Cek Tunggakan Kritis (5+ bulan)
+        pipeline_critical_debt = [
+            {'$match': {'CountOfPERIODE_BILL': {'$gte': 5}}}, # 5 bulan atau lebih
+            {'$group': {
+                '_id': '$NOMEN',
+                'months': {'$first': '$CountOfPERIODE_BILL'},
+                'amount': {'$first': '$SumOfJUMLAH'}
+            }},
+            {'$limit': 20}
+        ]
+        
+        critical_debt_result = list(collection_ardebt.aggregate(pipeline_critical_debt))
+        
+        debt_alerts = [
+            {'nomen': d['_id'], 'status': f"TUNGGAKAN KRITIS {d['months']} BULAN", 'amount': d['amount'], 'category': 'DEBT_CRITICAL'}
+            for d in critical_debt_result
+        ]
+        
+        alerts.extend(debt_alerts)
+        
+        return jsonify(alerts), 200
+        
+    except Exception as e:
+        print(f"Error fetching critical alerts: {e}")
+        return jsonify([]), 500
+
+
+@app.route('/api/export/dashboard', methods=['GET'])
+@login_required
+def export_dashboard_data():
+    """Export data utama dashboard (Summary, Rayon) ke Excel."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    try:
+        # 1. Ambil Data Summary
+        summary_response = dashboard_summary_api()
+        summary_data = summary_response.get_json()
+        
+        # 2. Ambil Data Rayon Detail
+        rayon_response = rayon_analysis_api()
+        rayon_data = rayon_response.get_json()
+        
+        # Konversi ke DataFrame
+        df_rayon = pd.DataFrame(rayon_data)
+        
+        # Konversi Summary ke DataFrame
+        df_summary = pd.DataFrame({
+            'Metrik': ['Total Pelanggan', 'Total Piutang (MC)', 'Total Tunggakan (ARDEBT)', 'Koleksi Bulan Ini', 'Persentase Koleksi'],
+            'Nilai': [
+                summary_data['total_pelanggan'],
+                summary_data['total_piutang'],
+                summary_data['total_tunggakan'],
+                summary_data['koleksi_bulan_ini'],
+                f"{summary_data['persentase_koleksi']:.2f}%"
+            ]
+        })
+        
+        # 3. Buat Excel File di memori (in-memory)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_summary.to_excel(writer, sheet_name='Ringkasan KPI', index=False)
+            df_rayon.to_excel(writer, sheet_name='Analisis Rayon', index=False)
+            pd.DataFrame(summary_data['tren_koleksi_7_hari']).to_excel(writer, sheet_name='Tren Koleksi 7 Hari', index=False)
+            
+        # 4. Buat response
+        output.seek(0)
+        
+        response = make_response(output.read())
+        response.headers['Content-Disposition'] = 'attachment; filename=Laporan_Dashboard_Analytics.xlsx'
+        response.headers['Content-type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        return response
+
+    except Exception as e:
+        print(f"Error during dashboard export: {e}")
+        return jsonify({"message": f"Gagal mengekspor data dashboard: {e}"}), 500
+
+@app.route('/api/export/anomalies', methods=['GET'])
+@login_required
+def export_anomalies_data():
+    """Export data anomali pemakaian air ke Excel."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    try:
+        # 1. Ambil Data Anomali
+        all_anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        
+        if not all_anomalies:
+            return jsonify({"message": "Tidak ada data anomali untuk diekspor."}), 404
+            
+        df_anomalies = pd.DataFrame(all_anomalies)
+        
+        # 2. Buat Excel File di memori (in-memory)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_anomalies.to_excel(writer, sheet_name='Anomali Pemakaian Air', index=False)
+            
+        # 3. Buat response
+        output.seek(0)
+        
+        response = make_response(output.read())
+        response.headers['Content-Disposition'] = 'attachment; filename=Laporan_Anomali_SBRS.xlsx'
+        response.headers['Content-type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        return response
+
+    except Exception as e:
+        print(f"Error during anomaly export: {e}")
+        return jsonify({"message": f"Gagal mengekspor data anomali: {e}"}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
