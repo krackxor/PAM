@@ -11,6 +11,7 @@ from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired 
 from functools import wraps
 import re 
+from datetime import datetime, timedelta # <-- PENAMBAHAN IMPORT BARU
 
 load_dotenv() 
 
@@ -945,6 +946,254 @@ def upload_ardebt_data():
         print(f"Error saat memproses file ARDEBT: {e}")
         return jsonify({"message": f"Gagal memproses file ARDEBT: {e}. Pastikan format data benar."}), 500
 
+
+# =========================================================================
+# === NEW DASHBOARD ANALYTICS ENDPOINTS (INTEGRATED) ===
+# =========================================================================
+
+@app.route('/dashboard', methods=['GET'])
+@login_required
+def analytics_dashboard():
+    """Dashboard Analytics Terpadu - Menampilkan semua metrik penting"""
+    return render_template('dashboard_analytics.html', is_admin=current_user.is_admin)
+
+@app.route('/api/dashboard/summary', methods=['GET'])
+@login_required
+def dashboard_summary_api():
+    """API untuk mengambil semua metrik dashboard dalam satu request"""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    try:
+        summary_data = {}
+        
+        # 1. TOTAL PELANGGAN (dari CID)
+        summary_data['total_pelanggan'] = collection_cid.count_documents({})
+        
+        # 2. TOTAL PIUTANG & TUNGGAKAN
+        pipeline_piutang = [
+            {'$group': {
+                '_id': None,
+                'total_piutang': {'$sum': '$NOMINAL'},
+                'jumlah_tagihan': {'$sum': 1}
+            }}
+        ]
+        piutang_result = list(collection_mc.aggregate(pipeline_piutang))
+        summary_data['total_piutang'] = piutang_result[0]['total_piutang'] if piutang_result else 0
+        summary_data['jumlah_tagihan'] = piutang_result[0]['jumlah_tagihan'] if piutang_result else 0
+        
+        pipeline_tunggakan = [
+            {'$group': {
+                '_id': None,
+                'total_tunggakan': {'$sum': '$JUMLAH'},
+                'jumlah_tunggakan': {'$sum': 1}
+            }}
+        ]
+        tunggakan_result = list(collection_ardebt.aggregate(pipeline_tunggakan))
+        summary_data['total_tunggakan'] = tunggakan_result[0]['total_tunggakan'] if tunggakan_result else 0
+        summary_data['jumlah_tunggakan'] = tunggakan_result[0]['jumlah_tunggakan'] if tunggakan_result else 0
+        
+        # 3. KOLEKSI HARI INI (dari MB)
+        today = pd.Timestamp.now().strftime('%Y-%m-%d')
+        pipeline_koleksi_today = [
+            {'$match': {'TGL_BAYAR': {'$regex': today}}},
+            {'$group': {
+                '_id': None,
+                'koleksi_hari_ini': {'$sum': '$NOMINAL'},
+                'transaksi_hari_ini': {'$sum': 1}
+            }}
+        ]
+        koleksi_result = list(collection_mb.aggregate(pipeline_koleksi_today))
+        summary_data['koleksi_hari_ini'] = koleksi_result[0]['koleksi_hari_ini'] if koleksi_result else 0
+        summary_data['transaksi_hari_ini'] = koleksi_result[0]['transaksi_hari_ini'] if koleksi_result else 0
+        
+        # 4. TOTAL KOLEKSI BULAN INI
+        this_month = pd.Timestamp.now().strftime('%Y-%m')
+        pipeline_koleksi_month = [
+            {'$match': {'TGL_BAYAR': {'$regex': this_month}}},
+            {'$group': {
+                '_id': None,
+                'koleksi_bulan_ini': {'$sum': '$NOMINAL'},
+                'transaksi_bulan_ini': {'$sum': 1}
+            }}
+        ]
+        koleksi_month_result = list(collection_mb.aggregate(pipeline_koleksi_month))
+        summary_data['koleksi_bulan_ini'] = koleksi_month_result[0]['koleksi_bulan_ini'] if koleksi_month_result else 0
+        summary_data['transaksi_bulan_ini'] = koleksi_month_result[0]['transaksi_bulan_ini'] if koleksi_month_result else 0
+        
+        # 5. ANOMALI PEMAKAIAN (dari fungsi existing)
+        anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        summary_data['total_anomali'] = len(anomalies)
+        
+        # Breakdown anomali per tipe
+        anomali_breakdown = {}
+        for item in anomalies:
+            status = item.get('STATUS_PEMAKAIAN', 'UNKNOWN')
+            anomali_breakdown[status] = anomali_breakdown.get(status, 0) + 1
+        summary_data['anomali_breakdown'] = anomali_breakdown
+        
+        # 6. PELANGGAN DENGAN TUNGGAKAN (Distinct NOMEN)
+        pelanggan_tunggakan = collection_ardebt.distinct('NOMEN')
+        summary_data['pelanggan_dengan_tunggakan'] = len(pelanggan_tunggakan)
+        
+        # 7. TOP 5 RAYON DENGAN PIUTANG TERTINGGI
+        pipeline_top_rayon = [
+            {'$group': {
+                '_id': '$RAYON',
+                'total_piutang': {'$sum': '$NOMINAL'}
+            }},
+            {'$sort': {'total_piutang': -1}},
+            {'$limit': 5}
+        ]
+        top_rayon = list(collection_mc.aggregate(pipeline_top_rayon))
+        summary_data['top_rayon_piutang'] = [
+            {'rayon': item['_id'], 'total': item['total_piutang']} 
+            for item in top_rayon
+        ]
+        
+        # 8. TREN KOLEKSI 7 HARI TERAKHIR
+        trend_data = []
+        for i in range(7):
+            date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+            
+            pipeline = [
+                {'$match': {'TGL_BAYAR': {'$regex': date}}}, 
+                {'$group': {
+                    '_id': None,
+                    'total': {'$sum': '$NOMINAL'},
+                    'count': {'$sum': 1}
+                }}
+            ]
+            result = list(collection_mb.aggregate(pipeline))
+            trend_data.append({
+                'tanggal': date,
+                'total': result[0]['total'] if result else 0,
+                'transaksi': result[0]['count'] if result else 0
+            })
+        summary_data['tren_koleksi_7_hari'] = sorted(trend_data, key=lambda x: x['tanggal'])
+        
+        # 9. PERSENTASE KOLEKSI
+        if summary_data['total_piutang'] > 0:
+            summary_data['persentase_koleksi'] = (summary_data['koleksi_bulan_ini'] / summary_data['total_piutang']) * 100
+        else:
+            summary_data['persentase_koleksi'] = 0
+        
+        return jsonify(summary_data), 200
+        
+    except Exception as e:
+        print(f"Error fetching dashboard summary: {e}")
+        return jsonify({"message": f"Gagal mengambil data dashboard: {e}"}), 500
+
+
+@app.route('/api/dashboard/rayon_analysis', methods=['GET'])
+@login_required
+def rayon_analysis_api():
+    """Analisis Detail per Rayon"""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    try:
+        # Menggunakan MC untuk Piutang
+        pipeline_piutang_rayon = [
+            {'$group': {
+                '_id': '$RAYON',
+                'total_piutang': {'$sum': '$NOMINAL'},
+                'total_pelanggan': {'$addToSet': '$NOMEN'}
+            }},
+            {'$project': {
+                '_id': 0,
+                'RAYON': '$_id',
+                'total_piutang': 1,
+                'total_pelanggan': {'$size': '$total_pelanggan'}
+            }},
+            {'$sort': {'total_piutang': -1}}
+        ]
+        rayon_piutang_data = list(collection_mc.aggregate(pipeline_piutang_rayon))
+        
+        rayon_map = {item['RAYON']: item for item in rayon_piutang_data}
+        
+        # Menggunakan MB untuk Koleksi Bulan Ini
+        this_month = pd.Timestamp.now().strftime('%Y-%m')
+        pipeline_koleksi_rayon = [
+            {'$match': {'TGL_BAYAR': {'$regex': this_month}}},
+            {'$group': {
+                '_id': '$RAYON',
+                'total_koleksi': {'$sum': '$NOMINAL'},
+            }},
+        ]
+        koleksi_result = list(collection_mb.aggregate(pipeline_koleksi_rayon))
+        
+        for item in koleksi_result:
+            rayon_name = item['_id']
+            if rayon_name in rayon_map:
+                rayon_map[rayon_name]['koleksi'] = item['total_koleksi']
+                
+                if rayon_map[rayon_name]['total_piutang'] > 0:
+                    rayon_map[rayon_name]['persentase_koleksi'] = (item['total_koleksi'] / rayon_map[rayon_name]['total_piutang']) * 100
+                else:
+                    rayon_map[rayon_name]['persentase_koleksi'] = 0
+            
+        # Isi nilai default jika tidak ada koleksi
+        for rayon in rayon_map.values():
+            rayon.setdefault('koleksi', 0)
+            rayon.setdefault('persentase_koleksi', 0)
+
+
+        return jsonify(list(rayon_map.values())), 200
+        
+    except Exception as e:
+        print(f"Error in rayon analysis: {e}")
+        return jsonify({"message": f"Gagal menganalisis data rayon: {e}"}), 500
+
+
+@app.route('/api/dashboard/anomaly_summary', methods=['GET'])
+@login_required
+def anomaly_summary_api():
+    """Summary Lengkap Semua Jenis Anomali"""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    try:
+        # Dapatkan semua anomali dari fungsi yang sudah ada
+        all_anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        
+        # Kategorisasi anomali
+        ekstrim = [a for a in all_anomalies if 'EKSTRIM' in a['STATUS_PEMAKAIAN']]
+        naik = [a for a in all_anomalies if 'NAIK' in a['STATUS_PEMAKAIAN'] and 'EKSTRIM' not in a['STATUS_PEMAKAIAN']]
+        turun = [a for a in all_anomalies if 'TURUN' in a['STATUS_PEMAKAIAN']]
+        zero = [a for a in all_anomalies if 'ZERO' in a['STATUS_PEMAKAIAN']]
+        
+        summary = {
+            'total_anomali': len(all_anomalies),
+            'kategori': {
+                'ekstrim': {
+                    'jumlah': len(ekstrim),
+                    'data': ekstrim[:10]  # Top 10 untuk preview
+                },
+                'naik_signifikan': {
+                    'jumlah': len(naik),
+                    'data': naik[:10]
+                },
+                'turun_signifikan': {
+                    'jumlah': len(turun),
+                    'data': turun[:10]
+                },
+                'zero': {
+                    'jumlah': len(zero),
+                    'data': zero[:10]
+                }
+            }
+        }
+        
+        return jsonify(summary), 200
+        
+    except Exception as e:
+        print(f"Error in anomaly summary: {e}")
+        return jsonify({"message": f"Gagal mengambil summary anomali: {e}"}), 500
+
+# =========================================================================
+# === END NEW DASHBOARD ANALYTICS ENDPOINTS ===
+# =========================================================================
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
