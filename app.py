@@ -48,11 +48,43 @@ try:
     collection_sbrs = db['MeterReading'] # SBRS (Baca Meter Harian/Parsial - APPEND)
     collection_ardebt = db['AccountReceivable'] # ARDEBT (Tunggakan Detail - REPLACE)
     
+    # ==========================================================
+    # === START OPTIMASI: INDEXING KRITIS (SOLUSI KECEPATAN PERMANEN) ===
+    # ==========================================================
+    
+    # CID (CustomerData): Paling KRITIS untuk JOIN
+    # Index NOMEN harus unik dan cepat karena ini adalah kunci utama
+    collection_cid.create_index([('NOMEN', 1)], name='idx_cid_nomen', unique=True)
+    # Index komposit untuk filter Rayon/TipePlggn
+    collection_cid.create_index([('RAYON', 1), ('TIPEPLGGN', 1)], name='idx_cid_rayon_tipe')
+
+    # MC (MasterCetak): Untuk Report Koleksi dan Grouping
+    collection_mc.create_index([('NOMEN', 1)], name='idx_mc_nomen')
+    collection_mc.create_index([('RAYON', 1), ('PCEZ', 1)], name='idx_mc_rayon_pcez') 
+    collection_mc.create_index([('STATUS', 1)], name='idx_mc_status')
+    # Index komposit untuk kueri kustom Rayon/Tarif/Volume/Nominal
+    collection_mc.create_index([('TARIF', 1), ('KUBIK', 1), ('NOMINAL', 1)], name='idx_mc_tarif_volume')
+
+    # MB (MasterBayar): Untuk Detail Transaksi dan Undue Check
+    collection_mb.create_index([('TGL_BAYAR', -1)], name='idx_mb_paydate_desc')
+    collection_mb.create_index([('NOMEN', 1)], name='idx_mb_nomen')
+    collection_mb.create_index([('RAYON', 1), ('PCEZ', 1), ('TGL_BAYAR', -1)], name='idx_mb_rayon_pcez_date')
+
+    # SBRS (MeterReading): Untuk Anomaly Check
+    collection_sbrs.create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', -1)], name='idx_sbrs_history')
+    
+    # ARDEBT (AccountReceivable): Untuk Cek Tunggakan
+    collection_ardebt.create_index([('NOMEN', 1)], name='idx_ardebt_nomen')
+    
+    # ==========================================================
+    # === END OPTIMASI: INDEXING KRITIS ===
+    # ==========================================================
+    
     collection_data = collection_mc
 
-    print("Koneksi MongoDB berhasil!")
+    print("Koneksi MongoDB berhasil dan index dikonfigurasi!")
 except Exception as e:
-    print(f"Gagal terhubung ke MongoDB: {e}")
+    print(f"Gagal terhubung ke MongoDB atau mengkonfigurasi index: {e}")
     client = None
 
 # --- FUNGSI UTILITY INTERNAL: ANALISIS SBRS ---
@@ -674,7 +706,6 @@ def analyze_volume_fluctuation_api():
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
 
     try:
-        # Menambahkan maxTimeMS=30000 untuk menghindari timeout pada agregasi kompleks
         fluctuation_data = _get_sbrs_anomalies(collection_sbrs, collection_cid)
         return jsonify(fluctuation_data), 200
 
@@ -743,8 +774,7 @@ def analyze_mc_grouping_api():
             }},
             {'$sort': {'RAYON': 1, 'TARIF': 1}}
         ]
-        # PENTING: Tambahkan maxTimeMS untuk menghindari timeout pada koleksi besar
-        grouping_data = list(collection_mc.aggregate(pipeline_grouping, maxTimeMS=30000))
+        grouping_data = list(collection_mc.aggregate(pipeline_grouping))
         return jsonify(grouping_data), 200
 
     except Exception as e:
@@ -787,8 +817,7 @@ def analyze_mc_grouping_summary_api():
                 'TotalNomenKustom': {'$size': '$CountOfNOMEN'}
             }}
         ]
-        # PENTING: Tambahkan maxTimeMS untuk menghindari timeout pada koleksi besar
-        summary_result = list(collection_mc.aggregate(pipeline_summary, maxTimeMS=30000))
+        summary_result = list(collection_mc.aggregate(pipeline_summary))
         
         if not summary_result:
             return jsonify({
@@ -849,8 +878,7 @@ def analyze_mc_tarif_breakdown_api():
             }},
             {'$sort': {'RAYON': 1, 'TARIF': 1}}
         ]
-        # PENTING: Tambahkan maxTimeMS untuk menghindari timeout pada koleksi besar
-        breakdown_data = list(collection_mc.aggregate(pipeline_tarif_breakdown, maxTimeMS=30000))
+        breakdown_data = list(collection_mc.aggregate(pipeline_tarif_breakdown))
         return jsonify(breakdown_data), 200
 
     except Exception as e:
