@@ -154,7 +154,7 @@ def search_nomen():
     try:
         print(f"DEBUG: Mencari NOMEN dari input: '{query_nomen}'")
         
-        # 1. PERUBAHAN: CEK KEBERADAAN (GATEKEEPER) DARI MC (Master Cetak)
+        # 1. CEK KEBERADAAN (GATEKEEPER) DARI MC (Master Cetak)
         mc_check_result = collection_mc.find_one({'NOMEN': query_nomen})
 
         if not mc_check_result:
@@ -218,7 +218,7 @@ def search_nomen():
         # Menggunakan data CID jika ditemukan, jika tidak gunakan placeholder sederhana 'N/A'
         cid_found = cid_result is not None
         
-        # PERBAIKAN: Mengganti placeholder menjadi 'N/A' saja
+        # Mengganti placeholder menjadi 'N/A'
         health_summary = {
             "NOMEN": query_nomen,
             "NAMA": cid_result.get('NAMA', 'N/A') if cid_found else 'N/A',
