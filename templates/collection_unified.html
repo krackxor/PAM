@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Koleksi Harian Terpadu{% endblock %}
+{% block title %}Laporan Koleksi & Piutang Terpadu{% endblock %}
 
 {% block custom_styles %}
 /* Custom CSS untuk Tampilan Report/Detail yang Responsif */
@@ -52,7 +52,10 @@
     border: 1px solid #f0f0f0; padding: 10px; text-align: right; white-space: nowrap; 
 }
 .report-table th, .collection-table th { background-color: #e9ecef; text-align: center; font-weight: 600; }
-.report-table td:first-child, .report-table td:nth-child(2) { text-align: left; } 
+/* New styles for improved report table */
+.report-table { min-width: 1000px; }
+.undue-cell { font-weight: bold; color: #17a2b8 !important; }
+
 .grand-total-row { font-weight: bold; background-color: #d0e7ff; color: var(--text-color); } 
 .percentage-cell { font-weight: bold; color: var(--secondary-color); }
 
@@ -106,19 +109,26 @@
     }
     
     .report-table {
-        min-width: 700px;
+        min-width: 100%;
     }
 }
 {% endblock %}
 
 {% block content %}
     <h2 style="text-align: left; border-bottom: none; margin-bottom: 20px; color: var(--primary-color);">
-        <i class="fas fa-chart-bar" style="margin-right: 10px;"></i> Koleksi Harian Terpadu
+        <i class="fas fa-chart-bar" style="margin-right: 10px;"></i> Laporan Koleksi & Piutang Terpadu
     </h2>
     
     <div id="reportArea">
         <p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Laporan Ringkas...</p>
     </div>
+
+    <div style="text-align: right; margin-top: 10px; margin-bottom: 20px;">
+        <a href="#" id="exportReportBtn" class="btn-primary" style="background-color: #6c757d; text-decoration: none;">
+            <i class="fas fa-file-excel"></i> Export Summary
+        </a>
+    </div>
+
 
     <div class="filter-input-group">
         <input type="text" id="filterInput" placeholder="Filter Detail (Rayon, PCEZ, NOMEN)...">
@@ -136,11 +146,16 @@
         const filterInput = document.getElementById('filterInput');
         const searchBtn = document.getElementById('searchBtn');
         const detailsArea = document.getElementById('detailsArea');
+        const exportReportBtn = document.getElementById('exportReportBtn');
         
         function formatRupiah(number) {
             return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
         }
         
+        function formatNumber(number) {
+            return (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+        }
+
         function formatPercent(number) {
             return (parseFloat(number) || 0).toFixed(2) + '%';
         }
@@ -167,42 +182,60 @@
         function renderReport(data, grandTotal) {
             let summaryHTML = `
                 <div class="report-header">
-                    <h3>Ringkasan Total Koleksi</h3>
+                    <h3>Ringkasan Total Aplikasi</h3>
                 </div>
                 <div class="report-grid">
                     <div class="summary-card" style="border-left-color: #007bff;">
-                        <h4>Total Nominal Piutang</h4>
-                        <p>${formatRupiah(grandTotal.TotalNominal)}</p>
-                    </div>
-                    <div class="summary-card" style="border-left-color: #28a745;">
-                        <h4>Total Nominal Koleksi</h4>
-                        <p>${formatRupiah(grandTotal.CollectedNominal)}</p>
+                        <h4>Total Pelanggan (CID)</h4>
+                        <p>${grandTotal.TotalPelanggan.toLocaleString('id-ID')}</p>
                     </div>
                     <div class="summary-card" style="border-left-color: #ffc107;">
-                        <h4>Persentase Nominal</h4>
-                        <p>${formatPercent(grandTotal.PercentNominal)}</p>
+                        <h4>Total Piutang MC (Nominal)</h4>
+                        <p>${formatRupiah(grandTotal.MC_TotalNominal)}</p>
+                    </div>
+                    <div class="summary-card" style="border-left-color: #dc3545;">
+                        <h4>Total Piutang MC (Kubik)</h4>
+                        <p>${formatNumber(grandTotal.MC_TotalKubik)} m³</p>
+                    </div>
+                    <div class="summary-card" style="border-left-color: #28a745;">
+                        <h4>Total Koleksi MC (Nominal)</h4>
+                        <p>${formatRupiah(grandTotal.MC_CollectedNominal)}</p>
                     </div>
                     <div class="summary-card" style="border-left-color: #17a2b8;">
-                        <h4>Pelanggan Terbayar</h4>
-                        <p>${grandTotal.CollectedNomen.toLocaleString('id-ID')}</p>
+                        <h4>MB "Undue" Koleksi (Nominal)</h4>
+                        <p>${formatRupiah(grandTotal.MB_UndueNominal)}</p>
+                    </div>
+                    <div class="summary-card" style="border-left-color: #0056b3;">
+                        <h4>MB "Undue" (Nominal %)</h4>
+                        <p>${formatPercent(grandTotal.UnduePercentNominal)}</p>
+                    </div>
+                    <div class="summary-card" style="border-left-color: #6c757d;">
+                        <h4>MC Koleksi (Nominal %)</h4>
+                        <p>${formatPercent(grandTotal.PercentNominal)}</p>
                     </div>
                 </div>
             `;
             
             let tableHTML = `
-                <h3 style="margin-top: 30px;">Detail Koleksi per Rayon / PCEZ</h3>
+                <h3 style="margin-top: 30px;">Detail Perbandingan MC (Piutang) vs MB (Koleksi Undue) per Rayon / PCEZ</h3>
                 <div class="report-table-wrapper">
                 <table class="report-table">
                     <thead>
                         <tr>
-                            <th>RAYON</th>
-                            <th>PCEZ</th>
-                            <th>TOTAL NOMINAL PIUTANG</th>
-                            <th>NOMINAL KOLEKSI</th>
-                            <th>% NOMINAL</th>
-                            <th>TOTAL NOMEN</th>
-                            <th>NOMEN TERBAYAR</th>
-                            <th>% NOMEN</th>
+                            <th rowspan="2">RAYON</th>
+                            <th rowspan="2">PCEZ</th>
+                            <th colspan="2" style="background-color: #ffeeba;">MC (PIUTANG)</th>
+                            <th colspan="2" style="background-color: #d4edda;">MC (KOLEKSI)</th>
+                            <th colspan="2" style="background-color: #d1ecf1;">MB ("UNDUE")</th>
+                            <th colspan="2" rowspan="2">PERSENTASE (%)</th>
+                        </tr>
+                        <tr>
+                            <th style="background-color: #ffeeba;">NOMINAL</th>
+                            <th style="background-color: #ffeeba;">KUBIK (m³)</th>
+                            <th style="background-color: #d4edda;">NOMINAL</th>
+                            <th style="background-color: #d4edda;">KUBIK (m³)</th>
+                            <th style="background-color: #d1ecf1;">NOMINAL</th>
+                            <th style="background-color: #d1ecf1;">KUBIK (m³)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -213,12 +246,14 @@
                     <tr>
                         <td data-label="Rayon">${item.RAYON}</td>
                         <td data-label="PCEZ">${item.PCEZ}</td>
-                        <td data-label="Piutang">${formatRupiah(item.TotalNominal)}</td>
-                        <td data-label="Koleksi">${formatRupiah(item.CollectedNominal)}</td>
+                        <td data-label="MC Piutang Nom">${formatRupiah(item.MC_TotalNominal)}</td>
+                        <td data-label="MC Piutang Kubik">${formatNumber(item.MC_TotalKubik)}</td>
+                        <td data-label="MC Koleksi Nom">${formatRupiah(item.MC_CollectedNominal)}</td>
+                        <td data-label="MC Koleksi Kubik">${formatNumber(item.MC_CollectedKubik)}</td>
+                        <td data-label="MB Undue Nom" class="undue-cell">${formatRupiah(item.MB_UndueNominal)}</td>
+                        <td data-label="MB Undue Kubik" class="undue-cell">${formatNumber(item.MB_UndueKubik)}</td>
                         <td data-label="% Nom" class="percentage-cell">${formatPercent(item.PercentNominal)}</td>
-                        <td data-label="Total Nomen">${item.TotalNomen.toLocaleString('id-ID')}</td>
-                        <td data-label="Nomen Bayar">${item.CollectedNomen.toLocaleString('id-ID')}</td>
-                        <td data-label="% Nomen" class="percentage-cell">${formatPercent(item.PercentNomenCount)}</td>
+                        <td data-label="% Undue" class="undue-cell">${formatPercent(item.UnduePercentNominal)}</td>
                     </tr>
                 `;
             });
@@ -227,12 +262,14 @@
                 <tr class="grand-total-row">
                     <td>GRAND TOTAL</td>
                     <td>-</td>
-                    <td>${formatRupiah(grandTotal.TotalNominal)}</td>
-                    <td>${formatRupiah(grandTotal.CollectedNominal)}</td>
+                    <td>${formatRupiah(grandTotal.MC_TotalNominal)}</td>
+                    <td>${formatNumber(grandTotal.MC_TotalKubik)}</td>
+                    <td>${formatRupiah(grandTotal.MC_CollectedNominal)}</td>
+                    <td>${formatNumber(grandTotal.MC_CollectedKubik)}</td>
+                    <td>${formatRupiah(grandTotal.MB_UndueNominal)}</td>
+                    <td>${formatNumber(grandTotal.MB_UndueKubik)}</td>
                     <td class="percentage-cell">${formatPercent(grandTotal.PercentNominal)}</td>
-                    <td>${grandTotal.TotalNomen.toLocaleString('id-ID')}</td>
-                    <td>${grandTotal.CollectedNomen.toLocaleString('id-ID')}</td>
-                    <td class="percentage-cell">${formatPercent(grandTotal.PercentNomenCount)}</td>
+                    <td class="undue-cell">${formatPercent(grandTotal.UnduePercentNominal)}</td>
                 </tr>
             `;
             
@@ -274,18 +311,21 @@
         function renderDetailTable(data) {
             
             let totalNominal = 0;
+            let totalKubik = 0; 
             const uniqueNomen = new Set();
             
             data.forEach(item => {
                 const nominal = parseFloat(item.NOMINAL || 0);
+                const kubik = parseFloat(item.KUBIKBAYAR || 0); 
                 totalNominal += nominal;
+                totalKubik += kubik; 
                 uniqueNomen.add(item.NOMEN); 
             });
 
             const uniqueNomenCount = uniqueNomen.size;
 
             let tableHTML = `
-                <h3 style="margin-top: 20px;">Listing Transaksi (${data.length} Transaksi)</h3>
+                <h3 style="margin-top: 20px;">Listing Transaksi MB (${data.length} Transaksi)</h3>
                 <div class="report-table-wrapper">
                 <table class="collection-table">
                     <thead>
@@ -295,6 +335,8 @@
                             <th>PCEZ</th>
                             <th>TGL BAYAR</th>
                             <th>NOMINAL</th>
+                            <th>KUBIK BAYAR (m³)</th> 
+                            <th>STATUS</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -302,7 +344,10 @@
             
             data.forEach(item => {
                 const nominal = parseFloat(item.NOMINAL || 0);
-                
+                const kubik = parseFloat(item.KUBIKBAYAR || 0);
+                const statusText = item.IS_UNDUE ? 'Undue (Bulan Ini)' : 'Normal';
+                const statusClass = item.IS_UNDUE ? 'undue-cell' : '';
+
                 tableHTML += `
                     <tr>
                         <td data-label="NOMEN">${item.NOMEN}</td>
@@ -310,6 +355,8 @@
                         <td data-label="PCEZ">${item.PCEZ}</td>
                         <td data-label="TGL BAYAR">${item.PAY_DT || '-'}</td>
                         <td data-label="NOMINAL">Rp ${nominal.toLocaleString('id-ID')}</td>
+                        <td data-label="KUBIK BAYAR">${kubik.toLocaleString('id-ID', { maximumFractionDigits: 0 })}</td> 
+                        <td data-label="STATUS" class="${statusClass}">${statusText}</td>
                     </tr>
                 `;
             });
@@ -319,10 +366,12 @@
                 <tr class="total-row">
                     <td colspan="4" style="text-align: left;">Total NOMINAL Terfilter</td>
                     <td>Rp ${totalNominal.toLocaleString('id-ID')}</td>
+                    <td>${totalKubik.toLocaleString('id-ID', { maximumFractionDigits: 0 })}</td>
+                    <td>-</td>
                 </tr>
                 <tr class="total-row">
                     <td colspan="4" style="text-align: left;">Total NOMEN Unik (Count)</td>
-                    <td>${uniqueNomenCount.toLocaleString('id-ID')}</td>
+                    <td colspan="3">${uniqueNomenCount.toLocaleString('id-ID')}</td>
                 </tr>
             `;
             
@@ -334,6 +383,12 @@
             
             detailsArea.innerHTML = tableHTML;
         }
+
+        // Export button handler
+        exportReportBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.location.href = '{{ url_for("export_collection_report") }}'; 
+        });
 
         // Event Listeners
         searchBtn.addEventListener('click', () => {
