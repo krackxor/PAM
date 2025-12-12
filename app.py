@@ -733,14 +733,23 @@ def analyze_mc_grouping_api():
                'as': 'customer_info'
             }},
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
-            {'$match': {
-                'customer_info.TIPEPLGGN': {'$regex': '^reg$', '$options': 'i'}, # FIX: Case-insensitive
-                'customer_info.RAYON': {'$in': ['34', '35']}
+            
+            # --- NORMALISASI DATA UNTUK FILTER ---
+            {'$addFields': {
+                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '']}}}}}, # Diubah ke huruf besar
+                'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '']}}}},
             }},
+            # --- END NORMALISASI ---
+            
+            {'$match': {
+                'CLEAN_TIPEPLGGN': 'REG', # Filter sekarang harus 'REG'
+                'CLEAN_RAYON': {'$in': ['34', '35']}
+            }},
+            
             {'$group': {
                 '_id': {
-                    'TIPEPLGGN': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']},
-                    'RAYON': {'$ifNull': ['$customer_info.RAYON', 'N/A']},
+                    'TIPEPLGGN': '$CLEAN_TIPEPLGGN', # Grouping menggunakan data bersih (REG)
+                    'RAYON': '$CLEAN_RAYON',
                     'TARIF': {'$ifNull': ['$TARIF', 'N/A']},
                     'MERK': {'$ifNull': ['$customer_info.MERK', 'N/A']},
                     'READ_METHOD': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']},
@@ -786,9 +795,17 @@ def analyze_mc_grouping_summary_api():
                'as': 'customer_info'
             }},
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+            
+            # --- NORMALISASI DATA UNTUK FILTER ---
+            {'$addFields': {
+                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '']}}}}}, # Diubah ke huruf besar
+                'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '']}}}},
+            }},
+            # --- END NORMALISASI ---
+            
             {'$match': {
-                'customer_info.TIPEPLGGN': {'$regex': '^reg$', '$options': 'i'}, # FIX: Case-insensitive
-                'customer_info.RAYON': {'$in': ['34', '35']}
+                'CLEAN_TIPEPLGGN': 'REG', # Filter sekarang harus 'REG'
+                'CLEAN_RAYON': {'$in': ['34', '35']}
             }},
             {'$group': {
                 '_id': None,
@@ -836,16 +853,23 @@ def analyze_mc_tarif_breakdown_api():
             }},
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
             
+            # --- NORMALISASI DATA UNTUK FILTER ---
+            {'$addFields': {
+                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '']}}}}}, # Diubah ke huruf besar
+                'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '']}}}},
+            }},
+            # --- END NORMALISASI ---
+            
             # 2. Filter Kriteria Kustom
             {'$match': {
-                'customer_info.TIPEPLGGN': {'$regex': '^reg$', '$options': 'i'}, # FIX: Case-insensitive
-                'customer_info.RAYON': {'$in': ['34', '35']}
+                'CLEAN_TIPEPLGGN': 'REG', # Filter sekarang harus 'REG'
+                'CLEAN_RAYON': {'$in': ['34', '35']}
             }},
             
             # 3. Grouping berdasarkan RAYON dan TARIF
             {'$group': {
                 '_id': {
-                    'RAYON': {'$ifNull': ['$customer_info.RAYON', 'N/A']},
+                    'RAYON': '$CLEAN_RAYON',
                     'TARIF': '$TARIF',
                 },
                 'CountOfNOMEN': {'$addToSet': '$NOMEN'},
