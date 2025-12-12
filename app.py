@@ -53,16 +53,13 @@ try:
     # ==========================================================
     
     # CID (CustomerData): Paling KRITIS untuk JOIN
-    # Index NOMEN harus unik dan cepat karena ini adalah kunci utama
     collection_cid.create_index([('NOMEN', 1)], name='idx_cid_nomen', unique=True)
-    # Index komposit untuk filter Rayon/TipePlggn
     collection_cid.create_index([('RAYON', 1), ('TIPEPLGGN', 1)], name='idx_cid_rayon_tipe')
 
     # MC (MasterCetak): Untuk Report Koleksi dan Grouping
     collection_mc.create_index([('NOMEN', 1)], name='idx_mc_nomen')
     collection_mc.create_index([('RAYON', 1), ('PCEZ', 1)], name='idx_mc_rayon_pcez') 
     collection_mc.create_index([('STATUS', 1)], name='idx_mc_status')
-    # Index komposit untuk kueri kustom Rayon/Tarif/Volume/Nominal
     collection_mc.create_index([('TARIF', 1), ('KUBIK', 1), ('NOMINAL', 1)], name='idx_mc_tarif_volume')
 
     # MB (MasterBayar): Untuk Detail Transaksi dan Undue Check
@@ -627,7 +624,7 @@ def export_collection_report():
             'RAYON', 'PCEZ', 
             'MC_TotalNominal', 'MC_TotalKubik',
             'MC_CollectedNominal', 'MC_CollectedKubik',
-            'MB_UndueNominal', 'MB_UndueKubik',
+            'MB_UNDUE_NOMINAL', 'MB_UndueKubik',
             'PercentNominal', 'UnduePercentNominal'
         ]]
         df_export.columns = [
@@ -659,10 +656,8 @@ def export_collection_report():
 @app.route('/analyze', methods=['GET'])
 @login_required
 def analyze_reports_landing():
-    """Landing Page untuk Sub-menu Analisis."""
     return render_template('analyze_landing.html', is_admin=current_user.is_admin)
 
-# Endpoint Laporan Anomali (Placeholder)
 @app.route('/analyze/extreme', methods=['GET'])
 @login_required
 def analyze_extreme_usage():
@@ -701,7 +696,6 @@ def analyze_stand_tungggu():
 @app.route('/api/analyze/volume_fluctuation', methods=['GET'])
 @login_required 
 def analyze_volume_fluctuation_api():
-    """API untuk menu Analisis Volume. Memanggil fungsi internal _get_sbrs_anomalies."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
 
@@ -710,7 +704,6 @@ def analyze_volume_fluctuation_api():
         return jsonify(fluctuation_data), 200
 
     except Exception as e:
-        # Pesan error yang lebih membantu jika pipeline gagal
         print(f"Error saat menganalisis fluktuasi volume: {e}")
         return jsonify({"message": f"Gagal mengambil data fluktuasi volume. Detail teknis error: {e}"}), 500
         
@@ -722,10 +715,6 @@ def analyze_volume_fluctuation_api():
 @app.route('/api/analyze/mc_grouping', methods=['GET'])
 @login_required 
 def analyze_mc_grouping_api():
-    """
-    API untuk menjalankan kueri agregasi berdasarkan permintaan pengguna (Grouping detail).
-    TIPEPLGGN='reg', RAYON='34'/'35'
-    """
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
 
@@ -745,7 +734,7 @@ def analyze_mc_grouping_api():
             }},
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
             {'$match': {
-                'customer_info.TIPEPLGGN': 'reg',
+                'customer_info.TIPEPLGGN': {'$regex': '^reg$', '$options': 'i'}, # FIX: Case-insensitive
                 'customer_info.RAYON': {'$in': ['34', '35']}
             }},
             {'$group': {
@@ -785,9 +774,6 @@ def analyze_mc_grouping_api():
 @app.route('/api/analyze/mc_grouping/summary', methods=['GET'])
 @login_required 
 def analyze_mc_grouping_summary_api():
-    """
-    API untuk mengambil Total Nominal, Kubik, dan Nomen Count dari grouping MC kustom (TIPEPLGGN='reg', RAYON='34'/'35').
-    """
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
 
@@ -801,7 +787,7 @@ def analyze_mc_grouping_summary_api():
             }},
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
             {'$match': {
-                'customer_info.TIPEPLGGN': 'reg',
+                'customer_info.TIPEPLGGN': {'$regex': '^reg$', '$options': 'i'}, # FIX: Case-insensitive
                 'customer_info.RAYON': {'$in': ['34', '35']}
             }},
             {'$group': {
@@ -836,10 +822,6 @@ def analyze_mc_grouping_summary_api():
 @app.route('/api/analyze/mc_tarif_breakdown', methods=['GET'])
 @login_required 
 def analyze_mc_tarif_breakdown_api():
-    """
-    API untuk mengambil breakdown pelanggan per RAYON dan TARIF 
-    (hanya untuk TIPEPLGGN='reg', RAYON='34'/'35').
-    """
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
 
@@ -856,7 +838,7 @@ def analyze_mc_tarif_breakdown_api():
             
             # 2. Filter Kriteria Kustom
             {'$match': {
-                'customer_info.TIPEPLGGN': 'reg',
+                'customer_info.TIPEPLGGN': {'$regex': '^reg$', '$options': 'i'}, # FIX: Case-insensitive
                 'customer_info.RAYON': {'$in': ['34', '35']}
             }},
             
@@ -1311,13 +1293,11 @@ def upload_ardebt_data():
 @app.route('/dashboard', methods=['GET'])
 @login_required
 def analytics_dashboard():
-    """Dashboard Analytics Terpadu - Menampilkan semua metrik penting"""
     return render_template('dashboard_analytics.html', is_admin=current_user.is_admin)
 
 @app.route('/api/dashboard/summary', methods=['GET'])
 @login_required
 def dashboard_summary_api():
-    """API untuk mengambil semua metrik dashboard dalam satu request"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
     
@@ -1408,7 +1388,14 @@ def dashboard_summary_api():
         pipeline_top_rayon = [
             {'$group': {
                 '_id': '$RAYON',
-                'total_piutang': {'$sum': '$NOMINAL'}
+                'total_piutang': {'$sum': '$NOMINAL'},
+                'total_pelanggan': {'$addToSet': '$NOMEN'}
+            }},
+            {'$project': {
+                '_id': 0,
+                'RAYON': '$_id',
+                'total_piutang': 1,
+                'total_pelanggan': {'$size': '$total_pelanggan'}
             }},
             {'$sort': {'total_piutang': -1}},
             {'$limit': 5}
@@ -1456,12 +1443,10 @@ def dashboard_summary_api():
 @app.route('/api/dashboard/rayon_analysis', methods=['GET'])
 @login_required
 def rayon_analysis_api():
-    """Analisis Detail per Rayon"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
     
     try:
-        # Menggunakan MC untuk Piutang
         pipeline_piutang_rayon = [
             {'$group': {
                 '_id': '$RAYON',
@@ -1480,7 +1465,6 @@ def rayon_analysis_api():
         
         rayon_map = {item['RAYON']: item for item in rayon_piutang_data}
         
-        # Menggunakan MB untuk Koleksi Bulan Ini
         this_month = pd.Timestamp.now().strftime('%Y-%m')
         pipeline_koleksi_rayon = [
             {'$match': {'TGL_BAYAR': {'$regex': this_month}}},
@@ -1501,7 +1485,6 @@ def rayon_analysis_api():
                 else:
                     rayon_map[rayon_name]['persentase_koleksi'] = 0
             
-        # Isi nilai default jika tidak ada koleksi
         for rayon in rayon_map.values():
             rayon.setdefault('koleksi', 0)
             rayon.setdefault('persentase_koleksi', 0)
@@ -1517,15 +1500,12 @@ def rayon_analysis_api():
 @app.route('/api/dashboard/anomaly_summary', methods=['GET'])
 @login_required
 def anomaly_summary_api():
-    """Summary Lengkap Semua Jenis Anomali"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
     
     try:
-        # Dapatkan semua anomali dari fungsi yang sudah ada
         all_anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
         
-        # Kategorisasi anomali
         ekstrim = [a for a in all_anomalies if 'EKSTRIM' in a['STATUS_PEMAKAIAN']]
         naik = [a for a in all_anomalies if 'NAIK' in a['STATUS_PEMAKAIAN'] and 'EKSTRIM' not in a['STATUS_PEMAKAIAN']]
         turun = [a for a in all_anomalies if 'TURUN' in a['STATUS_PEMAKAIAN']]
@@ -1536,7 +1516,7 @@ def anomaly_summary_api():
             'kategori': {
                 'ekstrim': {
                     'jumlah': len(ekstrim),
-                    'data': ekstrim[:10]  # Top 10 untuk preview
+                    'data': ekstrim[:10]
                 },
                 'naik_signifikan': {
                     'jumlah': len(naik),
@@ -1563,24 +1543,21 @@ def anomaly_summary_api():
 @app.route('/api/dashboard/critical_alerts', methods=['GET'])
 @login_required
 def critical_alerts_api():
-    """API untuk mengambil notifikasi anomali paling kritis (Ekstrim dan Tunggakan Kritis)."""
     if client is None:
         return jsonify([]), 200
         
     try:
         alerts = []
         
-        # 1. Cek Anomali Volume Ekstrim (Menggunakan fungsi yang sudah ada)
         anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
         ekstrim_alerts = [
             {'nomen': a['NOMEN'], 'status': a['STATUS_PEMAKAIAN'], 'ray': a['RAYON'], 'category': 'VOLUME_EKSTRIM'}
             for a in anomalies if 'EKSTRIM' in a['STATUS_PEMAKAIAN'] or 'ZERO' in a['STATUS_PEMAKAIAN']
         ]
-        alerts.extend(ekstrim_alerts[:20]) # Limit to top 20 extreme alerts
+        alerts.extend(ekstrim_alerts[:20])
 
-        # 2. Cek Tunggakan Kritis (5+ bulan)
         pipeline_critical_debt = [
-            {'$match': {'CountOfPERIODE_BILL': {'$gte': 5}}}, # 5 bulan atau lebih
+            {'$match': {'CountOfPERIODE_BILL': {'$gte': 5}}},
             {'$group': {
                 '_id': '$NOMEN',
                 'months': {'$first': '$CountOfPERIODE_BILL'},
@@ -1608,23 +1585,18 @@ def critical_alerts_api():
 @app.route('/api/export/dashboard', methods=['GET'])
 @login_required
 def export_dashboard_data():
-    """Export data utama dashboard (Summary, Rayon) ke Excel."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
     try:
-        # 1. Ambil Data Summary
         summary_response = dashboard_summary_api()
         summary_data = summary_response.get_json()
         
-        # 2. Ambil Data Rayon Detail
         rayon_response = rayon_analysis_api()
         rayon_data = rayon_response.get_json()
         
-        # Konversi ke DataFrame
         df_rayon = pd.DataFrame(rayon_data)
         
-        # Konversi Summary ke DataFrame
         df_summary = pd.DataFrame({
             'Metrik': ['Total Pelanggan', 'Total Piutang (MC)', 'Total Tunggakan (ARDEBT)', 'Koleksi Bulan Ini', 'Persentase Koleksi'],
             'Nilai': [
@@ -1636,14 +1608,12 @@ def export_dashboard_data():
             ]
         })
         
-        # 3. Buat Excel File di memori (in-memory)
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df_summary.to_excel(writer, sheet_name='Ringkasan KPI', index=False)
             df_rayon.to_excel(writer, sheet_name='Analisis Rayon', index=False)
             pd.DataFrame(summary_data['tren_koleksi_7_hari']).to_excel(writer, sheet_name='Tren Koleksi 7 Hari', index=False)
             
-        # 4. Buat response
         output.seek(0)
         
         response = make_response(output.read())
@@ -1658,12 +1628,10 @@ def export_dashboard_data():
 @app.route('/api/export/anomalies', methods=['GET'])
 @login_required
 def export_anomalies_data():
-    """Export data anomali pemakaian air ke Excel."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
     try:
-        # 1. Ambil Data Anomali
         all_anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
         
         if not all_anomalies:
@@ -1671,12 +1639,10 @@ def export_anomalies_data():
             
         df_anomalies = pd.DataFrame(all_anomalies)
         
-        # 2. Buat Excel File di memori (in-memory)
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df_anomalies.to_excel(writer, sheet_name='Anomali Pemakaian Air', index=False)
             
-        # 3. Buat response
         output.seek(0)
         
         response = make_response(output.read())
