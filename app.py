@@ -11,8 +11,8 @@ from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired 
 from functools import wraps
 import re 
-from datetime import datetime, timedelta # <-- PENAMBAHAN IMPORT BARU
-import io # <-- PENAMBAHAN IMPORT BARU
+from datetime import datetime, timedelta 
+import io 
 
 load_dotenv() 
 
@@ -338,86 +338,178 @@ def search_nomen():
 def daily_collection_unified_page():
     return render_template('collection_unified.html', is_admin=current_user.is_admin)
 
+# --- FUNGSI BARU UNTUK REPORT KOLEKSI & PIUTANG ---
 @app.route('/api/collection/report', methods=['GET'])
 @login_required 
 def collection_report_api():
-    """Menghitung Nomen Bayar, Nominal Bayar, Total Nominal, dan Persentase per Rayon/PCEZ."""
+    """Menghitung Nomen Bayar, Nominal Bayar, Total Nominal, dan Persentase per Rayon/PCEZ, termasuk KUBIKASI."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
 
-    # Pipeline Awal: Memastikan Rayon dan PCEZ selalu ada untuk menghindari KeyError
     initial_project = {
         '$project': {
             'RAYON': { '$ifNull': [ '$RAYON', 'N/A' ] }, 
             'PCEZ': { '$ifNull': [ '$PCEZ', 'N/A' ] },   
             'NOMEN': 1,
-            'NOMINAL': 1,
+            'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}, 
+            'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}}, # NEW: Include KUBIK for billed volume
             'STATUS': 1
         }
     }
     
-    # MENGGUNAKAN collection_mc SEBAGAI SUMBER PIUTANG UTAMA
+    # 1. MC (PIUTANG) METRICS - Billed
     pipeline_billed = [
         initial_project, 
         { '$group': {
             '_id': { 'rayon': '$RAYON', 'pcez': '$PCEZ' },
             'total_nomen_all': { '$addToSet': '$NOMEN' },
-            'total_nominal': { '$sum': '$NOMINAL' } 
+            'total_nominal': { '$sum': '$NOMINAL' },
+            'total_kubik': { '$sum': '$KUBIK' } # Sum of Billed Kubik
         }}
     ]
     billed_data = list(collection_mc.aggregate(pipeline_billed))
 
+    # 2. MC (KOLEKSI) METRICS - Collected (flagged in MC)
     pipeline_collected = [
         initial_project, 
         { '$match': { 'STATUS': 'Payment' } }, 
         { '$group': {
             '_id': { 'rayon': '$RAYON', 'pcez': '$PCEZ' },
             'collected_nomen': { '$addToSet': '$NOMEN' }, 
-            'collected_nominal': { '$sum': '$NOMINAL' } 
+            'collected_nominal': { '$sum': '$NOMINAL' },
+            'collected_kubik': { '$sum': '$KUBIK' } # Sum of Collected Kubik
         }}
     ]
     collected_data = list(collection_mc.aggregate(pipeline_collected))
 
     report_map = {}
     
+    # Merge Billed data
     for item in billed_data:
         key = (item['_id']['rayon'], item['_id']['pcez'])
         report_map[key] = {
             'RAYON': item['_id']['rayon'],
             'PCEZ': item['_id']['pcez'],
-            'TotalNominal': float(item['total_nominal']),
+            'MC_TotalNominal': float(item['total_nominal']),
+            'MC_TotalKubik': float(item['total_kubik']),
             'TotalNomen': len(item['total_nomen_all']),
-            'CollectedNominal': 0.0, 'CollectedNomen': 0, 'PercentNominal': 0.0, 'PercentNomenCount': 0.0
+            'MC_CollectedNominal': 0.0, 
+            'MC_CollectedKubik': 0.0,
+            'MC_CollectedNomen': 0, 
         }
 
+    # Merge Collected data
     for item in collected_data:
         key = (item['_id']['rayon'], item['_id']['pcez'])
         if key in report_map:
-            report_map[key]['CollectedNominal'] = float(item['collected_nominal'])
-            report_map[key]['CollectedNomen'] = len(item['collected_nomen'])
+            report_map[key]['MC_CollectedNominal'] = float(item['collected_nominal'])
+            report_map[key]['MC_CollectedKubik'] = float(item['collected_kubik'])
+            report_map[key]['MC_CollectedNomen'] = len(item['collected_nomen'])
             
-            if report_map[key]['TotalNominal'] > 0:
-                report_map[key]['PercentNominal'] = (report_map[key]['CollectedNominal'] / report_map[key]['TotalNominal']) * 100
-            
-            if report_map[key]['TotalNomen'] > 0:
-                report_map[key]['PercentNomenCount'] = (report_map[key]['CollectedNomen'] / report_map[key]['TotalNomen']) * 100
-
-    grand_total = {
-        'TotalNominal': sum(d['TotalNominal'] for d in report_map.values()),
-        'CollectedNominal': sum(d['CollectedNominal'] for d in report_map.values()),
-        'TotalNomen': sum(d['TotalNomen'] for d in report_map.values()),
-        'CollectedNomen': sum(d['CollectedNomen'] for d in report_map.values())
-    }
+    # Calculate MB (Undue) Metrics separately
+    this_month_year_regex = pd.Timestamp.now().strftime('%m%Y') # Assuming format like 122025
     
-    grand_total['PercentNominal'] = (grand_total['CollectedNominal'] / grand_total['TotalNominal']) * 100 if grand_total['TotalNominal'] > 0 else 0
-    grand_total['PercentNomenCount'] = (grand_total['CollectedNomen'] / grand_total['TotalNomen']) * 100 if grand_total['TotalNomen'] > 0 else 0
+    pipeline_mb_undue = [
+        # Match payments for the current month's bill (approximation)
+        { '$match': { 
+            'BULAN_REK': { '$regex': this_month_year_regex }
+        }},
+        { '$project': {
+            'NOMEN': 1,
+            'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}, 
+            'KUBIKBAYAR': {'$toDouble': {'$ifNull': ['$KUBIKBAYAR', 0]}}, # Use KUBIKBAYAR from MB
+        }},
+        # Join back to CID to get Rayon/PCEZ for MB data
+        {'$lookup': {
+           'from': 'CustomerData', 
+           'localField': 'NOMEN',
+           'foreignField': 'NOMEN',
+           'as': 'customer_info'
+        }},
+        {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+        { '$project': {
+             'RAYON': {'$ifNull': ['$customer_info.RAYON', 'N/A']},
+             'PCEZ': {'$ifNull': ['$customer_info.PCEZ', 'N/A']},
+             'NOMEN': 1,
+             'NOMINAL': 1,
+             'KUBIKBAYAR': 1
+        }},
+        { '$group': {
+            '_id': { 'rayon': '$RAYON', 'pcez': '$PCEZ' },
+            'mb_undue_nominal': { '$sum': '$NOMINAL' },
+            'mb_undue_kubik': { '$sum': '$KUBIKBAYAR' },
+            'mb_undue_nomen': { '$addToSet': '$NOMEN' },
+        }}
+    ]
+    mb_undue_data = list(collection_mb.aggregate(pipeline_mb_undue))
+    
+    # Merge MB Undue data
+    for item in mb_undue_data:
+        key = (item['_id']['rayon'], item['_id']['pcez'])
+        if key not in report_map:
+             report_map[key] = {
+                'RAYON': item['_id']['rayon'],
+                'PCEZ': item['_id']['pcez'],
+                'MC_TotalNominal': 0.0, 
+                'MC_TotalKubik': 0.0,
+                'TotalNomen': 0,
+                'MC_CollectedNominal': 0.0, 
+                'MC_CollectedKubik': 0.0,
+                'MC_CollectedNomen': 0, 
+            }
+            
+        report_map[key]['MB_UndueNominal'] = float(item['mb_undue_nominal'])
+        report_map[key]['MB_UndueKubik'] = float(item['mb_undue_kubik'])
+        report_map[key]['MB_UndueNomen'] = len(item['mb_undue_nomen'])
+
+
+    # Final calculations and cleanup
+    final_report = []
+    
+    grand_total = {
+        'TotalPelanggan': collection_cid.count_documents({}),
+        'MC_TotalNominal': 0.0, 'MC_TotalKubik': 0.0,
+        'MC_CollectedNominal': 0.0, 'MC_CollectedKubik': 0.0,
+        'MC_TotalNomen': 0, 'MC_CollectedNomen': 0,
+        'MB_UndueNominal': 0.0, 'MB_UndueKubik': 0.0,
+        'MB_UndueNomen': 0,
+        'PercentNominal': 0.0, 'PercentNomenCount': 0.0,
+        'UnduePercentNominal': 0.0 
+    }
+
+    for key, data in report_map.items():
+        data.setdefault('MB_UndueNominal', 0.0)
+        data.setdefault('MB_UndueKubik', 0.0)
+        data.setdefault('MB_UndueNomen', 0)
+        
+        data['PercentNominal'] = (data['MC_CollectedNominal'] / data['MC_TotalNominal']) * 100 if data['MC_TotalNominal'] > 0 else 0
+        data['PercentNomenCount'] = (data['MC_CollectedNomen'] / data['TotalNomen']) * 100 if data['TotalNomen'] > 0 else 0
+        data['UnduePercentNominal'] = (data['MB_UndueNominal'] / data['MC_TotalNominal']) * 100 if data['MC_TotalNominal'] > 0 else 0
+        
+        final_report.append(data)
+        
+        # Update Grand Totals
+        grand_total['MC_TotalNominal'] += data['MC_TotalNominal']
+        grand_total['MC_TotalKubik'] += data['MC_TotalKubik']
+        grand_total['MC_CollectedNominal'] += data['MC_CollectedNominal']
+        grand_total['MC_CollectedKubik'] += data['MC_CollectedKubik']
+        grand_total['MC_TotalNomen'] += data['TotalNomen']
+        grand_total['MC_CollectedNomen'] += data['MC_CollectedNomen']
+        grand_total['MB_UndueNominal'] += data['MB_UndueNominal']
+        grand_total['MB_UndueKubik'] += data['MB_UndueKubik']
+        grand_total['MB_UndueNomen'] += data['MB_UndueNomen']
+        
+    grand_total['PercentNominal'] = (grand_total['MC_CollectedNominal'] / grand_total['MC_TotalNominal']) * 100 if grand_total['MC_TotalNominal'] > 0 else 0
+    grand_total['PercentNomenCount'] = (grand_total['MC_CollectedNomen'] / grand_total['MC_TotalNomen']) * 100 if grand_total['MC_TotalNomen'] > 0 else 0
+    grand_total['UnduePercentNominal'] = (grand_total['MB_UndueNominal'] / grand_total['MC_TotalNominal']) * 100 if grand_total['MC_TotalNominal'] > 0 else 0
 
 
     return jsonify({
-        'report_data': list(report_map.values()),
+        'report_data': final_report,
         'grand_total': grand_total
     }), 200
 
+# --- FUNGSI BARU UNTUK DETAIL TRANSAKSI MB ---
 @app.route('/api/collection/detail', methods=['GET'])
 @login_required 
 def collection_detail_api():
@@ -426,40 +518,44 @@ def collection_detail_api():
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
     query_str = request.args.get('q', '').strip()
-    
     mongo_query = {} 
     
     if query_str:
         safe_query_str = re.escape(query_str)
-        
-        # Kolom yang mungkin ada di MB untuk filtering
         search_filter = {
             '$or': [
                 {'RAYON': {'$regex': safe_query_str, '$options': 'i'}}, 
                 {'PCEZ': {'$regex': safe_query_str, '$options': 'i'}},
                 {'NOMEN': {'$regex': safe_query_str, '$options': 'i'}},
-                {'ZONA_NOREK': {'$regex': safe_query_str, '$options': 'i'}} # Kolom alternatif di MB
+                {'ZONA_NOREK': {'$regex': safe_query_str, '$options': 'i'}} 
             ]
         }
         mongo_query.update(search_filter)
 
-    sort_order = [('TGL_BAYAR', -1)] # Sortasi berdasarkan TGL_BAYAR (dari MB)
+    sort_order = [('TGL_BAYAR', -1)] 
 
     try:
-        # MENGGUNAKAN collection_mb UNTUK DETAIL TRANSAKSI KOLEKSI
         results = list(collection_mb.find(mongo_query).sort(sort_order).limit(1000))
-
         cleaned_results = []
+        
+        this_month_str = datetime.now().strftime('%m%Y')
+
         for doc in results:
             nominal_val = float(doc.get('NOMINAL', 0)) 
+            kubik_val = float(doc.get('KUBIKBAYAR', 0)) # NEW: Include KUBIKBAYAR
+            pay_dt = doc.get('TGL_BAYAR', '')
+            bulan_rek = doc.get('BULAN_REK', '')
+            
+            is_undue = bulan_rek == this_month_str 
             
             cleaned_results.append({
                 'NOMEN': doc.get('NOMEN', 'N/A'),
-                # Mapping kolom MB ke nama kolom Frontend
                 'RAYON': doc.get('RAYON', doc.get('ZONA_NOREK', 'N/A')), 
                 'PCEZ': doc.get('PCEZ', doc.get('LKS_BAYAR', 'N/A')),
                 'NOMINAL': nominal_val,
-                'PAY_DT': doc.get('TGL_BAYAR', 'N/A')
+                'KUBIKBAYAR': kubik_val, # NEW
+                'PAY_DT': pay_dt,
+                'IS_UNDUE': is_undue # NEW
             })
             
         return jsonify(cleaned_results), 200
@@ -467,6 +563,63 @@ def collection_detail_api():
     except Exception as e:
         print(f"Error fetching detailed collection data: {e}")
         return jsonify({"message": f"Gagal mengambil data detail koleksi: {e}"}), 500
+
+
+# --- FUNGSI BARU UNTUK EXPORT LAPORAN KOLEKSI/REPORT ---
+@app.route('/api/export/collection_report', methods=['GET'])
+@login_required
+def export_collection_report():
+    """Export data Laporan Koleksi & Piutang (MC/MB) ke Excel."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    try:
+        report_response = collection_report_api()
+        report_json = report_response.get_json()
+        
+        if not report_json['report_data']:
+            return jsonify({"message": "Tidak ada data laporan untuk diekspor."}), 404
+            
+        df_report = pd.DataFrame(report_json['report_data'])
+        df_grand_total = pd.DataFrame([report_json['grand_total']])
+        df_grand_total.insert(0, 'RAYON', 'GRAND TOTAL')
+
+        # Hapus kolom count dan persen di grand total untuk dipisahkan
+        df_grand_total = df_grand_total.drop(columns=['MC_TotalNomen', 'MC_CollectedNomen', 'MB_UndueNomen', 'TotalPelanggan'], errors='ignore')
+        
+        # Gabungkan data dan total
+        df_export = pd.concat([df_report, df_grand_total], ignore_index=True)
+
+        # Re-order dan rename kolom
+        df_export = df_export[[
+            'RAYON', 'PCEZ', 
+            'MC_TotalNominal', 'MC_TotalKubik',
+            'MC_CollectedNominal', 'MC_CollectedKubik',
+            'MB_UndueNominal', 'MB_UndueKubik',
+            'PercentNominal', 'UnduePercentNominal'
+        ]]
+        df_export.columns = [
+            'RAYON', 'PCEZ', 
+            'MC_PIUTANG_NOMINAL', 'MC_PIUTANG_KUBIK',
+            'MC_KOLEKSI_NOMINAL', 'MC_KOLEKSI_KUBIK',
+            'MB_UNDUE_NOMINAL', 'MB_UNDUE_KUBIK',
+            'MC_PERSEN_KOLEKSI', 'MB_PERSEN_UNDUE'
+        ]
+
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_export.to_excel(writer, sheet_name='Laporan Koleksi & Piutang', index=False)
+            
+        output.seek(0)
+        
+        response = make_response(output.read())
+        response.headers['Content-Disposition'] = 'attachment; filename=Laporan_Koleksi_Piutang_Terpadu.xlsx'
+        response.headers['Content-type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        return response
+
+    except Exception as e:
+        print(f"Error during collection report export: {e}")
+        return jsonify({"message": f"Gagal mengekspor data laporan koleksi: {e}"}), 500
 
 
 # --- ENDPOINT ANALISIS DATA LANJUTAN (SUB-MENU DASHBOARD) ---
@@ -949,7 +1102,7 @@ def upload_ardebt_data():
 
 
 # =========================================================================
-# === NEW DASHBOARD ANALYTICS ENDPOINTS (INTEGRATED) ===
+# === DASHBOARD ANALYTICS ENDPOINTS (INTEGRATED) ===
 # =========================================================================
 
 @app.route('/dashboard', methods=['GET'])
@@ -1192,9 +1345,6 @@ def anomaly_summary_api():
         print(f"Error in anomaly summary: {e}")
         return jsonify({"message": f"Gagal mengambil summary anomali: {e}"}), 500
 
-# =========================================================================
-# === NEW DASHBOARD ANALYTICS ENDPOINTS (CRITICAL ALERTS & EXPORT) ===
-# =========================================================================
 
 @app.route('/api/dashboard/critical_alerts', methods=['GET'])
 @login_required
