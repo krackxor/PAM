@@ -359,56 +359,72 @@ def collection_report_api():
         'grand_total': grand_total
     }), 200
 
-@app.route('/api/collection/detail', methods=['GET'])
+# --- ENDPOINT DETAIL RAW DATA UNTUK HALAMAN KOLEKSI (BARU) ---
+
+@app.route('/api/details/mc', methods=['GET'])
 @login_required 
-def collection_detail_api():
-    """Endpoint API untuk mengambil data koleksi yang difilter dan diurutkan."""
+def api_get_mc_details():
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
-        
-    query_str = request.args.get('q', '').strip()
     
-    mongo_query = {} 
-    
-    if query_str:
-        safe_query_str = re.escape(query_str)
-        
-        # Kolom yang mungkin ada di MB untuk filtering
-        search_filter = {
-            '$or': [
-                {'RAYON': {'$regex': safe_query_str, '$options': 'i'}}, 
-                {'PCEZ': {'$regex': safe_query_str, '$options': 'i'}},
-                {'NOMEN': {'$regex': safe_query_str, '$options': 'i'}},
-                {'ZONA_NOREK': {'$regex': safe_query_str, '$options': 'i'}} # Kolom alternatif di MB
-            ]
-        }
-        mongo_query.update(search_filter)
-
-    sort_order = [('TGL_BAYAR', -1)] # Sortasi berdasarkan TGL_BAYAR (dari MB)
-
     try:
-        # MENGGUNAKAN collection_mb UNTUK DETAIL TRANSAKSI KOLEKSI
-        results = list(collection_mb.find(mongo_query).sort(sort_order).limit(1000))
-
-        cleaned_results = []
+        # Mengambil 50 data MC terbaru (atau random)
+        results = list(collection_mc.find({}).limit(50))
+        cleaned = []
         for doc in results:
-            nominal_val = float(doc.get('NOMINAL', 0)) 
-            
-            cleaned_results.append({
+            cleaned.append({
                 'NOMEN': doc.get('NOMEN', 'N/A'),
-                # Mapping kolom MB ke nama kolom Frontend
-                'RAYON': doc.get('RAYON', doc.get('ZONA_NOREK', 'N/A')), 
-                'PCEZ': doc.get('PCEZ', doc.get('LKS_BAYAR', 'N/A')),
-                'NOMINAL': nominal_val,
-                'PAY_DT': doc.get('TGL_BAYAR', 'N/A')
+                'NOMINAL': doc.get('NOMINAL', 0),
+                'KUBIK': doc.get('KUBIK', 0),
             })
-            
-        return jsonify(cleaned_results), 200
-
+        return jsonify(cleaned), 200
     except Exception as e:
-        print(f"Error fetching detailed collection data: {e}")
-        return jsonify({"message": f"Gagal mengambil data detail koleksi: {e}"}), 500
+        return jsonify({"message": f"Gagal memuat detail MC: {e}"}), 500
 
+@app.route('/api/details/mb_raw', methods=['GET'])
+@login_required 
+def api_get_mb_details_raw():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    try:
+        # Mengambil 50 data MB terbaru berdasarkan TGL_BAYAR
+        results = list(collection_mb.find({}).sort('TGL_BAYAR', -1).limit(50))
+        cleaned = []
+        for doc in results:
+            cleaned.append({
+                'NOMEN': doc.get('NOMEN', 'N/A'),
+                'NOMINAL': doc.get('NOMINAL', 0),
+                # Kubikasi tidak ada di MB, gunakan placeholder
+                'KUBIK': 'N/A', 
+            })
+        return jsonify(cleaned), 200
+    except Exception as e:
+        return jsonify({"message": f"Gagal memuat detail MB: {e}"}), 500
+
+@app.route('/api/details/cid', methods=['GET'])
+@login_required 
+def api_get_cid_details():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    try:
+        # Mengambil 50 data CID (random)
+        results = list(collection_cid.find({}).limit(50))
+        
+        cleaned = []
+        for doc in results:
+            cleaned.append({
+                'NOMEN': doc.get('NOMEN', 'N/A'),
+                # Menggunakan Nominal/Kubikasi N/A karena ini memerlukan join ke ARDEBT/SBRS
+                'NOMINAL': 'N/A', 
+                'KUBIK': 'N/A', 
+                'STATUS_CID': doc.get('STATUS', 'N/A'), # Status PD/TD dari Master
+                'TIPEPLGGN': doc.get('TIPEPLGGN', 'N/A'), # Asumsi ini status TD/PD Master
+            })
+        return jsonify(cleaned), 200
+    except Exception as e:
+        return jsonify({"message": f"Gagal memuat detail CID: {e}"}), 500
 
 # --- ENDPOINT ANALISIS DATA LANJUTAN (SUB-MENU DASHBOARD) ---
 
