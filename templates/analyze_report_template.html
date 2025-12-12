@@ -93,24 +93,49 @@
     </div>
 
     <script>
-        function fetchReportData(reportName) {
+        // Fungsi pembantu untuk memformat angka persentase
+        function formatPercent(number) {
+            return (parseFloat(number) || 0).toFixed(2) + '%';
+        }
+
+        async function fetchReportData(reportName) {
             const dataArea = document.getElementById('reportDataArea');
             dataArea.innerHTML = `<p style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Menghubungkan ke MongoDB untuk ${reportName}...</p>`;
             
-            // --- LOGIKA UTAMA PERLU DITAMBAHKAN DI SINI ---
-            // Di implementasi nyata, Anda akan memanggil API endpoint yang berbeda untuk setiap laporan.
-            // Contoh API call: fetch('/api/analyze/get_extreme_users')
+            let endpoint = '';
 
-            // Untuk saat ini, kita gunakan data dummy untuk demonstrasi UI dan responsivitas
-            setTimeout(() => {
-                const dummyData = [
-                    { NOMEN: '30012345', NAMA: 'Pelanggan A', RAYON: '35', TARIFF: 'R1', KUBIK: 150, KONDISI: 'Ekstrim' },
-                    { NOMEN: '30056789', NAMA: 'Pelanggan B', RAYON: '12', TARIFF: 'R2', KUBIK: 0, KONDISI: 'Zero' },
-                    { NOMEN: '30099999', NAMA: 'Pelanggan C', RAYON: '35', TARIFF: 'R1', KUBIK: 25, KONDISI: 'Turun' }
-                ];
+            // Mapping Laporan ke Endpoint API yang baru
+            if (reportName.includes('Naik/Turun')) {
+                endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}';
+            } else if (reportName.includes('Ekstrim')) {
+                endpoint = '/api/analyze/extreme_usage'; // Placeholder untuk Ekstrim
+            } else if (reportName.includes('Zero')) {
+                endpoint = '/api/analyze/zero_usage'; // Placeholder untuk Zero
+            } else {
+                 dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini belum diimplementasi.</p>`;
+                 return;
+            }
+
+            try {
+                const response = await fetch(endpoint);
+                const data = await response.json();
+
+                if (response.status === 401) {
+                    window.location.href = '{{ url_for("login") }}';
+                    return;
+                }
                 
-                renderDynamicTable(dummyData, reportName);
-            }, 1500); 
+                if (data.length === 0) {
+                    dataArea.innerHTML = `<p style="text-align: center;">Tidak ada data anomali ditemukan untuk laporan ${reportName}.</p>`;
+                    return;
+                }
+                
+                renderDynamicTable(data, reportName);
+
+            } catch (error) {
+                dataArea.innerHTML = `<p style="text-align: center; color: red;">❌ Gagal mengambil data: ${error}</p>`;
+                console.error('Fetch Error:', error);
+            }
         }
 
         function renderDynamicTable(data, title) {
@@ -120,7 +145,7 @@
                 return;
             }
 
-            // Pastikan semua key diubah menjadi UPPERCASE
+            // Dapatkan headers dari kunci objek pertama
             const headers = Object.keys(data[0]);
             
             let tableHTML = `<div class="result-table-wrapper"><table class="data-table"><thead><tr>`;
@@ -132,8 +157,14 @@
             data.forEach(item => {
                 tableHTML += `<tr>`;
                 headers.forEach(h => {
+                    let cellValue = item[h];
+                    
+                    if (h === 'PERSEN_SELISIH') {
+                        cellValue = formatPercent(cellValue);
+                    }
+                    
                     // PENTING: Tambahkan data-label untuk mobile view
-                    tableHTML += `<td data-label="${h.replace(/_/g, ' ')}">${item[h]}</td>`;
+                    tableHTML += `<td data-label="${h.replace(/_/g, ' ')}">${cellValue}</td>`;
                 });
                 tableHTML += `</tr>`;
             });
