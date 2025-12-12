@@ -664,7 +664,7 @@ def analyze_stand_tungggu():
                            is_admin=current_user.is_admin)
 
 # =========================================================================
-# === API BARU UNTUK ANALISIS AKURAT (Fluktuasi Volume Naik/Turun) ===
+# === API UNTUK ANALISIS AKURAT (Fluktuasi Volume Naik/Turun) ===
 # =========================================================================
 @app.route('/api/analyze/volume_fluctuation', methods=['GET'])
 @login_required 
@@ -681,8 +681,181 @@ def analyze_volume_fluctuation_api():
         # Pesan error yang lebih membantu jika pipeline gagal
         print(f"Error saat menganalisis fluktuasi volume: {e}")
         return jsonify({"message": f"Gagal mengambil data fluktuasi volume. Detail teknis error: {e}"}), 500
+        
 # =========================================================================
-# === END API BARU ===
+# === API GROUPING MC KUSTOM (BARU DARI PERMINTAAN USER) ===
+# =========================================================================
+
+# 1. API DETAIL (Untuk Laporan Grouping Penuh - Tidak digunakan di collection_unified.html)
+@app.route('/api/analyze/mc_grouping', methods=['GET'])
+@login_required 
+def analyze_mc_grouping_api():
+    """
+    API untuk menjalankan kueri agregasi berdasarkan permintaan pengguna (Grouping detail).
+    TIPEPLGGN='reg', RAYON='34'/'35'
+    """
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+
+    try:
+        pipeline_grouping = [
+            {'$project': {
+                'NOMEN': {'$toString': '$NOMEN'},
+                'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
+                'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
+                'TARIF': {'$toString': '$TARIF'},
+            }},
+            {'$lookup': {
+               'from': 'CustomerData', 
+               'localField': 'NOMEN',
+               'foreignField': 'NOMEN',
+               'as': 'customer_info'
+            }},
+            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+            {'$match': {
+                'customer_info.TIPEPLGGN': 'reg',
+                'customer_info.RAYON': {'$in': ['34', '35']}
+            }},
+            {'$group': {
+                '_id': {
+                    'TIPEPLGGN': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']},
+                    'RAYON': {'$ifNull': ['$customer_info.RAYON', 'N/A']},
+                    'TARIF': {'$ifNull': ['$TARIF', 'N/A']},
+                    'MERK': {'$ifNull': ['$customer_info.MERK', 'N/A']},
+                    'READ_METHOD': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']},
+                },
+                'CountOfNOMEN': {'$addToSet': '$NOMEN'}, 
+                'SumOfKUBIK': {'$sum': '$KUBIK'},
+                'SumOfNOMINAL': {'$sum': '$NOMINAL'},
+                'CountOfTARIF': {'$sum': 1}, 
+                'CountOfMERK': {'$sum': 1}, 
+                'CountOfREAD_METHOD': {'$sum': 1}
+            }},
+            {'$project': {
+                '_id': 0,
+                'TIPEPLGGN': '$_id.TIPEPLGGN', 'RAYON': '$_id.RAYON', 'TARIF': '$_id.TARIF',
+                'MERK': '$_id.MERK', 'READ_METHOD': '$_id.READ_METHOD',
+                'CountOfNOMEN': {'$size': '$CountOfNOMEN'},
+                'SumOfKUBIK': {'$round': ['$SumOfKUBIK', 2]},
+                'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 2]},
+                'CountOfTARIF': 1, 'CountOfMERK': 1, 'CountOfREAD_METHOD': 1
+            }},
+            {'$sort': {'RAYON': 1, 'TARIF': 1}}
+        ]
+        grouping_data = list(collection_mc.aggregate(pipeline_grouping))
+        return jsonify(grouping_data), 200
+
+    except Exception as e:
+        print(f"Error saat menganalisis grouping MC: {e}")
+        return jsonify({"message": f"Gagal mengambil data grouping MC. Detail teknis error: {e}"}), 500
+
+# 2. API SUMMARY (Untuk KPI Cards di collection_unified.html)
+@app.route('/api/analyze/mc_grouping/summary', methods=['GET'])
+@login_required 
+def analyze_mc_grouping_summary_api():
+    """
+    API untuk mengambil Total Nominal, Kubik, dan Nomen Count dari grouping MC kustom (TIPEPLGGN='reg', RAYON='34'/'35').
+    """
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+
+    try:
+        pipeline_summary = [
+            {'$lookup': {
+               'from': 'CustomerData', 
+               'localField': 'NOMEN',
+               'foreignField': 'NOMEN',
+               'as': 'customer_info'
+            }},
+            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+            {'$match': {
+                'customer_info.TIPEPLGGN': 'reg',
+                'customer_info.RAYON': {'$in': ['34', '35']}
+            }},
+            {'$group': {
+                '_id': None,
+                'SumOfKUBIK': {'$sum': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}}},
+                'SumOfNOMINAL': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}},
+                'CountOfNOMEN': {'$addToSet': '$NOMEN'}
+            }},
+            {'$project': {
+                '_id': 0,
+                'TotalPiutangKustomNominal': {'$round': ['$SumOfNOMINAL', 0]},
+                'TotalPiutangKustomKubik': {'$round': ['$SumOfKUBIK', 0]},
+                'TotalNomenKustom': {'$size': '$CountOfNOMEN'}
+            }}
+        ]
+
+        summary_result = list(collection_mc.aggregate(pipeline_summary))
+        
+        if not summary_result:
+            return jsonify({
+                'TotalPiutangKustomNominal': 0,
+                'TotalPiutangKustomKubik': 0,
+                'TotalNomenKustom': 0
+            }), 200
+
+        return jsonify(summary_result[0]), 200
+
+    except Exception as e:
+        print(f"Error saat mengambil summary grouping MC: {e}")
+        return jsonify({"message": f"Gagal mengambil summary grouping MC: {e}"}), 500
+
+# 3. API BREAKDOWN TARIF (Untuk Tabel Distribusi di collection_unified.html)
+@app.route('/api/analyze/mc_tarif_breakdown', methods=['GET'])
+@login_required 
+def analyze_mc_tarif_breakdown_api():
+    """
+    API untuk mengambil breakdown pelanggan per RAYON dan TARIF 
+    (hanya untuk TIPEPLGGN='reg', RAYON='34'/'35').
+    """
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+
+    try:
+        pipeline_tarif_breakdown = [
+            # 1. Join MC ke CID
+            {'$lookup': {
+               'from': 'CustomerData', 
+               'localField': 'NOMEN',
+               'foreignField': 'NOMEN',
+               'as': 'customer_info'
+            }},
+            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+            
+            # 2. Filter Kriteria Kustom
+            {'$match': {
+                'customer_info.TIPEPLGGN': 'reg',
+                'customer_info.RAYON': {'$in': ['34', '35']}
+            }},
+            
+            # 3. Grouping berdasarkan RAYON dan TARIF
+            {'$group': {
+                '_id': {
+                    'RAYON': {'$ifNull': ['$customer_info.RAYON', 'N/A']},
+                    'TARIF': '$TARIF',
+                },
+                'CountOfNOMEN': {'$addToSet': '$NOMEN'},
+            }},
+            
+            # 4. Proyeksi Akhir dan Penghitungan Size
+            {'$project': {
+                '_id': 0,
+                'RAYON': '$_id.RAYON',
+                'TARIF': {'$ifNull': ['$_id.TARIF', 'N/A']},
+                'JumlahPelanggan': {'$size': '$CountOfNOMEN'}
+            }},
+            {'$sort': {'RAYON': 1, 'TARIF': 1}}
+        ]
+
+        breakdown_data = list(collection_mc.aggregate(pipeline_tarif_breakdown))
+        return jsonify(breakdown_data), 200
+
+    except Exception as e:
+        print(f"Error saat mengambil tarif breakdown MC: {e}")
+        return jsonify({"message": f"Gagal mengambil tarif breakdown MC: {e}"}), 500
+# =========================================================================
+# === END API GROUPING MC KUSTOM ===
 # =========================================================================
 
 # Endpoint File Upload/Merge (Dinamis)
@@ -1183,7 +1356,18 @@ def dashboard_summary_api():
         anomali_breakdown = {}
         for item in anomalies:
             status = item.get('STATUS_PEMAKAIAN', 'UNKNOWN')
-            anomali_breakdown[status] = anomali_breakdown.get(status, 0) + 1
+            # Gunakan logika pengelompokan yang lebih sederhana untuk dashboard summary
+            if 'EKSTRIM' in status or 'NAIK' in status:
+                key = 'KENAIKAN_SIGNIFIKAN'
+            elif 'TURUN' in status:
+                key = 'PENURUNAN_SIGNIFIKAN'
+            elif 'ZERO' in status:
+                key = 'ZERO_USAGE'
+            else:
+                key = 'LAINNYA'
+                
+            anomali_breakdown[key] = anomali_breakdown.get(key, 0) + 1
+            
         summary_data['anomali_breakdown'] = anomali_breakdown
         
         # 6. PELANGGAN DENGAN TUNGGAKAN (Distinct NOMEN)
