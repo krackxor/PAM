@@ -187,6 +187,12 @@
 
     <div class="footer-nav">
         
+        <a href="{{ url_for('analytics_dashboard') }}" 
+           class="nav-item {% if request.endpoint == 'analytics_dashboard' %}active{% endif %}">
+           <i class="fas fa-tachometer-alt"></i>
+           <span>Dashboard</span>
+        </a>
+
         <a href="{{ url_for('index') }}" 
            class="nav-item {% if request.endpoint == 'index' %}active{% endif %}">
            <i class="fas fa-search"></i>
