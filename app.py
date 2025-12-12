@@ -674,6 +674,7 @@ def analyze_volume_fluctuation_api():
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
 
     try:
+        # Menambahkan maxTimeMS=30000 untuk menghindari timeout pada agregasi kompleks
         fluctuation_data = _get_sbrs_anomalies(collection_sbrs, collection_cid)
         return jsonify(fluctuation_data), 200
 
@@ -742,7 +743,8 @@ def analyze_mc_grouping_api():
             }},
             {'$sort': {'RAYON': 1, 'TARIF': 1}}
         ]
-        grouping_data = list(collection_mc.aggregate(pipeline_grouping))
+        # PENTING: Tambahkan maxTimeMS untuk menghindari timeout pada koleksi besar
+        grouping_data = list(collection_mc.aggregate(pipeline_grouping, maxTimeMS=30000))
         return jsonify(grouping_data), 200
 
     except Exception as e:
@@ -785,8 +787,8 @@ def analyze_mc_grouping_summary_api():
                 'TotalNomenKustom': {'$size': '$CountOfNOMEN'}
             }}
         ]
-
-        summary_result = list(collection_mc.aggregate(pipeline_summary))
+        # PENTING: Tambahkan maxTimeMS untuk menghindari timeout pada koleksi besar
+        summary_result = list(collection_mc.aggregate(pipeline_summary, maxTimeMS=30000))
         
         if not summary_result:
             return jsonify({
@@ -799,7 +801,7 @@ def analyze_mc_grouping_summary_api():
 
     except Exception as e:
         print(f"Error saat mengambil summary grouping MC: {e}")
-        return jsonify({"message": f"Gagal mengambil summary grouping MC: {e}"}), 500
+        return jsonify({"message": f"Gagal mengambil summary grouping MC. Detail teknis error: {e}"}), 500
 
 # 3. API BREAKDOWN TARIF (Untuk Tabel Distribusi di collection_unified.html)
 @app.route('/api/analyze/mc_tarif_breakdown', methods=['GET'])
@@ -847,13 +849,13 @@ def analyze_mc_tarif_breakdown_api():
             }},
             {'$sort': {'RAYON': 1, 'TARIF': 1}}
         ]
-
-        breakdown_data = list(collection_mc.aggregate(pipeline_tarif_breakdown))
+        # PENTING: Tambahkan maxTimeMS untuk menghindari timeout pada koleksi besar
+        breakdown_data = list(collection_mc.aggregate(pipeline_tarif_breakdown, maxTimeMS=30000))
         return jsonify(breakdown_data), 200
 
     except Exception as e:
         print(f"Error saat mengambil tarif breakdown MC: {e}")
-        return jsonify({"message": f"Gagal mengambil tarif breakdown MC: {e}"}), 500
+        return jsonify({"message": f"Gagal mengambil tarif breakdown MC. Detail teknis error: {e}"}), 500
 # =========================================================================
 # === END API GROUPING MC KUSTOM ===
 # =========================================================================
