@@ -10,13 +10,14 @@
     border: 1px solid #ddd;
     border-radius: var(--border-radius);
     text-align: center;
+    box-shadow: var(--shadow-light); 
 }
 #nomenInput {
-    padding: 10px;
+    padding: 12px; 
     border: 1px solid #ced4da;
     border-radius: 4px;
     width: 100%;
-    max-width: 300px;
+    max-width: 350px; 
     margin-bottom: 10px;
     font-size: 16px;
     box-sizing: border-box;
@@ -25,9 +26,10 @@
     background-color: var(--primary-color);
     color: white;
     border: none;
-    padding: 10px 20px;
+    padding: 12px 25px; 
     border-radius: 4px;
     cursor: pointer;
+    font-weight: 600;
     transition: background-color 0.3s;
 }
 .btn-search:hover {
@@ -37,50 +39,62 @@
 /* Status Summary Grid */
 .summary-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
     gap: 15px;
     margin-bottom: 30px;
 }
 .summary-card {
-    background-color: #e9ecef;
+    background-color: var(--card-bg);
     padding: 15px;
     border-radius: var(--border-radius);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    border-left: 5px solid; /* Aksen visual */
+    box-shadow: var(--shadow-light);
+    transition: transform 0.2s;
 }
-.summary-card h4 { margin: 0 0 5px 0; font-size: 1.1em; color: var(--primary-color); }
-.summary-card p { margin: 0; font-size: 1.5em; font-weight: bold; }
-.status-ok { color: var(--secondary-color); }
-.status-warning { color: #ffc107; }
-.status-danger { color: #dc3545; }
+.summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-medium);
+}
+.summary-card h4 { margin: 0 0 5px 0; font-size: 0.9em; text-transform: uppercase; color: #6c757d; }
+.summary-card p { margin: 0; font-size: 1.3em; font-weight: bold; }
+
+/* Aksen Warna Status */
+.status-ok { color: var(--secondary-color); border-color: var(--secondary-color); }
+.status-warning { color: var(--accent-color); border-color: var(--accent-color); }
+.status-danger { color: #dc3545; border-color: #dc3545; }
 
 /* Detail Data Table */
 .data-table-wrapper {
     overflow-x: auto;
     margin-top: 15px;
-    border: 1px solid #ddd;
+    border: 1px solid #e0e0e0; 
     border-radius: var(--border-radius);
+    box-shadow: var(--shadow-light);
+    overflow: hidden;
 }
 .data-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 13px;
-    min-width: 600px; 
+    font-size: 14px; 
+    min-width: 700px; 
 }
 .data-table th, .data-table td {
-    border: 1px solid #eee;
-    padding: 8px;
+    border: 1px solid #f0f0f0; 
+    padding: 10px; 
     text-align: left;
     white-space: nowrap;
 }
 .data-table th {
-    background-color: #f2f2f2;
+    background-color: #e9ecef; 
     text-align: center;
+    font-weight: 600;
 }
 
 /* Mobile Layout for Tables/Details (Card View) */
 @media screen and (max-width: 600px) {
     .data-table-wrapper {
         border: none;
+        box-shadow: none;
     }
     .data-table {
         min-width: 100%;
@@ -103,7 +117,7 @@
     }
     .data-table td:before {
         content: attr(data-label);
-        font-weight: bold;
+        font-weight: 600;
         text-align: left;
         width: 50%;
         padding-right: 10px;
@@ -160,7 +174,7 @@
         
         function renderTable(title, data, singleRow = false) {
             if (!data || (Array.isArray(data) && data.length === 0)) {
-                return `<h4>${title}</h4><p>Tidak ada data ditemukan.</p>`;
+                return `<h4 style="margin-top: 20px; color: #2c3e50;">${title}</h4><p>Tidak ada data ditemukan.</p>`;
             }
             
             const listData = Array.isArray(data) ? data : [data];
@@ -197,29 +211,32 @@
             const totalPiutang = formatCurrency(data.summary.TOTAL_PIUTANG_NOMINAL);
             const statusFinansial = data.summary.STATUS_FINANSIAL;
             const statusPemakaian = data.summary.STATUS_PEMAKAIAN;
+            
+            const statusFinancialClass = determineStatusClass(statusFinansial);
+            const statusUsageClass = determineStatusClass(statusPemakaian);
 
             healthSummary.innerHTML = `
-                <div class="summary-card">
+                <div class="summary-card status-ok">
                     <h4>NOMEN</h4>
-                    <p class="status-ok">${data.summary.NOMEN}</p>
+                    <p>${data.summary.NOMEN}</p>
                 </div>
-                <div class="summary-card">
+                <div class="summary-card" style="border-left-color: var(--primary-color);">
                     <h4>NAMA PELANGGAN</h4>
                     <p>${data.summary.NAMA}</p>
                 </div>
-                <div class="summary-card">
+                <div class="summary-card ${statusFinancialClass}">
                     <h4>TOTAL PIUTANG</h4>
-                    <p class="${determineStatusClass(statusFinansial)}">${totalPiutang}</p>
+                    <p>${totalPiutang}</p>
                 </div>
-                <div class="summary-card">
+                <div class="summary-card ${statusFinancialClass}">
                     <h4>STATUS FINANSIAL</h4>
-                    <p class="${determineStatusClass(statusFinansial)}">${statusFinansial}</p>
+                    <p>${statusFinansial}</p>
                 </div>
-                <div class="summary-card">
+                <div class="summary-card ${statusUsageClass}">
                     <h4>STATUS PEMAKAIAN</h4>
-                    <p class="${determineStatusClass(statusPemakaian)}">${statusPemakaian}</p>
+                    <p>${statusPemakaian}</p>
                 </div>
-                <div class="summary-card">
+                <div class="summary-card" style="border-left-color: #6c757d;">
                     <h4>PEMBAYARAN TERAKHIR</h4>
                     <p>${data.summary.PEMBAYARAN_TERAKHIR}</p>
                 </div>
