@@ -7,62 +7,66 @@
 .report-header { text-align: center; margin-bottom: 20px; }
 .report-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); 
     gap: 20px;
     margin-bottom: 30px;
 }
-.summary-card { background-color: white; padding: 15px; border-radius: var(--border-radius); text-align: center; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05); }
-.summary-card h4 { margin: 0 0 5px 0; font-size: 1em; color: #666; }
-.summary-card p { margin: 0; font-size: 1.5em; font-weight: bold; }
-.filter-input-group { 
-    margin-top: 30px; padding-top: 20px; border-top: 1px dashed #ddd; display: flex; align-items: center; gap: 10px;
+.summary-card { 
+    background-color: var(--card-bg); 
+    padding: 15px; 
+    border-radius: var(--border-radius); 
+    box-shadow: var(--shadow-light);
+    text-align: center; 
+    border: 1px solid #e0e0e0;
+    border-left: 5px solid;
+    transition: transform 0.2s;
 }
-#filterInput { padding: 10px; border: 1px solid #ced4da; border-radius: var(--border-radius); font-size: 16px; flex-grow: 1; }
+.summary-card:hover {
+     transform: translateY(-2px);
+     box-shadow: var(--shadow-medium);
+}
+.summary-card h4 { margin: 0 0 5px 0; font-size: 0.9em; color: #6c757d; }
+.summary-card p { margin: 0; font-size: 1.6em; font-weight: bold; }
+
+.filter-input-group { 
+    margin-top: 30px; padding-top: 20px; border-top: 1px dashed #ddd; 
+    display: flex; align-items: stretch; gap: 10px; 
+}
+#filterInput { 
+    padding: 12px; 
+    border: 1px solid #ced4da; 
+    border-radius: var(--border-radius); 
+    font-size: 16px; 
+    flex-grow: 1; 
+}
 .report-table-wrapper { overflow-x: auto; margin-top: 20px; }
 
-/* --- TABLE LAYOUT (DESKTOP DEFAULT) --- */
+/* --- TABLE LAYOUT --- */
 .report-table, .collection-table { 
     width: 100%; border-collapse: collapse; font-size: 14px; 
+    box-shadow: var(--shadow-light); 
+    border-radius: var(--border-radius);
+    overflow: hidden; 
 }
 .report-table th, .report-table td, .collection-table th, .collection-table td { 
-    border: 1px solid #ddd; padding: 8px; text-align: right; white-space: nowrap; 
+    border: 1px solid #f0f0f0; padding: 10px; text-align: right; white-space: nowrap; 
 }
-.report-table th, .collection-table th { background-color: #f2f2f2; text-align: center; }
+.report-table th, .collection-table th { background-color: #e9ecef; text-align: center; font-weight: 600; }
 .report-table td:first-child, .report-table td:nth-child(2) { text-align: left; } 
-.grand-total-row { font-weight: bold; background-color: #cfe2ff; }
+.grand-total-row { font-weight: bold; background-color: #d0e7ff; color: var(--text-color); } 
 .percentage-cell { font-weight: bold; color: var(--secondary-color); }
 
 .no-results { text-align: center; color: #555; padding: 20px; }
-
-/* --- CUSTOM RAW DATA SECTION --- */
-.raw-data-section {
-    margin-top: 40px;
-    padding-top: 20px;
-    border-top: 2px solid var(--primary-color);
-}
-.raw-data-grid {
-    display: grid;
-    grid-template-columns: 1fr; /* Default ke satu kolom di mobile */
-    gap: 30px;
-}
-@media screen and (min-width: 900px) {
-    .raw-data-grid {
-        grid-template-columns: repeat(3, 1fr); /* Tiga kolom di desktop */
-    }
-}
-
 
 /* -------------------------------------------------------------------------- */
 /* --- ROMBAK TOTAL UI: LAYOUT MOBILE (LIST TRANSAKSI) --- */
 /* -------------------------------------------------------------------------- */
 @media screen and (max-width: 600px) {
     
-    /* 1. Sembunyikan Header Tabel */
     .collection-table thead, .report-table thead {
         display: none;
     }
 
-    /* 2. Setiap Baris (TR) menjadi Kartu/Blok */
     .collection-table tr:not(.total-row) {
         display: block;
         margin-bottom: 10px;
@@ -71,7 +75,6 @@
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
     
-    /* 3. Setiap Sel (TD) menjadi Baris Item */
     .collection-table td {
         display: flex;
         justify-content: space-between;
@@ -79,20 +82,18 @@
         border: none;
         border-bottom: 1px solid #eee;
         position: relative;
-        text-align: right; /* Default text alignment */
+        text-align: right; 
     }
 
-    /* 4. Tampilkan Header Kolom Menggunakan CSS data-label */
     .collection-table td:before {
-        content: attr(data-label); /* Mengambil nilai dari atribut data-label */
-        font-weight: bold;
+        content: attr(data-label); 
+        font-weight: 600;
         text-align: left;
-        width: 50%; /* Beri ruang yang sama untuk label */
+        width: 50%; 
         color: var(--text-color);
         padding-right: 10px;
     }
     
-    /* 5. Khusus untuk Baris Total (Agar tetap terbaca sebagai footer tabel) */
     .collection-table .total-row td {
         display: table-cell;
         border: 1px solid #ddd;
@@ -104,10 +105,7 @@
         display: table-row-group;
     }
     
-    /* 6. Aturan untuk Tabel Report (Agregat) */
-    /* Kita biarkan Report Table tetap di scroll wrapper karena memiliki banyak kolom */
     .report-table {
-        /* Memaksa report table ke desktop view di mobile agar tidak terlalu aneh */
         min-width: 700px;
     }
 }
@@ -124,30 +122,14 @@
 
     <div class="filter-input-group">
         <input type="text" id="filterInput" placeholder="Filter Detail (Rayon, PCEZ, NOMEN)...">
-        <button id="searchBtn" class="btn-primary" style="background-color: var(--primary-color); color: white; padding: 10px 15px; border: none; border-radius: 4px;">
-            <i class="fas fa-filter"></i> Filter Transaksi Detail
+        <button id="searchBtn" class="btn-primary" style="background-color: var(--primary-color); color: white; padding: 12px 18px; border: none; border-radius: 4px;">
+            <i class="fas fa-filter"></i> Filter Detail
         </button>
     </div>
 
     <div id="detailsArea">
         <p class="no-results">Memuat data transaksi...</p>
     </div>
-    
-    <div class="raw-data-section">
-        <h3 style="margin-bottom: 20px; color: var(--primary-color);">Data Master Terakhir (50 Baris)</h3>
-        <div class="raw-data-grid">
-            <div id="rawMCTable">
-                <p style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Memuat Data MC...</p>
-            </div>
-            <div id="rawMBTable">
-                <p style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Memuat Data MB...</p>
-            </div>
-            <div id="rawCIDTable">
-                <p style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Memuat Data CID...</p>
-            </div>
-        </div>
-    </div>
-
 
     <script>
         const reportArea = document.getElementById('reportArea');
@@ -159,80 +141,11 @@
             return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
         }
         
-        function formatRupiahSimple(number) {
-            return (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
-        }
-
         function formatPercent(number) {
             return (parseFloat(number) || 0).toFixed(2) + '%';
         }
 
-        // --- FUNGSI UTILITY UNTUK MERENDER TABEL RAW ---
-        function renderRawTable(title, data, targetElementId) {
-            const targetElement = document.getElementById(targetElementId);
-
-            if (!data || data.length === 0) {
-                targetElement.innerHTML = `<h4>${title}</h4><p class="no-results">Tidak ada data ${title} ditemukan.</p>`;
-                return;
-            }
-
-            // Kolom yang diminta: Nomen, Nominal, Kubikasi + Status/Tipe
-            const requestedHeaders = [
-                { key: 'NOMEN', label: 'NOMEN' },
-                { key: 'NOMINAL', label: 'NOMINAL' },
-                { key: 'KUBIK', label: 'KUBIKASI' },
-                { key: 'STATUS_CID', label: 'STATUS TD' }, // Untuk CID
-                { key: 'TIPEPLGGN', label: 'STATUS PD' }   // Untuk CID
-            ];
-
-            // Filter header yang benar-benar ada di data
-            let headers = [];
-            
-            // Logika khusus untuk menentukan header mana yang akan ditampilkan (hanya yang diminta user)
-            if (targetElementId === 'rawMCTable') {
-                headers = requestedHeaders.slice(0, 3); // NOMEN, NOMINAL, KUBIK
-            } else if (targetElementId === 'rawMBTable') {
-                headers = requestedHeaders.slice(0, 3).filter(h => h.key !== 'KUBIK').concat({ key: 'TGL_BAYAR', label: 'TGL BAYAR' });
-            } else if (targetElementId === 'rawCIDTable') {
-                headers = [
-                    { key: 'NOMEN', label: 'NOMEN' },
-                    { key: 'TIPEPLGGN', label: 'STATUS PD' },
-                    { key: 'STATUS_CID', label: 'STATUS TD' }
-                ];
-            }
-
-
-            let tableHtml = `<h4>${title} (${data.length} baris)</h4>`;
-            tableHtml += '<div class="data-table-wrapper"><table class="collection-table"><thead><tr>';
-            
-            // Header Row
-            headers.forEach(h => {
-                tableHtml += `<th>${h.label}</th>`;
-            });
-            tableHtml += '</tr></thead><tbody>';
-
-            // Data Rows
-            data.forEach(item => {
-                tableHtml += '<tr>';
-                headers.forEach(h => {
-                    let cellValue = item[h.key] || 'N/A';
-                    
-                    if (h.key === 'NOMINAL') {
-                        cellValue = formatRupiahSimple(cellValue);
-                    } else if (h.key === 'KUBIK' && typeof item[h.key] === 'number') {
-                        cellValue = item[h.key].toLocaleString('id-ID') + ' m³';
-                    }
-                    
-                    tableHtml += `<td data-label="${h.label}">${cellValue}</td>`;
-                });
-                tableHtml += '</tr>';
-            });
-
-            tableHtml += '</tbody></table></div>';
-            targetElement.innerHTML = tableHtml;
-        }
-
-        // --- FUNGSI 1: MEMUAT REPORT RINGKAS (AGREGASI) ---
+        // --- FUNGSI 1: MEMUAT REPORT RINGKAS ---
         async function fetchCollectionReport() {
             try {
                 const response = await fetch('{{ url_for("collection_report_api") }}');
@@ -252,41 +165,30 @@
         }
         
         function renderReport(data, grandTotal) {
-            
-            // Perombakan Grid Summary
             let summaryHTML = `
                 <div class="report-header">
-                    <h3>Ringkasan Total Koleksi, Tagihan & Tunggakan</h3>
+                    <h3>Ringkasan Total Koleksi</h3>
                 </div>
                 <div class="report-grid">
-                    <div class="summary-card" style="border: 2px solid #007bff;">
-                        <h4>TOTAL TAGIHAN (MC)</h4>
-                        <p>${formatRupiah(grandTotal.TotalNominalBilled)}</p>
+                    <div class="summary-card" style="border-left-color: #007bff;">
+                        <h4>Total Nominal Piutang</h4>
+                        <p>${formatRupiah(grandTotal.TotalNominal)}</p>
                     </div>
-                    <div class="summary-card" style="border: 2px solid #28a745;">
-                        <h4>TOTAL KOLEKSI (MB)</h4>
+                    <div class="summary-card" style="border-left-color: #28a745;">
+                        <h4>Total Nominal Koleksi</h4>
                         <p>${formatRupiah(grandTotal.CollectedNominal)}</p>
                     </div>
-                    <div class="summary-card" style="border: 2px solid #dc3545;">
-                        <h4>TOTAL TUNGGAKAN (ARDEBT)</h4>
-                        <p>${formatRupiah(grandTotal.TotalDebtNominal)}</p>
-                    </div>
-                    <div class="summary-card" style="border: 2px solid #ffc107;">
-                        <h4>% NOMINAL KOLEKSI</h4>
+                    <div class="summary-card" style="border-left-color: #ffc107;">
+                        <h4>Persentase Nominal</h4>
                         <p>${formatPercent(grandTotal.PercentNominal)}</p>
                     </div>
-                    <div class="summary-card" style="border: 2px solid #17a2b8;">
-                        <h4>TOTAL NOMEN TAGIHAN (MC)</h4>
-                        <p>${grandTotal.TotalNomenBilled.toLocaleString('id-ID')}</p>
-                    </div>
-                    <div class="summary-card" style="border: 2px solid #17a2b8;">
-                        <h4>NOMEN SUDAH BAYAR (MB)</h4>
+                    <div class="summary-card" style="border-left-color: #17a2b8;">
+                        <h4>Pelanggan Terbayar</h4>
                         <p>${grandTotal.CollectedNomen.toLocaleString('id-ID')}</p>
                     </div>
                 </div>
             `;
             
-            // Tabel Detail Rayon (Logika lama, tetap dipertahankan)
             let tableHTML = `
                 <h3 style="margin-top: 30px;">Detail Koleksi per Rayon / PCEZ</h3>
                 <div class="report-table-wrapper">
@@ -295,11 +197,11 @@
                         <tr>
                             <th>RAYON</th>
                             <th>PCEZ</th>
-                            <th>TOTAL TAGIHAN (MC)</th>
-                            <th>NOMINAL KOLEKSI (MB)</th>
+                            <th>TOTAL NOMINAL PIUTANG</th>
+                            <th>NOMINAL KOLEKSI</th>
                             <th>% NOMINAL</th>
-                            <th>TOTAL NOMEN TAGIHAN (MC)</th>
-                            <th>NOMEN SUDAH BAYAR (MB)</th>
+                            <th>TOTAL NOMEN</th>
+                            <th>NOMEN TERBAYAR</th>
                             <th>% NOMEN</th>
                         </tr>
                     </thead>
@@ -311,11 +213,11 @@
                     <tr>
                         <td data-label="Rayon">${item.RAYON}</td>
                         <td data-label="PCEZ">${item.PCEZ}</td>
-                        <td data-label="Tagihan">${formatRupiah(item.TotalNominalMC)}</td>
-                        <td data-label="Koleksi">${formatRupiah(item.CollectedNominalMB)}</td>
+                        <td data-label="Piutang">${formatRupiah(item.TotalNominal)}</td>
+                        <td data-label="Koleksi">${formatRupiah(item.CollectedNominal)}</td>
                         <td data-label="% Nom" class="percentage-cell">${formatPercent(item.PercentNominal)}</td>
-                        <td data-label="Total Nomen">${item.TotalNomenMC.toLocaleString('id-ID')}</td>
-                        <td data-label="Nomen Bayar">${item.CollectedNomenMB.toLocaleString('id-ID')}</td>
+                        <td data-label="Total Nomen">${item.TotalNomen.toLocaleString('id-ID')}</td>
+                        <td data-label="Nomen Bayar">${item.CollectedNomen.toLocaleString('id-ID')}</td>
                         <td data-label="% Nomen" class="percentage-cell">${formatPercent(item.PercentNomenCount)}</td>
                     </tr>
                 `;
@@ -325,10 +227,10 @@
                 <tr class="grand-total-row">
                     <td>GRAND TOTAL</td>
                     <td>-</td>
-                    <td>${formatRupiah(grandTotal.TotalNominalBilled)}</td>
+                    <td>${formatRupiah(grandTotal.TotalNominal)}</td>
                     <td>${formatRupiah(grandTotal.CollectedNominal)}</td>
                     <td class="percentage-cell">${formatPercent(grandTotal.PercentNominal)}</td>
-                    <td>${grandTotal.TotalNomenBilled.toLocaleString('id-ID')}</td>
+                    <td>${grandTotal.TotalNomen.toLocaleString('id-ID')}</td>
                     <td>${grandTotal.CollectedNomen.toLocaleString('id-ID')}</td>
                     <td class="percentage-cell">${formatPercent(grandTotal.PercentNomenCount)}</td>
                 </tr>
@@ -343,7 +245,7 @@
             reportArea.innerHTML = summaryHTML + tableHTML;
         }
 
-        // --- FUNGSI 2: MEMUAT DETAIL TRANSAKSIONAL (LOGIKA LAMA FILTER) ---
+        // --- FUNGSI 2: MEMUAT DETAIL TRANSAKSIONAL ---
         async function fetchCollectionDetails(query = '') {
             detailsArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Detail Transaksi...</p>';
             
@@ -357,7 +259,7 @@
                 }
                 
                 if (data.length === 0) {
-                    detailsArea.innerHTML = '<p class="no-results">Tidak ada data koleksi yang ditemukan dengan filter tersebut (Maksimal 1000 baris).</p>';
+                    detailsArea.innerHTML = '<p class="no-results">Tidak ada data koleksi yang ditemukan dengan filter tersebut.</p>';
                     return;
                 }
 
@@ -369,7 +271,6 @@
             }
         }
         
-        // Fungsi rendering untuk transaksi detail (Logika lama)
         function renderDetailTable(data) {
             
             let totalNominal = 0;
@@ -385,7 +286,7 @@
 
             let tableHTML = `
                 <h3 style="margin-top: 20px;">Listing Transaksi (${data.length} Transaksi)</h3>
-                <div class="result-table-wrapper">
+                <div class="report-table-wrapper">
                 <table class="collection-table">
                     <thead>
                         <tr>
@@ -413,6 +314,7 @@
                 `;
             });
             
+            // Baris Ringkasan Total
             tableHTML += `
                 <tr class="total-row">
                     <td colspan="4" style="text-align: left;">Total NOMINAL Terfilter</td>
@@ -433,34 +335,6 @@
             detailsArea.innerHTML = tableHTML;
         }
 
-        // --- FUNGSI 3: MEMUAT DATA MASTER RAW ---
-        async function fetchRawDetails() {
-            try {
-                const [mcResponse, mbResponse, cidResponse] = await Promise.all([
-                    fetch('{{ url_for("api_get_mc_details") }}'),
-                    fetch('{{ url_for("api_get_mb_details_raw") }}'),
-                    fetch('{{ url_for("api_get_cid_details") }}')
-                ]);
-
-                const [mcData, mbData, cidData] = await Promise.all([
-                    mcResponse.json(),
-                    mbResponse.json(),
-                    cidResponse.json()
-                ]);
-
-                // Render per tabel
-                renderRawTable("MC - Piutang", mcData, 'rawMCTable');
-                renderRawTable("MB - Koleksi", mbData, 'rawMBTable');
-                renderRawTable("CID - Pelanggan", cidData, 'rawCIDTable');
-
-            } catch (error) {
-                console.error("Error fetching raw data details:", error);
-                document.getElementById('rawMCTable').innerHTML = '<p class="no-results" style="color: red;">Gagal memuat Data MC.</p>';
-                document.getElementById('rawMBTable').innerHTML = '<p class="no-results" style="color: red;">Gagal memuat Data MB.</p>';
-                document.getElementById('rawCIDTable').innerHTML = '<p class="no-results" style="color: red;">Gagal memuat Data CID.</p>';
-            }
-        }
-
         // Event Listeners
         searchBtn.addEventListener('click', () => {
             fetchCollectionDetails(filterInput.value.trim());
@@ -472,11 +346,10 @@
             }
         });
         
-        // Muat semua bagian saat halaman dimuat
+        // Muat kedua bagian saat halaman dimuat
         document.addEventListener('DOMContentLoaded', () => {
              fetchCollectionReport(); 
              fetchCollectionDetails(''); 
-             fetchRawDetails(); // Panggil fungsi baru
         });
 
     </script>
