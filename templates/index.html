@@ -63,6 +63,25 @@
 .status-warning { color: var(--accent-color); border-color: var(--accent-color); }
 .status-danger { color: #dc3545; border-color: #dc3545; }
 
+/* Navigation Styles */
+.details-nav button {
+    padding: 10px 15px;
+    margin: 5px;
+    border: 1px solid var(--primary-color);
+    border-radius: 4px;
+    background-color: transparent;
+    color: var(--primary-color);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.details-nav button.active {
+    background-color: var(--primary-color);
+    color: white;
+}
+.details-nav button:hover:not(.active) {
+    background-color: #f0f0f0;
+}
+
 /* Detail Data Table */
 .data-table-wrapper {
     overflow-x: auto;
@@ -141,6 +160,14 @@
         <div class="summary-grid" id="healthSummary">
             </div>
 
+        <div class="details-nav" id="detailsNav" style="margin-top: 20px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
+            <button onclick="showDetail('CID')">Data Profil</button>
+            <button onclick="showDetail('MC')">Riwayat Piutang (MC)</button>
+            <button onclick="showDetail('MB')">Riwayat Pembayaran</button>
+            <button onclick="showDetail('ARDEBT')">Detail Tunggakan</button>
+            <button onclick="showDetail('SBRS')">Riwayat Kubikasi</button>
+        </div>
+
         <div id="detailsContainer">
             </div>
     </div>
@@ -158,6 +185,10 @@
         const detailsContainer = document.getElementById('detailsContainer');
         const nomenTitle = document.getElementById('nomenTitle');
         const initialMessage = document.getElementById('initialMessage');
+        const detailsNav = document.getElementById('detailsNav');
+        
+        // Simpan data yang sudah diambil di sini
+        let fetchedData = null; 
 
         function formatCurrency(amount) {
             if (typeof amount === 'number') {
@@ -172,15 +203,15 @@
             return 'status-ok';
         }
         
-        function renderTable(title, data, singleRow = false) {
+        function renderTable(title, data, id) {
             if (!data || (Array.isArray(data) && data.length === 0)) {
-                return `<h4 style="margin-top: 20px; color: #2c3e50;">${title}</h4><p>Tidak ada data ditemukan.</p>`;
+                return `<div id="table-${id}" class="detail-table-section"><h4 style="margin-top: 20px; color: #2c3e50;">${title}</h4><p>Tidak ada data ditemukan.</p></div>`;
             }
             
             const listData = Array.isArray(data) ? data : [data];
             const headers = Object.keys(listData[0]);
             
-            let tableHtml = `<h4 style="margin-top: 20px; color: #2c3e50;">${title} (${listData.length} baris)</h4>`;
+            let tableHtml = `<div id="table-${id}" class="detail-table-section"><h4 style="margin-top: 20px; color: #2c3e50;">${title} (${listData.length} baris)</h4>`;
             tableHtml += '<div class="data-table-wrapper"><table class="data-table"><thead><tr>';
             
             // Header Row
@@ -202,11 +233,13 @@
                 tableHtml += '</tr>';
             });
 
-            tableHtml += '</tbody></table></div>';
+            tableHtml += '</tbody></table></div></div>';
             return tableHtml;
         }
 
         function renderResults(data) {
+            fetchedData = data;
+            
             // 1. Render Health Summary
             const totalPiutang = formatCurrency(data.summary.TOTAL_PIUTANG_NOMINAL);
             const statusFinansial = data.summary.STATUS_FINANSIAL;
@@ -242,24 +275,47 @@
                 </div>
             `;
             
-            // 2. Render Detail Tables
+            // 2. Render ALL Detail Tables to the Container
+            // They are all rendered first, then visibility is managed by showDetail()
             detailsContainer.innerHTML = '';
-            
-            // CID Data (Master Statis)
-            detailsContainer.innerHTML += renderTable("Master Data Pelanggan (CID)", data.cid_data);
-
-            // MC Data (Piutang Berjalan Bulan Ini)
-            detailsContainer.innerHTML += renderTable("Piutang Berjalan (MC - Bulan Ini)", data.mc_data);
-            
-            // ARDEBT Data (Tunggakan Historis)
-            detailsContainer.innerHTML += renderTable("Detail Tunggakan (ARDEBT)", data.ardebt_data);
-
-            // SBRS Data (Riwayat Baca Meter)
-            detailsContainer.innerHTML += renderTable("Riwayat Baca Meter (SBRS - Terakhir)", data.sbrs_data);
+            detailsContainer.innerHTML += renderTable("Master Data Pelanggan (CID)", data.cid_data, 'CID');
+            detailsContainer.innerHTML += renderTable("Riwayat Piutang (MC - Semua Periode)", data.mc_data, 'MC');
+            detailsContainer.innerHTML += renderTable("Riwayat Pembayaran (MB - Semua Transaksi)", data.mb_data, 'MB');
+            detailsContainer.innerHTML += renderTable("Detail Tunggakan (ARDEBT - Semua Periode)", data.ardebt_data, 'ARDEBT');
+            detailsContainer.innerHTML += renderTable("Riwayat Baca Meter (SBRS)", data.sbrs_data, 'SBRS');
             
             resultsArea.style.display = 'block';
             initialMessage.style.display = 'none';
+
+            // Otomatis tampilkan tabel pertama saat hasil dimuat
+            showDetail('CID');
         }
+        
+        window.showDetail = function(sectionId) {
+            // Sembunyikan semua section detail
+            const allSections = detailsContainer.querySelectorAll('.detail-table-section');
+            allSections.forEach(section => {
+                section.style.display = 'none';
+            });
+            
+            // Atur tombol aktif
+            const allButtons = detailsNav.querySelectorAll('button');
+            allButtons.forEach(button => {
+                button.classList.remove('active');
+            });
+
+            // Tampilkan section yang dipilih
+            const targetSection = document.getElementById(`table-${sectionId}`);
+            const activeButton = detailsNav.querySelector(`button[onclick*="'${sectionId}'"]`);
+            
+            if (targetSection) {
+                targetSection.style.display = 'block';
+            }
+            if (activeButton) {
+                activeButton.classList.add('active');
+            }
+        }
+
 
         async function performSearch() {
             const nomen = nomenInput.value.trim();
