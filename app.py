@@ -722,7 +722,6 @@ def analyze_mc_grouping_api():
         pipeline_grouping = [
             # Normalisasi NOMEN di MC sebelum lookup
             {'$project': {
-                # Normalisasi NOMEN di MC
                 'NOMEN': {'$trim': {'input': {'$toString': {'$ifNull': ['$NOMEN', 'UNKNOWN_NOMEN']}}}}, 
                 'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
                 'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
@@ -749,13 +748,13 @@ def analyze_mc_grouping_api():
             # --- END NORMALISASI ---
             
             {'$match': {
-                #'CLEAN_TIPEPLGGN': 'REG', # FILTER INI DINONAKTIFKAN UNTUK DIAGNOSIS
+                'CLEAN_TIPEPLGGN': 'REG',
                 'CLEAN_RAYON': {'$in': ['34', '35']}
             }},
             
             {'$group': {
                 '_id': {
-                    'TIPEPLGGN': '$CLEAN_TIPEPLGGN', # Tipe pelanggan dipertahankan untuk dilihat
+                    'TIPEPLGGN': '$CLEAN_TIPEPLGGN', 
                     'RAYON': '$CLEAN_RAYON',
                     'TARIF': '$CLEAN_TARIF',
                     'MERK': '$CLEAN_MERK',
@@ -783,6 +782,53 @@ def analyze_mc_grouping_api():
             {'$sort': {'RAYON': 1, 'TARIF': 1}}
         ]
         grouping_data = list(collection_mc.aggregate(pipeline_grouping))
+        
+        # --- LOGIKA DIAGNOSTIK ---
+        if not grouping_data:
+            # Kueri diagnostik tanpa filter Rayon dan Tipe
+            diagnostic_pipeline = [
+                {'$project': {
+                    'NOMEN': {'$trim': {'input': {'$toString': {'$ifNull': ['$NOMEN', 'UNKNOWN_NOMEN']}}}}, 
+                    'KUBIK': 1, 'NOMINAL': 1, 'TARIF': 1,
+                }},
+                {'$lookup': {
+                   'from': 'CustomerData', 
+                   'localField': 'NOMEN',
+                   'foreignField': 'NOMEN',
+                   'as': 'customer_info'
+                }},
+                {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+                {'$addFields': {
+                    'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'UNKNOWN']}}}}},
+                    'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'UNKNOWN']}}}},
+                }},
+                {'$match': { # Filter hanya memastikan NOMEN ada di CID dan MC
+                   'NOMEN': {'$ne': 'UNKNOWN_NOMEN'},
+                   'CLEAN_RAYON': {'$ne': 'UNKNOWN'}, 
+                   'CLEAN_TIPEPLGGN': {'$ne': 'UNKNOWN'}
+                }},
+                {'$group': {
+                    '_id': {
+                        'TIPEPLGGN': '$CLEAN_TIPEPLGGN', 
+                        'RAYON': '$CLEAN_RAYON',
+                    },
+                    'Count': {'$sum': 1}
+                }}
+            ]
+            diagnostic_result = list(collection_mc.aggregate(diagnostic_pipeline))
+            
+            if diagnostic_result:
+                 rayon_tipe_list = [f"{d['_id']['RAYON']} ({d['_id']['TIPEPLGGN']})" for d in diagnostic_result]
+                 message = (
+                    f"Tidak ada data ditemukan untuk Rayon 34/35 REG. "
+                    f"Data Rayon/TipePLGGN yang terdeteksi di database adalah: {', '.join(rayon_tipe_list)}. "
+                    f"Silakan periksa apakah nilai Rayon ('34' atau '35') atau TipePLGGN ('REG') Anda sudah benar."
+                 )
+                 return jsonify({"message": message}), 404
+            else:
+                 return jsonify({"message": "Gagal memuat report: Tidak ada data kustom ditemukan. (Join/Filter NOMEN gagal total)"}), 404
+        # --- END LOGIKA DIAGNOSTIK ---
+
         return jsonify(grouping_data), 200
 
     except Exception as e:
@@ -820,7 +866,7 @@ def analyze_mc_grouping_summary_api():
             # --- END NORMALISASI ---
             
             {'$match': {
-                #'CLEAN_TIPEPLGGN': 'REG', # FILTER INI DINONAKTIFKAN UNTUK DIAGNOSIS
+                'CLEAN_TIPEPLGGN': 'REG',
                 'CLEAN_RAYON': {'$in': ['34', '35']}
             }},
             {'$group': {
@@ -842,7 +888,8 @@ def analyze_mc_grouping_summary_api():
             return jsonify({
                 'TotalPiutangKustomNominal': 0,
                 'TotalPiutangKustomKubik': 0,
-                'TotalNomenKustom': 0
+                'TotalNomenKustom': 0,
+                'message': 'Tidak ada data yang cocok dengan Rayon 34/35 REG setelah normalisasi.'
             }), 200
 
         return jsonify(summary_result[0]), 200
@@ -882,7 +929,7 @@ def analyze_mc_tarif_breakdown_api():
             
             # 2. Filter Kriteria Kustom
             {'$match': {
-                #'CLEAN_TIPEPLGGN': 'REG', # FILTER INI DINONAKTIFKAN UNTUK DIAGNOSIS
+                'CLEAN_TIPEPLGGN': 'REG',
                 'CLEAN_RAYON': {'$in': ['34', '35']}
             }},
             
@@ -891,7 +938,7 @@ def analyze_mc_tarif_breakdown_api():
                 '_id': {
                     'RAYON': '$CLEAN_RAYON',
                     'TARIF': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$TARIF', 'N/A']}}}}},
-                    'TIPEPLGGN': '$CLEAN_TIPEPLGGN', # Tipe pelanggan dipertahankan untuk dilihat
+                    'TIPEPLGGN': '$CLEAN_TIPEPLGGN',
                 },
                 'CountOfNOMEN': {'$addToSet': '$NOMEN'},
             }},
@@ -907,6 +954,52 @@ def analyze_mc_tarif_breakdown_api():
             {'$sort': {'RAYON': 1, 'TARIF': 1}}
         ]
         breakdown_data = list(collection_mc.aggregate(pipeline_tarif_breakdown))
+        
+        # Tambahkan pemeriksaan data (sama seperti yang di-grouping API)
+        if not breakdown_data:
+            # Kueri diagnostik tanpa filter Rayon dan Tipe
+            diagnostic_pipeline = [
+                {'$project': {
+                    'NOMEN': {'$trim': {'input': {'$toString': {'$ifNull': ['$NOMEN', 'UNKNOWN_NOMEN']}}}}, 
+                    'TARIF': 1,
+                }},
+                {'$lookup': {
+                   'from': 'CustomerData', 
+                   'localField': 'NOMEN',
+                   'foreignField': 'NOMEN',
+                   'as': 'customer_info'
+                }},
+                {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+                {'$addFields': {
+                    'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'UNKNOWN']}}}}},
+                    'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'UNKNOWN']}}}},
+                }},
+                {'$match': { # Filter hanya memastikan NOMEN ada di CID dan MC
+                   'NOMEN': {'$ne': 'UNKNOWN_NOMEN'},
+                   'CLEAN_RAYON': {'$ne': 'UNKNOWN'}, 
+                   'CLEAN_TIPEPLGGN': {'$ne': 'UNKNOWN'}
+                }},
+                {'$group': {
+                    '_id': {
+                        'TIPEPLGGN': '$CLEAN_TIPEPLGGN', 
+                        'RAYON': '$CLEAN_RAYON',
+                    },
+                    'Count': {'$sum': 1}
+                }}
+            ]
+            diagnostic_result = list(collection_mc.aggregate(diagnostic_pipeline))
+            
+            if diagnostic_result:
+                 rayon_tipe_list = [f"{d['_id']['RAYON']} ({d['_id']['TIPEPLGGN']})" for d in diagnostic_result]
+                 message = (
+                    f"Tidak ada data ditemukan untuk Rayon 34/35 REG. "
+                    f"Data Rayon/TipePLGGN yang terdeteksi di database adalah: {', '.join(rayon_tipe_list)}. "
+                    f"Silakan periksa apakah nilai Rayon ('34' atau '35') atau TipePLGGN ('REG') Anda sudah benar."
+                 )
+                 return jsonify({"message": message}), 404
+            else:
+                 return jsonify({"message": "Gagal memuat report: Tidak ada data kustom ditemukan. (Join/Filter NOMEN gagal total)"}), 404
+        
         return jsonify(breakdown_data), 200
 
     except Exception as e:
