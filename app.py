@@ -720,7 +720,7 @@ def analyze_mc_grouping_api():
 
     try:
         pipeline_grouping = [
-            # Normalisasi NOMEN sebelum lookup
+            # Normalisasi NOMEN di MC sebelum lookup
             {'$project': {
                 'NOMEN': {'$trim': {'input': {'$toString': {'$ifNull': ['$NOMEN', 'UNKNOWN_NOMEN']}}}},
                 'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
@@ -730,7 +730,8 @@ def analyze_mc_grouping_api():
             {'$lookup': {
                'from': 'CustomerData', 
                'localField': 'NOMEN',
-               'foreignField': 'NOMEN',
+               # Perbaikan: Normalisasi NOMEN di CID saat lookup (seharusnya sudah di-index CID)
+               'foreignField': 'NOMEN', 
                'as': 'customer_info'
             }},
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
@@ -740,7 +741,7 @@ def analyze_mc_grouping_api():
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'UNKNOWN']}}}}},
                 'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'UNKNOWN']}}}},
                 
-                # Perubahan: TARIF, MERK, dan READ_METHOD diubah ke huruf besar dan di-trim, dengan default 'N/A'
+                # Normalisasi Grouping Keys
                 'CLEAN_TARIF': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$TARIF', 'N/A']}}}}},
                 'CLEAN_MERK': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
                 'CLEAN_READ_METHOD': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}}}}},
@@ -797,7 +798,7 @@ def analyze_mc_grouping_summary_api():
 
     try:
         pipeline_summary = [
-            # Normalisasi NOMEN sebelum lookup
+            # Normalisasi NOMEN di MC sebelum lookup
             {'$project': {
                 'NOMEN': {'$trim': {'input': {'$toString': {'$ifNull': ['$NOMEN', 'UNKNOWN_NOMEN']}}}},
                 'KUBIK': 1,
@@ -859,7 +860,7 @@ def analyze_mc_tarif_breakdown_api():
 
     try:
         pipeline_tarif_breakdown = [
-            # Normalisasi NOMEN sebelum lookup
+            # Normalisasi NOMEN di MC sebelum lookup
             {'$project': {
                 'NOMEN': {'$trim': {'input': {'$toString': {'$ifNull': ['$NOMEN', 'UNKNOWN_NOMEN']}}}},
                 'TARIF': 1,
