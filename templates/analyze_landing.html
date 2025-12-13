@@ -105,6 +105,22 @@
 
     <div class="report-grid-menu">
         
+        <a href="{{ url_for('analyze_full_mc_report') }}" class="report-card-link">
+            <div class="report-card">
+                <i class="fas fa-layer-group" style="color: #007bff;"></i>
+                <h3>Laporan Grup MC (Piutang)</h3>
+                <p>Data Piutang teragregasi per Rayon/Tarif/Merk (Master Cetak).</p>
+            </div>
+        </a>
+        
+        <a href="{{ url_for('analyze_full_mb_report') }}" class="report-card-link">
+            <div class="report-card">
+                <i class="fas fa-money-check-alt" style="color: #28a745;"></i>
+                <h3>Laporan Grup MB (Koleksi)</h3>
+                <p>Koleksi MB teragregasi per Rayon dan Kategori Bayar (Undue, Current, Tunggakan).</p>
+            </div>
+        </a>
+        
         <a href="{{ url_for('analyze_extreme_usage') }}" class="report-card-link">
             <div class="report-card">
                 <i class="fas fa-exclamation-triangle" style="color: var(--accent-color);"></i>
