@@ -70,7 +70,7 @@ try:
     # SBRS (MeterReading): Untuk Anomaly Check
     collection_sbrs.create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', -1)], name='idx_sbrs_history')
     
-    # ARDEBT (AccountReceivable): Untuk Cek TungGakan
+    # ARDEBT (AccountReceivable): Untuk Cek Tunggakan
     collection_ardebt.create_index([('NOMEN', 1)], name='idx_ardebt_nomen')
     
     # ==========================================================
@@ -720,8 +720,9 @@ def analyze_mc_grouping_api():
 
     try:
         pipeline_grouping = [
+            # Normalisasi NOMEN sebelum lookup
             {'$project': {
-                'NOMEN': {'$toString': '$NOMEN'},
+                'NOMEN': {'$trim': {'input': {'$toString': {'$ifNull': ['$NOMEN', 'UNKNOWN_NOMEN']}}}},
                 'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
                 'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
                 'TARIF': {'$toString': '$TARIF'},
@@ -736,10 +737,10 @@ def analyze_mc_grouping_api():
             
             # --- NORMALISASI DATA UNTUK FILTER DAN GROUPING ---
             {'$addFields': {
-                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '']}}}}},
-                'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '']}}}},
+                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'UNKNOWN']}}}}},
+                'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'UNKNOWN']}}}},
                 
-                # Perbaikan: TARIF, MERK, dan READ_METHOD diubah ke huruf besar dan di-trim
+                # Perubahan: TARIF, MERK, dan READ_METHOD diubah ke huruf besar dan di-trim, dengan default 'N/A'
                 'CLEAN_TARIF': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$TARIF', 'N/A']}}}}},
                 'CLEAN_MERK': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
                 'CLEAN_READ_METHOD': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}}}}},
@@ -796,6 +797,12 @@ def analyze_mc_grouping_summary_api():
 
     try:
         pipeline_summary = [
+            # Normalisasi NOMEN sebelum lookup
+            {'$project': {
+                'NOMEN': {'$trim': {'input': {'$toString': {'$ifNull': ['$NOMEN', 'UNKNOWN_NOMEN']}}}},
+                'KUBIK': 1,
+                'NOMINAL': 1,
+            }},
             {'$lookup': {
                'from': 'CustomerData', 
                'localField': 'NOMEN',
@@ -806,8 +813,8 @@ def analyze_mc_grouping_summary_api():
             
             # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
-                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '']}}}}},
-                'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '']}}}},
+                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'UNKNOWN']}}}}},
+                'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'UNKNOWN']}}}},
             }},
             # --- END NORMALISASI ---
             
@@ -852,7 +859,11 @@ def analyze_mc_tarif_breakdown_api():
 
     try:
         pipeline_tarif_breakdown = [
-            # 1. Join MC ke CID
+            # Normalisasi NOMEN sebelum lookup
+            {'$project': {
+                'NOMEN': {'$trim': {'input': {'$toString': {'$ifNull': ['$NOMEN', 'UNKNOWN_NOMEN']}}}},
+                'TARIF': 1,
+            }},
             {'$lookup': {
                'from': 'CustomerData', 
                'localField': 'NOMEN',
@@ -863,8 +874,8 @@ def analyze_mc_tarif_breakdown_api():
             
             # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
-                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '']}}}}},
-                'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '']}}}},
+                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'UNKNOWN']}}}}},
+                'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'UNKNOWN']}}}},
             }},
             # --- END NORMALISASI ---
             
