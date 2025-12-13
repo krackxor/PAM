@@ -1,30 +1,30 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}ACCESS GRANTED | TERMINAL INTERFACE{% endblock %}</title>
+    <title>{% block title %}Aplikasi Data Internal{% endblock %}</title>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 
     <style>
         :root {
-            --primary-color: #00ff00; /* Neon Green - Main Accent */
-            --secondary-color: #00ffff; /* Neon Cyan - Secondary Accent */
-            --accent-color: #ff00ff; /* Magenta/Fuchsia - Warning/Alert */
-            --bg-color: #000000; /* Pure Black Background */
-            --header-bg: #111111; /* Darker header */
-            --card-bg: #0a0a0a; /* Deep dark card background */
-            --footer-height: 65px;
-            --text-color-light: #00ff00; /* Green */
-            --text-color: #00ffff; /* Cyan */
-            --shadow-light: 0 0 5px rgba(0, 255, 0, 0.5);
-            --shadow-medium: 0 0 15px rgba(0, 255, 255, 0.7);
-            --border-radius: 0px; /* Sharp edges */
+            --primary-color: #007bff; /* Biru cerah */
+            --secondary-color: #28a745; /* Hijau */
+            --accent-color: #ffc107; /* Kuning/Warning */
+            --bg-color: #f4f7f9; 
+            --header-bg: #2c3e50;
+            --card-bg: #ffffff;
+            --footer-height: 60px;
+            --text-color-light: #ecf0f1;
+            --text-color: #212529; /* Teks lebih gelap */
+            --shadow-light: 0 1px 3px rgba(0, 0, 0, 0.08);
+            --shadow-medium: 0 4px 12px rgba(0, 0, 0, 0.15);
+            --border-radius: 8px;
         }
 
         body {
-            font-family: 'Consolas', 'Courier New', monospace;
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; /* Font yang lebih modern */
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
@@ -32,21 +32,18 @@
             display: flex;
             flex-direction: column; 
             min-height: 100vh;
-            text-shadow: 0 0 2px var(--primary-color);
         }
         
         .header-brand {
             background-color: var(--header-bg);
-            padding: 15px 20px; 
+            padding: 12px 20px; 
             color: var(--text-color-light);
-            box-shadow: 0 0 10px var(--primary-color);
+            box-shadow: var(--shadow-light);
             text-align: center;
-            text-transform: uppercase;
         }
         .header-logo {
-            font-size: 1.5em; 
+            font-size: 1.3em; 
             font-weight: 700;
-            letter-spacing: 2px;
         }
         
         .footer-nav {
@@ -56,8 +53,8 @@
             right: 0;
             height: var(--footer-height);
             background-color: var(--card-bg); 
-            border-top: 2px solid var(--secondary-color);
-            box-shadow: 0 0 20px var(--secondary-color);
+            border-top: 1px solid #e0e0e0;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.08); /* Shadow yang lebih halus */
             z-index: 1000;
             display: flex;
             justify-content: space-around; 
@@ -69,44 +66,42 @@
             flex-direction: column;
             align-items: center;
             text-decoration: none;
-            color: #555555; /* Dim color */
+            color: #999; 
             font-size: 0.75em;
             padding: 5px 0;
             flex-grow: 1; 
-            transition: color 0.2s, text-shadow 0.2s;
+            transition: color 0.2s, transform 0.1s;
         }
 
         .nav-item i {
-            font-size: 1.5em; 
+            font-size: 1.3em; 
             margin-bottom: 3px;
         }
         
         .nav-item.active {
             color: var(--primary-color);
-            font-weight: 700;
-            text-shadow: 0 0 5px var(--primary-color);
-            transform: translateY(-2px); 
+            font-weight: 600;
+            transform: translateY(-2px); /* Efek minor saat aktif */
         }
         
         .nav-item:hover {
-            color: var(--secondary-color);
-            text-shadow: 0 0 8px var(--secondary-color);
+            color: var(--primary-color);
         }
 
         .main-content {
             flex-grow: 1;
-            padding: 10px; /* Reduced padding for mobile */
+            padding: 20px 10px; 
             width: 100%;
             box-sizing: border-box;
+            padding-top: 20px; 
             display: flex;
             justify-content: center;
         }
         
         .container {
             background-color: var(--card-bg);
-            padding: 15px; /* Reduced padding for mobile */
+            padding: 30px;
             border-radius: var(--border-radius);
-            border: 1px solid var(--secondary-color);
             box-shadow: var(--shadow-medium);
             width: 100%; 
             max-width: 900px; 
@@ -116,50 +111,43 @@
         /* Gaya Card Umum */
         .card {
             background-color: var(--card-bg);
-            border: 1px solid var(--primary-color);
+            border: 1px solid #e0e0e0;
             border-radius: var(--border-radius);
-            padding: 15px;
+            padding: 20px;
             box-shadow: var(--shadow-light);
             transition: transform 0.3s, box-shadow 0.3s;
         }
         .card:hover {
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.8);
+            box-shadow: var(--shadow-medium);
         }
 
         /* Flash Messages */
         .flash-message {
             padding: 10px;
-            margin: 10px 5px;
-            border-radius: 0px;
+            margin-bottom: 20px;
+            border-radius: 4px;
             text-align: center;
             font-weight: 600;
-            text-shadow: none;
         }
-        /* Success: Green */
-        .flash-success { background-color: #003300; color: var(--primary-color); border: 1px solid var(--primary-color); box-shadow: 0 0 5px var(--primary-color); }
-        /* Danger: Magenta */
-        .flash-danger { background-color: #330033; color: var(--accent-color); border: 1px solid var(--accent-color); box-shadow: 0 0 5px var(--accent-color); }
-        /* Info: Cyan */
-        .flash-info { background-color: #003333; color: var(--secondary-color); border: 1px solid var(--secondary-color); box-shadow: 0 0 5px var(--secondary-color); }
+        .flash-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .flash-danger { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .flash-info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
 
         /* Gaya Tombol Umum */
         .btn-primary {
             background-color: var(--primary-color);
-            color: var(--bg-color); /* Black text on green button */
+            color: white;
             border: none;
             padding: 10px 20px;
-            border-radius: 0px;
+            border-radius: 4px;
             cursor: pointer;
-            font-weight: 700;
-            transition: background-color 0.3s, box-shadow 0.3s;
+            font-weight: 600;
+            transition: background-color 0.3s;
             text-decoration: none; 
             display: inline-block;
-            box-shadow: 0 0 5px var(--primary-color);
         }
         .btn-primary:hover {
-            background-color: var(--secondary-color);
-            color: var(--bg-color);
-            box-shadow: 0 0 10px var(--secondary-color);
+            background-color: #0056b3;
         }
 
         /* Badge Notifikasi */
@@ -167,29 +155,18 @@
             position: absolute; 
             top: 0px; 
             right: 10px; 
-            background-color: var(--accent-color); 
-            color: var(--bg-color); 
+            background-color: #dc3545; 
+            color: white; 
             border-radius: 50%; 
             padding: 0 5px; 
-            font-size: 0.8em; 
+            font-size: 0.7em; 
             font-weight: bold; 
             display: none;
-            box-shadow: 0 0 5px var(--accent-color);
-        }
-        
-        h2, h3, h4 {
-            color: var(--secondary-color);
-            text-shadow: 0 0 3px var(--secondary-color);
-            text-transform: uppercase;
-            border-bottom: 1px dashed #333;
-            padding-bottom: 5px;
-            margin-bottom: 15px;
         }
 
-        /* Responsive Fixes for Small Screens */
         @media (max-width: 600px) {
-            .main-content { padding: 5px; }
-            .container { padding: 10px; }
+            .main-content { padding: 10px; }
+            .container { padding: 15px; }
         }
 
         {% block custom_styles %}{% endblock %}
@@ -200,16 +177,16 @@
     
     <div class="header-brand">
         <div class="header-logo">
-            <i class="fas fa-terminal"></i> HIVE-MIND TERMINAL
+            PAM Internal Analytics
         </div>
     </div>
     
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-            <div style="width: 100%; display: flex; justify-content: center; padding: 5px 0 0 0;">
+            <div style="width: 100%; display: flex; justify-content: center; padding: 20px 0 0 0;">
                 <div style="max-width: 900px; width: 95%;">
                     {% for category, message in messages %}
-                        <div class="flash-message flash-{{ category }}">** ACCESS DENIED: {{ message | upper }} **</div>
+                        <div class="flash-message flash-{{ category }}">{{ message }}</div>
                     {% endfor %}
                 </div>
             </div>
@@ -228,39 +205,39 @@
            class="nav-item {% if request.endpoint == 'analytics_dashboard' %}active{% endif %}"
            style="position: relative;"> 
            <i class="fas fa-tachometer-alt"></i>
-           <span>SYSTEM CORE</span>
+           <span>Dashboard</span>
            <span id="criticalAlertBadge" class="badge">0</span>
         </a>
 
         <a href="{{ url_for('index') }}" 
            class="nav-item {% if request.endpoint == 'index' %}active{% endif %}">
            <i class="fas fa-search"></i>
-           <span>HOST LOOKUP</span>
+           <span>Cari</span>
         </a>
         
         <a href="{{ url_for('daily_collection_unified_page') }}" 
            class="nav-item {% if request.endpoint == 'daily_collection_unified_page' %}active{% endif %}">
            <i class="fas fa-chart-bar"></i>
-           <span>REPORT GEN</span>
+           <span>Report</span>
         </a>
 
         <a href="{{ url_for('analyze_reports_landing') }}" 
            class="nav-item {% if 'analyze' in request.endpoint %}active{% endif %}">
            <i class="fas fa-chart-line"></i>
-           <span>DATA ANALYSIS</span>
+           <span>Analisis</span>
         </a>
         
         {% if is_admin %}
             <a href="{{ url_for('admin_upload_unified_page') }}" 
                class="nav-item {% if request.endpoint == 'admin_upload_unified_page' %}active{% endif %}">
                <i class="fas fa-upload"></i>
-               <span>DATA INJECT</span>
+               <span>Upload</span>
             </a>
         {% endif %}
 
         <a href="{{ url_for('logout') }}" class="nav-item">
             <i class="fas fa-sign-out-alt"></i>
-            <span>LOGOUT</span>
+            <span>Keluar</span>
         </a>
     </div>
     
@@ -279,7 +256,7 @@
                     alertBadge.style.display = 'none';
                 }
             } catch (error) {
-                console.error('ERROR: Could not retrieve system alerts:', error);
+                console.error('Error checking alerts:', error);
                 alertBadge.style.display = 'none';
             }
         }
