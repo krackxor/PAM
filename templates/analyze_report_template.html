@@ -99,7 +99,7 @@
         }
         
         function formatNumber(number) {
-            return (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+            return (parseFloat(number) || 0).toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
         }
         
         // Fungsi pembantu untuk memformat angka persentase
@@ -112,35 +112,29 @@
             dataArea.innerHTML = `<p style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Menghubungkan ke MongoDB untuk ${reportName}...</p>`;
             
             let endpoint = '';
-            let isApiImplemented = true;
+            let isCustomReport = false;
 
-            // Mapping Laporan ke Endpoint API yang baru
+            // Mapping Laporan ke Endpoint API
             if (reportName.includes('Fluktuasi Volume')) {
                 endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}';
             } else if (reportName.includes('Grup Master Cetak')) {
                 endpoint = '{{ url_for("analyze_mc_grouping_api") }}';
+                isCustomReport = true;
             } else if (reportName.includes('Detail Master Bayar')) {
                 endpoint = '{{ url_for("analyze_mb_grouping_api") }}';
             } else if (reportName.includes('Distribusi Pelanggan Tarif Kustom')) {
                 endpoint = '{{ url_for("analyze_mc_tarif_breakdown_api") }}';
-            } else if (reportName.includes('Ekstrim')) {
-                endpoint = '/api/analyze/extreme_usage'; 
-                isApiImplemented = false;
-            } else if (reportName.includes('Zero')) {
-                endpoint = '/api/analyze/zero_usage'; 
-                isApiImplemented = false;
-            } else if (reportName.includes('Stand Tunggu')) {
-                endpoint = '/api/analyze/standby'; 
-                isApiImplemented = false;
+            } else if (reportName.includes('VIP')) {
+                endpoint = '{{ url_for("analyze_vip_payers") }}'; // NEW
+            } else if (reportName.includes('Berisiko Tinggi')) {
+                endpoint = '{{ url_for("analyze_high_risk") }}'; // NEW
+            } else if (reportName.includes('DQC: NOMEN di MC tanpa CID')) {
+                endpoint = '{{ url_for("dqc_mc_missing_cid") }}'; // NEW
             } else {
                  dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini tidak valid atau belum dipetakan.</p>`;
                  return;
             }
 
-            if (!isApiImplemented) {
-                dataArea.innerHTML = `<p style="text-align: center; color: orange;"><i class="fas fa-exclamation-triangle"></i> Laporan ${reportName} belum diimplementasi. Endpoint: ${endpoint}</p>`;
-                return;
-            }
 
             try {
                 const response = await fetch(endpoint);
@@ -325,14 +319,13 @@
              dataArea.innerHTML = html;
         }
 
-        // Rendering Tabel Dinamis Umum
+        // Rendering Tabel Dinamis Umum (untuk MB, SBRS, VIP, RISK, DQC)
         function renderDynamicTable(data, title, dataArea) {
             if (data.length === 0) {
                 dataArea.innerHTML = `<p style="text-align: center;">Tidak ada data ditemukan untuk laporan ${title}.</p>`;
                 return;
             }
 
-            // Dapatkan headers dari kunci objek pertama
             const headers = Object.keys(data[0]);
             
             let tableHTML = `<h3 style="margin-top: 20px;">Detail Data (${data.length} Baris)</h3>`;
@@ -349,13 +342,14 @@
                     
                     if (h === 'PERSEN_SELISIH') {
                         cellValue = formatPercent(cellValue);
-                    } else if (typeof cellValue === 'number' && (h.includes('NOMINAL') || h.includes('JUMLAH'))) {
+                    } else if (typeof cellValue === 'number' && (h.includes('NOMINAL') || h.includes('JUMLAH') || h.includes('AMOUNT'))) {
                         cellValue = formatRupiah(cellValue);
-                    } else if (typeof cellValue === 'number') {
+                    } else if (typeof cellValue === 'number' && h.includes('KUBIK')) {
                         cellValue = formatNumber(cellValue);
+                    } else if (cellValue === null) {
+                        cellValue = 'N/A'; // Handle null/NaN values from Pandas conversion
                     }
                     
-                    // PENTING: Tambahkan data-label untuk mobile view
                     tableHTML += `<td data-label="${h.replace(/_/g, ' ')}">${cellValue}</td>`;
                 });
                 tableHTML += `</tr>`;
