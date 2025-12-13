@@ -1,203 +1,263 @@
 {% extends "base.html" %}
 
-{% block title %}Laporan: {{ title }}{% endblock %}
+{% block title %}Analisis File Dinamis{% endblock %}
 
 {% block custom_styles %}
-/* CSS Khusus untuk Laporan Detail (Dinamis) */
-.report-info {
-    padding: 15px;
-    background-color: #fff3cd;
-    color: #856404;
-    border: 1px solid #ffeeba;
+/* CSS Khusus untuk Halaman Upload Analisis */
+.upload-section { 
+    border: 2px dashed var(--primary-color); 
+    padding: 30px; 
     border-radius: var(--border-radius);
-    margin-bottom: 20px;
+    margin-bottom: 30px;
+    text-align: center;
+    background-color: #f0f8ff; 
+}
+.btn-analyze { 
+    background-color: var(--accent-color); 
+    color: var(--text-color); 
+    border: none; 
+    padding: 12px 25px; 
+    border-radius: 4px; 
+    cursor: pointer; 
+    font-weight: 600;
+    transition: background-color 0.3s; 
+}
+.btn-analyze:hover { 
+    background-color: #e0a800; 
+}
+#analyzeStatus { 
+    margin-top: 15px; 
+    font-weight: 600; 
+    font-size: 1.1em;
 }
 
-.report-actions {
+.analysis-result { 
+    margin-top: 30px; 
+    border-top: 2px solid #ddd; 
+    padding-top: 20px; 
+}
+.data-summary {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: var(--border-radius);
+    padding: 15px;
     margin-bottom: 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px; /* NEW: Add gap for spacing */
+}
+.data-summary div { 
+    padding: 8px 0; 
+    border-bottom: 1px dashed #ced4da; 
+}
+.data-summary div:last-child {
+    border-bottom: none;
 }
 
-/* Wrapper scroll untuk responsivitas tabel */
+/* Style Tabel Hasil Analisis */
 .result-table-wrapper { 
     overflow-x: auto; 
-    margin-top: 20px; 
+    margin-top: 20px;
+    box-shadow: var(--shadow-light);
+    border-radius: var(--border-radius);
+    overflow: hidden;
 }
-
-/* Style Tabel */
-.data-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 14px;
-    min-width: 650px; /* Add min-width to ensure horizontal scroll when needed on desktop */
+table { 
+    width: 100%; 
+    border-collapse: collapse; 
+    font-size: 14px; 
 }
-.data-table th, .data-table td {
-    border: 1px solid #ddd;
-    padding: 8px;
+th, td { 
+    border: 1px solid #f0f0f0; 
+    padding: 10px; 
+    text-align: left; 
     white-space: nowrap; 
 }
-.data-table th {
-    background-color: #f2f2f2;
+th { 
+    background-color: #e9ecef; 
+    font-weight: 600;
 }
 
-/* Mobile Layout Fix */
+/* Tombol Kembali ke Dashboard Analisis */
+.btn-back-analysis {
+    display: inline-block;
+    margin-bottom: 20px;
+    padding: 10px 18px;
+    background-color: #6c757d;
+    color: white;
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: background-color 0.3s;
+}
+.btn-back-analysis:hover {
+    background-color: #5a6268;
+}
+
+/* Mobile Layout for Tables (Card View) */
 @media screen and (max-width: 600px) {
-    /* NEW: Stack buttons */
-    .report-actions {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    .report-actions button {
-        width: 100%;
-        margin-bottom: 10px;
-    }
-    
-    /* NEW: Remove wrapper styling on mobile */
     .result-table-wrapper {
         box-shadow: none;
         border: none;
     }
-
-    /* Card View for data-table */
-    .data-table {
-        min-width: 100%; /* Disable min-width to enable Card View */
+    table {
+        min-width: 100%;
     }
-    .data-table thead {
+    table thead {
         display: none;
     }
-    .data-table tr {
+    table tr {
         display: block;
-        margin-bottom: 15px; /* Increase margin for better card separation */
+        margin-bottom: 10px;
         border: 1px solid #ddd;
         border-radius: var(--border-radius);
     }
-    .data-table td {
+    table td {
         display: flex;
         justify-content: space-between;
         padding: 8px 12px;
         border: none;
         border-bottom: 1px solid #eee;
-        text-align: right; /* Align value to the right */
-        white-space: normal; /* Allow text wrapping */
-        font-size: 13px; /* Slightly smaller font for better fit */
     }
-    .data-table td:before {
+    table td:before {
         content: attr(data-label);
-        font-weight: bold;
+        font-weight: 600;
         text-align: left;
         width: 50%;
-        color: var(--text-color);
         padding-right: 10px;
-        white-space: nowrap; /* Keep label on one line */
     }
 }
 {% endblock %}
 
 {% block content %}
     <h2 style="text-align: left; border-bottom: none; margin-bottom: 10px; color: var(--primary-color);">
-        <i class="fas fa-list-alt" style="margin-right: 10px;"></i> Laporan Anomali: {{ title }}
+        <i class="fas fa-file-upload" style="margin-right: 10px;"></i> Analisis File Dinamis
     </h2>
     
-    <div class="report-info">
-        <p>{{ description }}</p>
-    </div>
+    <a href="{{ url_for('analyze_reports_landing') }}" class="btn-back-analysis">
+        ← Kembali ke Dashboard Analisis
+    </a>
 
-    <div class="report-actions">
-        <button onclick="window.history.back()" class="btn-primary" style="background-color: #6c757d; color: white; padding: 8px 15px; border-radius: 4px; border: none;">
-            ← Kembali ke Analisis
-        </button>
-        <button class="btn-primary" onclick="fetchReportData('{{ title }}')" style="background-color: var(--secondary-color); color: white; padding: 8px 15px; border-radius: 4px; border: none;">
-            Muat Data Laporan
-        </button>
+    <div class="upload-section">
+        <h3>Gabungkan dan Analisis File</h3>
+        <p>Unggah **dua atau lebih** file CSV/XLSX. Aplikasi akan menggabungkannya berdasarkan kolom **NOMEN** dan menyajikan ringkasan statistik.</p>
+        <form id="analyzeForm" enctype="multipart/form-data">
+            <input 
+                type="file" 
+                id="analyzeFile" 
+                name="file" 
+                accept=".csv, .xlsx, .xls" 
+                multiple 
+                required
+            >
+            <button type="submit" class="btn-analyze">Jalankan Analisis Gabungan</button>
+        </form>
+        <div id="analyzeStatus"></div>
     </div>
-
-    <div id="reportDataArea">
-        <p style="text-align: center;">Tekan "Muat Data Laporan" untuk menampilkan hasil dari MongoDB.</p>
+    
+    <div class="analysis-result" id="analysisResult">
+        <p style="text-align: center; color: gray;">Hasil analisis akan muncul di sini.</p>
     </div>
 
     <script>
-        // Fungsi pembantu untuk memformat angka persentase
-        function formatPercent(number) {
-            return (parseFloat(number) || 0).toFixed(2) + '%';
-        }
+        const analyzeForm = document.getElementById('analyzeForm');
+        const analyzeStatus = document.getElementById('analyzeStatus');
+        const analysisResult = document.getElementById('analysisResult');
 
-        async function fetchReportData(reportName) {
-            const dataArea = document.getElementById('reportDataArea');
-            dataArea.innerHTML = `<p style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Menghubungkan ke MongoDB untuk ${reportName}...</p>`;
+        analyzeForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
             
-            let endpoint = '';
-
-            // Mapping Laporan ke Endpoint API yang baru
-            if (reportName.includes('Naik/Turun')) {
-                endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}';
-            } else if (reportName.includes('Ekstrim')) {
-                endpoint = '/api/analyze/extreme_usage'; // Placeholder untuk Ekstrim
-            } else if (reportName.includes('Zero')) {
-                endpoint = '/api/analyze/zero_usage'; // Placeholder untuk Zero
-            } else {
-                 dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini belum diimplementasi.</p>`;
-                 return;
-            }
-
-            try {
-                const response = await fetch(endpoint);
-                const data = await response.json();
-
-                if (response.status === 401) {
-                    window.location.href = '{{ url_for("login") }}';
-                    return;
-                }
-                
-                if (data.length === 0) {
-                    dataArea.innerHTML = `<p style="text-align: center;">Tidak ada data anomali ditemukan untuk laporan ${reportName}.</p>`;
-                    return;
-                }
-                
-                renderDynamicTable(data, reportName);
-
-            } catch (error) {
-                dataArea.innerHTML = `<p style="text-align: center; color: red;">❌ Gagal mengambil data: ${error}</p>`;
-                console.error('Fetch Error:', error);
-            }
-        }
-
-        function renderDynamicTable(data, title) {
-            const dataArea = document.getElementById('reportDataArea');
-            if (data.length === 0) {
-                dataArea.innerHTML = `<p style="text-align: center;">Tidak ada data ditemukan untuk laporan ${title}.</p>`;
+            const fileInput = document.getElementById('analyzeFile');
+            if (fileInput.files.length < 1) {
+                analyzeStatus.innerHTML = '<span style="color: #dc3545;">❌ Harap pilih minimal satu file.</span>';
                 return;
             }
 
-            // Dapatkan headers dari kunci objek pertama
-            const headers = Object.keys(data[0]);
-            
-            let tableHTML = `<div class="result-table-wrapper"><table class="data-table"><thead><tr>`;
-            headers.forEach(h => {
-                tableHTML += `<th>${h.replace(/_/g, ' ')}</th>`;
-            });
-            tableHTML += `</tr></thead><tbody>`;
+            const formData = new FormData(this);
+            analyzeStatus.innerHTML = '<span style="color: orange;"><i class="fas fa-spinner fa-spin"></i> Menganalisis file dan menggabungkan data...</span>';
+            analysisResult.innerHTML = '<p style="text-align: center; color: #6c757d;">Memuat...</p>';
 
-            data.forEach(item => {
-                tableHTML += `<tr>`;
-                headers.forEach(h => {
-                    let cellValue = item[h];
-                    let displayLabel = h.replace(/_/g, ' ');
-                    
-                    if (h === 'PERSEN_SELISIH') {
-                        cellValue = formatPercent(cellValue);
-                    }
-                    
-                    // PENTING: Tambahkan data-label untuk mobile view
-                    tableHTML += `<td data-label="${displayLabel}">${cellValue}</td>`;
+            try {
+                const response = await fetch('{{ url_for("analyze_data") }}', {
+                    method: 'POST',
+                    body: formData
                 });
-                tableHTML += `</tr>`;
-            });
 
-            tableHTML += `</tbody></table></div>`;
-            dataArea.innerHTML = tableHTML;
+                const result = await response.json();
+
+                if (response.ok && result.status === 'success') {
+                    analyzeStatus.innerHTML = `<span style="color: var(--secondary-color);">✅ Analisis Selesai: ${result.summary.file_name}</span>`;
+                    renderAnalysis(result);
+                } else if (response.status === 401) {
+                    window.location.href = '{{ url_for("login") }}'; 
+                } else {
+                    analyzeStatus.innerHTML = `<span style="color: #dc3545;">❌ Error: ${result.message}</span>`;
+                    analysisResult.innerHTML = `<p style="color: #dc3545; text-align: center;">${result.message}</p>`;
+                }
+            } catch (error) {
+                analyzeStatus.innerHTML = `<span style="color: #dc3545;">❌ Gagal terhubung ke server.</span>`;
+                analysisResult.innerHTML = '';
+                console.error('Error:', error);
+            }
+        });
+        
+        function renderAnalysis(data) {
+            
+            // 1. Ringkasan Dasar
+            let summaryHtml = `
+                <h3 style="color: var(--primary-color);">Ringkasan Data Gabungan</h3>
+                <div class="data-summary">
+                    <div><strong>Nama File Hasil:</strong> ${data.summary.file_name}</div>
+                    <div><strong>Kunci Penggabungan:</strong> ${data.summary.join_key}</div>
+                    <div><strong>Jumlah Total Baris:</strong> ${data.summary.row_count.toLocaleString('id-ID')}</div>
+                    <div><strong>Jumlah Kolom:</strong> ${data.summary.column_count}</div>
+                    <div><strong>Kolom Ditemukan:</strong> ${data.summary.columns.join(', ')}</div>
+                </div>
+                
+                <h3 style="margin-top: 30px; color: var(--primary-color);">5 Baris Data Pertama (Head)</h3>
+                <div class="result-table-wrapper">${data.head}</div>
+                
+                <h3 style="margin-top: 30px; color: var(--primary-color);">Statistik Deskriptif</h3>
+                <div id="stats-table"></div>
+            `;
+            analysisResult.innerHTML = summaryHtml;
+            
+            // 2. Statistik Deskriptif (Tabel Pandas Describe)
+            const stats = JSON.parse(data.stats);
+            const statsElement = document.getElementById('stats-table');
+            
+            let statsTableHtml = '<div class="result-table-wrapper"><table><thead><tr><th>Statistik</th>';
+            
+            const columnNames = Object.keys(stats);
+            columnNames.forEach(col => {
+                statsTableHtml += `<th>${col}</th>`;
+            });
+            statsTableHtml += '</tr></thead><tbody>';
+            
+            const statNames = Object.keys(stats[columnNames[0]]);
+            
+            statNames.forEach(stat => {
+                statsTableHtml += `<tr><td data-label="Statistik"><strong>${stat.charAt(0).toUpperCase() + stat.slice(1)}</strong></td>`;
+                columnNames.forEach(col => {
+                    let value = stats[col][stat];
+                    let displayValue;
+                    
+                    if (value === null || typeof value === 'undefined') {
+                         displayValue = `-`;
+                    } else if (typeof value === 'number' && stat !== 'top' && stat !== 'freq') {
+                         // Format angka besar dengan pemisah ribuan, dan float dengan 2 desimal
+                         if (Math.abs(value) >= 1000) {
+                            displayValue = value.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+                         } else {
+                            displayValue = value.toFixed(2);
+                         }
+                    } else {
+                        displayValue = value;
+                    }
+                    statsTableHtml += `<td data-label="${col}">${displayValue}</td>`;
+                });
+                statsTableHtml += `</tr>`;
+            });
+            
+            statsTableHtml += '</tbody></table></div>';
+            statsElement.innerHTML = statsTableHtml;
         }
 
     </script>
