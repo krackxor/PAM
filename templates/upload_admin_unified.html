@@ -115,7 +115,7 @@
     border: 1px solid #ffeeba;
     padding: 8px;
     text-align: left;
-    white-space: nowrap; /* Penting untuk Card View/Horizontal Scroll */
+    white-space: nowrap; 
 }
 .anomaly-table th {
     background-color: #ffecb3;
@@ -137,77 +137,11 @@
     font-size: 0.9em;
 }
 
-/* NEW: Form stacking for better mobile experience */
-.monthly-group form {
-    display: flex;
-    flex-direction: column;
-    gap: 10px; 
-    align-items: center; 
-}
-.monthly-group input[type="file"] {
-    width: 100%; 
-    max-width: 300px; 
-    margin: 10px 0 0 0; 
-    box-sizing: border-box;
-}
-.monthly-group button {
-    width: 100%;
-    max-width: 300px; 
-}
 
-
-/* Mobile overrides */
-@media (max-width: 600px) {
+@media (max-width: 480px) {
     .tab-button {
         padding: 8px 12px;
         font-size: 0.9em;
-    }
-    
-    /* 1. Ensure file input and button stack properly */
-    .monthly-group input[type="file"],
-    .monthly-group button {
-        max-width: 100%; /* Force full width on mobile */
-    }
-
-    /* 2. Anomaly Table (Card View) */
-    .anomaly-section .result-table-wrapper {
-        border: none;
-        box-shadow: none;
-    }
-    
-    /* Force table to behave like a block of cards */
-    .anomaly-table {
-        min-width: 100%;
-        width: 100%;
-    }
-    .anomaly-table thead {
-        display: none;
-    }
-    .anomaly-table tr {
-        display: block;
-        margin-bottom: 15px;
-        border: 1px solid #ddd;
-        border-radius: var(--border-radius);
-    }
-    .anomaly-table td {
-        display: flex;
-        justify-content: space-between;
-        padding: 8px 12px;
-        border: none;
-        border-bottom: 1px solid #eee;
-        text-align: right;
-        font-size: 0.9em;
-    }
-    .anomaly-table td:before {
-        content: attr(data-label);
-        font-weight: 600;
-        text-align: left;
-        width: 50%;
-        color: var(--text-color);
-        padding-right: 10px;
-    }
-    .anomaly-table tr:last-child td {
-        border-bottom: none;
     }
 }
 {% endblock %}
@@ -329,51 +263,32 @@
             if (!anomalies || anomalies.length === 0) {
                 return `<p style="text-align: center; color: var(--secondary-color); font-weight: 600;">Tidak ada anomali pemakaian air yang ditemukan.</p>`;
             }
-            
-            // Define headers and their corresponding keys in the data object
-            const headers = [
-                { label: 'NOMEN', key: 'NOMEN' },
-                { label: 'NAMA', key: 'NAMA' },
-                { label: 'RAYON', key: 'RAYON' },
-                { label: 'STATUS ANOMALI', key: 'STATUS_PEMAKAIAN', isStatus: true },
-                { label: 'KUBIK TERBARU', key: 'KUBIK_TERBARU' },
-                { label: 'KUBIK SEBELUMNYA', key: 'KUBIK_SEBELUMNYA' },
-                { label: 'SELISIH (m³)', key: 'SELISIH_KUBIK' },
-                { label: '% SELISIH', key: 'PERSEN_SELISIH', isPercent: true }
-            ];
-
-            let tableHeader = '';
-            headers.forEach(h => {
-                tableHeader += `<th>${h.label}</th>`;
-            });
 
             let tableRows = '';
             anomalies.forEach(item => {
-                let rowCells = '';
-                
-                headers.forEach(h => {
-                    let cellValue = item[h.key] || '-';
-                    let statusClass = '';
-                    
-                    if (h.isPercent) {
-                        cellValue = cellValue + '%';
-                    }
-                    
-                    if (h.isStatus) {
-                        if (cellValue.includes('EKSTRIM') || cellValue.includes('NAIK')) {
-                            statusClass = 'status-ekstrim';
-                        } else if (cellValue.includes('TURUN')) {
-                            statusClass = 'status-turun';
-                        } else if (cellValue.includes('ZERO')) {
-                            statusClass = 'status-zero';
-                        }
-                    }
+                let statusClass = '';
+                if (item.STATUS_PEMAKAIAN.includes('EKSTRIM') || item.STATUS_PEMAKAIAN.includes('NAIK')) {
+                    statusClass = 'status-ekstrim';
+                } else if (item.STATUS_PEMAKAIAN.includes('TURUN')) {
+                    statusClass = 'status-turun';
+                } else if (item.STATUS_PEMAKAIAN.includes('ZERO')) {
+                    statusClass = 'status-zero';
+                } else {
+                    statusClass = '';
+                }
 
-                    // Tambahkan data-label untuk responsivitas Card View
-                    rowCells += `<td data-label="${h.label}" class="${statusClass}">${cellValue}</td>`;
-                });
-
-                tableRows += `<tr>${rowCells}</tr>`;
+                tableRows += `
+                    <tr>
+                        <td>${item.NOMEN}</td>
+                        <td>${item.NAMA}</td>
+                        <td>${item.RAYON}</td>
+                        <td class="${statusClass}">${item.STATUS_PEMAKAIAN}</td>
+                        <td>${item.KUBIK_TERBARU}</td>
+                        <td>${item.KUBIK_SEBELUMNYA}</td>
+                        <td>${item.SELISIH_KUBIK}</td>
+                        <td>${item.PERSEN_SELISIH}%</td>
+                    </tr>
+                `;
             });
 
             return `
@@ -383,7 +298,14 @@
                     <table class="anomaly-table">
                         <thead>
                             <tr>
-                                ${tableHeader}
+                                <th>NOMEN</th>
+                                <th>NAMA</th>
+                                <th>RAYON</th>
+                                <th>STATUS ANOMALI</th>
+                                <th>KUBIK TERBARU</th>
+                                <th>KUBIK SEBELUMNYA</th>
+                                <th>SELISIH (m³)</th>
+                                <th>% SELISIH</th>
                             </tr>
                         </thead>
                         <tbody>
