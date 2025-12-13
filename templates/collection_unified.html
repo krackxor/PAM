@@ -505,12 +505,12 @@
             customReportArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Menghubungkan ke MongoDB untuk Laporan Kustom...</p>';
             
             try {
-                // Endpoint ini harus dibuat di app.py
+                // Endpoint ini sekarang mengembalikan breakdown sederhana terstruktur
                 const response = await fetch('{{ url_for("analyze_mc_grouping_api") }}'); 
                 const data = await response.json();
                 
-                if (response.status !== 200 || data.length === 0) {
-                     customReportArea.innerHTML = `<p class="no-results" style="color: red;">❌ Gagal memuat report: ${data.message || 'Tidak ada data kustom ditemukan.'}</p>`;
+                if (data.status === 'error') {
+                     customReportArea.innerHTML = `<p class="no-results" style="color: red;">❌ Gagal memuat report: ${data.message}</p>`;
                      return;
                 }
                 
@@ -522,46 +522,51 @@
             }
         }
         
+        // Fungsi rendering yang disesuaikan untuk output LIST non-tabular
         function renderCustomReportTable(data) {
             const customArea = document.getElementById('customReportArea');
-            if (data.length === 0) return;
-
-            const headers = Object.keys(data[0]);
+            if (data.status !== 'success') {
+                 customArea.innerHTML = `<p class="no-results" style="color: red;">❌ ${data.message || 'Gagal memuat laporan kustom.'}</p>`;
+                 return;
+            }
             
-            let tableHTML = `
-                <div class="report-table-wrapper">
-                <table class="report-table" style="min-width: 1200px;">
-                    <thead>
-                        <tr>
+            // Helper function to render data in list format: [Value] - [Nomen Count] - [Nominal]
+            function renderBreakdownList(title, breakdownArray, dimensionKey) {
+                let listHTML = `<h4 style="margin-top: 15px; color: var(--primary-color);">${title}</h4><ul>`;
+                
+                if (breakdownArray.length === 0) {
+                    listHTML += `<li>Tidak ada data ditemukan.</li>`;
+                } else {
+                    breakdownArray.forEach(item => {
+                        const dimValue = item[dimensionKey] || 'N/A';
+                        const nomenCount = formatNumber(item.CountOfNOMEN);
+                        const nominal = formatRupiah(item.SumOfNOMINAL);
+                        
+                        // Format: [Dimension Value] - [Nomen Count] - [Nominal]
+                        // Contoh: 2A2 - 3535 NOMEN - Rp 545.004
+                        listHTML += `<li><strong>${dimValue}</strong> - ${nomenCount} NOMEN - ${nominal}</li>`;
+                    });
+                }
+                
+                listHTML += `</ul>`;
+                return listHTML;
+            }
+            
+            let reportHTML = `
+                <h3 style="color: #dc3545;">Laporan Grup Kustom (Rayon 34/35 Reguler)</h3>
+                <p style="font-size: 0.9em; color: #6c757d;">Angka dalam format: [Nilai Dimensi] - [Total Pelanggan] - [Total Nominal Piutang]</p>
             `;
-            // Render Headers
-            headers.forEach(h => {
-                const cleanHeader = h.replace(/_/g, ' ').replace('SumOf', '').replace('CountOf', 'Count ');
-                tableHTML += `<th>${cleanHeader}</th>`;
-            });
-            tableHTML += `</tr></thead><tbody>`;
-
-            // Render Rows
-            data.forEach(item => {
-                tableHTML += `<tr>`;
-                headers.forEach(h => {
-                    let cellValue = item[h];
-                    
-                    if (h.includes('NOMINAL')) {
-                        cellValue = formatRupiah(cellValue);
-                    } else if (h.includes('KUBIK') || h.includes('CountOf')) {
-                        cellValue = formatNumber(cellValue);
-                    }
-                    
-                    // PENTING: Tambahkan data-label untuk mobile view
-                    const dataLabel = h.replace(/_/g, ' ').replace('SumOf', '').replace('CountOf', 'Count ');
-                    tableHTML += `<td data-label="${dataLabel}" style="text-align: left;">${cellValue}</td>`;
-                });
-                tableHTML += `</tr>`;
-            });
-
-            tableHTML += `</tbody></table></div>`;
-            customReportArea.innerHTML = tableHTML;
+            
+            // 1. TARIF
+            reportHTML += renderBreakdownList('Tarif (Piutang Total)', data.tarif_breakdown, 'TARIF');
+            
+            // 2. MEREK METER
+            reportHTML += renderBreakdownList('Merek Meter (Piutang Total)', data.merk_breakdown, 'MERK');
+            
+            // 3. READ METHOD
+            reportHTML += renderBreakdownList('Metode Baca (Piutang Total)', data.read_method_breakdown, 'READ_METHOD');
+            
+            customReportArea.innerHTML = reportHTML;
         }
 
         // Export button handler
