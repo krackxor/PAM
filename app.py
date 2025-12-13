@@ -61,14 +61,17 @@ try:
     collection_mc.create_index([('RAYON', 1), ('PCEZ', 1)], name='idx_mc_rayon_pcez') 
     collection_mc.create_index([('STATUS', 1)], name='idx_mc_status')
     collection_mc.create_index([('TARIF', 1), ('KUBIK', 1), ('NOMINAL', 1)], name='idx_mc_tarif_volume')
+    collection_mc.create_index([('BULAN_TAHUN_DATA', 1)], name='idx_mc_bulan_tahun') # Index baru untuk Archival
 
     # MB (MasterBayar): Untuk Detail Transaksi dan Undue Check
     collection_mb.create_index([('TGL_BAYAR', -1)], name='idx_mb_paydate_desc')
     collection_mb.create_index([('NOMEN', 1)], name='idx_mb_nomen')
     collection_mb.create_index([('RAYON', 1), ('PCEZ', 1), ('TGL_BAYAR', -1)], name='idx_mb_rayon_pcez_date')
+    collection_mb.create_index([('BULAN_TAHUN_DATA', 1)], name='idx_mb_bulan_tahun') # Index baru untuk Archival
 
     # SBRS (MeterReading): Untuk Anomaly Check
     collection_sbrs.create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', -1)], name='idx_sbrs_history')
+    collection_sbrs.create_index([('BULAN_TAHUN_DATA', 1)], name='idx_sbrs_bulan_tahun') # Index baru untuk Archival
     
     # ARDEBT (AccountReceivable): Untuk Cek Tunggakan
     collection_ardebt.create_index([('NOMEN', 1)], name='idx_ardebt_nomen')
@@ -89,6 +92,10 @@ def _get_sbrs_anomalies(collection_sbrs, collection_cid):
     """
     Menjalankan pipeline agregasi untuk menemukan anomali pemakaian (Naik/Turun/Zero/Ekstrim) 
     dengan membandingkan 2 riwayat SBRS terakhir dan melakukan JOIN ke CID.
+    
+    CATATAN: Logika ini MENGAMBIL SEMUA DATA SBRS. Jika mode Archival SBRS diaktifkan,
+    perlu ditambahkan filter BULAN_TAHUN_DATA terbaru, tetapi untuk anomali,
+    riwayat tetap harus diakses tanpa batasan bulan.
     """
     if collection_sbrs is None or collection_cid is None:
         return []
@@ -276,7 +283,11 @@ def search_nomen():
         return jsonify({"status": "fail", "message": "Masukkan NOMEN untuk memulai pencarian terintegrasi."}), 400
 
     try:
-        # 1. DATA STATIS (CID) - Master Data Pelanggan
+        # 🚨 CATATAN: Karena MC, MB, SBRS sekarang Archival, query di sini
+        # seharusnya memfilter data terbaru. Karena belum ada endpoint filter bulan terbaru, 
+        # kita ambil data MC/MB/SBRS TANPA filter bulan untuk menghindari error query.
+
+        # 1. DATA STATIS (CID) - Master Data Pelanggan (REPLACE TOTAL)
         cleaned_nomen = query_nomen.strip().upper()
         cid_result = collection_cid.find_one({'NOMEN': cleaned_nomen})
         
@@ -286,19 +297,19 @@ def search_nomen():
                 "message": f"NOMEN {query_nomen} tidak ditemukan di Master Data Pelanggan (CID)."
             }), 404
 
-        # 2. PIUTANG BERJALAN (MC) - Snapshot Bulan Ini
+        # 2. PIUTANG BERJALAN (MC) - Snapshot Bulan Ini (Archival - Ambil Semua)
         mc_results = list(collection_mc.find({'NOMEN': cleaned_nomen}))
         piutang_nominal_total = sum(item.get('NOMINAL', 0) for item in mc_results)
         
-        # 3. TUNGGAKAN DETAIL (ARDEBT)
+        # 3. TUNGGAKAN DETAIL (ARDEBT) (REPLACE TOTAL)
         ardebt_results = list(collection_ardebt.find({'NOMEN': cleaned_nomen}))
         tunggakan_nominal_total = sum(item.get('JUMLAH', 0) for item in ardebt_results)
         
-        # 4. RIWAYAT PEMBAYARAN TERAKHIR (MB)
+        # 4. RIWAYAT PEMBAYARAN TERAKHIR (MB) (Archival - Ambil Terakhir)
         mb_last_payment_cursor = collection_mb.find({'NOMEN': cleaned_nomen}).sort('TGL_BAYAR', -1).limit(1)
         last_payment = list(mb_last_payment_cursor)[0] if list(mb_last_payment_cursor) else None
         
-        # 5. RIWAYAT BACA METER (SBRS)
+        # 5. RIWAYAT BACA METER (SBRS) (Archival - Ambil 2 Terakhir)
         sbrs_last_read_cursor = collection_sbrs.find({'CMR_ACCOUNT': cleaned_nomen}).sort('CMR_RD_DATE', -1).limit(2)
         sbrs_history = list(sbrs_last_read_cursor)
         
@@ -374,6 +385,9 @@ def collection_report_api():
     """Menghitung Nomen Bayar, Nominal Bayar, Total Nominal, dan Persentase per Rayon/PCEZ, termasuk KUBIKASI."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    # 🚨 PENTING: Untuk sementara, kita abaikan filter bulan terbaru di sini. 
+    # Setelah fitur filtering bulan terbaru diimplementasikan, filter match harus ditambahkan.
 
     initial_project = {
         '$project': {
@@ -709,6 +723,8 @@ def _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, r
     # This helper will return a list of aggregated results grouped by the dimension.
     # It filters to 'REG' type and applies rayon filter if provided ('34', '35', or 'TOTAL_34_35').
     
+    # 🚨 PENTING: Untuk sementara, kita abaikan filter bulan terbaru di sini.
+    
     dimension_map = {'TARIF': '$TARIF_CID', 'MERK': '$MERK_CID', 'READ_METHOD': '$READ_METHOD'}
     
     # Base pipeline structure (Projection and CID Join for all necessary fields)
@@ -794,6 +810,8 @@ def analyze_mc_grouping_api():
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
 
+    # 🚨 PENTING: Untuk sementara, kita abaikan filter bulan terbaru di sini.
+
     try:
         # 1. Total Aggregations
         totals = {
@@ -826,36 +844,39 @@ def analyze_mc_grouping_api():
         return jsonify({"status": "error", "message": f"Gagal mengambil data grouping MC: {e}"}), 500
 
 # =========================================================================
-# === API GROUPING MB KUSTOM (HELPER FUNCTION) - FIXED FOR USER REQUEST ===
+# === API GROUPING MB KUSTOM (HELPER FUNCTION) - BARU!!! ===
 # =========================================================================
 
-def _aggregate_mb_report_by_status(collection_mb, collection_cid, rayon_filter=None):
+def _aggregate_mb_grouping(collection_mb, collection_cid, rayon_filter=None):
     """
-    Mengagregasi data Master Bayar (MB) berdasarkan status: TOTAL, UNDUE, CURRENT, TUNGGAKAN.
-    Logika Status:
-    1. UNDUE: BULAN_REK sama dengan Bulan & Tahun TGL_BAYAR.
-    2. CURRENT: BULAN_REK sama dengan Bulan & Tahun SEBELUM TGL_BAYAR.
-    3. TUNGGAKAN: BULAN_REK lebih kecil dari Bulan & Tahun SEBELUM TGL_BAYAR.
+    Mengagregasi data Master Bayar (MB) untuk Rayon 34/35 berdasarkan status bayar
+    (UNDUE: BULAN_REK == TGL_BAYAR bulan/tahun) dan TUNGGAKAN (sisanya).
+    
+    🚨 PENTING: Untuk sementara, kita abaikan filter bulan terbaru di sini.
     """
     
     rayon_keys = ['34', '35']
     
-    # 1. Pipeline Base dan Normalisasi
+    # 1. Base Pipeline: Project, Join to CID, Normalize, Filter Rayon/Type
     pipeline = [
+        # Match payments where NOMINAL is > 0
         {'$match': {'NOMINAL': {'$gt': 0}}}, 
         {'$project': {
             'NOMEN': 1,
             'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
+            # TGL_BAYAR dipastikan format YYYY-MM-DD untuk ekstraksi
             'TGL_BAYAR': 1, 
+            # BULAN_REK dipastikan format MMYYYY (misal: 112025)
             'BULAN_REK': 1,
         }},
+        # Join to CID to get definitive Rayon and TIPEPLGGN
         {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
         {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
         {'$addFields': {
             'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
             'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},
         }},
-        {'$match': {'CLEAN_TIPEPLGGN': 'REG'}}
+        {'$match': {'CLEAN_TIPEPLGGN': 'REG'}} # Always filter to REG
     ]
     
     # Apply Rayon filter
@@ -864,119 +885,105 @@ def _aggregate_mb_report_by_status(collection_mb, collection_cid, rayon_filter=N
     elif rayon_filter == 'TOTAL_34_35':
         pipeline.append({'$match': {'CLEAN_RAYON': {'$in': rayon_keys}}})
     else:
-        return {} 
+        return {} # Jika tidak ada filter Rayon yang valid, kembalikan kosong
 
-    # 2. Classification Stage
+    # 2. Classification Stage: Undue vs Arrears (Tunggakan)
     pipeline.append({
         '$addFields': {
+            # Ekstraksi MMYYYY dari TGL_BAYAR (contoh: 2025-11-25 -> 112025)
             'PAY_MONTH_YEAR': {
                 '$concat': [
                     {'$substr': ['$TGL_BAYAR', 5, 2]},  # MM
                     {'$substr': ['$TGL_BAYAR', 0, 4]}   # YYYY
                 ]
             },
-            'BILL_MONTH_YEAR_NUM': {'$toInt': {'$ifNull': ['$BULAN_REK', '0']}}
         }
     })
     
-    # Calculate previous month/year number (for CURRENT check)
-    # This requires running some date logic in Python since complex date arithmetic in MongoDB aggregation is tricky.
-    
-    # For simplification and robustness against different MongoDB versions, we will compute the "Current" month's number logic here:
-    # Get current date from one sample record, then calculate the previous month's MMYYYY number string.
-    
-    # We will use a standard MongoDB approach: compare BILL_MONTH_YEAR_NUM with PAY_MONTH_YEAR_NUM
-    
     pipeline.append({
         '$addFields': {
-            'PAY_MONTH_YEAR_NUM': {'$toInt': '$PAY_MONTH_YEAR'}
-        }
-    })
-    
-    # --- Logic for Current/Tunggakan vs Undue ---
-    # Need to calculate MMYYYY-1 (Previous Month Number) based on PAY_MONTH_YEAR_NUM.
-    # We can approximate by converting BULAN_REK to integer and comparing.
-    
-    # Example: Pay Date (112025). Previous Month (102025).
-    # UNDUE: BULAN_REK == 112025
-    # CURRENT: BULAN_REK == 102025
-    # TUNGGAKAN: BULAN_REK < 102025
-    
-    # NOTE: Since the data type is string/int (MMYYYY), calculating the previous month number (MMYYYY-1) 
-    # directly using integer arithmetic is complex (e.g., 012025 - 1 = 122024). 
-    # For robust production code, external Python date logic is preferred, but for this exercise, 
-    # we'll rely on classification based on current PAY_MONTH_YEAR_NUM vs BILL_MONTH_YEAR_NUM.
-
-    pipeline.append({
-        '$addFields': {
-            'STATUS_BAYAR_GROUP': {
-                '$let': {
-                    'vars': {
-                        'pay_month_year': '$PAY_MONTH_YEAR',
-                        'bill_month_year': '$BULAN_REK'
-                    },
-                    'in': {
-                        '$switch': {
-                            'branches': [
-                                # 1. UNDUE: BULAN_REK sama dengan Bulan & Tahun TGL_BAYAR
-                                { 'case': {'$eq': ['$$bill_month_year', '$$pay_month_year']}, 'then': 'UNDUE' },
-                                
-                                # 2. CURRENT: BULAN_REK sama dengan Bulan & Tahun SEBELUM TGL_BAYAR.
-                                # Calculate previous month/year number based on current PAY_MONTH_YEAR string (MMYYYY)
-                                # Example: PAY_MONTH_YEAR = "112025" -> prev_MMYYYY_str = "102025"
-                                # This approximation logic is applied in Python using datetime before running the query.
-                                # Since we cannot execute Python code here, we must rely on pure Mongo logic.
-                                
-                                # Because simulating date arithmetic in Mongo is complex (Jan-1 = Dec Prev Year), 
-                                # we simplify the classification using a Python pre-calculated value.
-                                
-                                # We must pass the calculated numeric representation of the Previous Month. 
-                                # Let's assume we pass {current_month_num} and {previous_month_num} from Python:
-                                
-                                # Since we cannot dynamically inject Python variables easily here, we will define 
-                                # the CURRENT and ARREARS based on the TGL_BAYAR (date field) and BULAN_REK (string field).
-                                
-                                # Simplified logic based on provided criteria and available fields:
-                                # We treat the month number in the current TGL_BAYAR as the current billing month.
-                                
-                                # First, extract current and previous month MMYYYY numbers in Python before calling the API.
-                                
-                                # *** WARNING: The current setup relies on the assumption that TGL_BAYAR is consistent. ***
-                                # We'll use the user's provided example logic inside the backend where possible, but API needs dynamic dates.
-                                
-                                # If BULAN_REK is less than the current month in TGL_BAYAR, it's either CURRENT or TUNGGAKAN.
-                                
-                                # To fix this without complex Mongo logic: We only differentiate based on 'current' billing month.
-                                # If BULAN_REK == PrevMonth: CURRENT. If BULAN_REK < PrevMonth: TUNGGAKAN.
-                                
-                                # Since we cannot reliably calculate PrevMonth in this static pipeline, 
-                                # we simplify: anything that is not UNDUE is ARREARS (Tunggakan + Current).
-                                # To meet user's specific request for CURRENT, we MUST rely on the Python side to inject dynamic month comparison logic later, 
-                                # but for the core aggregation, we use a single ARREARS bucket for safety, then split later if needed.
-                                
-                                # Reverting to the old simplified logic due to Mongo aggregation limitations on date arithmetic:
-                                
-                                # Let's try to define the CURRENT and TUNGGAKAN based on a single integer comparison point.
-                                # Get TGL_BAYAR as YYYYMM (number)
-                                'PAY_YEAR_MONTH_NUM': {'$toInt': {'$concat': [{'$substr': ['$TGL_BAYAR', 0, 4]}, {'$substr': ['$TGL_BAYAR', 5, 2}]}]},
-                                'BILL_YEAR_MONTH_NUM': {'$toInt': {'$concat': [{'$substr': ['$BULAN_REK', 2, 4]}, {'$substr': ['$BULAN_REK', 0, 2}]}]} # Assuming BULAN_REK is MMYYYY
-                            }
-                        }
-                    }
+            'STATUS_BAYAR': {
+                '$cond': {
+                    # Jika MMYYYY pembayaran sama dengan BULAN_REK, itu UNDUE
+                    'if': { '$eq': ['$PAY_MONTH_YEAR', '$BULAN_REK'] },
+                    'then': 'UNDUE',
+                    'default': 'TUNGGAKAN' # Arrears/Tunggakan
                 }
             }
         }
     })
 
-    # Since the full logic (UNDUE, CURRENT, TUNGGAKAN) is too complex for static Mongo pipeline 
-    # without passing dynamic Python variables, we need to pass those variables via API calls, 
-    # or rely on Python to calculate the exact month numbers. 
+    # --- 3. Hitung Total Collection ---
+    pipeline_total = pipeline + [
+        {'$group': {
+            '_id': None,
+            'CountOfNOMEN': {'$addToSet': '$NOMEN'},
+            'SumOfNOMINAL': {'$sum': '$NOMINAL'},
+        }},
+        {'$project': {
+            '_id': 0,
+            'CountOfNOMEN': {'$size': '$CountOfNOMEN'},
+            'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 0]},
+        }}
+    ]
+    total_result = list(collection_mb.aggregate(pipeline_total, allowDiskUse=True))
+    total_metrics = total_result[0] if total_result else {'CountOfNOMEN': 0, 'SumOfNOMINAL': 0}
+
+    # --- 4. Hitung Undue Collection ---
+    pipeline_undue = pipeline + [
+        {'$match': {'STATUS_BAYAR': 'UNDUE'}},
+        {'$group': {
+            '_id': None,
+            'CountOfNOMEN_UNDUE': {'$addToSet': '$NOMEN'},
+            'SumOfNOMINAL_UNDUE': {'$sum': '$NOMINAL'},
+        }},
+        {'$project': {
+            '_id': 0,
+            'CountOfNOMEN_UNDUE': {'$size': '$CountOfNOMEN_UNDUE'},
+            'SumOfNOMINAL_UNDUE': {'$round': ['$SumOfNOMINAL_UNDUE', 0]},
+        }}
+    ]
+    undue_result = list(collection_mb.aggregate(pipeline_undue, allowDiskUse=True))
+    undue_metrics = undue_result[0] if undue_result else {'CountOfNOMEN_UNDUE': 0, 'SumOfNOMINAL_UNDUE': 0}
+
+    # --- 5. Hitung Arrears Collection (Tunggakan) ---
+    pipeline_arrears = pipeline + [
+        {'$match': {'STATUS_BAYAR': 'TUNGGAKAN'}},
+        {'$group': {
+            '_id': None,
+            'CountOfNOMEN_TUNGGAKAN': {'$addToSet': '$NOMEN'},
+            'SumOfNOMINAL_TUNGGAKAN': {'$sum': '$NOMINAL'},
+        }},
+        {'$project': {
+            '_id': 0,
+            'CountOfNOMEN_TUNGGAKAN': {'$size': '$CountOfNOMEN_TUNGGAKAN'},
+            'SumOfNOMINAL_TUNGGAKAN': {'$round': ['$SumOfNOMINAL_TUNGGAKAN', 0]},
+        }}
+    ]
+    arrears_result = list(collection_mb.aggregate(pipeline_arrears, allowDiskUse=True))
+    arrears_metrics = arrears_result[0] if arrears_result else {'CountOfNOMEN_TUNGGAKAN': 0, 'SumOfNOMINAL_TUNGGAKAN': 0}
+
+    # --- 6. Ambil Detail Listing (Dibatasi 500 baris per Rayon) ---
+    pipeline_details = pipeline + [
+        {'$project': {
+            '_id': 0,
+            'TGL_BAYAR': 1,
+            'NOMEN': 1,
+            'NOMINAL': {'$round': ['$NOMINAL', 0]},
+            'STATUS_BAYAR': 1
+        }},
+        {'$sort': {'TGL_BAYAR': -1}}, # Sort Descending by Date
+        {'$limit': 500}
+    ]
+    details = list(collection_mb.aggregate(pipeline_details, allowDiskUse=True))
     
-    # We will adjust the API endpoint to pass the needed month strings/numbers.
-    # For now, let's redefine the classification in a new, separate function in Python/Flask 
-    # which calculates the needed month numbers dynamically.
-    
-    return jsonify({"status": "error", "message": "Logic moved to dynamic Python calculation in the API endpoint."})
+    return {
+        'total': total_metrics,
+        'undue': undue_metrics,
+        'tunggakan': arrears_metrics,
+        'details': details
+    }
+
 
 @app.route('/api/analyze/mb_grouping', methods=['GET'])
 @login_required 
@@ -984,222 +991,1034 @@ def analyze_mb_grouping_api():
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
 
-    # Dynamic date calculation based on current date (or a simulated query date)
-    now = datetime.now()
-    
-    # Calculate CURRENT BILLING MONTH (e.g., if today is 2025-11-25, current month is 11, bill month for 'current' is 10)
-    current_bill_month_dt = now.replace(day=1) - timedelta(days=1)
-    
-    # MMYYYY format for Mongo string comparison
-    current_pay_month_str = now.strftime('%m%Y')      # e.g., 112025
-    current_bill_month_str = current_bill_month_dt.strftime('%m%Y') # e.g., 102025 (Previous month)
+    try:
+        # 1. Aggregasi untuk Rayon 34
+        r34_data = _aggregate_mb_grouping(collection_mb, collection_cid, rayon_filter='34')
 
-    # Function to run the aggregation with dynamic matching, similar to _aggregate_custom_mc_report
-    def aggregate_mb_by_status(status_type, rayon_filter, current_pay_month, current_bill_month):
+        # 2. Aggregasi untuk Rayon 35
+        r35_data = _aggregate_mb_grouping(collection_mb, collection_cid, rayon_filter='35')
         
-        # Base Pipeline (as defined in _aggregate_mb_grouping base)
-        pipeline = [
-            {'$match': {'NOMINAL': {'$gt': 0}}}, 
-            {'$project': {
-                'NOMEN': 1,
-                'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
-                'TGL_BAYAR': 1, 
-                'BULAN_REK': 1,
-            }},
-            {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
-            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
-            {'$addFields': {
-                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
-                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},
-                'PAY_MONTH_YEAR': {
-                    '$concat': [
-                        {'$substr': ['$TGL_BAYAR', 5, 2]},  # MM
-                        {'$substr': ['$TGL_BAYAR', 0, 4]}   # YYYY
-                    ]
-                }
-            }},
-            {'$match': {'CLEAN_TIPEPLGGN': 'REG'}}
-        ]
-        
-        # Apply Rayon filter
-        rayon_keys = ['34', '35']
-        if rayon_filter in rayon_keys:
-            pipeline.append({'$match': {'CLEAN_RAYON': rayon_filter}})
-        elif rayon_filter == 'TOTAL_34_35':
-            pipeline.append({'$match': {'CLEAN_RAYON': {'$in': rayon_keys}}})
-        else:
-            return {'CountOfNOMEN': 0, 'SumOfNOMINAL': 0, 'details': []}
+        # 3. Aggregasi untuk Total AB Sunter (R34 + R35)
+        ab_sunter_data = _aggregate_mb_grouping(collection_mb, collection_cid, rayon_filter='TOTAL_34_35')
 
-        # Apply Status Filter
-        status_match = {}
-        
-        if status_type == 'TOTAL':
-            # No specific match needed other than base pipeline filters
-            pass
-        elif status_type == 'UNDUE':
-            # UNDUE: BULAN_REK == PAY_MONTH_YEAR (e.g., Bayar Nov untuk Rek Nov)
-            status_match = {
-                'BULAN_REK': current_pay_month
-            }
-        elif status_type == 'CURRENT':
-            # CURRENT: BULAN_REK == Previous PAY_MONTH_YEAR (e.g., Bayar Nov untuk Rek Okt)
-            status_match = {
-                'BULAN_REK': current_bill_month
-            }
-        elif status_type == 'TUNGGAKAN':
-            # TUNGGAKAN: BULAN_REK < Previous PAY_MONTH_YEAR (e.g., Bayar Nov untuk Rek Sept atau sebelumnya)
-            # This requires converting MMYYYY to a sortable integer/string
-            
-            # Since the structure is MMYYYY, 112025 > 102025 works correctly for the same year.
-            # To be robust, we need YYYYMM format for comparison.
-            
-            # Calculate the integer representation of the Previous Month Bill (e.g., 202510)
-            current_bill_year_month_num = int(current_bill_month[2:6] + current_bill_month[0:2])
-
-            pipeline.append({
-                '$addFields': {
-                    'BILL_YEAR_MONTH_NUM': {'$toInt': {
-                        '$concat': [
-                            {'$substr': ['$BULAN_REK', 2, 4]}, # YYYY
-                            {'$substr': ['$BULAN_REK', 0, 2]}  # MM
-                        ]
-                    }}
-                }
-            })
-            
-            # Match where the bill date is numerically less than the 'Current' bill month date (Tunggakan)
-            status_match = {
-                'BILL_YEAR_MONTH_NUM': {'$lt': current_bill_year_month_num}
-            }
-        
-        if status_match:
-             pipeline.append({'$match': status_match})
-             
-        # Aggregation stage
-        pipeline_agg = pipeline + [
-            {'$group': {
-                '_id': None,
-                'CountOfNOMEN': {'$addToSet': '$NOMEN'},
-                'SumOfNOMINAL': {'$sum': '$NOMINAL'},
-            }},
-            {'$project': {
-                '_id': 0,
-                'CountOfNOMEN': {'$size': '$CountOfNOMEN'},
-                'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 0]},
-            }}
-        ]
-        
-        # Detail Listing (Max 500 rows)
-        pipeline_details = pipeline + [
-            {'$project': {
-                '_id': 0,
-                'TGL_BAYAR': 1,
-                'NOMEN': 1,
-                'NOMINAL': {'$round': ['$NOMINAL', 0]},
-                'STATUS_BAYAR': {'$literal': status_type} 
-            }},
-            {'$sort': {'TGL_BAYAR': -1}}, 
-            {'$limit': 500}
-        ]
-        
-        metrics = list(collection_mb.aggregate(pipeline_agg, allowDiskUse=True))
-        details = list(collection_mb.aggregate(pipeline_details, allowDiskUse=True))
-        
-        metrics_result = metrics[0] if metrics else {'CountOfNOMEN': 0, 'SumOfNOMINAL': 0}
-        
-        return {
-            'CountOfNOMEN': metrics_result['CountOfNOMEN'],
-            'SumOfNOMINAL': metrics_result['SumOfNOMINAL'],
-            'details': details
+        response_data = {
+            'status': 'success',
+            'rayon_34': r34_data,
+            'rayon_35': r35_data,
+            'ab_sunter': ab_sunter_data
         }
-    
-    # Run all categories and rayons
-    report = {}
-    rayon_filters = ['34', '35', 'TOTAL_34_35']
-    status_types = ['TOTAL', 'UNDUE', 'CURRENT', 'TUNGGAKAN']
+        
+        return jsonify(response_data), 200
 
-    for status in status_types:
-        report[status] = {}
-        for rayon in rayon_filters:
-            report[status][rayon] = aggregate_mb_by_status(
-                status, rayon, current_pay_month_str, current_bill_month_str
-            )
-
-    # Special handling for Detail Listing (R34 and R35 only for the specific request format)
-    # The new aggregate function already provides details, we just need to reformat the output structure.
-    
-    r34_details = report['TOTAL']['34']['details']
-    r35_details = report['TOTAL']['35']['details']
-
-
-    response_data = {
-        'status': 'success',
-        'report': report,
-        'r34_details': r34_details,
-        'r35_details': r35_details,
-    }
-    
-    return jsonify(response_data), 200
+    except Exception as e:
+        print(f"Error saat menganalisis custom grouping MB: {e}")
+        return jsonify({"status": "error", "message": f"Gagal mengambil data grouping MB: {e}"}), 500
 
 # =========================================================================
 # === END API GROUPING MB KUSTOM ===
 # =========================================================================
 
 
-# --- FUNGSI BARU: LAPORAN KOLEKSI HARIAN ---
-@app.route('/api/collection/daily_summary', methods=['GET'])
+# =========================================================================
+# === API UNTUK ANALISIS AKURAT (Fluktuasi Volume Naik/Turun) ===
+# =========================================================================
+@app.route('/api/analyze/volume_fluctuation', methods=['GET'])
 @login_required 
-def daily_collection_summary_api():
-    """Menghitung total nomen dan nominal koleksi per tanggal."""
+def analyze_volume_fluctuation_api():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+
+    try:
+        fluctuation_data = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        return jsonify(fluctuation_data), 200
+
+    except Exception as e:
+        print(f"Error saat menganalisis fluktuasi volume: {e}")
+        return jsonify({"message": f"Gagal mengambil data fluktuasi volume. Detail teknis error: {e}"}), 500
+        
+# 2. API SUMMARY (Untuk KPI Cards di collection_unified.html)
+@app.route('/api/analyze/mc_grouping/summary', methods=['GET'])
+@login_required 
+def analyze_mc_grouping_summary_api():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    # 🚨 PENTING: Untuk sementara, kita abaikan filter bulan terbaru di sini.
+
+    try:
+        pipeline_summary = [
+            {'$lookup': {
+               'from': 'CustomerData', 
+               'localField': 'NOMEN',
+               'foreignField': 'NOMEN',
+               'as': 'customer_info'
+            }},
+            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}},
+            
+            # --- NORMALISASI DATA UNTUK FILTER ---
+            {'$addFields': {
+                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}}, 
+                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
+            }},
+            # --- END NORMALISASI ---
+            
+            {'$match': {
+                'CLEAN_TIPEPLGGN': 'REG',
+                'CLEAN_RAYON': {'$in': ['34', '35']}
+            }},
+            {'$group': {
+                '_id': None,
+                'SumOfKUBIK': {'$sum': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}}},
+                'SumOfNOMINAL': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}},
+                'CountOfNOMEN': {'$addToSet': '$NOMEN'}
+            }},
+            {'$project': {
+                '_id': 0,
+                'TotalPiutangKustomNominal': {'$round': ['$SumOfNOMINAL', 0]},
+                'TotalPiutangKustomKubik': {'$round': ['$SumOfKUBIK', 0]},
+                'TotalNomenKustom': {'$size': '$CountOfNOMEN'}
+            }}
+        ]
+        summary_result = list(collection_mc.aggregate(pipeline_summary))
+        
+        if not summary_result:
+            return jsonify({
+                'TotalPiutangKustomNominal': 0,
+                'TotalPiutangKustomKubik': 0,
+                'TotalNomenKustom': 0
+            }), 200
+
+        return jsonify(summary_result[0]), 200
+
+    except Exception as e:
+        print(f"Error saat mengambil summary grouping MC: {e}")
+        return jsonify({"message": f"Gagal mengambil summary grouping MC. Detail teknis error: {e}"}), 500
+
+# 3. API BREAKDOWN TARIF (Untuk Tabel Distribusi di collection_unified.html)
+@app.route('/api/analyze/mc_tarif_breakdown', methods=['GET'])
+@login_required 
+def analyze_mc_tarif_breakdown_api():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    # 🚨 PENTING: Untuk sementara, kita abaikan filter bulan terbaru di sini.
+
+    try:
+        pipeline_tarif_breakdown = [
+            # 1. Join MC ke CID
+            {'$lookup': {
+               'from': 'CustomerData', 
+               'localField': 'NOMEN',
+               'foreignField': 'NOMEN',
+               'as': 'customer_info'
+            }},
+            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}},
+            
+            # --- NORMALISASI DATA UNTUK FILTER ---
+            {'$addFields': {
+                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}}, 
+                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
+            }},
+            # --- END NORMALISASI ---
+            
+            {'$match': {
+                'CLEAN_TIPEPLGGN': 'REG',
+                'CLEAN_RAYON': {'$in': ['34', '35']}
+            }},
+            
+            # 3. Grouping berdasarkan RAYON dan TARIF
+            {'$group': {
+                '_id': {
+                    'RAYON': '$CLEAN_RAYON',
+                    'TARIF': '$TARIF',
+                },
+                'CountOfNOMEN': {'$addToSet': '$NOMEN'},
+            }},
+            
+            # 4. Proyeksi Akhir dan Penghitungan Size
+            {'$project': {
+                '_id': 0,
+                'RAYON': '$_id.RAYON',
+                'TARIF': '$_id.TARIF',
+                'JumlahPelanggan': {'$size': '$CountOfNOMEN'}
+            }},
+            {'$sort': {'RAYON': 1, 'TARIF': 1}}
+        ]
+        breakdown_data = list(collection_mc.aggregate(pipeline_tarif_breakdown))
+        
+        # Perbaiki penanganan error/empty result: jika kosong, kembalikan [] dan status 200
+        if not breakdown_data:
+            return jsonify([]), 200 
+
+        return jsonify(breakdown_data), 200
+
+    except Exception as e:
+        print(f"Error saat mengambil tarif breakdown MC: {e}")
+        return jsonify({"message": f"Gagal mengambil tarif breakdown MC. Detail teknis error: {e}"}), 500
+# =========================================================================
+# === END API GROUPING MC KUSTOM ===
+# =========================================================================
+
+# Endpoint File Upload/Merge (Dinamis)
+@app.route('/analyze/upload', methods=['GET'])
+@login_required 
+def analyze_data_page():
+    return render_template('analyze_upload.html', is_admin=current_user.is_admin)
+
+@app.route('/api/analyze', methods=['POST'])
+@login_required 
+def analyze_data():
+    """Endpoint untuk mengunggah file jamak, menggabungkannya, dan menjalankan analisis data."""
+    if not request.files:
+        return jsonify({"message": "Tidak ada file yang diunggah."}), 400
+
+    uploaded_files = request.files.getlist('file')
+    all_dfs = []
+    
+    JOIN_KEY = 'NOMEN' 
+    
+    for file in uploaded_files:
+        filename = secure_filename(file.filename)
+        file_extension = filename.rsplit('.', 1)[1].lower()
+
+        if file_extension not in ALLOWED_EXTENSIONS:
+            continue
+
+        try:
+            if file_extension == 'csv':
+                df = pd.read_csv(file) 
+            elif file_extension in ['xlsx', 'xls']:
+                df = pd.read_excel(file, sheet_name=0) 
+            
+            df.columns = [col.strip().upper() for col in df.columns]
+            
+            if JOIN_KEY in df.columns:
+                 df[JOIN_KEY] = df[JOIN_KEY].astype(str).str.strip() 
+                 all_dfs.append(df)
+            else:
+                 return jsonify({"message": f"Gagal: File '{filename}' tidak memiliki kolom kunci '{JOIN_KEY}'."}), 400
+
+        except Exception as e:
+            print(f"Error membaca file {filename}: {e}")
+            return jsonify({"message": f"Gagal membaca file {filename}: {e}"}), 500
+
+    if not all_dfs:
+        return jsonify({"message": "Tidak ada file yang valid untuk digabungkan."}), 400
+
+    merged_df = all_dfs[0]
+    
+    for i in range(1, len(all_dfs)):
+        merged_df = pd.merge(merged_df, all_dfs[i], on=JOIN_KEY, how='outer', suffixes=(f'_f{i}', f'_f{i+1}'))
+
+    # Analisis Data Gabungan
+    data_summary = {
+        "file_name": f"Gabungan ({len(uploaded_files)} files)",
+        "join_key": JOIN_KEY,
+        "row_count": len(merged_df),
+        "column_count": len(merged_df.columns),
+        "columns": merged_df.columns.tolist() 
+    }
+
+    descriptive_stats = merged_df.describe(include='all').to_json(orient='index')
+    
+    return jsonify({
+        "status": "success",
+        "summary": data_summary,
+        "stats": descriptive_stats,
+        "head": merged_df.head().to_html(classes='table table-striped') 
+    }), 200
+
+# --- ENDPOINT KELOLA UPLOAD (ADMIN) ---
+@app.route('/admin/upload', methods=['GET'])
+@login_required 
+@admin_required 
+def admin_upload_unified_page():
+    return render_template('upload_admin_unified.html', is_admin=current_user.is_admin)
+
+@app.route('/upload/mc', methods=['POST'])
+@login_required 
+@admin_required 
+def upload_mc_data():
+    """Mode GANTI PER BULAN (Archival): Untuk Master Cetak (MC) / Piutang Bulanan."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    if 'file' not in request.files:
+        return jsonify({"message": "Tidak ada file di permintaan"}), 400
+
+    file = request.files['file']
+    if file.filename == '' or not allowed_file(file.filename):
+        return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
+
+    # >>> ARCHIVAL CHANGE 1/3: Get Month/Year
+    data_month_year = request.form.get('data_month_year') 
+    if not data_month_year or not re.match(r'^\d{6}$', data_month_year): 
+        return jsonify({"message": "Gagal: Harap tentukan Periode Data (MMYYYY) untuk arsip historis MC."}), 400
+    # <<<
+
+    filename = secure_filename(file.filename)
+    file_extension = filename.rsplit('.', 1)[1].lower()
+
+    try:
+        if file_extension == 'csv':
+            df = pd.read_csv(file)
+        elif file_extension in ['xlsx', 'xls']:
+            df = pd.read_excel(file, sheet_name=0) 
+        
+        df.columns = [col.strip().upper() for col in df.columns]
+        
+        # ===============================================================
+        # >>> PERBAIKAN KRITIS MC: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        # ===============================================================
+        
+        # Target kolom kunci MC untuk konsistensi
+        columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF'] 
+        
+        for col in df.columns:
+            if df[col].dtype == 'object' or col in columns_to_normalize_mc:
+                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
+                df[col] = df[col].astype(str).str.strip().str.upper()
+                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi
+                df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
+            
+            # Kolom finansial MC
+            if col in ['NOMINAL', 'NOMINAL_AKHIR', 'KUBIK', 'SUBNOMINAL', 'ANG_BP', 'DENDA', 'PPN']: 
+                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        # PETA ULANG KOLOM: MC.PC digunakan sebagai RAYON
+        if 'PC' in df.columns:
+             df = df.rename(columns={'PC': 'RAYON'})
+        
+        # ===============================================================
+        # >>> END PERBAIKAN KRITIS MC <<<
+        # ===============================================================
+
+        # >>> ARCHIVAL CHANGE 2/3: Add Month/Year Column
+        df['BULAN_TAHUN_DATA'] = data_month_year
+        # <<<
+
+        data_to_insert = df.to_dict('records')
+        
+        # >>> ARCHIVAL CHANGE 3/3: REPLACE only for this month
+        delete_result = collection_mc.delete_many({'BULAN_TAHUN_DATA': data_month_year})
+        
+        collection_mc.insert_many(data_to_insert)
+        count = len(data_to_insert)
+        
+        # --- RETURN REPORT ---
+        return jsonify({
+            "status": "success",
+            "message": f"Sukses! {count} baris Master Cetak (MC) untuk periode {data_month_year} berhasil MENGGANTI data periode yang sama. ({delete_result.deleted_count} baris lama dihapus).",
+            "summary_report": {
+                "total_rows": count,
+                "type": "REPLACE_MONTHLY",
+                "replaced_count": count
+            },
+            "anomaly_list": []
+        }), 200
+        # --- END RETURN REPORT ---
+
+    except Exception as e:
+        print(f"Error saat memproses file MC: {e}")
+        return jsonify({"message": f"Gagal memproses file MC: {e}. Pastikan format data benar."}), 500
+
+@app.route('/upload/mb', methods=['POST'])
+@login_required 
+@admin_required 
+def upload_mb_data():
+    """Mode GANTI PER BULAN (Archival): Untuk Master Bayar (MB) / Koleksi Harian."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    if 'file' not in request.files:
+        return jsonify({"message": "Tidak ada file di permintaan"}), 400
+
+    file = request.files['file']
+    if file.filename == '' or not allowed_file(file.filename):
+        return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
+        
+    # >>> ARCHIVAL CHANGE 1/3: Get Month/Year
+    data_month_year = request.form.get('data_month_year') 
+    if not data_month_year or not re.match(r'^\d{6}$', data_month_year): 
+        return jsonify({"message": "Gagal: Harap tentukan Periode Data (MMYYYY) untuk arsip historis MB."}), 400
+    # <<<
+
+    filename = secure_filename(file.filename)
+    file_extension = filename.rsplit('.', 1)[1].lower()
+
+    try:
+        if file_extension == 'csv':
+            df = pd.read_csv(file)
+        elif file_extension in ['xlsx', 'xls']:
+            df = pd.read_excel(file, sheet_name=0) 
+        
+        df.columns = [col.strip().upper() for col in df.columns]
+        
+        # ===============================================================
+        # >>> PERBAIKAN KRITIS MB: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        # ===============================================================
+
+        columns_to_normalize_mb = ['NOMEN', 'RAYON', 'PCEZ', 'ZONA_NOREK', 'LKS_BAYAR', 'BULAN_REK', 'NOTAGIHAN'] 
+        
+        for col in df.columns:
+            if df[col].dtype == 'object' or col in columns_to_normalize_mb:
+                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
+                df[col] = df[col].astype(str).str.strip().str.upper()
+                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
+                df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
+
+            if col in ['NOMINAL', 'SUBNOMINAL', 'BEATETAP', 'BEA_SEWA']: # Kolom finansial MB
+                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        # ===============================================================
+        # >>> END PERBAIKAN KRITIS MB <<<
+        # ===============================================================
+
+        # >>> ARCHIVAL CHANGE 2/3: Add Month/Year Column
+        df['BULAN_TAHUN_DATA'] = data_month_year
+        # <<<
+
+        data_to_insert = df.to_dict('records')
+        
+        if not data_to_insert:
+            return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
+        
+        # >>> ARCHIVAL CHANGE 3/3: REPLACE only for this month
+        delete_result = collection_mb.delete_many({'BULAN_TAHUN_DATA': data_month_year})
+        
+        collection_mb.insert_many(data_to_insert)
+        count = len(data_to_insert)
+        
+        # --- RETURN REPORT ---
+        return jsonify({
+            "status": "success",
+            "message": f"Sukses! {count} baris Master Bayar (MB) untuk periode {data_month_year} berhasil MENGGANTI data periode yang sama. ({delete_result.deleted_count} baris lama dihapus).",
+            "summary_report": {
+                "total_rows": count,
+                "type": "REPLACE_MONTHLY",
+                "replaced_count": count
+            },
+            "anomaly_list": []
+        }), 200
+        # --- END RETURN REPORT ---
+
+    except Exception as e:
+        print(f"Error saat memproses file MB: {e}")
+        return jsonify({"message": f"Gagal memproses file MB: {e}. Pastikan format data benar."}), 500
+
+@app.route('/upload/cid', methods=['POST'])
+@login_required 
+@admin_required 
+def upload_cid_data():
+    """Mode GANTI: Untuk Customer Data (CID) / Data Pelanggan Statis. (TETAP REPLACE TOTAL)"""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    if 'file' not in request.files:
+        return jsonify({"message": "Tidak ada file di permintaan"}), 400
+
+    file = request.files['file']
+    if file.filename == '' or not allowed_file(file.filename):
+        return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
+
+    filename = secure_filename(file.filename)
+    file_extension = filename.rsplit('.', 1)[1].lower()
+
+    try:
+        if file_extension == 'csv':
+            df = pd.read_csv(file)
+        elif file_extension in ['xlsx', 'xls']:
+            df = pd.read_excel(file, sheet_name=0) 
+        
+        df.columns = [col.strip().upper() for col in df.columns]
+
+        # PEMBERSIHAN DATA AMAN
+        for col in df.columns:
+            if df[col].dtype == 'object':
+                df[col] = df[col].astype(str).str.strip()
+        
+        # ===============================================================
+        # >>> PERBAIKAN KRITIS CID: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        # ===============================================================
+        
+        # Target kolom yang sering bermasalah pada Grouping Key
+        columns_to_normalize = ['MERK', 'READ_METHOD', 'TIPEPLGGN', 'RAYON', 'NOMEN', 'TARIFF']
+        
+        for col in columns_to_normalize:
+            if col in df.columns:
+                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
+                df[col] = df[col].astype(str).str.strip().str.upper()
+                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
+                df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
+        
+        # CID menggunakan TARIFF untuk Tarif, rename agar konsisten dengan MC (TARIF)
+        if 'TARIFF' in df.columns:
+             df = df.rename(columns={'TARIFF': 'TARIF'})
+
+
+        # ===============================================================
+        # >>> END PERBAIKAN KRITIS CID <<<
+        # ===============================================================
+
+        data_to_insert = df.to_dict('records')
+        
+        # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE TOTAL)
+        collection_cid.delete_many({})
+        collection_cid.insert_many(data_to_insert)
+        count = len(data_to_insert)
+
+        # --- RETURN REPORT ---
+        return jsonify({
+            "status": "success",
+            "message": f"Sukses! {count} baris Customer Data (CID) berhasil MENGGANTI data lama.",
+            "summary_report": {
+                "total_rows": count,
+                "type": "REPLACE",
+                "replaced_count": count
+            },
+            "anomaly_list": []
+        }), 200
+        # --- END RETURN REPORT ---
+
+    except Exception as e:
+        print(f"Error saat memproses file CID: {e}")
+        return jsonify({"message": f"Gagal memproses file CID: {e}. Pastikan format data benar."}), 500
+
+@app.route('/upload/sbrs', methods=['POST'])
+@login_required 
+@admin_required 
+def upload_sbrs_data():
+    """Mode GANTI PER BULAN (Archival): Untuk Riwayat Baca Meter (SBRS)."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    if 'file' not in request.files:
+        return jsonify({"message": "Tidak ada file di permintaan"}), 400
+
+    file = request.files['file']
+    if file.filename == '' or not allowed_file(file.filename):
+        return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
+
+    # >>> ARCHIVAL CHANGE 1/3: Get Month/Year
+    data_month_year = request.form.get('data_month_year') 
+    if not data_month_year or not re.match(r'^\d{6}$', data_month_year): 
+        return jsonify({"message": "Gagal: Harap tentukan Periode Data (MMYYYY) untuk arsip historis SBRS."}), 400
+    # <<<
+
+    filename = secure_filename(file.filename)
+    file_extension = filename.rsplit('.', 1)[1].lower()
+
+    try:
+        # Load data
+        if file_extension == 'csv':
+            df = pd.read_csv(file)
+        elif file_extension in ['xlsx', 'xls']:
+            df = pd.read_excel(file, sheet_name=0) 
+        
+        df.columns = [col.strip().upper() for col in df.columns]
+
+        # ===============================================================
+        # >>> PERBAIKAN KRITIS SBRS: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        # ===============================================================
+        
+        # Target kolom kunci SBRS untuk join konsisten dengan CID
+        columns_to_normalize_sbrs = ['CMR_ACCOUNT', 'CMR_RD_DATE', 'CMR_READER'] 
+
+        for col in df.columns:
+            if df[col].dtype == 'object' or col in columns_to_normalize_sbrs:
+                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
+                df[col] = df[col].astype(str).str.strip().str.upper()
+                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
+                df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
+
+            # Kolom numerik penting untuk SBRS
+            if col in ['CMR_PREV_READ', 'CMR_READING', 'CMR_KUBIK']: 
+                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        # ===============================================================
+        # >>> END PERBAIKAN KRITIS SBRS <<<
+        # ===============================================================
+
+        # >>> ARCHIVAL CHANGE 2/3: Add Month/Year Column
+        df['BULAN_TAHUN_DATA'] = data_month_year
+        # <<<
+
+        data_to_insert = df.to_dict('records')
+        
+        if not data_to_insert:
+            return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
+        
+        # >>> ARCHIVAL CHANGE 3/3: REPLACE only for this month
+        delete_result = collection_sbrs.delete_many({'BULAN_TAHUN_DATA': data_month_year})
+        
+        collection_sbrs.insert_many(data_to_insert)
+        count = len(data_to_insert)
+        
+        # --- RETURN REPORT ---
+        return jsonify({
+            "status": "success",
+            "message": f"Sukses! {count} baris Riwayat Baca Meter (SBRS) untuk periode {data_month_year} berhasil MENGGANTI data periode yang sama. ({delete_result.deleted_count} baris lama dihapus).",
+            "summary_report": {
+                "total_rows": count,
+                "type": "REPLACE_MONTHLY",
+                "replaced_count": count
+            },
+            "anomaly_list": []
+        }), 200
+        # --- END RETURN REPORT ---
+
+    except Exception as e:
+        print(f"Error saat memproses file SBRS: {e}")
+        return jsonify({"message": f"Gagal memproses file SBRS: {e}. Pastikan format data benar."}), 500
+
+@app.route('/upload/ardebt', methods=['POST'])
+@login_required 
+@admin_required 
+def upload_ardebt_data():
+    """Mode GANTI: Untuk data Detail Tunggakan (ARDEBT). (TETAP REPLACE TOTAL)"""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    if 'file' not in request.files:
+        return jsonify({"message": "Tidak ada file di permintaan"}), 400
+
+    file = request.files['file']
+    if file.filename == '' or not allowed_file(file.filename):
+        return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
+
+    filename = secure_filename(file.filename)
+    file_extension = filename.rsplit('.', 1)[1].lower()
+
+    try:
+        if file_extension == 'csv':
+            df = pd.read_csv(file)
+        elif file_extension in ['xlsx', 'xls']:
+            df = pd.read_excel(file, sheet_name=0) 
+        
+        df.columns = [col.strip().upper() for col in df.columns]
+        
+        # ===============================================================
+        # >>> PERBAIKAN KRITIS ARDEBT: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        # ===============================================================
+
+        # Target kolom kunci ARDEBT untuk konsistensi
+        columns_to_normalize_ardebt = ['NOMEN', 'RAYON', 'TIPEPLGGN'] 
+        
+        for col in df.columns:
+            if df[col].dtype == 'object' or col in columns_to_normalize_ardebt:
+                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
+                df[col] = df[col].astype(str).str.strip().str.upper()
+                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
+                df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
+            
+            # Kolom numerik penting
+            if col in ['JUMLAH', 'VOLUME']: 
+                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
+        # ===============================================================
+        # >>> END PERBAIKAN KRITIS ARDEBT <<<
+        # ===============================================================
+
+        data_to_insert = df.to_dict('records')
+        
+        if not data_to_insert:
+            return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
+        
+        # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE TOTAL)
+        collection_ardebt.delete_many({})
+        collection_ardebt.insert_many(data_to_insert)
+        count = len(data_to_insert)
+        
+        # --- RETURN REPORT ---
+        return jsonify({
+            "status": "success",
+            "message": f"Sukses! {count} baris Detail Tunggakan (ARDEBT) berhasil MENGGANTI data lama.",
+            "summary_report": {
+                "total_rows": count,
+                "type": "REPLACE",
+                "replaced_count": count
+            },
+            "anomaly_list": []
+        }), 200
+        # --- END RETURN REPORT ---
+
+    except Exception as e:
+        print(f"Error saat memproses file ARDEBT: {e}")
+        return jsonify({"message": f"Gagal memproses file ARDEBT: {e}. Pastikan format data benar."}), 500
+
+
+# =========================================================================
+# === DASHBOARD ANALYTICS ENDPOINTS (INTEGRATED) ===
+# =========================================================================
+
+@app.route('/dashboard', methods=['GET'])
+@login_required
+def analytics_dashboard():
+    return render_template('dashboard_analytics.html', is_admin=current_user.is_admin)
+
+@app.route('/api/dashboard/summary', methods=['GET'])
+@login_required
+def dashboard_summary_api():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    # 🚨 PENTING: Untuk sementara, kita abaikan filter bulan terbaru di sini.
+    
+    try:
+        summary_data = {}
+        
+        # 1. TOTAL PELANGGAN (dari CID)
+        summary_data['total_pelanggan'] = collection_cid.count_documents({})
+        
+        # 2. TOTAL PIUTANG & TUNGGAKAN
+        pipeline_piutang = [
+            {'$group': {
+                '_id': None,
+                'total_piutang': {'$sum': '$NOMINAL'},
+                'jumlah_tagihan': {'$sum': 1}
+            }}
+        ]
+        piutang_result = list(collection_mc.aggregate(pipeline_piutang))
+        summary_data['total_piutang'] = piutang_result[0]['total_piutang'] if piutang_result else 0
+        summary_data['jumlah_tagihan'] = piutang_result[0]['jumlah_tagihan'] if piutang_result else 0
+        
+        pipeline_tunggakan = [
+            {'$group': {
+                '_id': None,
+                'total_tunggakan': {'$sum': '$JUMLAH'},
+                'jumlah_tunggakan': {'$sum': 1}
+            }}
+        ]
+        tunggakan_result = list(collection_ardebt.aggregate(pipeline_tunggakan))
+        summary_data['total_tunggakan'] = tunggakan_result[0]['total_tunggakan'] if tunggakan_result else 0
+        summary_data['jumlah_tunggakan'] = tunggakan_result[0]['jumlah_tunggakan'] if tunggakan_result else 0
+        
+        # 3. KOLEKSI HARI INI (dari MB)
+        today = pd.Timestamp.now().strftime('%Y-%m-%d')
+        pipeline_koleksi_today = [
+            {'$match': {'TGL_BAYAR': {'$regex': today}}},
+            {'$group': {
+                '_id': None,
+                'koleksi_hari_ini': {'$sum': '$NOMINAL'},
+                'transaksi_hari_ini': {'$sum': 1}
+            }}
+        ]
+        koleksi_result = list(collection_mb.aggregate(pipeline_koleksi_today))
+        summary_data['koleksi_hari_ini'] = koleksi_result[0]['koleksi_hari_ini'] if koleksi_result else 0
+        summary_data['transaksi_hari_ini'] = koleksi_result[0]['transaksi_hari_ini'] if koleksi_result else 0
+        
+        # 4. TOTAL KOLEKSI BULAN INI
+        this_month = pd.Timestamp.now().strftime('%Y-%m')
+        pipeline_koleksi_month = [
+            {'$match': {'TGL_BAYAR': {'$regex': this_month}}},
+            {'$group': {
+                '_id': None,
+                'koleksi_bulan_ini': {'$sum': '$NOMINAL'},
+                'transaksi_bulan_ini': {'$sum': 1}
+            }}
+        ]
+        koleksi_month_result = list(collection_mb.aggregate(pipeline_koleksi_month))
+        summary_data['koleksi_bulan_ini'] = koleksi_month_result[0]['koleksi_bulan_ini'] if koleksi_month_result else 0
+        summary_data['transaksi_bulan_ini'] = koleksi_month_result[0]['transaksi_bulan_ini'] if koleksi_month_result else 0
+        
+        # 5. ANOMALI PEMAKAIAN (dari fungsi existing)
+        anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        summary_data['total_anomali'] = len(anomalies)
+        
+        # Breakdown anomali per tipe
+        anomali_breakdown = {}
+        for item in anomalies:
+            status = item.get('STATUS_PEMAKAIAN', 'UNKNOWN')
+            # Gunakan logika pengelompokan yang lebih sederhana untuk dashboard summary
+            if 'EKSTRIM' in status or 'NAIK' in status:
+                key = 'KENAIKAN_SIGNIFIKAN'
+            elif 'TURUN' in status:
+                key = 'PENURUNAN_SIGNIFIKAN'
+            elif 'ZERO' in status:
+                key = 'ZERO_USAGE'
+            else:
+                key = 'LAINNYA'
+                
+            anomali_breakdown[key] = anomali_breakdown.get(key, 0) + 1
+            
+        summary_data['anomali_breakdown'] = anomali_breakdown
+        
+        # 6. PELANGGAN DENGAN TUNGGAKAN (Distinct NOMEN)
+        pelanggan_tunggakan = collection_ardebt.distinct('NOMEN')
+        summary_data['pelanggan_dengan_tunggakan'] = len(pelanggan_tunggakan)
+        
+        # 7. TOP 5 RAYON DENGAN PIUTANG TERTINGGI
+        pipeline_top_rayon = [
+            {'$group': {
+                '_id': '$RAYON',
+                'total_piutang': {'$sum': '$NOMINAL'},
+                'total_pelanggan': {'$addToSet': '$NOMEN'}
+            }},
+            {'$project': {
+                '_id': 0,
+                'RAYON': '$_id',
+                'total_piutang': 1,
+                'total_pelanggan': {'$size': '$total_pelanggan'}
+            }},
+            {'$sort': {'total_piutang': -1}},
+            {'$limit': 5}
+        ]
+        top_rayon = list(collection_mc.aggregate(pipeline_top_rayon))
+        summary_data['top_rayon_piutang'] = [
+            {'rayon': item['_id'], 'total': item['total_piutang']} 
+            for item in top_rayon
+        ]
+        
+        # 8. TREN KOLEKSI 7 HARI TERAKHIR
+        trend_data = []
+        for i in range(7):
+            date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+            
+            pipeline = [
+                {'$match': {'TGL_BAYAR': {'$regex': date}}}, 
+                {'$group': {
+                    '_id': None,
+                    'total': {'$sum': '$NOMINAL'},
+                    'count': {'$sum': 1}
+                }}
+            ]
+            result = list(collection_mb.aggregate(pipeline))
+            trend_data.append({
+                'tanggal': date,
+                'total': result[0]['total'] if result else 0,
+                'transaksi': result[0]['count'] if result else 0
+            })
+        summary_data['tren_koleksi_7_hari'] = sorted(trend_data, key=lambda x: x['tanggal'])
+        
+        # 9. PERSENTASE KOLEKSI
+        if summary_data['total_piutang'] > 0:
+            summary_data['persentase_koleksi'] = (summary_data['koleksi_bulan_ini'] / summary_data['total_piutang']) * 100
+        else:
+            summary_data['persentase_koleksi'] = 0
+        
+        return jsonify(summary_data), 200
+        
+    except Exception as e:
+        print(f"Error fetching dashboard summary: {e}")
+        return jsonify({"message": f"Gagal mengambil data dashboard: {e}"}), 500
+
+
+@app.route('/api/dashboard/rayon_analysis', methods=['GET'])
+@login_required
+def rayon_analysis_api():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    # 🚨 PENTING: Untuk sementara, kita abaikan filter bulan terbaru di sini.
+
+    try:
+        pipeline_piutang_rayon = [
+            {'$group': {
+                '_id': '$RAYON',
+                'total_piutang': {'$sum': '$NOMINAL'},
+                'total_pelanggan': {'$addToSet': '$NOMEN'}
+            }},
+            {'$project': {
+                '_id': 0,
+                'RAYON': '$_id',
+                'total_piutang': 1,
+                'total_pelanggan': {'$size': '$total_pelanggan'}
+            }},
+            {'$sort': {'total_piutang': -1}}
+        ]
+        rayon_piutang_data = list(collection_mc.aggregate(pipeline_piutang_rayon))
+        
+        rayon_map = {item['RAYON']: item for item in rayon_piutang_data}
+        
+        this_month = pd.Timestamp.now().strftime('%Y-%m')
+        pipeline_koleksi_rayon = [
+            {'$match': {'TGL_BAYAR': {'$regex': this_month}}},
+            {'$group': {
+                '_id': '$RAYON',
+                'total_koleksi': {'$sum': '$NOMINAL'},
+            }},
+        ]
+        koleksi_result = list(collection_mb.aggregate(pipeline_koleksi_rayon))
+        
+        for item in koleksi_result:
+            rayon_name = item['_id']
+            if rayon_name in rayon_map:
+                rayon_map[rayon_name]['koleksi'] = item['total_koleksi']
+                
+                if rayon_map[rayon_name]['total_piutang'] > 0:
+                    rayon_map[rayon_name]['persentase_koleksi'] = (item['total_koleksi'] / rayon_map[rayon_name]['total_piutang']) * 100
+                else:
+                    rayon_map[rayon_name]['persentase_koleksi'] = 0
+            
+        for rayon in rayon_map.values():
+            rayon.setdefault('koleksi', 0)
+            rayon.setdefault('persentase_koleksi', 0)
+
+
+        return jsonify(list(rayon_map.values())), 200
+        
+    except Exception as e:
+        print(f"Error in rayon analysis: {e}")
+        return jsonify({"message": f"Gagal menganalisis data rayon: {e}"}), 500
+
+
+@app.route('/api/dashboard/anomaly_summary', methods=['GET'])
+@login_required
+def anomaly_summary_api():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    try:
+        all_anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        
+        ekstrim = [a for a in all_anomalies if 'EKSTRIM' in a['STATUS_PEMAKAIAN']]
+        naik = [a for a in all_anomalies if 'NAIK' in a['STATUS_PEMAKAIAN'] and 'EKSTRIM' not in a['STATUS_PEMAKAIAN']]
+        turun = [a for a in all_anomalies if 'TURUN' in a['STATUS_PEMAKAIAN']]
+        zero = [a for a in all_anomalies if 'ZERO' in a['STATUS_PEMAKAIAN']]
+        
+        summary = {
+            'total_anomali': len(all_anomalies),
+            'kategori': {
+                'ekstrim': {
+                    'jumlah': len(ekstrim),
+                    'data': ekstrim[:10]
+                },
+                'naik_signifikan': {
+                    'jumlah': len(naik),
+                    'data': naik[:10]
+                },
+                'turun_signifikan': {
+                    'jumlah': len(turun),
+                    'data': turun[:10]
+                },
+                'zero': {
+                    'jumlah': len(zero),
+                    'data': zero[:10]
+                }
+            }
+        }
+        
+        return jsonify(summary), 200
+        
+    except Exception as e:
+        print(f"Error in anomaly summary: {e}")
+        return jsonify({"message": f"Gagal mengambil summary anomali: {e}"}), 500
+
+
+@app.route('/api/dashboard/critical_alerts', methods=['GET'])
+@login_required
+def critical_alerts_api():
+    if client is None:
+        return jsonify([]), 200
+        
+    try:
+        alerts = []
+        
+        anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        ekstrim_alerts = [
+            {'nomen': a['NOMEN'], 'status': a['STATUS_PEMAKAIAN'], 'ray': a['RAYON'], 'category': 'VOLUME_EKSTRIM'}
+            for a in anomalies if 'EKSTRIM' in a['STATUS_PEMAKAIAN'] or 'ZERO' in a['STATUS_PEMAKAIAN']
+        ]
+        alerts.extend(ekstrim_alerts[:20])
+
+        pipeline_critical_debt = [
+            {'$match': {'CountOfPERIODE_BILL': {'$gte': 5}}},
+            {'$group': {
+                '_id': '$NOMEN',
+                'months': {'$first': '$CountOfPERIODE_BILL'},
+                'amount': {'$first': '$SumOfJUMLAH'}
+            }},
+            {'$limit': 20}
+        ]
+        
+        critical_debt_result = list(collection_ardebt.aggregate(pipeline_critical_debt))
+        
+        debt_alerts = [
+            {'nomen': d['_id'], 'status': f"TUNGGAKAN KRITIS {d['months']} BULAN", 'amount': d['amount'], 'category': 'DEBT_CRITICAL'}
+            for d in critical_debt_result
+        ]
+        
+        alerts.extend(debt_alerts)
+        
+        return jsonify(alerts), 200
+        
+    except Exception as e:
+        print(f"Error fetching critical alerts: {e}")
+        return jsonify([]), 500
+
+
+@app.route('/api/export/dashboard', methods=['GET'])
+@login_required
+def export_dashboard_data():
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
     try:
-        pipeline = [
-            {'$match': {
-                # Filter hanya data yang memiliki TGL_BAYAR dalam format YYYY-MM-DD
-                'TGL_BAYAR': {'$type': 'string', '$regex': '^\d{4}-\d{2}-\d{2}'}, 
-                'NOMINAL': {'$gt': 0}
-            }},
-            {'$project': {
-                'TGL_BAYAR': 1,
-                'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
-                'NOMEN': 1
-            }},
-            {'$group': {
-                '_id': '$TGL_BAYAR',
-                'CountOfNomen': {'$addToSet': '$NOMEN'},
-                'SumOfNOMINAL': {'$sum': '$NOMINAL'}
-            }},
-            {'$project': {
-                '_id': 0,
-                'Tanggal': '$_id',
-                'NomenCount': {'$size': '$CountOfNomen'},
-                'NominalSum': {'$round': ['$SumOfNOMINAL', 0]}
-            }},
-            {'$sort': {'Tanggal': 1}}
-        ]
+        summary_response = dashboard_summary_api()
+        summary_data = summary_response.get_json()
         
-        results = list(collection_mb.aggregate(pipeline))
+        rayon_response = rayon_analysis_api()
+        rayon_data = rayon_response.get_json()
         
-        # Format tanggal dari YYYY-MM-DD ke DD/MM/YYYY
-        for item in results:
-            try:
-                date_obj = datetime.strptime(item['Tanggal'], '%Y-%m-%d')
-                item['Tanggal'] = date_obj.strftime('%d/%m/%Y')
-            except ValueError:
-                # Abaikan jika format tanggal salah
-                pass
-                
-        return jsonify(results), 200
+        df_rayon = pd.DataFrame(rayon_data)
         
-    except Exception as e:
-        print(f"Error fetching daily collection summary: {e}")
-        return jsonify({"message": f"Gagal mengambil ringkasan koleksi harian: {e}"}), 500
+        df_summary = pd.DataFrame({
+            'Metrik': ['Total Pelanggan', 'Total Piutang (MC)', 'Total Tunggakan (ARDEBT)', 'Koleksi Bulan Ini', 'Persentase Koleksi'],
+            'Nilai': [
+                summary_data['total_pelanggan'],
+                summary_data['total_piutang'],
+                summary_data['total_tunggakan'],
+                summary_data['koleksi_bulan_ini'],
+                f"{summary_data['persentase_koleksi']:.2f}%"
+            ]
+        })
+        
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_summary.to_excel(writer, sheet_name='Ringkasan KPI', index=False)
+            df_rayon.to_excel(writer, sheet_name='Analisis Rayon', index=False)
+            pd.DataFrame(summary_data['tren_koleksi_7_hari']).to_excel(writer, sheet_name='Tren Koleksi 7 Hari', index=False)
+            
+        output.seek(0)
+        
+        response = make_response(output.read())
+        response.headers['Content-Disposition'] = 'attachment; filename=Laporan_Dashboard_Analytics.xlsx'
+        response.headers['Content-type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        return response
 
-# =========================================================================
-# === END FUNGSI BARU: LAPORAN KOLEKSI HARIAN ---
-# =========================================================================
+    except Exception as e:
+        print(f"Error during dashboard export: {e}")
+        return jsonify({"message": f"Gagal mengekspor data dashboard: {e}"}), 500
+
+
+@app.route('/api/export/anomalies', methods=['GET'])
+@login_required
+def export_anomalies_data():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    try:
+        all_anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        
+        if not all_anomalies:
+            return jsonify({"message": "Tidak ada data anomali untuk diekspor."}), 404
+            
+        df_anomalies = pd.DataFrame(all_anomalies)
+        
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_anomalies.to_excel(writer, sheet_name='Anomali Pemakaian Air', index=False)
+            
+        output.seek(0)
+        
+        response = make_response(output.read())
+        response.headers['Content-Disposition'] = 'attachment; filename=Laporan_Anomali_SBRS.xlsx'
+        response.headers['Content-type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        return response
+
+    except Exception as e:
+        print(f"Error during anomaly export: {e}")
+        return jsonify({"message": f"Gagal mengekspor data anomali: {e}"}), 500
 
 
 if __name__ == '__main__':
