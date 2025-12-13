@@ -61,6 +61,21 @@
     background-color: #d0e7ff;
 }
 
+/* Style for individual sections inside the Monthly tab (copied from upload_admin_unified.html) */
+.breakdown-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* 3 kolom yang responsif */
+    gap: 20px;
+    margin-top: 15px;
+    margin-bottom: 30px;
+}
+.breakdown-table-container {
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-light);
+}
+
 /* Mobile Layout Fix */
 @media screen and (max-width: 600px) {
     .data-table thead {
@@ -132,9 +147,14 @@
             return (parseFloat(number) || 0).toFixed(2) + '%';
         }
         
+        function formatNumber(number) {
+            return (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+        }
+        
         function formatRupiah(number) {
             return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
         }
+
 
         async function fetchReportData(reportName) {
             const dataArea = document.getElementById('reportDataArea');
@@ -143,34 +163,27 @@
             let endpoint = '';
             let isMBReport = false;
             let isMCReport = false;
+            let isTarifBreakdown = false;
             let isAnomalyReport = false;
 
-            // Mapping Laporan ke Endpoint API yang baru
+            // Mapping Laporan ke Endpoint API
             if (reportName.includes('Master Bayar (MB)')) {
                 endpoint = '{{ url_for("analyze_mb_grouping_api") }}';
                 isMBReport = true;
-            } else if (reportName.includes('Master Cetak (MC)')) {
+            } else if (reportName.includes('Master Cetak (MC) Lengkap')) {
                 endpoint = '{{ url_for("analyze_mc_grouping_api") }}';
                 isMCReport = true;
+            } else if (reportName.includes('Distribusi Pelanggan Berdasarkan TARIF')) {
+                endpoint = '{{ url_for("analyze_mc_tarif_breakdown_api") }}';
+                isTarifBreakdown = true;
             } else if (reportName.includes('Naik/Turun')) {
                 endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}';
                 isAnomalyReport = true;
-            } else if (reportName.includes('Ekstrim') || reportName.includes('Zero') || reportName.includes('Stand Tunggu')) {
-                 // Placeholder untuk Ekstrim, Zero, Stand Tunggu (yang memerlukan logika agregasi yang berbeda)
-                 // Untuk Ekstrim/Zero/Reduced, logika yang ada di app.py (_get_sbrs_anomalies) sudah dikaitkan ke analyze_volume_fluctuation_api
-                 // Untuk menyederhanakan, kita asumsikan laporan anomali lainnya menggunakan endpoint yang sama atau belum diimplementasikan.
-                 if (reportName.includes('Ekstrim') || reportName.includes('Zero')) {
-                     // Logika di app.py saat ini hanya di analyze_volume_fluctuation_api.
-                     // Jika Anda ingin report Ekstrim/Zero bekerja, perlu ditambahkan API spesifik.
-                     // Untuk Ekstrim/Zero, kita akan gunakan endpoint yang sama untuk mendapatkan semua data anomali dan client-side filter.
-                     endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}';
-                     isAnomalyReport = true;
-                 } else {
-                    dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini belum diimplementasi.</p>`;
-                    return;
-                 }
+            } else if (reportName.includes('Ekstrim') || reportName.includes('Zero')) {
+                 endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}';
+                 isAnomalyReport = true;
             } else {
-                 dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini tidak valid.</p>`;
+                 dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini belum diimplementasi.</p>`;
                  return;
             }
 
@@ -184,18 +197,21 @@
                     return;
                 }
                 
-                if (response.status !== 200 || (isAnomalyReport && data.length === 0) || (isMCReport && data.status !== 'success') || (isMBReport && data.status !== 'success')) {
-                    dataArea.innerHTML = `<p style="text-align: center; color: red;">Tidak ada data ditemukan untuk laporan ${reportName}.</p>`;
+                if (response.status !== 200 || 
+                    (isAnomalyReport && data.length === 0) || 
+                    (isTarifBreakdown && data.length === 0) ||
+                    (isMCReport && data.status !== 'success') || 
+                    (isMBReport && data.status !== 'success')) {
+                    dataArea.innerHTML = `<p style="text-align: center;">Tidak ada data ditemukan untuk laporan ${reportName}.</p>`;
                     return;
                 }
                 
                 if (isMBReport) {
                     renderMBReport(data);
                 } else if (isMCReport) {
-                    // Re-use existing MC render logic if implemented elsewhere, 
-                    // or use the dynamic table if it's meant to show the breakdown only.
-                    // For now, assume it should render the full JSON structure
                     renderMCGroupingReport(data); 
+                } else if (isTarifBreakdown) {
+                    renderTarifBreakdownTable(data); 
                 } else if (isAnomalyReport) {
                     // Apply filtering if specific anomaly report is requested (Ekstrim/Zero)
                     let filteredData = data;
@@ -215,7 +231,7 @@
         }
         
         // =========================================================================================
-        // NEW MB REPORT RENDERER
+        // 1. MB GROUPING REPORT RENDERER
         // =========================================================================================
         function renderMBReport(data) {
             const dataArea = document.getElementById('reportDataArea');
@@ -266,17 +282,17 @@
                             <tr class="total-row" style="background-color: ${color}22;">
                                 <td data-label="RAYON" style="text-align: left;">TOTAL AB SUNTER</td>
                                 <td data-label="Nomen Count">${total.NomenCount.toLocaleString('id-ID')}</td>
-                                <td data-label="Total Nominal">${formatRupiah(total.TotalNominal)}</td>
+                                <td data-label="Total Nominal" style="text-align: right;">${formatRupiah(total.TotalNominal)}</td>
                             </tr>
                             <tr>
                                 <td data-label="RAYON" style="text-align: left;">Rayon 34</td>
                                 <td data-label="Nomen Count">${r34.NomenCount.toLocaleString('id-ID')}</td>
-                                <td data-label="Total Nominal">${formatRupiah(r34.TotalNominal)}</td>
+                                <td data-label="Total Nominal" style="text-align: right;">${formatRupiah(r34.TotalNominal)}</td>
                             </tr>
                             <tr>
                                 <td data-label="RAYON" style="text-align: left;">Rayon 35</td>
                                 <td data-label="Nomen Count">${r35.NomenCount.toLocaleString('id-ID')}</td>
-                                <td data-label="Total Nominal">${formatRupiah(r35.TotalNominal)}</td>
+                                <td data-label="Total Nominal" style="text-align: right;">${formatRupiah(r35.TotalNominal)}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -313,7 +329,7 @@
                 tableHTML += `
                     <tr>
                         <td data-label="TANGGAL BAYAR" style="text-align: left;">${item.TANGGAL_BAYAR}</td>
-                        <td data-label="JML TRANSAKSI">${item.JumlahTransaksi.toLocaleString('id-ID')}</td>
+                        <td data-label="JML TRANSAKSI" style="text-align: center;">${item.JumlahTransaksi.toLocaleString('id-ID')}</td>
                         <td data-label="TOTAL NOMINAL" style="text-align: right;">${formatRupiah(item.TotalNominal)}</td>
                     </tr>
                 `;
@@ -322,7 +338,7 @@
             tableHTML += `
                 <tr class="total-row" style="background-color: #f2f2f2; font-weight: bold;">
                     <td style="text-align: left;">GRAND TOTAL</td>
-                    <td data-label="GRAND TOTAL TRANSAKSI">${totalTransaksi.toLocaleString('id-ID')}</td>
+                    <td data-label="GRAND TOTAL TRANSAKSI" style="text-align: center;">${totalTransaksi.toLocaleString('id-ID')}</td>
                     <td data-label="GRAND TOTAL NOMINAL" style="text-align: right;">${formatRupiah(totalNominal)}</td>
                 </tr>
             `;
@@ -371,7 +387,182 @@
 
         
         // =========================================================================================
-        // GENERIC / ANOMALY REPORT RENDERER (EXISTING FUNCTION)
+        // 2. MC GROUPING REPORT RENDERER (Copied from collection_unified.html)
+        // =========================================================================================
+        function renderMCGroupingReport(data) {
+            const customArea = document.getElementById('reportDataArea');
+            if (data.status !== 'success') {
+                 customArea.innerHTML = `<p class="no-results" style="color: red;">❌ ${data.message || 'Gagal memuat laporan kustom.'}</p>`;
+                 return;
+            }
+
+            const totals = data.totals;
+            const breakdowns = data.breakdowns;
+            
+            
+            // -------------------------------------------------------------------------
+            // 1. RENDER RINGKASAN TOTAL
+            // -------------------------------------------------------------------------
+            
+            let totalSummaryHTML = `
+                <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px;">Ringkasan Nomen, Nominal, dan Kubikasi (Reguler Rayon 34/35)</h3>
+                <div class="report-table-wrapper" style="max-width: 800px; margin-left: auto; margin-right: auto;">
+                    <table class="data-table" style="min-width: 100%;">
+                        <thead>
+                            <tr style="background-color: #f8d7da; color: #721c24;">
+                                <th style="text-align: left;">AREA</th>
+                                <th>Nomen Count</th>
+                                <th>Total Nominal</th>
+                                <th>Total Kubik (m³)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="text-align: left; font-weight: bold;">AB SUNTER (Total R34 + R35)</td>
+                                <td>${formatNumber(totals.TOTAL_34_35.CountOfNOMEN)}</td>
+                                <td>${formatRupiah(totals.TOTAL_34_35.SumOfNOMINAL)}</td>
+                                <td>${formatNumber(totals.TOTAL_34_35.SumOfKUBIK)}</td>
+                            </tr>
+                            <tr>
+                                <td style="text-align: left; font-weight: 600;">Rayon 34</td>
+                                <td>${formatNumber(totals[34].CountOfNOMEN)}</td>
+                                <td>${formatRupiah(totals[34].SumOfNOMINAL)}</td>
+                                <td>${formatNumber(totals[34].SumOfKUBIK)}</td>
+                            </tr>
+                            <tr>
+                                <td style="text-align: left; font-weight: 600;">Rayon 35</td>
+                                <td>${formatNumber(totals[35].CountOfNOMEN)}</td>
+                                <td>${formatRupiah(totals[35].SumOfNOMINAL)}</td>
+                                <td>${formatNumber(totals[35].SumOfKUBIK)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; margin-top: 40px;">Detail Breakdown Per Dimensi</h3>
+            `;
+
+            // -------------------------------------------------------------------------
+            // 2. RENDER BREAKDOWN PER DIMENSI (3x Tabel Terpisah per Dimensi)
+            // -------------------------------------------------------------------------
+            
+            // Helper function to create a single breakdown table (for one area: Total, R34, or R35)
+            function createSingleBreakdownTable(title, dataArray, dimensionKey) {
+                let tableHTML = `
+                    <div class="breakdown-table-container">
+                        <h5 style="margin-top: 0; color: #17a2b8;">${title}</h5>
+                        <div class="result-table-wrapper" style="margin-top: 10px;">
+                            <table class="data-table" style="min-width: 100%;">
+                                <thead>
+                                    <tr style="background-color: #f0f8ff;">
+                                        <th style="text-align: left; width: 40%;">${dimensionKey.replace(/_/g, ' ').toUpperCase()}</th>
+                                        <th>Nomen Count</th>
+                                        <th>Nominal</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                `;
+                
+                dataArray.forEach(item => {
+                    const dimValue = item[dimensionKey] || 'N/A';
+                    const nomenCount = formatNumber(item.CountOfNOMEN);
+                    const nominal = formatRupiah(item.SumOfNOMINAL);
+                    
+                    tableHTML += `
+                        <tr>
+                            <td style="text-align: left;" data-label="${dimensionKey.toUpperCase()}">${dimValue}</td>
+                            <td data-label="Nomen Count" style="text-align: center;">${nomenCount}</td>
+                            <td data-label="Nominal" style="text-align: right;">${nominal}</td>
+                        </tr>
+                    `;
+                });
+                
+                tableHTML += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+                return tableHTML;
+            }
+
+            // Function to render the entire group of 3 tables for a dimension
+            function renderDimensionGroup(dimensionName, dimensionKey, breakdownData) {
+                let groupHTML = `
+                    <h4 style="color: #007bff; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">Breakdown Berdasarkan: ${dimensionName}</h4>
+                    <div class="breakdown-group">
+                        ${createSingleBreakdownTable(`AB SUNTER (Total)`, breakdownData.TOTAL_34_35, dimensionKey)}
+                        ${createSingleBreakdownTable(`Rayon 34`, breakdownData[34], dimensionKey)}
+                        ${createSingleBreakdownTable(`Rayon 35`, breakdownData[35], dimensionKey)}
+                    </div>
+                `;
+                return groupHTML;
+            }
+
+            // Gabungkan semua output
+            let breakdownHTML = '';
+            breakdownHTML += renderDimensionGroup('Jenis TARIF', 'TARIF', breakdowns.TARIF);
+            breakdownHTML += renderDimensionGroup('Merek Meter', 'MERK', breakdowns.MERK);
+            breakdownHTML += renderDimensionGroup('Metode Baca', 'READ_METHOD', breakdowns.READ_METHOD);
+
+            customArea.innerHTML = totalSummaryHTML + breakdownHTML;
+        }
+
+        // =========================================================================================
+        // 3. TARIF BREAKDOWN REPORT RENDERER (Copied from collection_unified.html)
+        // =========================================================================================
+
+        function renderTarifBreakdownTable(data) {
+            const dataArea = document.getElementById('reportDataArea');
+            let totalPelanggan = data.reduce((sum, item) => sum + item.JumlahPelanggan, 0);
+
+            let tableHTML = `
+                <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px;">Ringkasan Distribusi Pelanggan</h3>
+                <div class="result-table-wrapper" style="max-width: 600px; margin-left: 0;"> 
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left;">RAYON</th>
+                            <th style="text-align: left;">TARIF</th>
+                            <th>JML Pelanggan</th>
+                            <th>Persentase (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            data.forEach(item => {
+                const percentage = (item.JumlahPelanggan / totalPelanggan) * 100;
+                tableHTML += `
+                    <tr>
+                        <td data-label="RAYON" style="text-align: left;">${item.RAYON}</td>
+                        <td data-label="TARIF" style="text-align: left;">${item.TARIF}</td>
+                        <td data-label="JML Pelanggan" style="text-align: center;">${formatNumber(item.JumlahPelanggan)}</td>
+                        <td data-label="Persentase" style="text-align: right; font-weight: bold; color: var(--secondary-color);">${formatPercent(percentage)}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                <tr class="total-row" style="font-weight: bold; background-color: #d0e7ff; color: var(--text-color);">
+                    <td style="text-align: left;">TOTAL</td>
+                    <td>-</td> 
+                    <td style="text-align: center;">${formatNumber(totalPelanggan)}</td>
+                    <td style="text-align: right;">100.00%</td>
+                </tr>
+            `;
+            
+            tableHTML += `
+                    </tbody>
+                </table>
+                </div>
+            `;
+            dataArea.innerHTML = tableHTML;
+        }
+
+
+        // =========================================================================================
+        // 4. GENERIC / ANOMALY REPORT RENDERER (EXISTING FUNCTION)
         // =========================================================================================
 
         function renderDynamicTable(data, title) {
@@ -408,16 +599,6 @@
             tableHTML += `</tbody></table></div>`;
             dataArea.innerHTML = tableHTML;
         }
-        
-        // Placeholder function for MC Report (assuming it uses the complex MC grouping JSON)
-        function renderMCGroupingReport(data) {
-             const dataArea = document.getElementById('reportDataArea');
-             // This is complex and assumes the render logic is identical to collection_unified.html's custom report
-             // Since the logic is extensive, we'll use a simplified message here
-             dataArea.innerHTML = `<p style="text-align: center; color: green;">✅ Data Grup MC (Master Cetak) berhasil dimuat. Render laporan ini mirip dengan bagian "Laporan Grouping MC: AB Sunter" di menu Report/Koleksi.</p>`;
-             // Actual implementation would copy the renderCustomReportTable logic from collection_unified.html
-        }
-
 
     </script>
 {% endblock %}
