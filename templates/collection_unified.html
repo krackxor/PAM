@@ -734,6 +734,64 @@
                 `;
                 return tableHTML;
             }
+            
+            // --- Helper function to create the daily summary table ---
+            function createDailySummaryTable(title, detailsArray) {
+                
+                if (detailsArray.length === 0) {
+                    return `
+                        <h5 style="margin-top: 25px; color: #6c757d;">${title} (0 Transaksi)</h5>
+                        <p class="no-results" style="font-size: 0.9em;">Tidak ada detail transaksi ditemukan untuk area ini.</p>
+                    `;
+                }
+                
+                let totalNominal = 0;
+                let totalNomen = 0;
+                detailsArray.forEach(item => {
+                    totalNominal += item.SumOfNOMINAL || 0;
+                    totalNomen += item.CountOfNOMEN || 0;
+                });
+
+                let tableHTML = `
+                    <h5 style="margin-top: 25px; color: #007bff;">${title} (${detailsArray.length} Hari Transaksi Terbaru)</h5>
+                    <div class="report-table-wrapper">
+                        <table class="report-table" style="min-width: 450px;">
+                            <thead>
+                                <tr style="background-color: #f0f8ff;">
+                                    <th data-label="TGL BAYAR">TGL BAYAR</th>
+                                    <th data-label="Nomen">NOMEN (Count)</th>
+                                    <th data-label="Nominal">NOMINAL (Rp)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                detailsArray.forEach(item => {
+                    tableHTML += `
+                        <tr>
+                            <td data-label="TGL BAYAR">${item.TGL_BAYAR}</td>
+                            <td data-label="Nomen">${formatNumber(item.CountOfNOMEN)}</td>
+                            <td data-label="Nominal">${formatRupiah(item.SumOfNOMINAL)}</td>
+                        </tr>
+                    `;
+                });
+                
+                tableHTML += `
+                    <tr class="grand-total-row">
+                        <td data-label="TOTAL" style="text-align: left;">TOTAL PERIODE</td>
+                        <td data-label="Total Nomen">${formatNumber(totalNomen)}</td>
+                        <td data-label="Total Nominal">${formatRupiah(totalNominal)}</td>
+                    </tr>
+                `;
+
+                tableHTML += `
+                        </tbody>
+                    </table>
+                </div>
+                `;
+                return tableHTML;
+            }
+
 
             // -------------------------------------------------------------------------
             // 1. RINGKASAN KOLEKSI (3 Tabel Terpisah)
@@ -741,6 +799,7 @@
             
             let summaryHTML = `
                 <h4 style="color: #17a2b8; margin-bottom: 15px;">Ringkasan Koleksi Berdasarkan Status Pembayaran</h4>
+                
                 <h5 style="color: #007bff; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">TABEL 1: TOTAL KOLEKSI (UNDUE + TUNGGAKAN)</h5>
                 <div class="breakdown-group">
                     ${createSummaryTable('Total Koleksi (MB)', 'total')}
@@ -758,74 +817,17 @@
             `;
             
             // -------------------------------------------------------------------------
-            // 2. DETAIL LISTING KOLEKSI (Per Rayon)
+            // 2. DETAIL LISTING KOLEKSI HARIAN (3 Tabel Terpisah)
             // -------------------------------------------------------------------------
             
-            function renderDetailListing(title, detailsArray) {
-                // The user wants: TGL BAYAR - NOMEN - NOMINAL
-                
-                if (detailsArray.length === 0) {
-                    return `
-                        <h5 style="margin-top: 25px; color: #6c757d;">${title} (${detailsArray.length} Transaksi)</h5>
-                        <p class="no-results" style="font-size: 0.9em;">Tidak ada detail transaksi ditemukan untuk area ini.</p>
-                    `;
-                }
-
-                let totalNominal = 0;
-                detailsArray.forEach(item => {
-                    totalNominal += item.NOMINAL || 0;
-                });
-                
-                let tableHTML = `
-                    <h5 style="margin-top: 25px; color: #007bff;">${title} (${detailsArray.length} Transaksi Terbaru, Diurutkan Terbaru)</h5>
-                    <div class="report-table-wrapper">
-                        <table class="report-table" style="min-width: 600px;">
-                            <thead>
-                                <tr style="background-color: #f0f8ff;">
-                                    <th data-label="TGL BAYAR">TGL BAYAR</th>
-                                    <th data-label="NOMEN">NOMEN</th>
-                                    <th data-label="NOMINAL">NOMINAL</th>
-                                    <th data-label="STATUS BAYAR">STATUS BAYAR</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                `;
-                
-                detailsArray.forEach(item => {
-                    // Note: Keeping STATUS_BAYAR as it provides crucial context (Undue vs Tunggakan)
-                    const statusClass = item.STATUS_BAYAR === 'UNDUE' ? 'status-ok' : 'status-danger';
-                    tableHTML += `
-                        <tr>
-                            <td data-label="TGL BAYAR">${item.TGL_BAYAR}</td>
-                            <td data-label="NOMEN">${item.NOMEN}</td>
-                            <td data-label="NOMINAL">${formatRupiah(item.NOMINAL)}</td>
-                            <td data-label="STATUS BAYAR" class="${statusClass}" style="text-align: center;">${item.STATUS_BAYAR}</td>
-                        </tr>
-                    `;
-                });
-                
-                tableHTML += `
-                    <tr class="grand-total-row">
-                        <td data-label="TOTAL" style="text-align: left;">GRAND TOTAL</td>
-                        <td data-label="NOMEN"></td>
-                        <td data-label="NOMINAL">${formatRupiah(totalNominal)}</td>
-                        <td data-label="STATUS"></td>
-                    </tr>
-                `;
-
-                tableHTML += `
-                        </tbody>
-                    </table>
-                </div>
-            `;
-                return tableHTML;
-            }
-            
             let detailsHTML = `
-                <h4 style="color: var(--primary-color); margin-top: 30px;">TABEL 4: DETAIL TRANSAKSI HARI INI (Diurutkan Tanggal Bayar)</h4>
-                ${renderDetailListing('AB SUNTER (Total R34 + R35)', abSunter.details)}
-                ${renderDetailListing('Rayon 34', r34.details)}
-                ${renderDetailListing('Rayon 35', r35.details)}
+                <h4 style="color: var(--primary-color); margin-top: 30px;">TABEL 4: DETAIL KOLEKSI HARIAN (TGL, NOMEN COUNT, NOMINAL)</h4>
+                
+                <div class="breakdown-group">
+                    ${createDailySummaryTable('AB SUNTER (Total R34 + R35)', abSunter.details)}
+                    ${createDailySummaryTable('Rayon 34', r34.details)}
+                    ${createDailySummaryTable('Rayon 35', r35.details)}
+                </div>
             `;
 
             area.innerHTML = summaryHTML + detailsHTML;
