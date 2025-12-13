@@ -647,7 +647,7 @@ def export_collection_report():
         return response
 
     except Exception as e:
-        print(f"Error during dashboard export: {e}")
+        print(f"Error during collection report export: {e}")
         return jsonify({"message": f"Gagal mengekspor data laporan koleksi: {e}"}), 500
 
 
@@ -722,7 +722,8 @@ def analyze_mc_grouping_api():
         pipeline_grouping = [
             # Normalisasi NOMEN di MC sebelum lookup
             {'$project': {
-                'NOMEN': {'$trim': {'input': {'$toString': {'$ifNull': ['$NOMEN', 'UNKNOWN_NOMEN']}}}},
+                # Normalisasi NOMEN di MC
+                'NOMEN': {'$trim': {'input': {'$toString': {'$ifNull': ['$NOMEN', 'UNKNOWN_NOMEN']}}}}, 
                 'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
                 'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
                 'TARIF': {'$toString': '$TARIF'},
@@ -730,8 +731,7 @@ def analyze_mc_grouping_api():
             {'$lookup': {
                'from': 'CustomerData', 
                'localField': 'NOMEN',
-               # Perbaikan: Normalisasi NOMEN di CID saat lookup (seharusnya sudah di-index CID)
-               'foreignField': 'NOMEN', 
+               'foreignField': 'NOMEN',
                'as': 'customer_info'
             }},
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
@@ -749,13 +749,13 @@ def analyze_mc_grouping_api():
             # --- END NORMALISASI ---
             
             {'$match': {
-                'CLEAN_TIPEPLGGN': 'REG',
+                #'CLEAN_TIPEPLGGN': 'REG', # FILTER INI DINONAKTIFKAN UNTUK DIAGNOSIS
                 'CLEAN_RAYON': {'$in': ['34', '35']}
             }},
             
             {'$group': {
                 '_id': {
-                    'TIPEPLGGN': '$CLEAN_TIPEPLGGN', 
+                    'TIPEPLGGN': '$CLEAN_TIPEPLGGN', # Tipe pelanggan dipertahankan untuk dilihat
                     'RAYON': '$CLEAN_RAYON',
                     'TARIF': '$CLEAN_TARIF',
                     'MERK': '$CLEAN_MERK',
@@ -820,7 +820,7 @@ def analyze_mc_grouping_summary_api():
             # --- END NORMALISASI ---
             
             {'$match': {
-                'CLEAN_TIPEPLGGN': 'REG',
+                #'CLEAN_TIPEPLGGN': 'REG', # FILTER INI DINONAKTIFKAN UNTUK DIAGNOSIS
                 'CLEAN_RAYON': {'$in': ['34', '35']}
             }},
             {'$group': {
@@ -882,7 +882,7 @@ def analyze_mc_tarif_breakdown_api():
             
             # 2. Filter Kriteria Kustom
             {'$match': {
-                'CLEAN_TIPEPLGGN': 'REG',
+                #'CLEAN_TIPEPLGGN': 'REG', # FILTER INI DINONAKTIFKAN UNTUK DIAGNOSIS
                 'CLEAN_RAYON': {'$in': ['34', '35']}
             }},
             
@@ -891,6 +891,7 @@ def analyze_mc_tarif_breakdown_api():
                 '_id': {
                     'RAYON': '$CLEAN_RAYON',
                     'TARIF': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$TARIF', 'N/A']}}}}},
+                    'TIPEPLGGN': '$CLEAN_TIPEPLGGN', # Tipe pelanggan dipertahankan untuk dilihat
                 },
                 'CountOfNOMEN': {'$addToSet': '$NOMEN'},
             }},
@@ -900,6 +901,7 @@ def analyze_mc_tarif_breakdown_api():
                 '_id': 0,
                 'RAYON': '$_id.RAYON',
                 'TARIF': '$_id.TARIF',
+                'TIPEPLGGN': '$_id.TIPEPLGGN',
                 'JumlahPelanggan': {'$size': '$CountOfNOMEN'}
             }},
             {'$sort': {'RAYON': 1, 'TARIF': 1}}
