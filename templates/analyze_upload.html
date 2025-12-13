@@ -1,129 +1,114 @@
 {% extends "base.html" %}
 
-{% block title %}Analisis File Dinamis{% endblock %}
+{% block title %}Dynamic File Analysis{% endblock %}
 
 {% block custom_styles %}
 /* CSS Khusus untuk Halaman Upload Analisis */
 .upload-section { 
-    border: 2px dashed var(--primary-color); 
-    padding: 30px; 
-    border-radius: var(--border-radius);
-    margin-bottom: 30px;
+    border: 2px dashed var(--secondary-color); 
+    padding: 20px; 
+    border-radius: 0px;
+    margin-bottom: 20px;
     text-align: center;
-    background-color: #f0f8ff; 
+    background-color: #050505; 
+    box-shadow: 0 0 10px var(--secondary-color);
 }
 .btn-analyze { 
-    background-color: var(--accent-color); 
-    color: var(--text-color); 
+    background-color: var(--secondary-color); 
+    color: var(--bg-color); 
     border: none; 
-    padding: 12px 25px; 
-    border-radius: 4px; 
+    padding: 10px 20px; 
+    border-radius: 0px; 
     cursor: pointer; 
-    font-weight: 600;
+    font-weight: 700;
     transition: background-color 0.3s; 
-    width: 100%; /* Default 100% width in form */
-    max-width: 350px;
-    margin-top: 15px; /* Add margin for spacing */
+    box-shadow: 0 0 5px var(--secondary-color);
 }
 .btn-analyze:hover { 
-    background-color: #e0a800; 
+    background-color: var(--primary-color); 
+    box-shadow: 0 0 10px var(--primary-color);
 }
 #analyzeStatus { 
     margin-top: 15px; 
-    font-weight: 600; 
-    font-size: 1.1em;
+    font-weight: 700; 
+    font-size: 1.0em;
 }
 
 .analysis-result { 
-    margin-top: 30px; 
-    border-top: 2px solid #ddd; 
-    padding-top: 20px; 
+    margin-top: 20px; 
+    border-top: 1px dashed #333; 
+    padding-top: 15px; 
 }
 .data-summary {
-    background-color: #f8f9fa;
-    border: 1px solid #e9ecef;
-    border-radius: var(--border-radius);
-    padding: 15px;
-    margin-bottom: 20px;
+    background-color: #0a0a0a;
+    border: 1px solid #333;
+    border-radius: 0px;
+    padding: 10px;
+    margin-bottom: 15px;
+    color: var(--primary-color);
 }
 .data-summary div { 
-    padding: 8px 0; 
-    border-bottom: 1px dashed #ced4da; 
+    padding: 5px 0; 
+    border-bottom: 1px dashed #222; 
 }
 .data-summary div:last-child {
     border-bottom: none;
+}
+.data-summary strong {
+    color: var(--secondary-color);
+}
+.data-summary div {
+    display: flex;
+    justify-content: space-between;
 }
 
 /* Style Tabel Hasil Analisis */
 .result-table-wrapper { 
     overflow-x: auto; 
-    margin-top: 20px;
-    box-shadow: var(--shadow-light);
-    border-radius: var(--border-radius);
+    margin-top: 15px;
+    box-shadow: 0 0 5px var(--primary-color);
     overflow: hidden;
+    background-color: #111;
 }
 table { 
     width: 100%; 
     border-collapse: collapse; 
-    font-size: 14px; 
+    font-size: 12px; 
+    color: var(--primary-color);
 }
 th, td { 
-    border: 1px solid #f0f0f0; 
-    padding: 10px; 
+    border: 1px solid #333; 
+    padding: 8px; 
     text-align: left; 
     white-space: nowrap; 
 }
 th { 
-    background-color: #e9ecef; 
-    font-weight: 600;
+    background-color: #222; 
+    font-weight: 700;
+    color: var(--secondary-color);
+    text-transform: uppercase;
 }
 
 /* Tombol Kembali ke Dashboard Analisis */
 .btn-back-analysis {
     display: inline-block;
-    margin-bottom: 20px;
-    padding: 10px 18px;
-    background-color: #6c757d;
+    margin-bottom: 15px;
+    padding: 8px 15px;
+    background-color: #555;
     color: white;
-    border-radius: 4px;
+    border-radius: 0px;
     text-decoration: none;
     font-weight: 600;
-    transition: background-color 0.3s;
 }
 .btn-back-analysis:hover {
-    background-color: #5a6268;
+    background-color: #777;
 }
 
-/* ========================================================== */
-/* MOBILE LAYOUT FIXES (< 600px) */
-/* ========================================================== */
+/* Mobile Layout for Tables (Card View) */
 @media screen and (max-width: 600px) {
-    .upload-section {
-        padding: 15px;
-    }
-    .btn-analyze {
-        max-width: 100%;
-    }
-    .btn-back-analysis {
-        width: 100%;
-        text-align: center;
-        margin-bottom: 15px;
-    }
-    .upload-section form {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-    }
-    .upload-section input[type="file"] {
-        width: 100%;
-        max-width: 100%;
-    }
-
-    /* Card View for all tables on this page */
     .result-table-wrapper {
         box-shadow: none;
         border: none;
-        overflow-x: hidden;
     }
     table {
         min-width: 100%;
@@ -133,43 +118,41 @@ th {
     }
     table tr {
         display: block;
-        margin-bottom: 15px; /* Tambah margin antar card */
-        border: 1px solid #ddd;
-        border-radius: var(--border-radius);
+        margin-bottom: 10px;
+        border: 1px solid #333;
+        border-radius: 0px;
+        background-color: #050505;
     }
     table td {
         display: flex;
         justify-content: space-between;
         padding: 8px 12px;
         border: none;
-        border-bottom: 1px solid #eee;
-        text-align: right; /* Nilai di kanan */
-        white-space: normal;
-        font-size: 13px;
+        border-bottom: 1px solid #333;
     }
     table td:before {
         content: attr(data-label);
-        font-weight: 600;
+        font-weight: 700;
         text-align: left;
-        width: 50%;
+        width: 45%;
+        color: var(--secondary-color);
         padding-right: 10px;
-        white-space: nowrap;
     }
 }
 {% endblock %}
 
 {% block content %}
-    <h2 style="text-align: left; border-bottom: none; margin-bottom: 10px; color: var(--primary-color);">
-        <i class="fas fa-file-upload" style="margin-right: 10px;"></i> Analisis File Dinamis
+    <h2 style="text-align: left; border-bottom: none; margin-bottom: 10px; color: var(--secondary-color);">
+        <i class="fas fa-file-upload" style="margin-right: 10px;"></i> DYNAMIC FILE INGESTION & ANALYSIS
     </h2>
     
     <a href="{{ url_for('analyze_reports_landing') }}" class="btn-back-analysis">
-        ← Kembali ke Dashboard Analisis
+        ← BACK TO ANALYSIS SUITE
     </a>
 
     <div class="upload-section">
-        <h3>Gabungkan dan Analisis File</h3>
-        <p>Unggah **dua atau lebih** file CSV/XLSX. Aplikasi akan menggabungkannya berdasarkan kolom **NOMEN** dan menyajikan ringkasan statistik.</p>
+        <h3>INITIATE DATA MESH MERGE</h3>
+        <p style="color: #999; text-shadow: none;">Upload **two or more** CSV/XLSX files. The system will merge them using the **HOST ID (NOMEN)** and generate descriptive statistics.</p>
         <form id="analyzeForm" enctype="multipart/form-data">
             <input 
                 type="file" 
@@ -178,14 +161,15 @@ th {
                 accept=".csv, .xlsx, .xls" 
                 multiple 
                 required
+                style="color: var(--primary-color); background: #111; border: 1px solid #333; padding: 10px; margin-bottom: 15px; width: 100%; box-sizing: border-box;"
             >
-            <button type="submit" class="btn-analyze">Jalankan Analisis Gabungan</button>
+            <button type="submit" class="btn-analyze">EXECUTE MERGE & ANALYZE</button>
         </form>
         <div id="analyzeStatus"></div>
     </div>
     
     <div class="analysis-result" id="analysisResult">
-        <p style="text-align: center; color: gray;">Hasil analisis akan muncul di sini.</p>
+        <p style="text-align: center; color: #777;">[OUTPUT] Analysis results will be displayed here.</p>
     </div>
 
     <script>
@@ -198,13 +182,13 @@ th {
             
             const fileInput = document.getElementById('analyzeFile');
             if (fileInput.files.length < 1) {
-                analyzeStatus.innerHTML = '<span style="color: #dc3545;">❌ Harap pilih minimal satu file.</span>';
+                analyzeStatus.innerHTML = `<span style="color: #ff0000;">❌ [ERROR] At least one file must be selected.</span>`;
                 return;
             }
 
             const formData = new FormData(this);
-            analyzeStatus.innerHTML = '<span style="color: orange;"><i class="fas fa-spinner fa-spin"></i> Menganalisis file dan menggabungkan data...</span>';
-            analysisResult.innerHTML = '<p style="text-align: center; color: #6c757d;">Memuat...</p>';
+            analyzeStatus.innerHTML = `<span style="color: var(--secondary-color);"><i class="fas fa-spinner fa-spin"></i> Merging data streams... Please standby...</span>`;
+            analysisResult.innerHTML = `<p style="text-align: center; color: #777;">Processing...</p>`;
 
             try {
                 const response = await fetch('{{ url_for("analyze_data") }}', {
@@ -215,16 +199,17 @@ th {
                 const result = await response.json();
 
                 if (response.ok && result.status === 'success') {
-                    analyzeStatus.innerHTML = `<span style="color: var(--secondary-color);">✅ Analisis Selesai: ${result.summary.file_name}</span>`;
+                    analyzeStatus.innerHTML = `<span style="color: var(--primary-color);">✅ ANALYSIS COMPLETE: ${result.summary.file_name}</span>`;
                     renderAnalysis(result);
                 } else if (response.status === 401) {
                     window.location.href = '{{ url_for("login") }}'; 
                 } else {
-                    analyzeStatus.innerHTML = `<span style="color: #dc3545;">❌ Error: ${result.message}</span>`;
-                    analysisResult.innerHTML = `<p style="color: #dc3545; text-align: center;">${result.message}</p>`;
+                    analyzeStatus.innerHTML = `<span style="color: #ff0000;">❌ [FATAL ERROR] ${result.message}</span>`;
+                    analysisResult.innerHTML = `<p style="color: #ff0000; text-align: center;">${result.message}</p>`;
                 }
             } catch (error) {
-                analyzeStatus.innerHTML = `<span style="color: #dc3545;">❌ Gagal terhubung ke server.</span>`;
+                analyzeStatus.innerHTML = `<span style="color: #ff0000;">❌ [NETWORK ERROR] Connection failure.</span>`;
+                analysisResult.innerHTML = '';
                 console.error('Error:', error);
             }
         });
@@ -233,19 +218,19 @@ th {
             
             // 1. Ringkasan Dasar
             let summaryHtml = `
-                <h3 style="color: var(--primary-color);">Ringkasan Data Gabungan</h3>
+                <h3 style="color: var(--secondary-color);">[MERGE SUMMARY]</h3>
                 <div class="data-summary">
-                    <div><strong>Nama File Hasil:</strong> ${data.summary.file_name}</div>
-                    <div><strong>Kunci Penggabungan:</strong> ${data.summary.join_key}</div>
-                    <div><strong>Jumlah Total Baris:</strong> ${data.summary.row_count.toLocaleString('id-ID')}</div>
-                    <div><strong>Jumlah Kolom:</strong> ${data.summary.column_count}</div>
-                    <div><strong>Kolom Ditemukan:</strong> ${data.summary.columns.join(', ')}</div>
+                    <div><strong>OUTPUT FILE:</strong> <span>${data.summary.file_name}</span></div>
+                    <div><strong>MERGE KEY:</strong> <span>${data.summary.join_key}</span></div>
+                    <div><strong>TOTAL RECORDS:</strong> <span>${data.summary.row_count.toLocaleString('id-ID')}</span></div>
+                    <div><strong>COLUMN COUNT:</strong> <span>${data.summary.column_count}</span></div>
+                    <div><strong>COLUMNS DETECTED:</strong> <span>${data.summary.columns.join(', ')}</span></div>
                 </div>
                 
-                <h3 style="margin-top: 30px; color: var(--primary-color);">5 Baris Data Pertama (Head)</h3>
+                <h3 style="margin-top: 20px; color: var(--secondary-color);">[DATA HEAD (5 RECORDS)]</h3>
                 <div class="result-table-wrapper">${data.head}</div>
                 
-                <h3 style="margin-top: 30px; color: var(--primary-color);">Statistik Deskriptif</h3>
+                <h3 style="margin-top: 20px; color: var(--secondary-color);">[DESCRIPTIVE STATISTICS]</h3>
                 <div id="stats-table"></div>
             `;
             analysisResult.innerHTML = summaryHtml;
@@ -254,7 +239,7 @@ th {
             const stats = JSON.parse(data.stats);
             const statsElement = document.getElementById('stats-table');
             
-            let statsTableHtml = '<div class="result-table-wrapper"><table><thead><tr><th>Statistik</th>';
+            let statsTableHtml = '<div class="result-table-wrapper"><table><thead><tr><th>STATISTIC</th>';
             
             const columnNames = Object.keys(stats);
             columnNames.forEach(col => {
@@ -265,7 +250,7 @@ th {
             const statNames = Object.keys(stats[columnNames[0]]);
             
             statNames.forEach(stat => {
-                statsTableHtml += `<tr><td data-label="Statistik"><strong>${stat.charAt(0).toUpperCase() + stat.slice(1)}</strong></td>`;
+                statsTableHtml += `<tr><td data-label="STATISTIC"><strong>${stat.charAt(0).toUpperCase() + stat.slice(1)}</strong></td>`;
                 columnNames.forEach(col => {
                     let value = stats[col][stat];
                     let displayValue;
@@ -289,12 +274,6 @@ th {
             
             statsTableHtml += '</tbody></table></div>';
             statsElement.innerHTML = statsTableHtml;
-            
-            // Add data-label to head table for mobile compatibility (since it's rendered as HTML string)
-            // Note: This relies on the table being simple enough to manipulate after insertion.
-            // For Pandas HTML output, we must ensure all <td> tags get data-label.
-            // A safer approach might be to modify Python to return JSON and build the HTML here, 
-            // but for simple fix, we stick to the existing structure and rely on the mobile CSS.
         }
 
     </script>
