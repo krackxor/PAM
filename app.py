@@ -738,6 +738,10 @@ def analyze_mc_grouping_api():
             {'$addFields': {
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '']}}}}}, # Diubah ke huruf besar
                 'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '']}}}},
+                # --- START: Normalisasi MERK dan READ_METHOD (FIX PERMASALAHAN GROUPING) ---
+                'CLEAN_MERK': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
+                'CLEAN_READ_METHOD': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}}}}},
+                # --- END: Normalisasi MERK dan READ_METHOD ---
             }},
             # --- END NORMALISASI ---
             
@@ -751,8 +755,8 @@ def analyze_mc_grouping_api():
                     'TIPEPLGGN': '$CLEAN_TIPEPLGGN', # Grouping menggunakan data bersih (REG)
                     'RAYON': '$CLEAN_RAYON',
                     'TARIF': {'$ifNull': ['$TARIF', 'N/A']},
-                    'MERK': {'$ifNull': ['$customer_info.MERK', 'N/A']},
-                    'READ_METHOD': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']},
+                    'MERK': '$CLEAN_MERK', # Menggunakan kolom yang sudah dinormalisasi
+                    'READ_METHOD': '$CLEAN_READ_METHOD', # Menggunakan kolom yang sudah dinormalisasi
                 },
                 'CountOfNOMEN': {'$addToSet': '$NOMEN'}, 
                 'SumOfKUBIK': {'$sum': '$KUBIK'},
