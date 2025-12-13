@@ -13,6 +13,8 @@ from functools import wraps
 import re 
 from datetime import datetime, timedelta 
 import io 
+from pymongo import InsertOne # <--- MODIFIKASI BARU: Import InsertOne
+from pymongo.errors import BulkWriteError # <--- MODIFIKASI BARU: Import BulkWriteError
 
 load_dotenv() 
 
@@ -66,6 +68,9 @@ try:
     collection_mb.create_index([('TGL_BAYAR', -1)], name='idx_mb_paydate_desc')
     collection_mb.create_index([('NOMEN', 1)], name='idx_mb_nomen')
     collection_mb.create_index([('RAYON', 1), ('PCEZ', 1), ('TGL_BAYAR', -1)], name='idx_mb_rayon_pcez_date')
+    
+    # Rekomendasi Index Unik untuk MB (Mencegah Duplikasi Cepat)
+    # collection_mb.create_index([('NOTAGIHAN', 1), ('TGL_BAYAR', 1), ('NOMINAL', 1)], name='idx_mb_unique_keys', unique=True)
 
     # SBRS (MeterReading): Untuk Anomaly Check
     collection_sbrs.create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', -1)], name='idx_sbrs_history')
@@ -1293,7 +1298,7 @@ def upload_mc_data():
 @login_required 
 @admin_required 
 def upload_mb_data():
-    """Mode APPEND: Untuk Master Bayar (MB) / Koleksi Harian. (DIPERBAIKI)"""
+    """Mode APPEND: Untuk Master Bayar (MB) / Koleksi Harian. (DIPERBAIKI DENGAN BULK WRITE)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -1349,20 +1354,44 @@ def upload_mb_data():
         skipped_count = 0
         total_rows = len(data_to_insert)
         
-        # Kunci unik: NOTAGIHAN (dari MB) + TGL_BAYAR
+        # Kunci unik: NOTAGIHAN (dari MB) + TGL_BAYAR, NOMINAL
         UNIQUE_KEYS = ['NOTAGIHAN', 'TGL_BAYAR', 'NOMINAL'] 
         
         if not all(key in df.columns for key in UNIQUE_KEYS):
             return jsonify({"message": f"Gagal Append: File MB harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)}. Cek file Anda."}), 400
 
-        for record in data_to_insert:
-            filter_query = {key: record.get(key) for key in UNIQUE_KEYS}
-            
-            if collection_mb.find_one(filter_query):
-                skipped_count += 1
-            else:
-                collection_mb.insert_one(record)
-                inserted_count += 1
+        # ===============================================================
+        # >>> MODIFIKASI KRITIS: GANTI ITERASI FindOne/InsertOne dengan Bulk Write <<<
+        # SOLUSI UNTUK MENCEGAH TIMEOUT PADA FILE BESAR
+        # ===============================================================
+        
+        requests_to_write = [InsertOne(record) for record in data_to_insert]
+
+        try:
+            # collection_mb harus memiliki UNIQUE INDEX pada kombinasi UNIQUE_KEYS
+            # untuk memastikan duplikat tidak dimasukkan. ordered=False mencegah
+            # operasi berhenti pada duplikat pertama.
+            result = collection_mb.bulk_write(requests_to_write, ordered=False)
+            inserted_count = result.inserted_count
+            skipped_count = total_rows - inserted_count
+
+        except BulkWriteError as bwe:
+             # Menangani duplikasi/kesalahan lainnya saat bulk write
+             inserted_count = bwe.details.get('nInserted', 0)
+             skipped_count = total_rows - inserted_count
+             
+             # Jika terjadi error lain (bukan hanya duplikasi)
+             if inserted_count == 0 and total_rows > 0 and 'writeErrors' in bwe.details and bwe.details['writeErrors'][0]['code'] not in [11000, 11001]: # 11000/11001 = Duplicate Key Error
+                 # Mengembalikan error jika terjadi kegagalan total
+                 return jsonify({"message": f"Gagal memproses file MB: Terjadi error Bulk Write. Error: {bwe.details['writeErrors'][0]['errmsg']}"}), 500
+
+        except Exception as e:
+            print(f"Error saat memproses Bulk Write MB: {e}")
+            return jsonify({"message": f"Gagal memproses file MB: Terjadi error jaringan/DB. Error: {e}"}), 500
+        
+        # ===============================================================
+        # >>> END MODIFIKASI KRITIS <<<
+        # ===============================================================
         
         # --- RETURN REPORT ---
         return jsonify({
@@ -1535,7 +1564,7 @@ def upload_sbrs_data():
                 collection_sbrs.insert_one(record)
                 inserted_count += 1
         
-        # === ANALISIS ANOMALI INSTAN SETELAH INSERT ===
+        # === ANALISIS ANOMALI INSTAN SETELAN INSERT ===
         anomaly_list = []
         try:
             if inserted_count > 0:
