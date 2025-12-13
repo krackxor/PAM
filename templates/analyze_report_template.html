@@ -26,7 +26,7 @@
     margin-top: 20px; 
 }
 
-/* Style Tabel */
+/* Style Tabel Umum */
 .data-table {
     width: 100%;
     border-collapse: collapse;
@@ -61,7 +61,7 @@
     background-color: #d0e7ff;
 }
 
-/* Style for individual sections inside the Monthly tab (copied from upload_admin_unified.html) */
+/* Style untuk kelompok tabel kustom (AB Sunter) - MC Grouping */
 .breakdown-group {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* 3 kolom yang responsif */
@@ -121,7 +121,7 @@
 
 {% block content %}
     <h2 style="text-align: left; border-bottom: none; margin-bottom: 10px; color: var(--primary-color);">
-        <i class="fas fa-list-alt" style="margin-right: 10px;"></i> Laporan Anomali: {{ title }}
+        <i class="fas fa-list-alt" style="margin-right: 10px;"></i> Laporan Analisis: {{ title }}
     </h2>
     
     <div class="report-info">
@@ -183,7 +183,7 @@
                  endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}';
                  isAnomalyReport = true;
             } else {
-                 dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini belum diimplementasi.</p>`;
+                 dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini belum diimplementasi: ${reportName}</p>`;
                  return;
             }
 
@@ -406,7 +406,7 @@
             
             let totalSummaryHTML = `
                 <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px;">Ringkasan Nomen, Nominal, dan Kubikasi (Reguler Rayon 34/35)</h3>
-                <div class="report-table-wrapper" style="max-width: 800px; margin-left: auto; margin-right: auto;">
+                <div class="result-table-wrapper" style="max-width: 800px; margin-left: auto; margin-right: auto;">
                     <table class="data-table" style="min-width: 100%;">
                         <thead>
                             <tr style="background-color: #f8d7da; color: #721c24;">
@@ -418,22 +418,22 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td style="text-align: left; font-weight: bold;">AB SUNTER (Total R34 + R35)</td>
-                                <td>${formatNumber(totals.TOTAL_34_35.CountOfNOMEN)}</td>
-                                <td>${formatRupiah(totals.TOTAL_34_35.SumOfNOMINAL)}</td>
-                                <td>${formatNumber(totals.TOTAL_34_35.SumOfKUBIK)}</td>
+                                <td data-label="AREA" style="text-align: left; font-weight: bold;">AB SUNTER (Total R34 + R35)</td>
+                                <td data-label="Nomen Count" style="text-align: center;">${formatNumber(totals.TOTAL_34_35.CountOfNOMEN)}</td>
+                                <td data-label="Total Nominal" style="text-align: right;">${formatRupiah(totals.TOTAL_34_35.SumOfNOMINAL)}</td>
+                                <td data-label="Total Kubik" style="text-align: right;">${formatNumber(totals.TOTAL_34_35.SumOfKUBIK)}</td>
                             </tr>
                             <tr>
-                                <td style="text-align: left; font-weight: 600;">Rayon 34</td>
-                                <td>${formatNumber(totals[34].CountOfNOMEN)}</td>
-                                <td>${formatRupiah(totals[34].SumOfNOMINAL)}</td>
-                                <td>${formatNumber(totals[34].SumOfKUBIK)}</td>
+                                <td data-label="AREA" style="text-align: left; font-weight: 600;">Rayon 34</td>
+                                <td data-label="Nomen Count" style="text-align: center;">${formatNumber(totals[34].CountOfNOMEN)}</td>
+                                <td data-label="Total Nominal" style="text-align: right;">${formatRupiah(totals[34].SumOfNOMINAL)}</td>
+                                <td data-label="Total Kubik" style="text-align: right;">${formatNumber(totals[34].SumOfKUBIK)}</td>
                             </tr>
                             <tr>
-                                <td style="text-align: left; font-weight: 600;">Rayon 35</td>
-                                <td>${formatNumber(totals[35].CountOfNOMEN)}</td>
-                                <td>${formatRupiah(totals[35].SumOfNOMINAL)}</td>
-                                <td>${formatNumber(totals[35].SumOfKUBIK)}</td>
+                                <td data-label="AREA" style="text-align: left; font-weight: 600;">Rayon 35</td>
+                                <td data-label="Nomen Count" style="text-align: center;">${formatNumber(totals[35].CountOfNOMEN)}</td>
+                                <td data-label="Total Nominal" style="text-align: right;">${formatRupiah(totals[35].SumOfNOMINAL)}</td>
+                                <td data-label="Total Kubik" style="text-align: right;">${formatNumber(totals[35].SumOfKUBIK)}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -470,7 +470,7 @@
                     
                     tableHTML += `
                         <tr>
-                            <td style="text-align: left;" data-label="${dimensionKey.toUpperCase()}">${dimValue}</td>
+                            <td data-label="${dimensionKey.toUpperCase()}" style="text-align: left;">${dimValue}</td>
                             <td data-label="Nomen Count" style="text-align: center;">${nomenCount}</td>
                             <td data-label="Nominal" style="text-align: right;">${nominal}</td>
                         </tr>
@@ -545,10 +545,10 @@
             
             tableHTML += `
                 <tr class="total-row" style="font-weight: bold; background-color: #d0e7ff; color: var(--text-color);">
-                    <td style="text-align: left;">TOTAL</td>
+                    <td data-label="TOTAL" style="text-align: left;">TOTAL</td>
                     <td>-</td> 
-                    <td style="text-align: center;">${formatNumber(totalPelanggan)}</td>
-                    <td style="text-align: right;">100.00%</td>
+                    <td data-label="JML Pelanggan Total" style="text-align: center;">${formatNumber(totalPelanggan)}</td>
+                    <td data-label="Persentase Total" style="text-align: right;">100.00%</td>
                 </tr>
             `;
             
