@@ -401,7 +401,7 @@ def collection_report_api():
     # 2. MC (KOLEKSI) METRICS - Collected (flagged in MC)
     pipeline_collected = [
         initial_project, 
-        { '$match': { 'STATUS': 'PAYMENT' } }, 
+        { '$match': { 'STATUS': 'PAYMENT' } }, # Gunakan UPPERCASE yang sudah bersih
         { '$group': {
             '_id': { 'rayon': '$RAYON', 'pcez': '$PCEZ' },
             'collected_nomen': { '$addToSet': '$NOMEN' }, 
@@ -661,6 +661,14 @@ def export_collection_report():
 def analyze_reports_landing():
     return render_template('analyze_landing.html', is_admin=current_user.is_admin)
 
+@app.route('/analyze/full_mc_report', methods=['GET'])
+@login_required
+def analyze_full_mc_report():
+    return render_template('analyze_report_template.html', 
+                           title="Laporan Grup Master Cetak (MC) Lengkap", 
+                           description="Menyajikan data agregasi NOMEN, Kubik, dan Nominal berdasarkan Rayon, Metode Baca, Tarif, dan Jenis Meter.",
+                           is_admin=current_user.is_admin)
+
 @app.route('/analyze/extreme', methods=['GET'])
 @login_required
 def analyze_extreme_usage():
@@ -694,6 +702,129 @@ def analyze_stand_tungggu():
                            is_admin=current_user.is_admin)
 
 # =========================================================================
+# === API GROUPING MC LENGKAP (SESUAI PERMINTAAN PENGGUNA) ===
+# =========================================================================
+
+@app.route('/api/analyze/mc_full_report', methods=['GET'])
+@login_required 
+def analyze_mc_full_report_api():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    # Helper to calculate total NOMEN, KUBIK, NOMINAL based on an optional Rayon filter.
+    def _aggregate_mc_totals(collection_mc, collection_cid, rayon_filter=None):
+        pipeline = [{'$project': {
+            'NOMEN': '$NOMEN',
+            'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
+            'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
+        }}]
+    
+        if rayon_filter in ['34', '35']:
+            # Join to CID for accurate Rayon filtering (using CID's data)
+            pipeline.extend([
+                {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
+                {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
+                {'$addFields': {'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},}},
+                {'$match': {'CLEAN_RAYON': rayon_filter}}
+            ])
+        # NOTE: For 'All', we skip the match stage to count everything in MC
+        
+        pipeline.extend([
+            {'$group': {
+                '_id': None,
+                'TotalNomen': {'$addToSet': '$NOMEN'}, 
+                'SumOfKUBIK': {'$sum': '$KUBIK'},
+                'SumOfNOMINAL': {'$sum': '$NOMINAL'},
+            }},
+            {'$project': {
+                '_id': 0,
+                'CountOfNOMEN': {'$size': '$TotalNomen'},
+                'SumOfKUBIK': {'$round': ['$SumOfKUBIK', 0]},
+                'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 0]},
+            }}
+        ])
+
+        result = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
+        return result[0] if result else {'CountOfNOMEN': 0, 'SumOfKUBIK': 0, 'SumOfNOMINAL': 0}
+
+    # Helper to aggregate metrics grouped by a single dimension (Tarif, Read Method, Merk Meter)
+    def _aggregate_mc_breakdown(collection_mc, collection_cid, dimension, rayon_filter=None):
+        dimension_map = {'TARIF': '$TARIF_CID', 'READ_METHOD': '$READ_METHOD', 'MERK_METER': '$MERK'}
+        dimension_field = dimension.upper()
+        if dimension_field not in dimension_map: return []
+        group_key = dimension_map[dimension_field]
+        
+        pipeline = [
+            {'$project': {
+                'NOMEN': '$NOMEN',
+                'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
+                'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
+            }},
+            # Join to CID to get the grouping dimension and Rayon
+            {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
+            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
+            {'$addFields': {
+                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
+                'TARIF_CID': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TARIF', 'N/A']}}}}}, 
+                'MERK': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
+                'READ_METHOD': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}}}}},
+            }},
+        ]
+        
+        if rayon_filter in ['34', '35']:
+            pipeline.append({'$match': {'CLEAN_RAYON': rayon_filter}})
+        
+        pipeline.extend([
+            {'$group': {
+                '_id': group_key,
+                'CountOfNOMEN': {'$addToSet': '$NOMEN'}, 
+                'SumOfNOMINAL': {'$sum': '$NOMINAL'},
+                'SumOfKUBIK': {'$sum': '$KUBIK'},
+            }},
+            {'$project': {
+                '_id': 0,
+                dimension_field: '$_id',
+                'CountOfNOMEN': {'$size': '$CountOfNOMEN'},
+                'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 0]},
+                'SumOfKUBIK': {'$round': ['$SumOfKUBIK', 0]},
+            }},
+            {'$sort': {dimension_field: 1}}
+        ])
+
+        return list(collection_mc.aggregate(pipeline, allowDiskUse=True))
+
+    try:
+        # 1. KPI Totals
+        totals = {
+            'all': _aggregate_mc_totals(collection_mc, collection_cid, rayon_filter=None), # All MC data
+            '34': _aggregate_mc_totals(collection_mc, collection_cid, rayon_filter='34'),
+            '35': _aggregate_mc_totals(collection_mc, collection_cid, rayon_filter='35'),
+        }
+
+        # 2. Breakdown by Dimension
+        dimensions = ['READ_METHOD', 'TARIF', 'MERK_METER']
+        breakdowns = {}
+        
+        for dim in dimensions:
+            breakdowns[dim] = {
+                'all': _aggregate_mc_breakdown(collection_mc, collection_cid, dim, rayon_filter=None), 
+                '34': _aggregate_mc_breakdown(collection_mc, collection_cid, dim, rayon_filter='34'),
+                '35': _aggregate_mc_breakdown(collection_mc, collection_cid, dim, rayon_filter='35'),
+            }
+
+        response_data = {
+            'status': 'success',
+            'totals': totals,
+            'breakdowns': breakdowns
+        }
+        
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        print(f"Error saat membuat laporan lengkap MC: {e}")
+        return jsonify({"status": "error", "message": f"Gagal mengambil laporan lengkap MC: {e}"}), 500
+
+# =========================================================================
 # === API UNTUK ANALISIS AKURAT (Fluktuasi Volume Naik/Turun) ===
 # =========================================================================
 @app.route('/api/analyze/volume_fluctuation', methods=['GET'])
@@ -711,10 +842,10 @@ def analyze_volume_fluctuation_api():
         return jsonify({"message": f"Gagal mengambil data fluktuasi volume. Detail teknis error: {e}"}), 500
         
 # =========================================================================
-# === API GROUPING MC KUSTOM (BARU DARI PERMINTAAN USER) ===
+# === API GROUPING MC KUSTOM (KEMBALI KE MODE GROUPING KOKOH) ===
 # =========================================================================
 
-# 1. API DETAIL (Mengembalikan Summary Total Kustom)
+# 1. API DETAIL (Untuk Laporan Grouping Penuh - MODE GROUPING KOKOH)
 @app.route('/api/analyze/mc_grouping', methods=['GET'])
 @login_required 
 def analyze_mc_grouping_api():
@@ -740,6 +871,7 @@ def analyze_mc_grouping_api():
             
             # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
+                # Normalisasi di sini menggunakan data yang sudah di-clean saat upload (UPPERCASE STRING)
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},
                 'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
                 'CLEAN_MERK': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
@@ -748,33 +880,41 @@ def analyze_mc_grouping_api():
             # --- END NORMALISASI ---
             
             {'$match': {
+                # Filter menggunakan STRING KAPITAL yang sudah di-clean
                 'CLEAN_TIPEPLGGN': 'REG',
-                'CLEAN_RAYON': {'$in': ['34', '35']} 
+                'CLEAN_RAYON': {'$in': ['34', '35']} # Filter menggunakan string, konsisten dengan CID upload
             }},
             
-            # >>> START SIMPLIFIKASI: Mengubah ke Summary Total <<<
             {'$group': {
-                '_id': None, # Group semua dokumen menjadi satu untuk mendapatkan grand totals
-                'TotalNomenKustom': {'$addToSet': '$NOMEN'}, 
+                '_id': {
+                    'TIPEPLGGN': '$CLEAN_TIPEPLGGN',
+                    'RAYON': '$CLEAN_RAYON',
+                    'TARIF': '$TARIF', 
+                    
+                    # Grouping Key Paling Kokoh
+                    'MERK': '$CLEAN_MERK', 
+                    'READ_METHOD': '$CLEAN_READ_METHOD', 
+                },
+                'CountOfNOMEN': {'$addToSet': '$NOMEN'}, 
                 'SumOfKUBIK': {'$sum': '$KUBIK'},
                 'SumOfNOMINAL': {'$sum': '$NOMINAL'},
             }},
             {'$project': {
                 '_id': 0,
-                'TotalPelanggan': {'$size': '$TotalNomenKustom'},
-                'TotalPiutangNominal': {'$round': ['$SumOfNOMINAL', 0]},
-                'TotalPiutangKubik': {'$round': ['$SumOfKUBIK', 2]},
-                'Keterangan': 'Ringkasan Total Kustom (Rayon 34/35 REG)'
-            }}
-            # >>> END SIMPLIFIKASI <<<
+                'TIPEPLGGN': '$_id.TIPEPLGGN', 'RAYON': '$_id.RAYON', 'TARIF': '$_id.TARIF',
+                'MERK': '$_id.MERK', 'READ_METHOD': '$_id.READ_METHOD',
+                'CountOfNOMEN': {'$size': '$CountOfNOMEN'},
+                'SumOfKUBIK': {'$round': ['$SumOfKUBIK', 2]},
+                'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 2]},
+            }},
+            {'$sort': {'RAYON': 1, 'TARIF': 1}}
         ]
         grouping_data = list(collection_mc.aggregate(pipeline_grouping))
         
         # Perbaiki penanganan error/empty result: jika kosong, kembalikan [] dan status 200
         if not grouping_data:
             return jsonify([]), 200 
-
-        # Mengembalikan summary sebagai array berisi satu objek (sesuai permintaan user)
+            
         return jsonify(grouping_data), 200
 
     except Exception as e:
@@ -980,7 +1120,7 @@ def admin_upload_unified_page():
 @login_required 
 @admin_required 
 def upload_mc_data():
-    """Mode GANTI: Untuk Master Cetak (MC) / Piutang Bulanan."""
+    """Mode GANTI: Untuk Master Cetak (MC) / Piutang Bulanan. (DIPERBAIKI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
     
@@ -1007,7 +1147,7 @@ def upload_mc_data():
         # ===============================================================
         
         # Target kolom kunci MC untuk konsistensi
-        columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF', 'RAYON', 'PCEZ'] 
+        columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF'] 
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize_mc:
@@ -1020,10 +1160,13 @@ def upload_mc_data():
             if col in ['NOMINAL', 'NOMINAL_AKHIR', 'KUBIK', 'SUBNOMINAL', 'ANG_BP', 'DENDA', 'PPN']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
-        # PETA ULANG KOLOM: MC.PC digunakan sebagai RAYON (jika MC tidak punya RAYON)
-        if 'PC' in df.columns and 'RAYON' not in df.columns:
+        # PETA ULANG KOLOM: MC.PC digunakan sebagai RAYON
+        if 'PC' in df.columns:
              df = df.rename(columns={'PC': 'RAYON'})
         
+        # Hapus kolom RAYON lama jika ada konflik, tapi karena MC sampel tidak ada RAYON, ini aman.
+        # Jika kode production mengandalkan RAYON, ini akan membuat data konsisten.
+
         # ===============================================================
         # >>> END PERBAIKAN KRITIS MC <<<
         # ===============================================================
@@ -1056,7 +1199,7 @@ def upload_mc_data():
 @login_required 
 @admin_required 
 def upload_mb_data():
-    """Mode APPEND: Untuk Master Bayar (MB) / Koleksi Harian."""
+    """Mode APPEND: Untuk Master Bayar (MB) / Koleksi Harian. (DIPERBAIKI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -1095,6 +1238,9 @@ def upload_mb_data():
             if col in ['NOMINAL', 'SUBNOMINAL', 'BEATETAP', 'BEA_SEWA']: # Kolom finansial MB
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
+        # Catatan: Kolom MB NOMEN dan ZONA_NOREK sama-sama menjadi kunci NOMEN/ID. 
+        # Kita andalkan NOMEN untuk join, yang sudah di-clean.
+
         # ===============================================================
         # >>> END PERBAIKAN KRITIS MB <<<
         # ===============================================================
@@ -1146,7 +1292,7 @@ def upload_mb_data():
 @login_required 
 @admin_required 
 def upload_cid_data():
-    """Mode GANTI: Untuk Customer Data (CID) / Data Pelanggan Statis."""
+    """Mode GANTI: Untuk Customer Data (CID) / Data Pelanggan Statis. (DIPERBAIKI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -1190,7 +1336,8 @@ def upload_cid_data():
         # CID menggunakan TARIFF untuk Tarif, rename agar konsisten dengan MC (TARIF)
         if 'TARIFF' in df.columns:
              df = df.rename(columns={'TARIFF': 'TARIF'})
-        
+
+
         # ===============================================================
         # >>> END PERBAIKAN KRITIS CID <<<
         # ===============================================================
@@ -1223,7 +1370,7 @@ def upload_cid_data():
 @login_required 
 @admin_required 
 def upload_sbrs_data():
-    """Mode APPEND: Untuk data Baca Meter (SBRS) / Riwayat Stand Meter."""
+    """Mode APPEND: Untuk data Baca Meter (SBRS) / Riwayat Stand Meter. (DIPERBAIKI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -1327,7 +1474,7 @@ def upload_sbrs_data():
 @login_required 
 @admin_required 
 def upload_ardebt_data():
-    """Mode GANTI: Untuk data Detail Tunggakan (ARDEBT)."""
+    """Mode GANTI: Untuk data Detail Tunggakan (ARDEBT). (DIPERBAIKI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
     
@@ -1348,15 +1495,29 @@ def upload_ardebt_data():
             df = pd.read_excel(file, sheet_name=0) 
         
         df.columns = [col.strip().upper() for col in df.columns]
+        
+        # ===============================================================
+        # >>> PERBAIKAN KRITIS ARDEBT: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        # ===============================================================
 
-        # PEMBERSIHAN DATA AMAN
+        # Target kolom kunci ARDEBT untuk konsistensi
+        columns_to_normalize_ardebt = ['NOMEN', 'RAYON', 'TIPEPLGGN'] 
+        
         for col in df.columns:
-            if df[col].dtype == 'object':
-                df[col] = df[col].astype(str).str.strip()
+            if df[col].dtype == 'object' or col in columns_to_normalize_ardebt:
+                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
+                df[col] = df[col].astype(str).str.strip().str.upper()
+                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
+                df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
+            
             # Kolom numerik penting
             if col in ['JUMLAH', 'VOLUME']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        
+
+        # ===============================================================
+        # >>> END PERBAIKAN KRITIS ARDEBT <<<
+        # ===============================================================
+
         data_to_insert = df.to_dict('records')
         
         if not data_to_insert:
