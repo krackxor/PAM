@@ -708,10 +708,10 @@ def analyze_volume_fluctuation_api():
         return jsonify({"message": f"Gagal mengambil data fluktuasi volume. Detail teknis error: {e}"}), 500
         
 # =========================================================================
-# === API GROUPING MC KUSTOM (BARU DARI PERMINTAAN USER) ===
+# === API GROUPING MC KUSTOM (KEMBALI KE MODE GROUPING KOKOH) ===
 # =========================================================================
 
-# 1. API DETAIL (Untuk Laporan Grouping Penuh - MODE DIAGNOSTIK COUNT)
+# 1. API DETAIL (Untuk Laporan Grouping Penuh - MODE GROUPING KOKOH)
 @app.route('/api/analyze/mc_grouping', methods=['GET'])
 @login_required 
 def analyze_mc_grouping_api():
@@ -732,58 +732,56 @@ def analyze_mc_grouping_api():
                'foreignField': 'NOMEN',
                'as': 'customer_info'
             }},
+            # $unwind dipertahankan karena Tarif Breakdown yang berhasil juga menggunakannya
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
             
             # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
-                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '']}}}}}, # Diubah ke huruf besar
+                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '']}}}}},
                 'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '']}}}},
                 
-                # FIX: Normalisasi MERK dan READ_METHOD 
+                # Gunakan Normalisasi yang sangat kuat dari Pandas/CID Upload
                 'CLEAN_MERK': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
                 'CLEAN_READ_METHOD': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}}}}},
             }},
             # --- END NORMALISASI ---
             
             {'$match': {
-                'CLEAN_TIPEPLGGN': 'REG', # Filter sekarang harus 'REG'
+                'CLEAN_TIPEPLGGN': 'REG',
                 'CLEAN_RAYON': {'$in': ['34', '35']}
             }},
             
-            # >>> START DIAGNOSTIK AKHIR: HITUNG JUMLAH DOKUMEN YANG LOLOS FILTER/JOIN <<<
             {'$group': {
-                '_id': None,
-                'TotalDokumen': {'$sum': 1}
+                '_id': {
+                    'TIPEPLGGN': '$CLEAN_TIPEPLGGN',
+                    'RAYON': '$CLEAN_RAYON',
+                    'TARIF': {'$ifNull': ['$TARIF', 'N/A']},
+                    
+                    # Grouping Key Paling Kokoh
+                    'MERK': {'$toString': {'$ifNull': ['$CLEAN_MERK', 'N/A']}}, 
+                    'READ_METHOD': {'$toString': {'$ifNull': ['$CLEAN_READ_METHOD', 'N/A']}}, 
+                },
+                'CountOfNOMEN': {'$addToSet': '$NOMEN'}, 
+                'SumOfKUBIK': {'$sum': '$KUBIK'},
+                'SumOfNOMINAL': {'$sum': '$NOMINAL'},
             }},
             {'$project': {
                 '_id': 0,
-                'MESSAGE': 'DIAGNOSIS_COUNT',
-                'JumlahDokumenLolosFilter': '$TotalDokumen'
-            }}
-            # >>> END DIAGNOSTIK AKHIR <<<
+                'TIPEPLGGN': '$_id.TIPEPLGGN', 'RAYON': '$_id.RAYON', 'TARIF': '$_id.TARIF',
+                'MERK': '$_id.MERK', 'READ_METHOD': '$_id.READ_METHOD',
+                'CountOfNOMEN': {'$size': '$CountOfNOMEN'},
+                'SumOfKUBIK': {'$round': ['$SumOfKUBIK', 2]},
+                'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 2]},
+            }},
+            {'$sort': {'RAYON': 1, 'TARIF': 1}}
         ]
         grouping_data = list(collection_mc.aggregate(pipeline_grouping))
         
-        # Logika Response Berdasarkan Diagnosis
-        if grouping_data and grouping_data[0].get('MESSAGE') == 'DIAGNOSIS_COUNT':
-             
-            count = grouping_data[0].get('JumlahDokumenLolosFilter', 0)
+        # Perbaiki penanganan error/empty result: jika kosong, kembalikan [] dan status 200
+        if not grouping_data:
+            return jsonify([]), 200 
             
-            if count > 0:
-                 # Jika count > 0, masalah ada di tahap grouping sebelumnya (MERK/READ_METHOD)
-                 # Kita kembalikan pesan ini agar user tahu ada data, dan masalahnya di grouping key.
-                 return jsonify({
-                     "message": f"DIAGNOSIS: Ditemukan {count} dokumen yang lolos Filter/Join. Masalah ASLI ada pada Grouping Key (MERK/READ_METHOD).", 
-                     "status": "diagnosis_success", 
-                     "count": count
-                 }), 200
-
-            else:
-                 # Jika count == 0, masalah ada di filter atau join.
-                 return jsonify({"message": "DIAGNOSIS: Gagal Join / Filter. Jumlah dokumen lolos Filter/Join adalah 0. Cek konsistensi NOMEN, RAYON, dan TIPEPLGGN.", "status": "diagnosis_fail"}), 404
-             
-        # Jika ada error tak terduga, kembalikan 404
-        return jsonify({"message": "Gagal memuat report: Tidak ada data kustom ditemukan."}), 404
+        return jsonify(grouping_data), 200
 
     except Exception as e:
         print(f"Error saat menganalisis grouping MC: {e}")
@@ -895,6 +893,11 @@ def analyze_mc_tarif_breakdown_api():
             {'$sort': {'RAYON': 1, 'TARIF': 1}}
         ]
         breakdown_data = list(collection_mc.aggregate(pipeline_tarif_breakdown))
+        
+        # Perbaiki penanganan error/empty result: jika kosong, kembalikan [] dan status 200
+        if not breakdown_data:
+            return jsonify([]), 200 
+
         return jsonify(breakdown_data), 200
 
     except Exception as e:
