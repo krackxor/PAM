@@ -13,8 +13,8 @@ from functools import wraps
 import re 
 from datetime import datetime, timedelta 
 import io 
-from pymongo import InsertOne # <--- MODIFIKASI BARU: Import InsertOne
-from pymongo.errors import BulkWriteError # <--- MODIFIKASI BARU: Import BulkWriteError
+from pymongo import InsertOne 
+from pymongo.errors import BulkWriteError 
 
 load_dotenv() 
 
@@ -885,6 +885,7 @@ def _aggregate_mb_grouping(collection_mb, collection_cid, rayon_filter=None):
         }
     })
     
+    # >>> START FIX KRITIS: MENGGANTI 'default' dengan 'else' <<<
     pipeline.append({
         '$addFields': {
             'STATUS_BAYAR': {
@@ -892,11 +893,12 @@ def _aggregate_mb_grouping(collection_mb, collection_cid, rayon_filter=None):
                     # Jika MMYYYY pembayaran sama dengan BULAN_REK, itu UNDUE
                     'if': { '$eq': ['$PAY_MONTH_YEAR', '$BULAN_REK'] },
                     'then': 'UNDUE',
-                    'default': 'TUNGGAKAN' # Arrears/Tunggakan
+                    'else': 'TUNGGAKAN' # Fix: Mengganti 'default' dengan 'else'
                 }
             }
         }
     })
+    # >>> END FIX KRITIS <<<
 
     # --- 3. Hitung Total Collection ---
     pipeline_total = pipeline + [
