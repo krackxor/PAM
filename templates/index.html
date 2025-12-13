@@ -276,7 +276,19 @@
             
             try {
                 const response = await fetch(`{{ url_for('search_nomen') }}?nomen=${nomen}`);
-                const result = await response.json();
+                
+                // Ambil respons sebagai teks untuk membedakan JSON vs HTML Error
+                const responseText = await response.text(); 
+                let result = {};
+
+                try {
+                    result = JSON.parse(responseText);
+                } catch (e) {
+                    // JSON parsing error (server returned non-JSON/HTML)
+                    searchStatus.innerHTML = `<span class="status-danger">❌ Error Server: Gagal mengurai respons. Server mungkin mengalami kegagalan internal.</span>`;
+                    console.error('JSON Parse Error:', e, 'Response Text:', responseText.substring(0, 200));
+                    return;
+                }
 
                 if (response.status === 200 && result.status === 'success') {
                     searchStatus.innerHTML = `<span class="status-ok">✅ Ditemukan. Klik tombol 'Cari' lagi untuk NOMEN lain.</span>`;
@@ -286,10 +298,12 @@
                     detailsContainer.innerHTML = '';
                     resultsArea.style.display = 'none';
                 } else {
+                    // Menangani error JSON dari backend (misal status 500 dari try-except Python)
                     searchStatus.innerHTML = `<span class="status-danger">❌ Error Server: ${result.message || 'Gagal memuat data.'}</span>`;
                 }
             } catch (error) {
-                searchStatus.innerHTML = `<span class="status-danger">❌ Error Jaringan.</span>`;
+                // True network error (fetch failed, e.g., connection lost, CORS issues)
+                searchStatus.innerHTML = `<span class="status-danger">❌ Error Jaringan. Cek koneksi Anda atau hubungi admin.</span>`;
                 console.error('Fetch Error:', error);
             }
         }
