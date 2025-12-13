@@ -738,7 +738,9 @@ def analyze_mc_grouping_api():
             # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '']}}}}},
-                'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '']}}}},
+                
+                # FIX KRITIS: Konversi RAYON ke INTEGER untuk Filter
+                'CLEAN_RAYON': {'$toInt': {'$ifNull': ['$customer_info.RAYON', 0]}}, 
                 
                 # Gunakan Normalisasi yang sangat kuat dari Pandas/CID Upload
                 'CLEAN_MERK': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
@@ -748,7 +750,8 @@ def analyze_mc_grouping_api():
             
             {'$match': {
                 'CLEAN_TIPEPLGGN': 'REG',
-                'CLEAN_RAYON': {'$in': ['34', '35']}
+                # FIX KRITIS: Filter menggunakan INTEGER
+                'CLEAN_RAYON': {'$in': [34, 35]} 
             }},
             
             {'$group': {
@@ -757,7 +760,7 @@ def analyze_mc_grouping_api():
                     'RAYON': '$CLEAN_RAYON',
                     'TARIF': {'$ifNull': ['$TARIF', 'N/A']},
                     
-                    # Grouping Key Paling Kokoh
+                    # Grouping Key Paling Kokoh (Menggunakan CLEAN_FIELD)
                     'MERK': {'$toString': {'$ifNull': ['$CLEAN_MERK', 'N/A']}}, 
                     'READ_METHOD': {'$toString': {'$ifNull': ['$CLEAN_READ_METHOD', 'N/A']}}, 
                 },
@@ -807,13 +810,16 @@ def analyze_mc_grouping_summary_api():
             # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '']}}}}}, # Diubah ke huruf besar
-                'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '']}}}},
+                
+                # FIX KRITIS: Konversi RAYON ke INTEGER untuk Filter
+                'CLEAN_RAYON': {'$toInt': {'$ifNull': ['$customer_info.RAYON', 0]}}, 
             }},
             # --- END NORMALISASI ---
             
             {'$match': {
                 'CLEAN_TIPEPLGGN': 'REG', # Filter sekarang harus 'REG'
-                'CLEAN_RAYON': {'$in': ['34', '35']}
+                # FIX KRITIS: Filter menggunakan INTEGER
+                'CLEAN_RAYON': {'$in': [34, 35]} 
             }},
             {'$group': {
                 '_id': None,
@@ -864,14 +870,17 @@ def analyze_mc_tarif_breakdown_api():
             # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '']}}}}}, # Diubah ke huruf besar
-                'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '']}}}},
+                
+                # FIX KRITIS: Konversi RAYON ke INTEGER untuk Filter
+                'CLEAN_RAYON': {'$toInt': {'$ifNull': ['$customer_info.RAYON', 0]}},
             }},
             # --- END NORMALISASI ---
             
             # 2. Filter Kriteria Kustom
             {'$match': {
                 'CLEAN_TIPEPLGGN': 'REG', # Filter sekarang harus 'REG'
-                'CLEAN_RAYON': {'$in': ['34', '35']}
+                # FIX KRITIS: Filter menggunakan INTEGER
+                'CLEAN_RAYON': {'$in': [34, 35]}
             }},
             
             # 3. Grouping berdasarkan RAYON dan TARIF
