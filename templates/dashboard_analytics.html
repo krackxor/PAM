@@ -1,300 +1,324 @@
 {% extends "base.html" %}
 
-{% block title %}Target Acquisition{% endblock %}
+{% block title %}System Core | Analytics Matrix{% endblock %}
 
 {% block custom_styles %}
-/* CSS Khusus untuk Halaman Pencarian */
-.search-box {
-    margin-bottom: 20px;
-    padding: 15px;
-    border: 1px solid var(--secondary-color);
-    border-radius: var(--border-radius);
-    text-align: center;
-    box-shadow: var(--shadow-light); 
-    background-color: var(--card-bg);
-}
-#nomenInput {
-    padding: 10px; 
-    border: 1px solid #555;
-    background-color: #111;
-    color: var(--primary-color);
-    border-radius: 0px;
-    width: 100%;
-    max-width: 350px; 
-    margin-bottom: 10px;
-    font-size: 16px;
-    box-sizing: border-box;
-}
-.btn-search {
-    background-color: var(--primary-color);
-    color: var(--bg-color);
-    border: none;
-    padding: 10px 20px; 
-    border-radius: 0px;
-    cursor: pointer;
-    font-weight: 700;
-    transition: background-color 0.3s;
-    box-shadow: 0 0 5px var(--primary-color);
-}
-.btn-search:hover {
-    background-color: var(--secondary-color);
-}
-
-/* Status Summary Grid */
-.summary-grid {
+/* CSS Khusus untuk Dashboard */
+.dashboard-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); /* Adjusted minmax for mobile */
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); /* Adjusted for mobile */
     gap: 10px;
     margin-bottom: 20px;
 }
-.summary-card {
+.summary-card-dash {
     background-color: var(--card-bg);
-    padding: 10px;
+    padding: 15px;
     border-radius: var(--border-radius);
-    border-left: 3px solid; /* Aksen visual */
     box-shadow: var(--shadow-light);
+    border-left: 3px solid var(--primary-color);
     transition: transform 0.2s;
 }
-.summary-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 0 10px var(--primary-color);
+.summary-card-dash:hover {
+    box-shadow: 0 0 10px var(--secondary-color);
 }
-.summary-card h4 { margin: 0 0 5px 0; font-size: 0.75em; text-transform: uppercase; color: #777; }
-.summary-card p { margin: 0; font-size: 1.1em; font-weight: bold; color: var(--secondary-color); }
+.summary-card-dash h4 { margin: 0 0 5px 0; font-size: 0.8em; text-transform: uppercase; color: #777; }
+.summary-card-dash p { margin: 0; font-size: 1.4em; font-weight: bold; color: var(--secondary-color); }
+.text-danger { color: #ff0000; border-color: #ff0000 !important; }
+.text-success { color: var(--primary-color); border-color: var(--primary-color) !important; }
+.text-warning { color: var(--accent-color); border-color: var(--accent-color) !important; }
 
-/* Aksen Warna Status */
-.status-ok { color: var(--primary-color); border-color: var(--primary-color); }
-.status-warning { color: var(--accent-color); border-color: var(--accent-color); }
-.status-danger { color: #ff0000; border-color: #ff0000; }
-
-/* Detail Data Table */
-.data-table-wrapper {
-    overflow-x: auto;
-    margin-top: 15px;
-    border: 1px solid #333; 
+.chart-section, .table-section {
+    background-color: var(--card-bg);
+    padding: 15px;
     border-radius: var(--border-radius);
-    box-shadow: var(--shadow-light);
-    overflow: hidden;
-    background-color: #111;
+    box-shadow: var(--shadow-medium);
+    margin-bottom: 20px;
 }
-.data-table {
+.full-width-grid {
+    display: grid;
+    grid-template-columns: 1fr; /* Default to stack on mobile */
+    gap: 15px;
+}
+
+@media (min-width: 900px) {
+    .full-width-grid {
+        grid-template-columns: 2fr 1fr;
+    }
+}
+@media (max-width: 600px) {
+    .summary-card-dash p { font-size: 1.2em; }
+}
+
+.data-table-simple {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px; 
-    min-width: 600px; /* Ensure horizontal scroll on mobile */
-}
-.data-table th, .data-table td {
-    border: 1px solid #333; 
-    padding: 8px; 
-    text-align: left;
-    white-space: nowrap;
-}
-.data-table th {
-    background-color: #222; 
+    font-size: 13px;
     color: var(--primary-color);
-    text-align: center;
-    font-weight: 600;
+}
+.data-table-simple th, .data-table-simple td {
+    padding: 8px;
+    border-bottom: 1px dashed #333;
+    text-align: left;
+}
+.data-table-simple th {
+    background-color: #222;
+    color: var(--secondary-color);
     text-transform: uppercase;
 }
-.data-table td {
+.data-table-simple tr:last-child td {
+    border-bottom: none;
+}
+.anomaly-list-item {
+     border-bottom: 1px dotted #333;
+     padding: 5px 0;
+}
+.anomaly-list-item strong {
     color: var(--secondary-color);
 }
-
-/* Mobile Layout for Tables/Details (Card View) - Disabled for Hacker Theme scroll focus */
-@media screen and (max-width: 600px) {
-    .summary-grid {
-        grid-template-columns: 1fr; /* Stack cards on mobile */
-    }
+.anomaly-list-item span {
+    color: var(--primary-color);
+    font-size: 0.9em;
 }
 {% endblock %}
 
 {% block content %}
     <h2 style="text-align: left; border-bottom: none; margin-bottom: 15px; color: var(--secondary-color);">
-        <i class="fas fa-search" style="margin-right: 10px;"></i> TARGET ACQUISITION: HOST LOOKUP
+        <i class="fas fa-tachometer-alt" style="margin-right: 10px;"></i> SYSTEM CORE | ANALYTICS MATRIX
     </h2>
     
-    <div class="search-box">
-        <input type="text" id="nomenInput" placeholder="ENTER TARGET ID (NOMEN)">
-        <button id="searchBtn" class="btn-search">INITIATE TRACE</button>
-        <div id="searchStatus" style="margin-top: 10px;"></div>
+    <div style="text-align: right; margin-bottom: 15px;">
+        <a href="{{ url_for('export_dashboard_data') }}" class="btn-primary" style="background-color: var(--secondary-color); text-decoration: none;">
+            <i class="fas fa-file-excel"></i> EXPORT LOGS
+        </a>
     </div>
 
-    <div id="resultsArea" style="display: none;">
-        <h3>STATUS REPORT: TARGET <span id="nomenTitle"></span></h3>
-        <div class="summary-grid" id="healthSummary">
+    <div id="loadingStatus" style="text-align: center; padding: 20px; color: var(--accent-color);"><i class="fas fa-spinner fa-spin"></i> DECRYPTING DATA STREAM...</div>
+
+    <div id="dashboardContent" style="display: none;">
+        
+        <h3 style="color: var(--primary-color);">[SYSTEM STATUS SUMMARY]</h3>
+        <div class="dashboard-grid" id="summaryGrid">
             </div>
 
-        <div id="detailsContainer">
+        <div class="full-width-grid">
+            
+            <div class="chart-section">
+                <h3 style="margin-top: 0; color: #00ffff;">PAYLOAD COLLECTION TREND (7-Day Trace)</h3>
+                <canvas id="collectionTrendChart"></canvas>
             </div>
+
+            <div class="table-section">
+                <h3 style="margin-top: 0; color: #00ffff;">TOP 5 SECTORS (Highest Obligation)</h3>
+                <div id="topRayonTable"></div>
+            </div>
+
+        </div>
+
+        <div class="chart-section">
+            <h3 style="margin-top: 0; color: #00ffff;">USAGE ANOMALY SCAN REPORT</h3>
+            <div id="anomalySummary"></div>
+        </div>
+        
     </div>
     
-    <div id="initialMessage" style="text-align: center; color: #777; text-shadow: none;">
-        <p>Use TARGET ID to retrieve all linked data: CID, Arrears, Billing, and Meter History.</p>
-    </div>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
 
     <script>
-        const nomenInput = document.getElementById('nomenInput');
-        const searchBtn = document.getElementById('searchBtn');
-        const searchStatus = document.getElementById('searchStatus');
-        const resultsArea = document.getElementById('resultsArea');
-        const healthSummary = document.getElementById('healthSummary');
-        const detailsContainer = document.getElementById('detailsContainer');
-        const nomenTitle = document.getElementById('nomenTitle');
-        const initialMessage = document.getElementById('initialMessage');
-
-        function formatCurrency(amount) {
-            if (typeof amount === 'number') {
-                 return `IDR ${amount.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-            }
-            return amount;
-        }
-
-        function determineStatusClass(statusText) {
-            if (statusText.includes('TUNGGAKAN') || statusText.includes('EKSTRIM') || statusText.includes('DANGER')) return 'status-danger';
-            if (statusText.includes('PIUTANG') || statusText.includes('ZERO') || statusText.includes('TURUN') || statusText.includes('WARNING')) return 'status-warning';
-            return 'status-ok';
+        const summaryGrid = document.getElementById('summaryGrid');
+        const anomalySummary = document.getElementById('anomalySummary');
+        const topRayonTable = document.getElementById('topRayonTable');
+        const loadingStatus = document.getElementById('loadingStatus');
+        const dashboardContent = document.getElementById('dashboardContent');
+        const alertBadge = document.getElementById('criticalAlertBadge');
+        
+        function formatRupiah(number) {
+            return 'IDR ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
         }
         
-        function renderTable(title, data, singleRow = false) {
-            if (!data || (Array.isArray(data) && data.length === 0)) {
-                return `<h4 style="margin-top: 20px; color: #ff00ff;">${title}</h4><p style="color:#ff00ff;">[!] No data payload found.</p>`;
-            }
-            
-            const listData = Array.isArray(data) ? data : [data];
-            const headers = Object.keys(listData[0]);
-            
-            let tableHtml = `<h4 style="margin-top: 20px; color: var(--primary-color);">${title} (${listData.length} RECORDS)</h4>`;
-            tableHtml += '<div class="data-table-wrapper"><table class="data-table"><thead><tr>';
-            
-            // Header Row
-            headers.forEach(h => {
-                tableHtml += `<th>${h.replace(/_/g, ' ')}</th>`;
-            });
-            tableHtml += '</tr></thead><tbody>';
+        function formatNumber(number) {
+             return (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+        }
+        
+        function formatPercent(number) {
+            return (parseFloat(number) || 0).toFixed(2) + '%';
+        }
 
-            // Data Rows
-            listData.forEach(item => {
-                tableHtml += '<tr>';
-                headers.forEach(h => {
-                    let cellValue = item[h];
-                    if (h.includes('NOMINAL') || h.includes('JUMLAH') || h.includes('AMOUNT')) {
-                        cellValue = formatCurrency(cellValue);
+        function determineCardColor(key, value) {
+            if (key.includes('tunggakan') || key.includes('anomali') && value > 0) return 'text-danger';
+            if (key.includes('koleksi') || key.includes('pelanggan')) return 'text-success';
+            if (key.includes('piutang')) return 'text-warning';
+            return 'border-left: 3px solid var(--primary-color)';
+        }
+        
+        function renderSummaryCards(data) {
+            summaryGrid.innerHTML = '';
+            
+            // Re-mapping names
+            const cardData = [
+                { title: "TOTAL HOSTS (CID)", key: 'total_pelanggan', value: formatNumber(data.total_pelanggan), color: 'text-success' },
+                { title: "CURRENT OBLIGATION (MC)", key: 'total_piutang', value: formatRupiah(data.total_piutang), color: 'text-warning' },
+                { title: "HISTORIC DEBT (ARDEBT)", key: 'total_tunggakan', value: formatRupiah(data.total_tunggakan), color: 'text-danger' },
+                { title: "UNIQUE DEBT HOSTS", key: 'pelanggan_dengan_tunggakan', value: formatNumber(data.pelanggan_dengan_tunggakan), color: 'text-danger' },
+                { title: "COLLECTION TODAY", key: 'koleksi_hari_ini', value: formatRupiah(data.koleksi_hari_ini), color: 'text-success' },
+                { title: "COLLECTION THIS CYCLE", key: 'koleksi_bulan_ini', value: formatRupiah(data.koleksi_bulan_ini), color: 'text-success' },
+                { title: "COLLECTION RATE", key: 'persentase_koleksi', value: formatPercent(data.persentase_koleksi), color: 'text-success' },
+                { title: "TOTAL USAGE ANOMALY", key: 'total_anomali', value: formatNumber(data.total_anomali), color: data.total_anomali > 0 ? 'text-danger' : 'text-success' },
+            ];
+            
+            cardData.forEach(item => {
+                const card = `
+                    <div class="summary-card-dash ${item.color}">
+                        <h4>${item.title}</h4>
+                        <p>${item.value}</p>
+                    </div>
+                `;
+                summaryGrid.innerHTML += card;
+            });
+        }
+        
+        function renderTopRayon(data) {
+            let tableHTML = '<table class="data-table-simple"><thead><tr><th>SECTOR ID</th><th>OBLIGATION (IDR)</th></tr></thead><tbody>';
+            
+            data.forEach(item => {
+                tableHTML += `
+                    <tr>
+                        <td>${item.rayon || 'N/A'}</td>
+                        <td style="text-align: right;">${formatRupiah(item.total)}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += '</tbody></table>';
+            topRayonTable.innerHTML = tableHTML;
+        }
+        
+        function renderAnomalyBreakdown(data) {
+             let html = '';
+             
+             Object.keys(data.anomali_breakdown).forEach(key => {
+                 const count = data.anomali_breakdown[key];
+                 let title = key.replace(/_/g, ' ').toUpperCase();
+                 let color = '#777';
+                 
+                 if (key.includes('EKSTRIM') || key.includes('ZERO_USAGE')) {
+                     color = '#ff0000';
+                     title = title.replace('EKSTRIM', 'EXTREME SPIKE').replace('ZERO_USAGE', 'Z-FLOW');
+                 } else if (key.includes('KENAIKAN')) {
+                     color = '#ff00ff';
+                     title = title.replace('KENAIKAN', 'MAJOR SPIKE');
+                 } else if (key.includes('PENURUNAN')) {
+                     color = '#00ffff';
+                     title = title.replace('PENURUNAN', 'DRASTIC DROP');
+                 }
+                 
+                 if (count > 0) {
+                     html += `
+                        <h4 style="margin-top: 15px; color: ${color};">${title} (${count} HOSTS DETECTED)</h4>
+                     `;
+                 }
+             });
+             
+             // Since the API only returns a count breakdown, we can't show the list here,
+             // so we show a placeholder message or the combined anomaly data
+             if (data.total_anomali === 0) {
+                 html = '<p style="text-align: center; color: var(--primary-color);">[SYSTEM MESSAGE] No significant anomalies detected.</p>';
+             } else {
+                 html += `<p style="color: var(--accent-color); text-align: center; margin-top: 15px;">Detailed anomaly list is available in the DATA ANALYSIS SUITE.</p>`;
+             }
+             
+             anomalySummary.innerHTML = html;
+        }
+
+        function renderCollectionTrendChart(data) {
+            const labels = data.map(item => new Date(item.tanggal).toLocaleDateString('id-ID', { month: 'short', day: 'numeric' }));
+            const trendData = data.map(item => item.total);
+
+            // Destroy existing chart instance if it exists
+            const existingChart = Chart.getChart("collectionTrendChart");
+            if (existingChart) {
+                existingChart.destroy();
+            }
+
+            // Set chart colors for hacker theme
+            Chart.defaults.color = 'var(--secondary-color)'; 
+            Chart.defaults.borderColor = '#333'; 
+
+            new Chart(document.getElementById('collectionTrendChart'), {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Collection Amount (IDR)',
+                        data: trendData,
+                        borderColor: 'var(--primary-color)',
+                        backgroundColor: 'rgba(0, 255, 0, 0.1)',
+                        tension: 0.4,
+                        pointRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        x: {
+                            grid: { color: '#111' }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#111' },
+                            ticks: {
+                                callback: function(value, index, ticks) {
+                                    if (Math.abs(value) >= 1000000) {
+                                        return 'IDR ' + (value / 1000000).toFixed(0) + ' M';
+                                    }
+                                    return formatRupiah(value).replace('IDR ', '');
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
                     }
-                    tableHtml += `<td data-label="${h.replace(/_/g, ' ')}">${cellValue}</td>`;
-                });
-                tableHtml += '</tr>';
+                }
             });
-
-            tableHtml += '</tbody></table></div>';
-            return tableHtml;
         }
-
-        function renderResults(data) {
-            // 1. Render Health Summary
-            const totalPiutang = formatCurrency(data.summary.TOTAL_PIUTANG_NOMINAL);
-            const statusFinansial = data.summary.STATUS_FINANSIAL;
-            const statusPemakaian = data.summary.STATUS_PEMAKAIAN;
-            
-            const statusFinancialClass = determineStatusClass(statusFinansial);
-            const statusUsageClass = determineStatusClass(statusPemakaian);
-            
-            // Mapping names to Hacker Theme
-            const NAMA = data.summary.NAMA || 'TARGET NAME UNKNOWN';
-            const ALAMAT = data.summary.ALAMAT || 'N/A';
-            const TIPE_PLGGN = data.summary.TIPE_PLGGN || 'N/A';
-            const PEMBAYARAN_TERAKHIR = data.summary.PEMBAYARAN_TERAKHIR || 'NO RECENT ACTIVITY';
-            const STATUS_FINANSIAL_DISPLAY = statusFinansial.toUpperCase().replace(/PIUTANG/g, 'BILL').replace(/TUNGGAKAN/g, 'DEBT');
-            const STATUS_PEMAKAIAN_DISPLAY = statusPemakaian.toUpperCase().replace(/PEMAKAIAN/g, 'USAGE').replace(/ZERO/g, 'Z-FLOW');
-
-            healthSummary.innerHTML = `
-                <div class="summary-card status-ok">
-                    <h4>TARGET ID</h4>
-                    <p>${data.summary.NOMEN}</p>
-                </div>
-                <div class="summary-card" style="border-left-color: var(--secondary-color);">
-                    <h4>TARGET NAME</h4>
-                    <p>${NAMA}</p>
-                </div>
-                 <div class="summary-card" style="border-left-color: var(--primary-color);">
-                    <h4>SEGMENT</h4>
-                    <p>${TIPE_PLGGN}</p>
-                </div>
-                <div class="summary-card ${statusFinancialClass}">
-                    <h4>TOTAL OBLIGATION</h4>
-                    <p>${totalPiutang}</p>
-                </div>
-                <div class="summary-card ${statusFinancialClass}">
-                    <h4>FINANCIAL STATUS</h4>
-                    <p>${STATUS_FINANSIAL_DISPLAY}</p>
-                </div>
-                <div class="summary-card ${statusUsageClass}">
-                    <h4>USAGE ANOMALY</h4>
-                    <p>${STATUS_PEMAKAIAN_DISPLAY}</p>
-                </div>
-                <div class="summary-card" style="border-left-color: #777;">
-                    <h4>LAST PAYMENT DATE</h4>
-                    <p>${PEMBAYARAN_TERAKHIR}</p>
-                </div>
-            `;
-            
-            // 2. Render Detail Tables
-            detailsContainer.innerHTML = '';
-            
-            // CID Data (Master Statis)
-            detailsContainer.innerHTML += renderTable("DATA PAYLOAD 1: HOST MASTER (CID)", data.cid_data);
-
-            // MC Data (Piutang Berjalan Bulan Ini)
-            detailsContainer.innerHTML += renderTable("DATA PAYLOAD 2: CURRENT BILLING (MC)", data.mc_data);
-            
-            // ARDEBT Data (Tunggakan Historis)
-            detailsContainer.innerHTML += renderTable("DATA PAYLOAD 3: ARREARS DETAIL (ARDEBT)", data.ardebt_data);
-
-            // SBRS Data (Riwayat Baca Meter)
-            detailsContainer.innerHTML += renderTable("DATA PAYLOAD 4: METER LOG HISTORY (SBRS - RECENT)", data.sbrs_data);
-            
-            resultsArea.style.display = 'block';
-            initialMessage.style.display = 'none';
-        }
-
-        async function performSearch() {
-            const nomen = nomenInput.value.trim();
-            if (!nomen) {
-                searchStatus.innerHTML = `<span class="status-danger">[ERROR] INPUT REQUIRED. ENTER TARGET ID.</span>`;
-                resultsArea.style.display = 'none';
-                return;
-            }
-
-            searchStatus.innerHTML = `<span style="color: var(--secondary-color);"><i class="fas fa-spinner fa-spin"></i> TRACING TARGET ID: ${nomen}...</span>`;
-            nomenTitle.textContent = nomen;
-            resultsArea.style.display = 'none';
-            initialMessage.style.display = 'none';
+        
+        async function fetchDashboardData() {
+            loadingStatus.style.display = 'block';
+            dashboardContent.style.display = 'none';
             
             try {
-                const response = await fetch(`{{ url_for('search_nomen') }}?nomen=${nomen}`);
-                const result = await response.json();
+                const response = await fetch('{{ url_for("dashboard_summary_api") }}');
+                const data = await response.json();
 
-                if (response.status === 200 && result.status === 'success') {
-                    searchStatus.innerHTML = `<span class="status-ok">✅ TRACE COMPLETE. TARGET ACQUIRED.</span>`;
-                    renderResults(result);
-                } else if (response.status === 404 || result.status === 'not_found') {
-                    searchStatus.innerHTML = `<span class="status-danger">❌ TARGET ${nomen} NOT FOUND IN MASTER DB.</span>`;
-                    detailsContainer.innerHTML = '';
-                    resultsArea.style.display = 'none';
-                } else {
-                    searchStatus.innerHTML = `<span class="status-danger">❌ SERVER ERROR: ${result.message || 'FAILED TO RETRIEVE PAYLOAD.'}</span>`;
+                if (response.status === 401) {
+                    window.location.href = '{{ url_for("login") }}';
+                    return;
                 }
+                
+                if (response.status !== 200) {
+                    loadingStatus.innerHTML = `<span style="color: #ff0000;">❌ ERROR: ${data.message || 'FAILED TO RETRIEVE SUMMARY MATRIX.'}</span>`;
+                    return;
+                }
+
+                renderSummaryCards(data);
+                renderTopRayon(data.top_rayon_piutang);
+                renderCollectionTrendChart(data.tren_koleksi_7_hari);
+                renderAnomalyBreakdown(data); // Pass full data to get total_anomali and breakdown
+
+                loadingStatus.style.display = 'none';
+                dashboardContent.style.display = 'block';
+
             } catch (error) {
-                searchStatus.innerHTML = `<span class="status-danger">❌ NETWORK ERROR. CONNECTION FAILURE.</span>`;
+                loadingStatus.innerHTML = `<span style="color: #ff0000;">❌ CONNECTION TIMEOUT.</span>`;
                 console.error('Fetch Error:', error);
             }
         }
-
-        searchBtn.addEventListener('click', performSearch);
-        nomenInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                performSearch();
-            }
-        });
         
+        document.addEventListener('DOMContentLoaded', () => {
+             fetchDashboardData(); 
+        });
     </script>
 {% endblock %}
