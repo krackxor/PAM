@@ -70,7 +70,7 @@ try:
     # SBRS (MeterReading): Untuk Anomaly Check
     collection_sbrs.create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', -1)], name='idx_sbrs_history')
     
-    # ARDEBT (AccountReceivable): Untuk Cek Tunggakan
+    # ARDEBT (AccountReceivable): Untuk Cek TungGakan
     collection_ardebt.create_index([('NOMEN', 1)], name='idx_ardebt_nomen')
     
     # ==========================================================
@@ -738,7 +738,8 @@ def analyze_mc_grouping_api():
             {'$addFields': {
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '']}}}}},
                 'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '']}}}},
-                # Perubahan: Pastikan TARIF, MERK, dan READ_METHOD juga diubah ke huruf besar
+                
+                # Perbaikan: TARIF, MERK, dan READ_METHOD diubah ke huruf besar dan di-trim
                 'CLEAN_TARIF': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$TARIF', 'N/A']}}}}},
                 'CLEAN_MERK': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
                 'CLEAN_READ_METHOD': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}}}}},
