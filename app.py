@@ -627,7 +627,7 @@ def export_collection_report():
             'RAYON', 'PCEZ', 
             'MC_TotalNominal', 'MC_TotalKubik',
             'MC_CollectedNominal', 'MC_CollectedKubik',
-            'MB_UNDUE_NOMINAL', 'MB_UndueKubik',
+            'MB_UndueNominal', 'MB_UndueKubik',
             'PercentNominal', 'UnduePercentNominal'
         ]]
         df_export.columns = [
@@ -668,6 +668,16 @@ def analyze_full_mc_report():
                            title="Laporan Grup Master Cetak (MC) Lengkap", 
                            description="Menyajikan data agregasi NOMEN, Kubik, dan Nominal berdasarkan Rayon, Metode Baca, Tarif, dan Jenis Meter.",
                            is_admin=current_user.is_admin)
+
+# --- NEW ROUTE FOR MB GROUPING REPORT ---
+@app.route('/analyze/full_mb_report', methods=['GET'])
+@login_required
+def analyze_full_mb_report():
+    return render_template('analyze_report_template.html', 
+                           title="Laporan Grup Master Bayar (MB) Berdasarkan Kategori", 
+                           description="Menyajikan data agregasi Koleksi MB (Undue, Current, Tunggakan) berdasarkan Rayon 34 dan 35.",
+                           is_admin=current_user.is_admin)
+# --- END NEW ROUTE ---
 
 @app.route('/analyze/extreme', methods=['GET'])
 @login_required
@@ -824,6 +834,196 @@ def analyze_mc_grouping_api():
     except Exception as e:
         print(f"Error saat menganalisis custom grouping MC: {e}")
         return jsonify({"status": "error", "message": f"Gagal mengambil data grouping MC: {e}"}), 500
+
+# =========================================================================
+# === NEW MB GROUPING & DAILY TREND LOGIC ===
+# =========================================================================
+
+def _aggregate_mb_category(collection_mb, collection_cid, category_type):
+    """
+    Helper untuk mengagregasi MB berdasarkan kategori (Undue, Current, Tunggakan).
+    Filters: TIPEPLGGN=REG, RAYON in ('34', '35').
+    """
+    
+    # --- KONTEKS BULAN DARI PERMINTAAN USER (ASUMSI LAPORAN NOVEMBER 2025) ---
+    UNDUE_BULAN_REK = "112025"
+    CURRENT_BULAN_REK = "102025"
+    TUNGGAKAN_THRESHOLD_MONTH_YEAR = 102025
+    
+    if category_type == 'undue':
+        match_filter = {'BULAN_REK': UNDUE_BULAN_REK}
+    elif category_type == 'current':
+        match_filter = {'BULAN_REK': CURRENT_BULAN_REK}
+    elif category_type == 'tunggakan':
+        # Tunggakan: BULAN_REK di bawah 102025. Perlu konversi ke integer untuk perbandingan.
+        match_filter = {
+            '$expr': { 
+                '$lt': [
+                    { '$toInt': { '$ifNull': [ '$BULAN_REK', 0 ] } }, # Convert BULAN_REK to int
+                    TUNGGAKAN_THRESHOLD_MONTH_YEAR
+                ]
+            }
+        }
+    else:
+        return []
+    
+    pipeline = [
+        # 1. Join MB dengan CID untuk mendapatkan data Rayon dan Tipe Pelanggan yang bersih
+        {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
+        {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
+        
+        # 2. Normalisasi dan Filter
+        {'$addFields': {
+            'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
+            'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},
+            'CLEAN_NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}
+        }},
+        {'$match': {
+            'CLEAN_TIPEPLGGN': 'REG',
+            'CLEAN_RAYON': {'$in': ['34', '35']},
+            'CLEAN_NOMINAL': {'$gt': 0}
+        }},
+        {'$match': match_filter}, # Filter berdasarkan kategori (Undue/Current/Tunggakan)
+        
+        # 3. Grouping berdasarkan Rayon
+        {'$group': {
+            '_id': '$CLEAN_RAYON',
+            'NomenCount': {'$addToSet': '$NOMEN'},
+            'TotalNominal': {'$sum': '$CLEAN_NOMINAL'},
+        }},
+        
+        # 4. Proyeksi Akhir
+        {'$project': {
+            '_id': 0,
+            'RAYON': '$_id',
+            'NomenCount': {'$size': '$NomenCount'},
+            'TotalNominal': {'$round': ['$TotalNominal', 0]},
+        }},
+        {'$sort': {'RAYON': 1}}
+    ]
+
+    results = list(collection_mb.aggregate(pipeline, allowDiskUse=True))
+    
+    # Hitung total AB Sunter (R34 + R35)
+    total_ab_sunter = {
+        'RAYON': 'TOTAL_AB_SUNTER',
+        'NomenCount': sum(item['NomenCount'] for item in results),
+        'TotalNominal': sum(item['TotalNominal'] for item in results),
+    }
+    
+    # Gabungkan R34, R35, dan Total
+    report = {item['RAYON']: item for item in results}
+    report['TOTAL_AB_SUNTER'] = total_ab_sunter
+    
+    return report
+
+def _aggregate_mb_daily_trend(collection_mb):
+    """Menghitung total pembayaran dan count nomen per hari untuk Nov 2025."""
+    
+    # Filter TGL_BAYAR untuk November 2025
+    TGL_BAYAR_REPORT_MONTH = "2025-11"
+    
+    pipeline = [
+        {'$match': {
+            'TGL_BAYAR': {'$regex': f'^{TGL_BAYAR_REPORT_MONTH}'},
+            'NOMINAL': {'$ne': None, '$gt': 0}
+        }},
+        {'$project': {
+            'TGL_BAYAR_DATE': {'$substr': ['$TGL_BAYAR', 0, 10]}, # Ambil tanggal saja (YYYY-MM-DD)
+            'NOMEN': 1,
+            'CLEAN_NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}
+        }},
+        {'$group': {
+            '_id': '$TGL_BAYAR_DATE',
+            'TotalNominal': {'$sum': '$CLEAN_NOMINAL'},
+            'NomenCount': {'$addToSet': '$NOMEN'}
+        }},
+        {'$project': {
+            '_id': 0,
+            'TANGGAL_BAYAR': '$_id',
+            'JumlahTransaksi': {'$size': '$NomenCount'},
+            'TotalNominal': {'$round': ['$TotalNominal', 0]},
+        }},
+        {'$sort': {'TANGGAL_BAYAR': 1}}
+    ]
+    
+    return list(collection_mb.aggregate(pipeline))
+
+def _aggregate_mb_detail(collection_mb, collection_cid, rayon_filter):
+    """Menampilkan detail transaksi MB (NOMEN, NOMINAL, TGL_BAYAR) per Rayon 34 atau 35, diurutkan."""
+    
+    # Filter TGL_BAYAR untuk November 2025
+    TGL_BAYAR_REPORT_MONTH = "2025-11"
+    
+    pipeline = [
+        # 1. Join MB dengan CID
+        {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
+        {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
+        
+        # 2. Normalisasi dan Filter
+        {'$addFields': {
+            'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$customer_info.RAYON', 'N/A'}}}}}}
+        },
+        {'$match': {
+            'CLEAN_RAYON': rayon_filter, # Filter Rayon spesifik
+            'TGL_BAYAR': {'$regex': f'^{TGL_BAYAR_REPORT_MONTH}'}, # Filter Bulan November
+        }},
+        
+        # 3. Proyeksi kolom yang diminta
+        {'$project': {
+            '_id': 0,
+            'TANGGAL_BAYAR': '$TGL_BAYAR',
+            'NOMEN': '$NOMEN',
+            'NOMINAL': {'$round': [{'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}, 0]},
+        }},
+        
+        # 4. Sorting berdasarkan TANGGAL_BAYAR
+        {'$sort': {'TANGGAL_BAYAR': 1}}
+    ]
+    
+    return list(collection_mb.aggregate(pipeline))
+
+@app.route('/api/analyze/mb_grouping', methods=['GET'])
+@login_required 
+def analyze_mb_grouping_api():
+    """Menggabungkan laporan MB Undue, Current, Tunggakan, dan Daily Trend."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+
+    try:
+        # 1. Koleksi Per Kategori
+        undue_data = _aggregate_mb_category(collection_mb, collection_cid, 'undue')
+        current_data = _aggregate_mb_category(collection_mb, collection_cid, 'current')
+        tunggakan_data = _aggregate_mb_category(collection_mb, collection_cid, 'tunggakan')
+        
+        # 2. Daily Trend
+        daily_trend = _aggregate_mb_daily_trend(collection_mb)
+
+        # 3. Detail Rayon
+        detail_r34 = _aggregate_mb_detail(collection_mb, collection_cid, '34')
+        detail_r35 = _aggregate_mb_detail(collection_mb, collection_cid, '35')
+
+        response_data = {
+            'status': 'success',
+            'category_report': {
+                'undue': undue_data,
+                'current': current_data,
+                'tunggakan': tunggakan_data
+            },
+            'daily_trend': daily_trend,
+            'detail_r34': detail_r34,
+            'detail_r35': detail_r35
+        }
+        
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        print(f"Error saat menganalisis custom grouping MB: {e}")
+        return jsonify({"status": "error", "message": f"Gagal mengambil data grouping MB: {e}"}), 500
+
+# =========================================================================
+# === END NEW MB GROUPING & DAILY TREND LOGIC ===
+# =========================================================================
 
 # =========================================================================
 # === API UNTUK ANALISIS AKURAT (Fluktuasi Volume Naik/Turun) ===
@@ -1362,7 +1562,7 @@ def upload_sbrs_data():
                 collection_sbrs.insert_one(record)
                 inserted_count += 1
         
-        # === ANALISIS ANOMALI INSTAN SETELAH INSERT ===
+        # === ANALISIS ANOMALI INSTAN SETELAN INSERT ===
         anomaly_list = []
         try:
             if inserted_count > 0:
