@@ -22,7 +22,7 @@
 
 /* FIX KRITIS: Wrapper untuk Horizontal Scrolling */
 .report-table-wrapper, .result-table-wrapper {
-    overflow-x: auto;
+    overflow-x: hidden; /* MENGHILANGKAN SCROLLING HORIZONTAL */
     width: 100%; 
     margin-top: 15px;
     margin-bottom: 20px; 
@@ -30,18 +30,19 @@
     overflow-y: hidden;
 }
 
-/* General Report Table Styling: Enforce consistency, scroll, and alignment */
+/* General Report Table Styling: Enforce consistency, allow wrapping */
 .report-table, .collection-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 14px;
-    min-width: 700px; /* Ensure horizontal scroll on main tables */
+    /* min-width: Dihapus agar tabel bisa mengecil ke 100% */
 }
 .report-table th, .report-table td, .collection-table th, .collection-table td {
     border: 1px solid #f0f0f0; 
     padding: 10px; 
     text-align: right;
-    white-space: nowrap;
+    white-space: normal; /* FIX: MEMUNGKINKAN TEKS WRAP/PATAH BARIS */
+    word-break: break-word; /* Memastikan kata panjang bisa dipatahkan */
 }
 .report-table th, .collection-table th {
     font-weight: 600;
@@ -82,19 +83,21 @@
 }
 
 /* -------------------------------------------------------------------------- */
-/* FIX UKURAN ZOOM HP: Mobile Layout (Mengecilkan ukuran font dan padding) */
+/* FIX UKURAN ZOOM HP: Mobile Optimization (Non-Card View, Reduced Size) */
 /* -------------------------------------------------------------------------- */
 @media screen and (max-width: 600px) {
     .report-table, .collection-table {
-        font-size: 11px; /* Mengecilkan ukuran font */
-        min-width: 500px; /* Sedikit mengurangi min-width untuk memungkinkan zoom out lebih jauh */
+        font-size: 10px; /* Mengecilkan ukuran font secara agresif */
+        min-width: 100%; /* Memastikan lebar minimum adalah 100% */
+        table-layout: fixed; /* Membantu memaksa kolom agar muat */
     }
     .report-table th, .report-table td, .collection-table th, .collection-table td {
-        padding: 6px 4px; /* Mengurangi padding */
+        padding: 5px 3px; /* Mengurangi padding secara agresif */
+        line-height: 1.2;
     }
 }
 /* -------------------------------------------------------------------------- */
-/* Perbaikan Selesai: Menggunakan Horizontal Scroll (Tampilan Tabel Biasa) di HP.
+/* Perbaikan Selesai: Menggunakan Tampilan Tabel Biasa Tanpa Horizontal Scroll.
 /* -------------------------------------------------------------------------- */
 {% endblock %}
 
