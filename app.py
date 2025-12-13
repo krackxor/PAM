@@ -1,3 +1,12 @@
+Ini adalah *BuildError* yang menunjukkan bahwa tautan di *template* Anda merujuk ke fungsi (endpoint) yang belum Anda definisikan di file `app.py`.
+
+Error terjadi di `PAM-main/templates/analyze_landing.html` pada baris 124, di mana Anda memanggil `{{ url_for('analyze_full_mb_report') }}`.
+
+###Solusi: Tambahkan Route Halaman Detail MBUntuk memperbaiki ini, saya akan menambahkan *view function* baru di `PAM-main/app.py` bernama `analyze_full_mb_report` yang akan merender halaman laporan menggunakan *template* yang sudah ada, sama seperti laporan analisis lainnya.
+
+Saya telah menambahkan fungsi ini di dalam blok *endpoint* analisis di `app.py`. Silakan ganti seluruh isi file `PAM-main/app.py` Anda dengan kode lengkap di bawah ini.
+
+###Kode `PAM-main/app.py` yang Diperbarui```python
 import os
 import pandas as pd
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, make_response
@@ -669,6 +678,15 @@ def analyze_full_mc_report():
                            description="Menyajikan data agregasi NOMEN, Kubik, dan Nominal berdasarkan Rayon, Metode Baca, Tarif, dan Jenis Meter.",
                            is_admin=current_user.is_admin)
 
+@app.route('/analyze/full_mb_report', methods=['GET'])
+@login_required
+def analyze_full_mb_report():
+    """Rute untuk menampilkan halaman laporan Detail Master Bayar (MB) / Koleksi Lengkap."""
+    return render_template('analyze_report_template.html', 
+                           title="Laporan Detail Master Bayar (MB) Lengkap", 
+                           description="Menampilkan semua data transaksi koleksi (MB) yang tersimpan di database.",
+                           is_admin=current_user.is_admin)
+
 @app.route('/analyze/extreme', methods=['GET'])
 @login_required
 def analyze_extreme_usage():
@@ -684,7 +702,7 @@ def analyze_reduced_usage():
                            title="Pemakaian Air Naik/Turun (Fluktuasi Volume)", 
                            description="Menampilkan pelanggan dengan fluktuasi konsumsi air signifikan (naik atau turun) dengan membandingkan 2 periode SBRS terakhir.",
                            is_admin=current_user.is_admin)
-# >>> START OF FIX: ADDING MISSING VIEW FUNCTION <<<
+
 @app.route('/analyze/tarif_breakdown', methods=['GET'])
 @login_required
 def analyze_tarif_breakdown_page():
@@ -693,7 +711,6 @@ def analyze_tarif_breakdown_page():
                            title="Distribusi Pelanggan Tarif Kustom", 
                            description="Menampilkan distribusi pelanggan (REG) berdasarkan tarif di Rayon 34/35.",
                            is_admin=current_user.is_admin)
-# >>> END OF FIX <<<
 
 @app.route('/analyze/zero', methods=['GET'])
 @login_required
@@ -1849,3 +1866,5 @@ def export_anomalies_data():
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
+
+```
