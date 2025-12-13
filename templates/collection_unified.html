@@ -505,12 +505,12 @@
             customReportArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Menghubungkan ke MongoDB untuk Laporan Kustom...</p>';
             
             try {
-                // Endpoint ini sekarang mengembalikan breakdown sederhana terstruktur
+                // Endpoint ini harus dibuat di app.py
                 const response = await fetch('{{ url_for("analyze_mc_grouping_api") }}'); 
                 const data = await response.json();
                 
-                if (data.status === 'error') {
-                     customReportArea.innerHTML = `<p class="no-results" style="color: red;">❌ Gagal memuat report: ${data.message}</p>`;
+                if (response.status !== 200 || data.status !== 'success') {
+                     customReportArea.innerHTML = `<p class="no-results" style="color: red;">❌ Gagal memuat report: ${data.message || 'Tidak ada data kustom ditemukan.'}</p>`;
                      return;
                 }
                 
@@ -522,14 +522,27 @@
             }
         }
         
-        // Fungsi rendering yang disesuaikan untuk output LIST non-tabular
+        // Fungsi rendering yang disesuaikan untuk output LIST non-tabular (Request Baru)
         function renderCustomReportTable(data) {
             const customArea = document.getElementById('customReportArea');
             if (data.status !== 'success') {
                  customArea.innerHTML = `<p class="no-results" style="color: red;">❌ ${data.message || 'Gagal memuat laporan kustom.'}</p>`;
                  return;
             }
-            
+
+            // Helper function to render a single total KPI box
+            function renderTotalCard(title, nomen, nominal, kubik=null) {
+                 const cardHTML = `
+                    <div class="summary-card" style="border-left-color: #007bff; text-align: left; padding: 10px;">
+                        <h4 style="color: #007bff; margin-bottom: 5px;">${title}</h4>
+                        <p style="font-size: 1.1em; margin-bottom: 3px;">Nomen: <strong>${formatNumber(nomen)}</strong></p>
+                        ${kubik !== null ? `<p style="font-size: 1.1em; margin-bottom: 3px;">Kubikasi: <strong>${formatNumber(kubik)} m³</strong></p>` : ''}
+                        <p style="font-size: 1.2em; font-weight: bold; color: #dc3545;">Nominal: ${formatRupiah(nominal)}</p>
+                    </div>
+                 `;
+                 return cardHTML;
+            }
+
             // Helper function to render data in list format: [Value] - [Nomen Count] - [Nominal]
             function renderBreakdownList(title, breakdownArray, dimensionKey) {
                 let listHTML = `<h4 style="margin-top: 15px; color: var(--primary-color);">${title}</h4><ul>`;
@@ -544,7 +557,7 @@
                         
                         // Format: [Dimension Value] - [Nomen Count] - [Nominal]
                         // Contoh: 2A2 - 3535 NOMEN - Rp 545.004
-                        listHTML += `<li><strong>${dimValue}</strong> - ${nomenCount} NOMEN - ${nominal}</li>`;
+                        listHTML += `<li style="list-style-type: square; margin-left: 20px;"><strong>${dimValue}</strong> - ${nomenCount} NOMEN - ${nominal}</li>`;
                     });
                 }
                 
@@ -552,20 +565,42 @@
                 return listHTML;
             }
             
+            const totals = data.totals;
+            const breakdowns = data.breakdowns;
+
             let reportHTML = `
-                <h3 style="color: #dc3545;">Laporan Grup Kustom (Rayon 34/35 Reguler)</h3>
-                <p style="font-size: 0.9em; color: #6c757d;">Angka dalam format: [Nilai Dimensi] - [Total Pelanggan] - [Total Nominal Piutang]</p>
+                <h3 style="color: #dc3545; margin-bottom: 20px;">Laporan Grouping MC Kustom (Rayon 34/35 Reguler)</h3>
+                
+                <h4 style="color: var(--primary-color);">1. Total Agregasi Pelanggan Reguler Rayon 34/35</h4>
+                <div class="report-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+                    ${renderTotalCard('TOTAL R34 + R35 (Nomen & Nominal)', totals.TOTAL_34_35.CountOfNOMEN, totals.TOTAL_34_35.SumOfNOMINAL)}
+                    ${renderTotalCard('TOTAL R34 + R35 (Nomen, Kubik, Nominal)', totals.TOTAL_34_35.CountOfNOMEN, totals.TOTAL_34_35.SumOfNOMINAL, totals.TOTAL_34_35.SumOfKUBIK)}
+                    ${renderTotalCard('RAYON 34 (Nomen, Kubik, Nominal)', totals[34].CountOfNOMEN, totals[34].SumOfNOMINAL, totals[34].SumOfKUBIK)}
+                    ${renderTotalCard('RAYON 35 (Nomen, Kubik, Nominal)', totals[35].CountOfNOMEN, totals[35].SumOfNOMINAL, totals[35].SumOfKUBIK)}
+                </div>
+                <p style="font-size: 0.9em; color: #6c757d; margin-top: 15px;">*Total Nomen R34 + R35 mencerminkan pelanggan unik yang muncul di kedua rayon.</p>
+
+                <h4 style="color: var(--primary-color); margin-top: 30px;">2. Breakdown Berdasarkan Dimensi</h4>
             `;
+
+            // --- BREAKDOWN TARIF ---
+            reportHTML += `<h5 style="color: #007bff; margin-top: 25px;">2.1. Breakdown Jenis TARIF</h5>`;
+            reportHTML += renderBreakdownList('Total Rayon 34 & 35', breakdowns.TARIF.TOTAL_34_35, 'TARIF');
+            reportHTML += renderBreakdownList('Hanya Rayon 34', breakdowns.TARIF[34], 'TARIF');
+            reportHTML += renderBreakdownList('Hanya Rayon 35', breakdowns.TARIF[35], 'TARIF');
             
-            // 1. TARIF
-            reportHTML += renderBreakdownList('Tarif (Piutang Total)', data.tarif_breakdown, 'TARIF');
-            
-            // 2. MEREK METER
-            reportHTML += renderBreakdownList('Merek Meter (Piutang Total)', data.merk_breakdown, 'MERK');
-            
-            // 3. READ METHOD
-            reportHTML += renderBreakdownList('Metode Baca (Piutang Total)', data.read_method_breakdown, 'READ_METHOD');
-            
+            // --- BREAKDOWN MERK ---
+            reportHTML += `<h5 style="color: #007bff; margin-top: 25px;">2.2. Breakdown Merek Meter (MERK)</h5>`;
+            reportHTML += renderBreakdownList('Total Rayon 34 & 35', breakdowns.MERK.TOTAL_34_35, 'MERK');
+            reportHTML += renderBreakdownList('Hanya Rayon 34', breakdowns.MERK[34], 'MERK');
+            reportHTML += renderBreakdownList('Hanya Rayon 35', breakdowns.MERK[35], 'MERK');
+
+            // --- BREAKDOWN READ METHOD ---
+            reportHTML += `<h5 style="color: #007bff; margin-top: 25px;">2.3. Breakdown Metode Baca (READ_METHOD)</h5>`;
+            reportHTML += renderBreakdownList('Total Rayon 34 & 35', breakdowns.READ_METHOD.TOTAL_34_35, 'READ_METHOD');
+            reportHTML += renderBreakdownList('Hanya Rayon 34', breakdowns.READ_METHOD[34], 'READ_METHOD');
+            reportHTML += renderBreakdownList('Hanya Rayon 35', breakdowns.READ_METHOD[35], 'READ_METHOD');
+
             customReportArea.innerHTML = reportHTML;
         }
 
