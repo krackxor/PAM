@@ -552,13 +552,14 @@ def collection_detail_api():
     mongo_query = {} 
     
     if query_str:
-        safe_query_str = re.escape(query_str)
+        safe_query_str = re.escape(query_str.upper())
         search_filter = {
             '$or': [
-                {'RAYON': {'$regex': safe_query_str, '$options': 'i'}}, 
-                {'PCEZ': {'$regex': safe_query_str, '$options': 'i'}},
-                {'NOMEN': {'$regex': safe_query_str, '$options': 'i'}},
-                {'ZONA_NOREK': {'$regex': safe_query_str, '$options': 'i'}} 
+                {'RAYON': {'$regex': safe_query_str}}, 
+                {'PCEZ': {'$regex': safe_query_str}},
+                {'NOMEN': {'$regex': safe_query_str}},
+                {'ZONA_NOREK': {'$regex': safe_query_str}}, 
+                {'LKS_BAYAR': {'$regex': safe_query_str}} 
             ]
         }
         mongo_query.update(search_filter)
@@ -577,7 +578,7 @@ def collection_detail_api():
             pay_dt = doc.get('TGL_BAYAR', '')
             bulan_rek = doc.get('BULAN_REK', '')
             
-            is_undue = bulan_rek == this_month_str 
+            is_undue = bulan_rek == doc.get('BULAN_REK', 'N/A')
             
             cleaned_results.append({
                 'NOMEN': doc.get('NOMEN', 'N/A'),
@@ -710,10 +711,10 @@ def analyze_volume_fluctuation_api():
         return jsonify({"message": f"Gagal mengambil data fluktuasi volume. Detail teknis error: {e}"}), 500
         
 # =========================================================================
-# === API GROUPING MC KUSTOM (BARU DARI PERMINTAAN USER) ===
+# === API GROUPING MC KUSTOM (KEMBALI KE MODE GROUPING KOKOH) ===
 # =========================================================================
 
-# 1. API DETAIL (Mengembalikan Summary Total Kustom + Breakdowns)
+# 1. API DETAIL (Untuk Laporan Grouping Penuh - MODE GROUPING KOKOH -> SIMPLIFIKASI)
 @app.route('/api/analyze/mc_grouping', methods=['GET'])
 @login_required 
 def analyze_mc_grouping_api():
@@ -734,10 +735,12 @@ def analyze_mc_grouping_api():
                'foreignField': 'NOMEN',
                'as': 'customer_info'
             }},
+            # Unwind dipertahankan, karena filter akan menyingkirkan hasil join yang gagal
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
             
             # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
+                # Normalisasi di sini menggunakan data yang sudah di-clean saat upload (UPPERCASE STRING)
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},
                 'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
                 'CLEAN_MERK': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
@@ -746,124 +749,35 @@ def analyze_mc_grouping_api():
             # --- END NORMALISASI ---
             
             {'$match': {
+                # Filter menggunakan STRING KAPITAL yang sudah di-clean
                 'CLEAN_TIPEPLGGN': 'REG',
-                'CLEAN_RAYON': {'$in': ['34', '35']} 
+                'CLEAN_RAYON': {'$in': ['34', '35']} # Filter menggunakan string, konsisten dengan CID upload
             }},
             
-            {'$facet': {
-                # 1. Overall and Rayon Totals (Summary)
-                "summaryTotals": [
-                    {'$group': {
-                        '_id': { 'rayon': '$CLEAN_RAYON' }, 
-                        'TotalNomen': {'$addToSet': '$NOMEN'}, 
-                        'SumOfKUBIK': {'$sum': '$KUBIK'},
-                        'SumOfNOMINAL': {'$sum': '$NOMINAL'},
-                    }},
-                    {'$group': {
-                        '_id': None,
-                        'TotalPelangganAll': {'$sum': {'$size': '$TotalNomen'}},
-                        'TotalNominalAll': {'$sum': '$SumOfNOMINAL'},
-                        'TotalKubikAll': {'$sum': '$SumOfKUBIK'},
-                        'RayonDetails': {'$push': {
-                            'Rayon': '$_id.rayon',
-                            'NomenCount': {'$size': '$TotalNomen'},
-                            'Nominal': '$SumOfNOMINAL',
-                            'Kubik': '$SumOfKUBIK'
-                        }}
-                    }}
-                ],
-                
-                # 2. Breakdown by TARIF
-                "breakdown_tarif": [
-                    {'$group': {
-                        '_id': '$TARIF',
-                        'NomenCount': {'$addToSet': '$NOMEN'}, 
-                        'TotalNominal': {'$sum': '$NOMINAL'}
-                    }},
-                    {'$project': {
-                        '_id': 0,
-                        'TARIF': '$_id',
-                        'NomenCount': {'$size': '$NomenCount'},
-                        'TotalNominal': {'$round': ['$TotalNominal', 2]}
-                    }},
-                    {'$sort': {'TARIF': 1}}
-                ],
-                
-                # 3. Breakdown by MERK
-                "breakdown_merk": [
-                    {'$group': {
-                        '_id': '$CLEAN_MERK',
-                        'NomenCount': {'$addToSet': '$NOMEN'}, 
-                        'TotalNominal': {'$sum': '$NOMINAL'}
-                    }},
-                    {'$project': {
-                        '_id': 0,
-                        'MERK': '$_id',
-                        'NomenCount': {'$size': '$NomenCount'},
-                        'TotalNominal': {'$round': ['$TotalNominal', 2]}
-                    }},
-                    {'$sort': {'MERK': 1}}
-                ],
-                
-                # 4. Breakdown by READ_METHOD
-                "breakdown_read_method": [
-                    {'$group': {
-                        '_id': '$CLEAN_READ_METHOD',
-                        'NomenCount': {'$addToSet': '$NOMEN'}, 
-                        'TotalNominal': {'$sum': '$NOMINAL'}
-                    }},
-                    {'$project': {
-                        '_id': 0,
-                        'READ_METHOD': '$_id',
-                        'NomenCount': {'$size': '$NomenCount'},
-                        'TotalNominal': {'$round': ['$TotalNominal', 2]}
-                    }},
-                    {'$sort': {'READ_METHOD': 1}}
-                ]
+            # >>> START SIMPLIFIKASI: Mengubah ke Summary Total <<<
+            {'$group': {
+                '_id': None, // Group semua dokumen menjadi satu untuk mendapatkan grand totals
+                'TotalNomenKustom': {'$addToSet': '$NOMEN'}, 
+                'SumOfKUBIK': {'$sum': '$KUBIK'},
+                'SumOfNOMINAL': {'$sum': '$NOMINAL'},
             }},
-            
-            # 5. Final Output Restructuring
             {'$project': {
                 '_id': 0,
-                'summary_totals': {
-                    '$let': {
-                        'vars': { 'summary': {'$arrayElemAt': ['$summaryTotals', 0]}},
-                        'in': {
-                            'TotalPelangganAll': '$$summary.TotalPelangganAll',
-                            'TotalNominalAll': {'$round': ['$$summary.TotalNominalAll', 2]},
-                            'TotalKubikAll': {'$round': ['$$summary.TotalKubikAll', 2]},
-                            # Calculate Rayon 34 and 35 totals from RayonDetails array
-                            'TotalPelanggan34': {'$ifNull': [{'$arrayElemAt': ['$summary.RayonDetails.NomenCount', {'$indexOfArray': ['$summary.RayonDetails.Rayon', '34']}]}, 0]},
-                            'TotalPelanggan35': {'$ifNull': [{'$arrayElemAt': ['$summary.RayonDetails.NomenCount', {'$indexOfArray': ['$summary.RayonDetails.Rayon', '35']}]}, 0]},
-                            'TotalNominal34': {'$round': [{'$ifNull': [{'$arrayElemAt': ['$summary.RayonDetails.Nominal', {'$indexOfArray': ['$summary.RayonDetails.Rayon', '34']}]}, 0]}, 2]},
-                            'TotalNominal35': {'$round': [{'$ifNull': [{'$arrayElemAt': ['$summary.RayonDetails.Nominal', {'$indexOfArray': ['$summary.RayonDetails.Rayon', '35']}]}, 0]}, 2]},
-                            'TotalKubik34': {'$round': [{'$ifNull': [{'$arrayElemAt': ['$summary.RayonDetails.Kubik', {'$indexOfArray': ['$summary.RayonDetails.Rayon', '34']}]}, 0]}, 2]},
-                            'TotalKubik35': {'$round': [{'$ifNull': [{'$arrayElemAt': ['$summary.RayonDetails.Kubik', {'$indexOfArray': ['$summary.RayonDetails.Rayon', '35']}]}, 0]}, 2]}
-                        }
-                    }
-                },
-                'breakdown_tarif': '$breakdown_tarif',
-                'breakdown_merk': '$breakdown_merk',
-                'breakdown_read_method': '$breakdown_read_method',
+                'TotalPelanggan': {'$size': '$TotalNomenKustom'},
+                'TotalPiutangNominal': {'$round': ['$SumOfNOMINAL', 0]},
+                'TotalPiutangKubik': {'$round': ['$SumOfKUBIK', 2]},
+                'Keterangan': 'Ringkasan Total Kustom (Rayon 34/35 REG)'
             }}
+            # >>> END SIMPLIFIKASI <<<
         ]
         grouping_data = list(collection_mc.aggregate(pipeline_grouping))
         
         # Perbaiki penanganan error/empty result: jika kosong, kembalikan [] dan status 200
         if not grouping_data:
-             return jsonify({
-                "summary_totals": {
-                    "TotalPelangganAll": 0, "TotalPelanggan34": 0, "TotalPelanggan35": 0,
-                    "TotalNominalAll": 0.0, "TotalNominal34": 0.0, "TotalNominal35": 0.0,
-                    "TotalKubikAll": 0.0, "TotalKubik34": 0.0, "TotalKubik35": 0.0,
-                },
-                "breakdown_tarif": [],
-                "breakdown_merk": [],
-                "breakdown_read_method": []
-            }), 200 
+            return jsonify([]), 200 
 
-        # Mengembalikan objek summary yang telah distrukturkan
-        return jsonify(grouping_data[0]), 200
+        # Mengembalikan summary sebagai array berisi satu objek (sesuai permintaan user)
+        return jsonify(grouping_data), 200
 
     except Exception as e:
         print(f"Error saat menganalisis grouping MC: {e}")
@@ -1068,7 +982,7 @@ def admin_upload_unified_page():
 @login_required 
 @admin_required 
 def upload_mc_data():
-    """Mode GANTI: Untuk Master Cetak (MC) / Piutang Bulanan."""
+    """Mode GANTI: Untuk Master Cetak (MC) / Piutang Bulanan. (DIPERBAIKI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
     
@@ -1095,7 +1009,7 @@ def upload_mc_data():
         # ===============================================================
         
         # Target kolom kunci MC untuk konsistensi
-        columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF', 'RAYON', 'PCEZ'] 
+        columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF', 'RAYON'] 
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize_mc:
@@ -1144,7 +1058,7 @@ def upload_mc_data():
 @login_required 
 @admin_required 
 def upload_mb_data():
-    """Mode APPEND: Untuk Master Bayar (MB) / Koleksi Harian."""
+    """Mode APPEND: Untuk Master Bayar (MB) / Koleksi Harian. (DIPERBAIKI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -1234,7 +1148,7 @@ def upload_mb_data():
 @login_required 
 @admin_required 
 def upload_cid_data():
-    """Mode GANTI: Untuk Customer Data (CID) / Data Pelanggan Statis."""
+    """Mode GANTI: Untuk Customer Data (CID) / Data Pelanggan Statis. (DIPERBAIKI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -1311,7 +1225,7 @@ def upload_cid_data():
 @login_required 
 @admin_required 
 def upload_sbrs_data():
-    """Mode APPEND: Untuk data Baca Meter (SBRS) / Riwayat Stand Meter."""
+    """Mode APPEND: Untuk data Baca Meter (SBRS) / Riwayat Stand Meter. (DIPERBAIKI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
