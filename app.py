@@ -702,37 +702,48 @@ def analyze_stand_tungggu():
                            is_admin=current_user.is_admin)
 
 # =========================================================================
-# === API GROUPING MC LENGKAP (SESUAI PERMINTAAN PENGGUNA) ===
+# === API GROUPING MC KUSTOM (HELPER FUNCTION) ===
 # =========================================================================
 
-@app.route('/api/analyze/mc_full_report', methods=['GET'])
-@login_required 
-def analyze_mc_full_report_api():
-    if client is None:
-        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+def _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, rayon_filter=None):
+    # This helper will return a list of aggregated results grouped by the dimension.
+    # It filters to 'REG' type and applies rayon filter if provided ('34', '35', or 'TOTAL_34_35').
     
-    # Helper to calculate total NOMEN, KUBIK, NOMINAL based on an optional Rayon filter.
-    def _aggregate_mc_totals(collection_mc, collection_cid, rayon_filter=None):
-        pipeline = [{'$project': {
+    dimension_map = {'TARIF': '$TARIF_CID', 'MERK': '$MERK_CID', 'READ_METHOD': '$READ_METHOD'}
+    
+    # Base pipeline structure (Projection and CID Join for all necessary fields)
+    pipeline = [
+        {'$project': {
             'NOMEN': '$NOMEN',
-            'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
             'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
-        }}]
+            'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
+        }},
+        {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
+        {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
+        {'$addFields': {
+            'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
+            'TARIF_CID': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TARIF', 'N/A']}}}}}, 
+            'MERK_CID': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
+            'READ_METHOD': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}}}}},
+            'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},
+        }},
+        {'$match': {'CLEAN_TIPEPLGGN': 'REG'}} # Always filter to REG
+    ]
     
-        if rayon_filter in ['34', '35']:
-            # Join to CID for accurate Rayon filtering (using CID's data)
-            pipeline.extend([
-                {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
-                {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
-                {'$addFields': {'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},}},
-                {'$match': {'CLEAN_RAYON': rayon_filter}}
-            ])
-        # NOTE: For 'All', we skip the match stage to count everything in MC
-        
+    # Apply Rayon filter
+    rayon_keys = ['34', '35']
+    if rayon_filter in rayon_keys:
+        pipeline.append({'$match': {'CLEAN_RAYON': rayon_filter}})
+    elif rayon_filter == 'TOTAL_34_35':
+        pipeline.append({'$match': {'CLEAN_RAYON': {'$in': rayon_keys}}})
+
+    # Grouping stage
+    if dimension is None:
+        # Total Aggregation
         pipeline.extend([
             {'$group': {
                 '_id': None,
-                'TotalNomen': {'$addToSet': '$NOMEN'}, 
+                'TotalNomen': {'$addToSet': '$NOMEN'},
                 'SumOfKUBIK': {'$sum': '$KUBIK'},
                 'SumOfNOMINAL': {'$sum': '$NOMINAL'},
             }},
@@ -743,73 +754,63 @@ def analyze_mc_full_report_api():
                 'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 0]},
             }}
         ])
-
         result = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
         return result[0] if result else {'CountOfNOMEN': 0, 'SumOfKUBIK': 0, 'SumOfNOMINAL': 0}
-
-    # Helper to aggregate metrics grouped by a single dimension (Tarif, Read Method, Merk Meter)
-    def _aggregate_mc_breakdown(collection_mc, collection_cid, dimension, rayon_filter=None):
-        dimension_map = {'TARIF': '$TARIF_CID', 'READ_METHOD': '$READ_METHOD', 'MERK_METER': '$MERK'}
-        dimension_field = dimension.upper()
-        if dimension_field not in dimension_map: return []
-        group_key = dimension_map[dimension_field]
         
-        pipeline = [
-            {'$project': {
-                'NOMEN': '$NOMEN',
-                'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
-                'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
-            }},
-            # Join to CID to get the grouping dimension and Rayon
-            {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
-            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
-            {'$addFields': {
-                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
-                'TARIF_CID': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TARIF', 'N/A']}}}}}, 
-                'MERK': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
-                'READ_METHOD': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}}}}},
-            }},
-        ]
-        
-        if rayon_filter in ['34', '35']:
-            pipeline.append({'$match': {'CLEAN_RAYON': rayon_filter}})
-        
+    else:
+        # Dimension Breakdown Aggregation
+        group_key = dimension_map[dimension]
         pipeline.extend([
             {'$group': {
                 '_id': group_key,
-                'CountOfNOMEN': {'$addToSet': '$NOMEN'}, 
-                'SumOfNOMINAL': {'$sum': '$NOMINAL'},
+                'CountOfNOMEN': {'$addToSet': '$NOMEN'},
                 'SumOfKUBIK': {'$sum': '$KUBIK'},
+                'SumOfNOMINAL': {'$sum': '$NOMINAL'},
             }},
             {'$project': {
                 '_id': 0,
-                dimension_field: '$_id',
+                'DIMENSION_KEY': '$_id',
                 'CountOfNOMEN': {'$size': '$CountOfNOMEN'},
-                'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 0]},
                 'SumOfKUBIK': {'$round': ['$SumOfKUBIK', 0]},
+                'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 0]},
             }},
-            {'$sort': {dimension_field: 1}}
+            {'$sort': {'DIMENSION_KEY': 1}}
         ])
+        results = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
+        
+        # Rename DIMENSION_KEY field back to the dimension name for easy consumption in JS
+        for item in results:
+             item[dimension] = item.pop('DIMENSION_KEY')
+             
+        return results
 
-        return list(collection_mc.aggregate(pipeline, allowDiskUse=True))
+# =========================================================================
+# === API GROUPING MC KUSTOM (GENERATES COMPLEX JSON FOR CUSTOM REPORT) ===
+# =========================================================================
+
+@app.route('/api/analyze/mc_grouping', methods=['GET'])
+@login_required 
+def analyze_mc_grouping_api():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
 
     try:
-        # 1. KPI Totals
+        # 1. Total Aggregations
         totals = {
-            'all': _aggregate_mc_totals(collection_mc, collection_cid, rayon_filter=None), # All MC data
-            '34': _aggregate_mc_totals(collection_mc, collection_cid, rayon_filter='34'),
-            '35': _aggregate_mc_totals(collection_mc, collection_cid, rayon_filter='35'),
+            'TOTAL_34_35': _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, rayon_filter='TOTAL_34_35'),
+            '34': _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, rayon_filter='34'),
+            '35': _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, rayon_filter='35'),
         }
 
-        # 2. Breakdown by Dimension
-        dimensions = ['READ_METHOD', 'TARIF', 'MERK_METER']
+        # 2. Dimension Breakdowns (for R34, R35, and R34+R35 Total)
+        dimensions = ['TARIF', 'MERK', 'READ_METHOD']
         breakdowns = {}
-        
+
         for dim in dimensions:
             breakdowns[dim] = {
-                'all': _aggregate_mc_breakdown(collection_mc, collection_cid, dim, rayon_filter=None), 
-                '34': _aggregate_mc_breakdown(collection_mc, collection_cid, dim, rayon_filter='34'),
-                '35': _aggregate_mc_breakdown(collection_mc, collection_cid, dim, rayon_filter='35'),
+                'TOTAL_34_35': _aggregate_custom_mc_report(collection_mc, collection_cid, dim, rayon_filter='TOTAL_34_35'),
+                '34': _aggregate_custom_mc_report(collection_mc, collection_cid, dim, rayon_filter='34'),
+                '35': _aggregate_custom_mc_report(collection_mc, collection_cid, dim, rayon_filter='35'),
             }
 
         response_data = {
@@ -821,8 +822,8 @@ def analyze_mc_full_report_api():
         return jsonify(response_data), 200
 
     except Exception as e:
-        print(f"Error saat membuat laporan lengkap MC: {e}")
-        return jsonify({"status": "error", "message": f"Gagal mengambil laporan lengkap MC: {e}"}), 500
+        print(f"Error saat menganalisis custom grouping MC: {e}")
+        return jsonify({"status": "error", "message": f"Gagal mengambil data grouping MC: {e}"}), 500
 
 # =========================================================================
 # === API UNTUK ANALISIS AKURAT (Fluktuasi Volume Naik/Turun) ===
@@ -841,92 +842,6 @@ def analyze_volume_fluctuation_api():
         print(f"Error saat menganalisis fluktuasi volume: {e}")
         return jsonify({"message": f"Gagal mengambil data fluktuasi volume. Detail teknis error: {e}"}), 500
         
-# =========================================================================
-# === API GROUPING MC KUSTOM (KINI MENGEMBALIKAN BREAKDOWN SEDERHANA) ===
-# =========================================================================
-
-@app.route('/api/analyze/mc_grouping', methods=['GET'])
-@login_required 
-def analyze_mc_grouping_api():
-    if client is None:
-        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
-    
-    # Helper function to perform aggregation by a single dimension for R34/R35 REG
-    def _get_simple_breakdown(dimension_key):
-        dimension_map = {'TARIF': '$TARIF_CID', 'READ_METHOD': '$READ_METHOD', 'MERK': '$MERK_CID'}
-        group_key_field = dimension_map.get(dimension_key.upper())
-
-        if not group_key_field:
-            return []
-
-        pipeline = [
-            {'$project': {
-                'NOMEN': '$NOMEN', 
-                'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
-            }},
-            {'$lookup': {
-               'from': 'CustomerData', 
-               'localField': 'NOMEN',
-               'foreignField': 'NOMEN',
-               'as': 'customer_info'
-            }},
-            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}},
-            
-            {'$addFields': {
-                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},
-                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
-                'TARIF_CID': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TARIF', 'N/A']}}}}},
-                'MERK_CID': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
-                'READ_METHOD': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}}}}},
-            }},
-            
-            {'$match': {
-                'CLEAN_TIPEPLGGN': 'REG',
-                'CLEAN_RAYON': {'$in': ['34', '35']} 
-            }},
-            
-            {'$group': {
-                '_id': group_key_field,
-                'CountOfNOMEN': {'$addToSet': '$NOMEN'}, 
-                'SumOfNOMINAL': {'$sum': '$NOMINAL'},
-            }},
-            {'$project': {
-                '_id': 0,
-                'DIMENSION_KEY': '$_id',
-                'CountOfNOMEN': {'$size': '$CountOfNOMEN'},
-                'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 0]},
-            }},
-            {'$sort': {'DIMENSION_KEY': 1}}
-        ]
-        
-        results = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
-        
-        for item in results:
-             # Rename DIMENSION_KEY field back to the dimension name for easy consumption in JS
-             item[dimension_key.upper()] = item.pop('DIMENSION_KEY')
-             
-        return results
-
-    try:
-        # Panggil helper untuk setiap breakdown yang diminta
-        tarif_data = _get_simple_breakdown('TARIF')
-        merk_data = _get_simple_breakdown('MERK')
-        read_method_data = _get_simple_breakdown('READ_METHOD')
-
-        response_data = {
-            'status': 'success',
-            # Kembalikan data dalam struktur yang mudah dipisahkan
-            'tarif_breakdown': tarif_data,
-            'merk_breakdown': merk_data,
-            'read_method_breakdown': read_method_data
-        }
-        
-        return jsonify(response_data), 200
-
-    except Exception as e:
-        print(f"Error saat menganalisis simple grouping MC: {e}")
-        return jsonify({"status": "error", "message": f"Gagal mengambil data grouping MC. Detail teknis error: {e}"}), 500
-
 # 2. API SUMMARY (Untuk KPI Cards di collection_unified.html)
 @app.route('/api/analyze/mc_grouping/summary', methods=['GET'])
 @login_required 
