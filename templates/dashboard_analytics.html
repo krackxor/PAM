@@ -1,367 +1,305 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard Analytics Terpadu{% endblock %}
+{% block title %}Pencarian Terintegrasi{% endblock %}
 
 {% block custom_styles %}
-/* CSS Khusus untuk Dashboard */
-.dashboard-grid {
+/* CSS Khusus untuk Halaman Pencarian */
+.search-box {
+    margin-bottom: 30px;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: var(--border-radius);
+    text-align: center;
+    box-shadow: var(--shadow-light); 
+}
+#nomenInput {
+    padding: 12px; 
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    width: 100%;
+    max-width: 350px; 
+    margin-bottom: 10px;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+.btn-search {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 12px 25px; 
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background-color 0.3s;
+}
+.btn-search:hover {
+    background-color: #0056b3;
+}
+
+/* Status Summary Grid */
+.summary-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); 
-    gap: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+    gap: 15px;
     margin-bottom: 30px;
 }
-.summary-card-dash {
+.summary-card {
     background-color: var(--card-bg);
-    padding: 20px;
+    padding: 15px;
     border-radius: var(--border-radius);
+    border-left: 5px solid; /* Aksen visual */
     box-shadow: var(--shadow-light);
-    border-left: 5px solid var(--primary-color);
     transition: transform 0.2s;
 }
-.summary-card-dash h4 { margin: 0 0 5px 0; font-size: 0.9em; text-transform: uppercase; color: #6c757d; }
-.summary-card-dash p { margin: 0; font-size: 1.8em; font-weight: bold; }
-.text-danger { color: #dc3545; border-color: #dc3545 !important; }
-.text-success { color: var(--secondary-color); border-color: var(--secondary-color) !important; }
-.text-warning { color: var(--accent-color); border-color: var(--accent-color) !important; }
-
-.chart-section, .table-section {
-    background-color: var(--card-bg);
-    padding: 20px;
-    border-radius: var(--border-radius);
+.summary-card:hover {
+    transform: translateY(-2px);
     box-shadow: var(--shadow-medium);
-    margin-bottom: 30px;
 }
-.full-width-grid {
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: 20px;
-}
+.summary-card h4 { margin: 0 0 5px 0; font-size: 0.9em; text-transform: uppercase; color: #6c757d; }
+.summary-card p { margin: 0; font-size: 1.3em; font-weight: bold; }
 
-/* Style Tabel Sederhana (Top Rayon) */
-.data-table-simple {
+/* Aksen Warna Status */
+.status-ok { color: var(--secondary-color); border-color: var(--secondary-color); }
+.status-warning { color: var(--accent-color); border-color: var(--accent-color); }
+.status-danger { color: #dc3545; border-color: #dc3545; }
+
+/* Detail Data Table */
+.data-table-wrapper {
+    overflow-x: auto;
+    margin-top: 15px;
+    border: 1px solid #e0e0e0; 
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-light);
+    overflow: hidden;
+}
+.data-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 14px;
+    font-size: 14px; 
+    min-width: 700px; 
 }
-.data-table-simple th, .data-table-simple td {
-    padding: 10px;
-    border-bottom: 1px solid #eee;
+.data-table th, .data-table td {
+    border: 1px solid #f0f0f0; 
+    padding: 10px; 
     text-align: left;
-    white-space: nowrap; /* Penting untuk Card View */
+    white-space: nowrap;
 }
-.data-table-simple th {
-    background-color: #f8f9fa;
-}
-.data-table-simple tr:last-child td {
-    border-bottom: none;
+.data-table th {
+    background-color: #e9ecef; 
+    text-align: center;
+    font-weight: 600;
 }
 
-/* ========================================================== */
-/* MOBILE LAYOUT FIXES (< 600px) */
-/* ========================================================== */
-@media (max-width: 900px) {
-    .full-width-grid {
-        grid-template-columns: 1fr;
+/* Mobile Layout for Tables/Details (Card View) */
+@media screen and (max-width: 600px) {
+    .data-table-wrapper {
+        border: none;
+        box-shadow: none;
     }
-}
-@media (max-width: 600px) {
-    .dashboard-grid {
-        grid-template-columns: 1fr; /* Stack cards vertically */
-    }
-    .summary-card-dash p { font-size: 1.5em; }
-    
-    /* Card View for .data-table-simple (Top Rayon) */
-    .table-section {
-        padding: 15px;
-    }
-    .data-table-simple {
+    .data-table {
         min-width: 100%;
     }
-    .data-table-simple thead {
+    .data-table thead {
         display: none;
     }
-    .data-table-simple tr {
+    .data-table tr {
         display: block;
         margin-bottom: 10px;
         border: 1px solid #ddd;
         border-radius: var(--border-radius);
     }
-    .data-table-simple td {
+    .data-table td {
         display: flex;
         justify-content: space-between;
         padding: 8px 12px;
         border: none;
         border-bottom: 1px solid #eee;
-        text-align: right;
-        white-space: normal;
     }
-    .data-table-simple td:before {
+    .data-table td:before {
         content: attr(data-label);
         font-weight: 600;
         text-align: left;
         width: 50%;
-        color: var(--text-color);
         padding-right: 10px;
-        white-space: nowrap;
-    }
-    .data-table-simple tr:last-child td {
-        border-bottom: 1px solid #eee;
-    }
-
-    /* Anomaly Summary List styling for mobile */
-    .chart-section {
-        padding: 15px;
-    }
-    #anomalySummary ul {
-        padding-left: 20px;
-    }
-    #anomalySummary li {
-        font-size: 0.9em;
     }
 }
 {% endblock %}
 
 {% block content %}
-    <h2 style="text-align: left; border-bottom: none; margin-bottom: 10px; color: var(--primary-color);">
-        <i class="fas fa-tachometer-alt" style="margin-right: 10px;"></i> Dashboard Analytics Terpadu
+    <h2 style="text-align: left; border-bottom: none; margin-bottom: 20px; color: var(--primary-color);">
+        <i class="fas fa-search" style="margin-right: 10px;"></i> Pencarian Pelanggan Terintegrasi
     </h2>
     
-    <div style="text-align: right; margin-bottom: 20px;">
-        <a href="{{ url_for('export_dashboard_data') }}" class="btn-primary" style="background-color: var(--secondary-color); text-decoration: none;">
-            <i class="fas fa-file-excel"></i> Export Laporan ke Excel
-        </a>
+    <div class="search-box">
+        <input type="text" id="nomenInput" placeholder="Masukkan NOMEN Pelanggan">
+        <button id="searchBtn" class="btn-search">Cari Data Lengkap</button>
+        <div id="searchStatus" style="margin-top: 10px;"></div>
     </div>
 
-    <div id="loadingStatus" style="text-align: center; padding: 30px;"><i class="fas fa-spinner fa-spin"></i> Memuat data dashboard...</div>
-
-    <div id="dashboardContent" style="display: none;">
-        
-        <h3 style="color: var(--primary-color);">Ringkasan Utama</h3>
-        <div class="dashboard-grid" id="summaryGrid">
+    <div id="resultsArea" style="display: none;">
+        <h3>Status Kesehatan Pelanggan <span id="nomenTitle"></span></h3>
+        <div class="summary-grid" id="healthSummary">
             </div>
 
-        <div class="full-width-grid">
-            
-            <div class="chart-section">
-                <h3 style="margin-top: 0; color: #2c3e50;">Tren Koleksi Nominal (7 Hari Terakhir)</h3>
-                <canvas id="collectionTrendChart"></canvas>
+        <div id="detailsContainer">
             </div>
-
-            <div class="table-section">
-                <h3 style="margin-top: 0; color: #2c3e50;">Top 5 Rayon (Piutang Terbesar)</h3>
-                <div id="topRayonTable"></div>
-            </div>
-
-        </div>
-
-        <div class="chart-section">
-            <h3 style="margin-top: 0; color: #2c3e50;">Ringkasan Anomali Pemakaian Air</h3>
-            <div id="anomalySummary"></div>
-        </div>
-        
     </div>
     
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+    <div id="initialMessage" style="text-align: center; color: #6c757d;">
+        <p>Gunakan NOMEN untuk mencari semua data pelanggan dari Master Cetak, Tunggakan, CID, dan Riwayat Baca Meter secara bersamaan.</p>
+    </div>
 
     <script>
-        const summaryGrid = document.getElementById('summaryGrid');
-        const anomalySummary = document.getElementById('anomalySummary');
-        const topRayonTable = document.getElementById('topRayonTable');
-        const loadingStatus = document.getElementById('loadingStatus');
-        const dashboardContent = document.getElementById('dashboardContent');
-        const alertBadge = document.getElementById('criticalAlertBadge');
-        
-        function formatRupiah(number) {
-            return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
-        }
-        
-        function formatPercent(number) {
-            return (parseFloat(number) || 0).toFixed(2) + '%';
+        const nomenInput = document.getElementById('nomenInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const searchStatus = document.getElementById('searchStatus');
+        const resultsArea = document.getElementById('resultsArea');
+        const healthSummary = document.getElementById('healthSummary');
+        const detailsContainer = document.getElementById('detailsContainer');
+        const nomenTitle = document.getElementById('nomenTitle');
+        const initialMessage = document.getElementById('initialMessage');
+
+        function formatCurrency(amount) {
+            if (typeof amount === 'number') {
+                 return `Rp ${amount.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+            }
+            return amount;
         }
 
-        function determineCardColor(key, value) {
-            if (key.includes('tunggakan') || key.includes('anomali') && value > 0) return 'text-danger';
-            if (key.includes('koleksi') || key.includes('pelanggan')) return 'text-success';
-            if (key.includes('piutang')) return 'text-warning';
-            return 'border-left: 5px solid var(--primary-color)';
+        function determineStatusClass(statusText) {
+            if (statusText.includes('TUNGGAKAN') || statusText.includes('EKSTRIM')) return 'status-danger';
+            if (statusText.includes('PIUTANG') || statusText.includes('ZERO') || statusText.includes('TURUN')) return 'status-warning';
+            return 'status-ok';
         }
         
-        function renderSummaryCards(data) {
-            summaryGrid.innerHTML = '';
+        function renderTable(title, data, singleRow = false) {
+            if (!data || (Array.isArray(data) && data.length === 0)) {
+                return `<h4 style="margin-top: 20px; color: #2c3e50;">${title}</h4><p>Tidak ada data ditemukan.</p>`;
+            }
             
-            const cardData = [
-                { title: "Total Pelanggan (CID)", key: 'total_pelanggan', value: data.total_pelanggan.toLocaleString('id-ID'), color: 'text-success' },
-                { title: "Total Piutang Bulanan (MC)", key: 'total_piutang', value: formatRupiah(data.total_piutang), color: 'text-warning' },
-                { title: "Total Tunggakan (ARDEBT)", key: 'total_tunggakan', value: formatRupiah(data.total_tunggakan), color: 'text-danger' },
-                { title: "Pelanggan Tunggakan Unik", key: 'pelanggan_dengan_tunggakan', value: data.pelanggan_dengan_tunggakan.toLocaleString('id-ID'), color: 'text-danger' },
-                { title: "Koleksi Hari Ini", key: 'koleksi_hari_ini', value: formatRupiah(data.koleksi_hari_ini), color: 'text-success' },
-                { title: "Koleksi Bulan Ini", key: 'koleksi_bulan_ini', value: formatRupiah(data.koleksi_bulan_ini), color: 'text-success' },
-                { title: "Persentase Koleksi (vs Piutang)", key: 'persentase_koleksi', value: formatPercent(data.persentase_koleksi), color: 'text-success' },
-                { title: "Total Anomali Pemakaian", key: 'total_anomali', value: data.total_anomali.toLocaleString('id-ID'), color: data.total_anomali > 0 ? 'text-danger' : 'text-success' },
-            ];
+            const listData = Array.isArray(data) ? data : [data];
+            const headers = Object.keys(listData[0]);
             
-            cardData.forEach(item => {
-                const card = `
-                    <div class="summary-card-dash ${item.color}">
-                        <h4>${item.title}</h4>
-                        <p>${item.value}</p>
-                    </div>
-                `;
-                summaryGrid.innerHTML += card;
+            let tableHtml = `<h4 style="margin-top: 20px; color: #2c3e50;">${title} (${listData.length} baris)</h4>`;
+            tableHtml += '<div class="data-table-wrapper"><table class="data-table"><thead><tr>';
+            
+            // Header Row
+            headers.forEach(h => {
+                tableHtml += `<th>${h.replace(/_/g, ' ')}</th>`;
             });
-        }
-        
-        function renderTopRayon(data) {
-            let tableHTML = '<table class="data-table-simple"><thead><tr><th>Rayon</th><th>Piutang (Rp)</th></tr></thead><tbody>';
-            
-            data.forEach(item => {
-                tableHTML += `
-                    <tr>
-                        <td data-label="Rayon">${item.rayon || 'N/A'}</td>
-                        <td data-label="Piutang (Rp)" style="text-align: right;">${formatRupiah(item.total)}</td>
-                    </tr>
-                `;
+            tableHtml += '</tr></thead><tbody>';
+
+            // Data Rows
+            listData.forEach(item => {
+                tableHtml += '<tr>';
+                headers.forEach(h => {
+                    let cellValue = item[h];
+                    if (h.includes('NOMINAL') || h.includes('JUMLAH')) {
+                        cellValue = formatCurrency(cellValue);
+                    }
+                    tableHtml += `<td data-label="${h.replace(/_/g, ' ')}">${cellValue}</td>`;
+                });
+                tableHtml += '</tr>';
             });
+
+            tableHtml += '</tbody></table></div>';
+            return tableHtml;
+        }
+
+        function renderResults(data) {
+            // 1. Render Health Summary
+            const totalPiutang = formatCurrency(data.summary.TOTAL_PIUTANG_NOMINAL);
+            const statusFinansial = data.summary.STATUS_FINANSIAL;
+            const statusPemakaian = data.summary.STATUS_PEMAKAIAN;
             
-            tableHTML += '</tbody></table>';
-            topRayonTable.innerHTML = tableHTML;
-        }
-        
-        function renderAnomalyBreakdown(data) {
-             let html = '';
-             
-             Object.keys(data.kategori).forEach(key => {
-                 const category = data.kategori[key];
-                 const title = key.replace(/_/g, ' ').toUpperCase();
-                 const color = key.includes('ekstrim') || key.includes('zero') ? '#dc3545' : '#ffc107';
-                 
-                 if (category.jumlah > 0) {
-                     html += `
-                        <h4 style="margin-top: 15px; color: ${color};">${title} (${category.jumlah} Pelanggan)</h4>
-                        <ul style="list-style-type: none; padding: 0;">
-                     `;
-                     category.data.forEach(item => {
-                        html += `<li style="margin-bottom: 5px; border-bottom: 1px dotted #eee;">
-                            <strong>${item.NOMEN}</strong> - ${item.NAMA} (${item.STATUS_PEMAKAIAN})
-                        </li>`;
-                     });
-                     html += `</ul>`;
-                 }
-             });
-             
-             if (!html) {
-                 html = '<p style="text-align: center; color: var(--secondary-color);">Tidak ada anomali pemakaian air signifikan yang terdeteksi.</p>';
-             }
-             
-             anomalySummary.innerHTML = html;
+            const statusFinancialClass = determineStatusClass(statusFinansial);
+            const statusUsageClass = determineStatusClass(statusPemakaian);
+
+            healthSummary.innerHTML = `
+                <div class="summary-card status-ok">
+                    <h4>NOMEN</h4>
+                    <p>${data.summary.NOMEN}</p>
+                </div>
+                <div class="summary-card" style="border-left-color: var(--primary-color);">
+                    <h4>NAMA PELANGGAN</h4>
+                    <p>${data.summary.NAMA}</p>
+                </div>
+                <div class="summary-card ${statusFinancialClass}">
+                    <h4>TOTAL PIUTANG</h4>
+                    <p>${totalPiutang}</p>
+                </div>
+                <div class="summary-card ${statusFinancialClass}">
+                    <h4>STATUS FINANSIAL</h4>
+                    <p>${statusFinansial}</p>
+                </div>
+                <div class="summary-card ${statusUsageClass}">
+                    <h4>STATUS PEMAKAIAN</h4>
+                    <p>${statusPemakaian}</p>
+                </div>
+                <div class="summary-card" style="border-left-color: #6c757d;">
+                    <h4>PEMBAYARAN TERAKHIR</h4>
+                    <p>${data.summary.PEMBAYARAN_TERAKHIR}</p>
+                </div>
+            `;
+            
+            // 2. Render Detail Tables
+            detailsContainer.innerHTML = '';
+            
+            // CID Data (Master Statis)
+            detailsContainer.innerHTML += renderTable("Master Data Pelanggan (CID)", data.cid_data);
+
+            // MC Data (Piutang Berjalan Bulan Ini)
+            detailsContainer.innerHTML += renderTable("Piutang Berjalan (MC - Bulan Ini)", data.mc_data);
+            
+            // ARDEBT Data (Tunggakan Historis)
+            detailsContainer.innerHTML += renderTable("Detail Tunggakan (ARDEBT)", data.ardebt_data);
+
+            // SBRS Data (Riwayat Baca Meter)
+            detailsContainer.innerHTML += renderTable("Riwayat Baca Meter (SBRS - Terakhir)", data.sbrs_data);
+            
+            resultsArea.style.display = 'block';
+            initialMessage.style.display = 'none';
         }
 
-        function renderCollectionTrendChart(data) {
-            const labels = data.map(item => new Date(item.tanggal).toLocaleDateString('id-ID', { month: 'short', day: 'numeric' }));
-            const trendData = data.map(item => item.total);
-
-            // Destroy existing chart instance if it exists
-            const existingChart = Chart.getChart("collectionTrendChart");
-            if (existingChart) {
-                existingChart.destroy();
+        async function performSearch() {
+            const nomen = nomenInput.value.trim();
+            if (!nomen) {
+                searchStatus.innerHTML = '<span class="status-danger">Masukkan NOMEN yang valid.</span>';
+                resultsArea.style.display = 'none';
+                return;
             }
 
-            new Chart(document.getElementById('collectionTrendChart'), {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Koleksi Nominal (Rp)',
-                        data: trendData,
-                        borderColor: 'var(--primary-color)',
-                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
-                        tension: 0.4,
-                        pointRadius: 5
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value, index, ticks) {
-                                    if (Math.abs(value) >= 1000000) {
-                                        return 'Rp ' + (value / 1000000).toFixed(0) + ' Jt';
-                                    }
-                                    return formatRupiah(value);
-                                }
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    }
-                }
-            });
-        }
-        
-        async function fetchDashboardData() {
-            loadingStatus.style.display = 'block';
-            dashboardContent.style.display = 'none';
+            searchStatus.innerHTML = '<span style="color: orange;"><i class="fas fa-spinner fa-spin"></i> Mencari data terintegrasi...</span>';
+            nomenTitle.textContent = nomen;
+            resultsArea.style.display = 'none';
+            initialMessage.style.display = 'none';
             
             try {
-                const response = await fetch('{{ url_for("dashboard_summary_api") }}');
-                const data = await response.json();
+                const response = await fetch(`{{ url_for('search_nomen') }}?nomen=${nomen}`);
+                const result = await response.json();
 
-                if (response.status === 401) {
-                    window.location.href = '{{ url_for("login") }}';
-                    return;
+                if (response.status === 200 && result.status === 'success') {
+                    searchStatus.innerHTML = `<span class="status-ok">✅ Ditemukan. Klik tombol 'Cari' lagi untuk NOMEN lain.</span>`;
+                    renderResults(result);
+                } else if (response.status === 404 || result.status === 'not_found') {
+                    searchStatus.innerHTML = `<span class="status-danger">❌ NOMEN ${nomen} tidak ditemukan di Master Data.</span>`;
+                    detailsContainer.innerHTML = '';
+                    resultsArea.style.display = 'none';
+                } else {
+                    searchStatus.innerHTML = `<span class="status-danger">❌ Error Server: ${result.message || 'Gagal memuat data.'}</span>`;
                 }
-                
-                if (response.status !== 200) {
-                    loadingStatus.innerHTML = `<span style="color: #dc3545;">❌ Error: ${data.message || 'Gagal memuat data ringkasan.'}</span>`;
-                    return;
-                }
-
-                renderSummaryCards(data);
-                renderTopRayon(data.top_rayon_piutang);
-                renderCollectionTrendChart(data.tren_koleksi_7_hari);
-                renderAnomalyBreakdown(data.anomali_breakdown);
-
-                loadingStatus.style.display = 'none';
-                dashboardContent.style.display = 'block';
-
             } catch (error) {
-                loadingStatus.innerHTML = `<span style="color: #dc3545;">❌ Gagal terhubung ke server.</span>`;
+                searchStatus.innerHTML = `<span class="status-danger">❌ Error Jaringan.</span>`;
                 console.error('Fetch Error:', error);
             }
         }
-        
-        // ======================================================
-        // === NEW: Critical Alert and Notification Functions ===
-        // ======================================================
-        
-        async function checkCriticalAlerts() {
-            try {
-                const response = await fetch('{{ url_for("critical_alerts_api") }}');
-                const alerts = await response.json();
-                
-                if (alerts.length > 0) {
-                    alertBadge.textContent = alerts.length;
-                    alertBadge.style.display = 'inline-block';
-                } else {
-                    alertBadge.style.display = 'none';
-                }
-            } catch (error) {
-                console.error('Error checking alerts:', error);
-                alertBadge.style.display = 'none';
+
+        searchBtn.addEventListener('click', performSearch);
+        nomenInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                performSearch();
             }
-        }
-
-
-        document.addEventListener('DOMContentLoaded', () => {
-             fetchDashboardData(); 
-             checkCriticalAlerts(); // Cek pertama kali
-             // Check setiap 5 menit (300000 ms)
-             setInterval(checkCriticalAlerts, 300000); 
         });
+        
     </script>
 {% endblock %}
