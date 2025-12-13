@@ -206,13 +206,6 @@
     <div id="customReportArea">
         <p class="no-results">Tekan tombol di atas untuk memuat laporan agregasi Piutang (MC) untuk area AB Sunter.</p>
     </div>
-
-    <h3 style="margin-top: 40px; color: #dc3545; border-top: 1px solid #dc3545; padding-top: 20px;">
-        <i class="fas fa-list-ol"></i> BREAKDOWN MC: Distribusi Pelanggan Berdasarkan TARIF
-    </h3>
-    <div id="tarifBreakdownArea">
-        <p class="no-results">Tekan "Muat Data Grup MC & Breakdown Tarif" untuk melihat hasil agregasi Tarif.</p>
-    </div>
     
     <h3 style="margin-top: 40px; color: #17a2b8; border-top: 1px solid #17a2b8; padding-top: 20px;">
         <i class="fas fa-money-check-alt"></i> Modul Analisis Grup MB: Koleksi Pembayaran (AB Sunter)
@@ -224,6 +217,13 @@
 
     <div id="customMBReportArea">
         <p class="no-results">Tekan tombol di atas untuk memuat laporan agregasi Koleksi (MB) untuk area AB Sunter.</p>
+    </div>
+
+    <h3 style="margin-top: 40px; color: #dc3545; border-top: 1px solid #dc3545; padding-top: 20px;">
+        <i class="fas fa-list-ol"></i> BREAKDOWN MC: Distribusi Pelanggan Berdasarkan TARIF
+    </h3>
+    <div id="tarifBreakdownArea">
+        <p class="no-results">Tekan "Muat Data Grup MC & Breakdown Tarif" di atas untuk melihat hasil agregasi Tarif.</p>
     </div>
 
     <script>
@@ -332,7 +332,7 @@
                      return;
                 }
                 
-                // NEW: RENDER TARIF BREAKDOWN SECTION (Integrated)
+                // NEW: RENDER TARIF BREAKDOWN SECTION (Integrated with MC button)
                 renderTarifBreakdownSection(data.breakdowns.TARIF);
                 
                 renderCustomReportTable(data);
@@ -571,17 +571,18 @@
                 });
 
                 let tableHTML = `
-                    <h5 style="margin-top: 25px; color: #007bff;">${title} (${detailsArray.length} Hari Transaksi Terbaru)</h5>
-                    <div class="report-table-wrapper">
-                        <table class="report-table" style="min-width: 450px;">
-                            <thead>
-                                <tr style="background-color: #f0f8ff;">
-                                    <th data-label="TGL BAYAR">TGL BAYAR</th>
-                                    <th data-label="Nomen">NOMEN (Count)</th>
-                                    <th data-label="Nominal">NOMINAL (Rp)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
+                    <div class="breakdown-table-container">
+                        <h5 style="margin-top: 0; color: #007bff;">${title} (${detailsArray.length} Hari Transaksi Terbaru)</h5>
+                        <div class="report-table-wrapper" style="margin-top: 10px;">
+                            <table class="report-table" style="min-width: 450px; font-size: 13px;">
+                                <thead>
+                                    <tr style="background-color: #f0f8ff;">
+                                        <th data-label="TGL BAYAR">TGL BAYAR</th>
+                                        <th data-label="Nomen">NOMEN (Count)</th>
+                                        <th data-label="Nominal">NOMINAL (Rp)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
                 `;
                 
                 detailsArray.forEach(item => {
@@ -613,6 +614,7 @@
                         </tbody>
                     </table>
                 </div>
+                </div>
                 `;
                 return tableHTML;
             }
@@ -643,9 +645,9 @@
                 <h4 style="color: var(--primary-color); margin-top: 30px;">TABEL 4: RINGKASAN KOLEKSI HARIAN BERDASARKAN TANGGAL</h4>
                 
                 <div class="breakdown-group">
-                    <div style="grid-column: span 1;">${createDailySummaryTable('AB SUNTER (Total R34 + R35)', abSunter.details)}</div>
-                    <div style="grid-column: span 1;">${createDailySummaryTable('Rayon 34', r34.details)}</div>
-                    <div style="grid-column: span 1;">${createDailySummaryTable('Rayon 35', r35.details)}</div>
+                    ${createDailySummaryTable('AB SUNTER (Total R34 + R35)', abSunter.details)}
+                    ${createDailySummaryTable('Rayon 34', r34.details)}
+                    ${createDailySummaryTable('Rayon 35', r35.details)}
                 </div>
             `;
 
@@ -658,8 +660,7 @@
         
         // Muat semua bagian saat halaman dimuat
         document.addEventListener('DOMContentLoaded', () => {
-             // Memuat Grouping MB saat DOM ready
-             fetchCustomMBReport();
+             // fetchCustomMBReport() dihapus dari sini agar tidak auto-load
         });
 
     </script>
