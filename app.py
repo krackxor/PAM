@@ -401,7 +401,7 @@ def collection_report_api():
     # 2. MC (KOLEKSI) METRICS - Collected (flagged in MC)
     pipeline_collected = [
         initial_project, 
-        { '$match': { 'STATUS': 'PAYMENT' } }, # Gunakan UPPERCASE yang sudah bersih
+        { '$match': { 'STATUS': 'PAYMENT' } }, 
         { '$group': {
             '_id': { 'rayon': '$RAYON', 'pcez': '$PCEZ' },
             'collected_nomen': { '$addToSet': '$NOMEN' }, 
@@ -714,7 +714,7 @@ def analyze_volume_fluctuation_api():
 # === API GROUPING MC KUSTOM (KEMBALI KE MODE GROUPING KOKOH) ===
 # =========================================================================
 
-# 1. API DETAIL (Untuk Laporan Grouping Penuh - MODE GROUPING KOKOH)
+# 1. API DETAIL (Untuk Laporan Grouping Penuh - MODE GROUPING KOKOH -> SIMPLIFIKASI)
 @app.route('/api/analyze/mc_grouping', methods=['GET'])
 @login_required 
 def analyze_mc_grouping_api():
@@ -754,36 +754,29 @@ def analyze_mc_grouping_api():
                 'CLEAN_RAYON': {'$in': ['34', '35']} # Filter menggunakan string, konsisten dengan CID upload
             }},
             
+            # >>> START SIMPLIFIKASI: Mengubah ke Summary Total <<<
             {'$group': {
-                '_id': {
-                    'TIPEPLGGN': '$CLEAN_TIPEPLGGN',
-                    'RAYON': '$CLEAN_RAYON',
-                    'TARIF': '$TARIF', 
-                    
-                    # Grouping Key Paling Kokoh
-                    'MERK': '$CLEAN_MERK', 
-                    'READ_METHOD': '$CLEAN_READ_METHOD', 
-                },
-                'CountOfNOMEN': {'$addToSet': '$NOMEN'}, 
+                '_id': None, // Group semua dokumen menjadi satu untuk mendapatkan grand totals
+                'TotalNomenKustom': {'$addToSet': '$NOMEN'}, 
                 'SumOfKUBIK': {'$sum': '$KUBIK'},
                 'SumOfNOMINAL': {'$sum': '$NOMINAL'},
             }},
             {'$project': {
                 '_id': 0,
-                'TIPEPLGGN': '$_id.TIPEPLGGN', 'RAYON': '$_id.RAYON', 'TARIF': '$_id.TARIF',
-                'MERK': '$_id.MERK', 'READ_METHOD': '$_id.READ_METHOD',
-                'CountOfNOMEN': {'$size': '$CountOfNOMEN'},
-                'SumOfKUBIK': {'$round': ['$SumOfKUBIK', 2]},
-                'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 2]},
-            }},
-            {'$sort': {'RAYON': 1, 'TARIF': 1}}
+                'TotalPelanggan': {'$size': '$TotalNomenKustom'},
+                'TotalPiutangNominal': {'$round': ['$SumOfNOMINAL', 0]},
+                'TotalPiutangKubik': {'$round': ['$SumOfKUBIK', 2]},
+                'Keterangan': 'Ringkasan Total Kustom (Rayon 34/35 REG)'
+            }}
+            # >>> END SIMPLIFIKASI <<<
         ]
         grouping_data = list(collection_mc.aggregate(pipeline_grouping))
         
         # Perbaiki penanganan error/empty result: jika kosong, kembalikan [] dan status 200
         if not grouping_data:
             return jsonify([]), 200 
-            
+
+        # Mengembalikan summary sebagai array berisi satu objek (sesuai permintaan user)
         return jsonify(grouping_data), 200
 
     except Exception as e:
@@ -1016,7 +1009,7 @@ def upload_mc_data():
         # ===============================================================
         
         # Target kolom kunci MC untuk konsistensi
-        columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF'] 
+        columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF', 'RAYON', 'PCEZ'] 
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize_mc:
@@ -1029,13 +1022,10 @@ def upload_mc_data():
             if col in ['NOMINAL', 'NOMINAL_AKHIR', 'KUBIK', 'SUBNOMINAL', 'ANG_BP', 'DENDA', 'PPN']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
-        # PETA ULANG KOLOM: MC.PC digunakan sebagai RAYON
-        if 'PC' in df.columns:
+        # PETA ULANG KOLOM: MC.PC digunakan sebagai RAYON (jika MC tidak punya RAYON)
+        if 'PC' in df.columns and 'RAYON' not in df.columns:
              df = df.rename(columns={'PC': 'RAYON'})
         
-        # Hapus kolom RAYON lama jika ada konflik, tapi karena MC sampel tidak ada RAYON, ini aman.
-        # Jika kode production mengandalkan RAYON, ini akan membuat data konsisten.
-
         # ===============================================================
         # >>> END PERBAIKAN KRITIS MC <<<
         # ===============================================================
@@ -1107,9 +1097,6 @@ def upload_mb_data():
             if col in ['NOMINAL', 'SUBNOMINAL', 'BEATETAP', 'BEA_SEWA']: # Kolom finansial MB
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
-        # Catatan: Kolom MB NOMEN dan ZONA_NOREK sama-sama menjadi kunci NOMEN/ID. 
-        # Kita andalkan NOMEN untuk join, yang sudah di-clean.
-
         # ===============================================================
         # >>> END PERBAIKAN KRITIS MB <<<
         # ===============================================================
@@ -1205,8 +1192,7 @@ def upload_cid_data():
         # CID menggunakan TARIFF untuk Tarif, rename agar konsisten dengan MC (TARIF)
         if 'TARIFF' in df.columns:
              df = df.rename(columns={'TARIFF': 'TARIF'})
-
-
+        
         # ===============================================================
         # >>> END PERBAIKAN KRITIS CID <<<
         # ===============================================================
@@ -1343,7 +1329,7 @@ def upload_sbrs_data():
 @login_required 
 @admin_required 
 def upload_ardebt_data():
-    """Mode GANTI: Untuk data Detail Tunggakan (ARDEBT). (DIPERBAIKI)"""
+    """Mode GANTI: Untuk data Detail Tunggakan (ARDEBT)."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
     
@@ -1364,29 +1350,15 @@ def upload_ardebt_data():
             df = pd.read_excel(file, sheet_name=0) 
         
         df.columns = [col.strip().upper() for col in df.columns]
-        
-        # ===============================================================
-        # >>> PERBAIKAN KRITIS ARDEBT: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
-        # ===============================================================
 
-        # Target kolom kunci ARDEBT untuk konsistensi
-        columns_to_normalize_ardebt = ['NOMEN', 'RAYON', 'TIPEPLGGN'] 
-        
+        # PEMBERSIHAN DATA AMAN
         for col in df.columns:
-            if df[col].dtype == 'object' or col in columns_to_normalize_ardebt:
-                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
-                df[col] = df[col].astype(str).str.strip().str.upper()
-                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
-                df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
-            
+            if df[col].dtype == 'object':
+                df[col] = df[col].astype(str).str.strip()
             # Kolom numerik penting
             if col in ['JUMLAH', 'VOLUME']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-
-        # ===============================================================
-        # >>> END PERBAIKAN KRITIS ARDEBT <<<
-        # ===============================================================
-
+        
         data_to_insert = df.to_dict('records')
         
         if not data_to_insert:
