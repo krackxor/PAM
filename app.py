@@ -732,26 +732,23 @@ def analyze_mc_grouping_api():
                'foreignField': 'NOMEN',
                'as': 'customer_info'
             }},
-            # $unwind dipertahankan karena Tarif Breakdown yang berhasil juga menggunakannya
-            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+            # Unwind dipertahankan, karena filter akan menyingkirkan hasil join yang gagal
+            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
             
             # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
-                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '']}}}}},
-                
-                # FIX KRITIS: Konversi RAYON ke INTEGER untuk Filter
-                'CLEAN_RAYON': {'$toInt': {'$ifNull': ['$customer_info.RAYON', 0]}}, 
-                
-                # Gunakan Normalisasi yang sangat kuat dari Pandas/CID Upload
+                # Fix String Normalization: Pastikan outputnya selalu STRING KAPITAL
+                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},
+                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
                 'CLEAN_MERK': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
                 'CLEAN_READ_METHOD': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}}}}},
             }},
             # --- END NORMALISASI ---
             
             {'$match': {
+                # Filter menggunakan STRING KAPITAL yang sudah di-clean
                 'CLEAN_TIPEPLGGN': 'REG',
-                # FIX KRITIS: Filter menggunakan INTEGER
-                'CLEAN_RAYON': {'$in': [34, 35]} 
+                'CLEAN_RAYON': {'$in': ['34', '35']} # Filter menggunakan string, konsisten dengan CID upload
             }},
             
             {'$group': {
@@ -760,9 +757,9 @@ def analyze_mc_grouping_api():
                     'RAYON': '$CLEAN_RAYON',
                     'TARIF': {'$ifNull': ['$TARIF', 'N/A']},
                     
-                    # Grouping Key Paling Kokoh (Menggunakan CLEAN_FIELD)
-                    'MERK': {'$toString': {'$ifNull': ['$CLEAN_MERK', 'N/A']}}, 
-                    'READ_METHOD': {'$toString': {'$ifNull': ['$CLEAN_READ_METHOD', 'N/A']}}, 
+                    # Grouping Key Paling Kokoh
+                    'MERK': '$CLEAN_MERK', 
+                    'READ_METHOD': '$CLEAN_READ_METHOD', 
                 },
                 'CountOfNOMEN': {'$addToSet': '$NOMEN'}, 
                 'SumOfKUBIK': {'$sum': '$KUBIK'},
@@ -805,21 +802,18 @@ def analyze_mc_grouping_summary_api():
                'foreignField': 'NOMEN',
                'as': 'customer_info'
             }},
-            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}},
             
             # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
-                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '']}}}}}, # Diubah ke huruf besar
-                
-                # FIX KRITIS: Konversi RAYON ke INTEGER untuk Filter
-                'CLEAN_RAYON': {'$toInt': {'$ifNull': ['$customer_info.RAYON', 0]}}, 
+                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}}, 
+                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
             }},
             # --- END NORMALISASI ---
             
             {'$match': {
-                'CLEAN_TIPEPLGGN': 'REG', # Filter sekarang harus 'REG'
-                # FIX KRITIS: Filter menggunakan INTEGER
-                'CLEAN_RAYON': {'$in': [34, 35]} 
+                'CLEAN_TIPEPLGGN': 'REG',
+                'CLEAN_RAYON': {'$in': ['34', '35']}
             }},
             {'$group': {
                 '_id': None,
@@ -865,22 +859,19 @@ def analyze_mc_tarif_breakdown_api():
                'foreignField': 'NOMEN',
                'as': 'customer_info'
             }},
-            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}},
             
             # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
-                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '']}}}}}, # Diubah ke huruf besar
-                
-                # FIX KRITIS: Konversi RAYON ke INTEGER untuk Filter
-                'CLEAN_RAYON': {'$toInt': {'$ifNull': ['$customer_info.RAYON', 0]}},
+                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}}, 
+                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
             }},
             # --- END NORMALISASI ---
             
             # 2. Filter Kriteria Kustom
             {'$match': {
-                'CLEAN_TIPEPLGGN': 'REG', # Filter sekarang harus 'REG'
-                # FIX KRITIS: Filter menggunakan INTEGER
-                'CLEAN_RAYON': {'$in': [34, 35]}
+                'CLEAN_TIPEPLGGN': 'REG',
+                'CLEAN_RAYON': {'$in': ['34', '35']}
             }},
             
             # 3. Grouping berdasarkan RAYON dan TARIF
@@ -1159,6 +1150,7 @@ def upload_cid_data():
         
         # ===============================================================
         # >>> PERBAIKAN KRITIS: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        # Data RAYON dan TIPEPLGGN dibersihkan secara KONSISTEN ke STRING KAPITAL
         # ===============================================================
         
         # Target kolom yang sering bermasalah pada Grouping Key
