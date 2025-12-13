@@ -138,12 +138,12 @@ def _get_sbrs_anomalies(collection_sbrs, collection_cid):
             'STATUS_PEMAKAIAN': {
                 '$switch': {
                     'branches': [
-                        { 'case': {'$gte': ['$KUBIK_TERBARU', 150]}, 'then': 'EKSTRIM (>150 m³)' }, # Threshold Ekstrim Tinggi
-                        { 'case': {'$gte': ['$PERSEN_SELISIH', 50]}, 'then': 'NAIK EKSTRIM (>=50%)' }, 
-                        { 'case': {'$gte': ['$PERSEN_SELISIH', 10]}, 'then': 'NAIK SIGNIFIKAN (>=10%)' }, 
-                        { 'case': {'$lte': ['$PERSEN_SELISIH', -50]}, 'then': 'TURUN EKSTRIM (<= -50%)' }, 
-                        { 'case': {'$lte': ['$PERSEN_SELISIH', -10]}, 'then': 'TURUN SIGNIFIKAN (<= -10%)' }, 
-                        { 'case': {'$eq': ['$KUBIK_TERBARU', 0]}, 'then': 'ZERO / NOL' },
+                        { 'case': {'$gte': ['$KUBIK_TERBARU', 150]}, 'then': 'KONSUMSI EKSTREM (>150 m³)' }, # Threshold Ekstrim Tinggi
+                        { 'case': {'$gte': ['$PERSEN_SELISIH', 50]}, 'then': 'KENAIKAN EKSTREM (>=50%)' }, 
+                        { 'case': {'$gte': ['$PERSEN_SELISIH', 10]}, 'then': 'KENAIKAN SIGNIFIKAN (>=10%)' }, 
+                        { 'case': {'$lte': ['$PERSEN_SELISIH', -50]}, 'then': 'PENURUNAN EKSTREM (<= -50%)' }, 
+                        { 'case': {'$lte': ['$PERSEN_SELISIH', -10]}, 'then': 'PENURUNAN SIGNIFIKAN (<= -10%)' }, 
+                        { 'case': {'$eq': ['$KUBIK_TERBARU', 0]}, 'then': 'KONSUMSI NOL (ZERO)' },
                     ],
                     'default': 'STABIL / NORMAL'
                 }
@@ -197,7 +197,7 @@ if user_list_str:
                 'is_admin': is_admin, 'username': username
             }
         except ValueError as e:
-            print(f"Peringatan: Format USER_LIST salah pada entry '{user_entry}'. Error: {e}")
+            print(f"Peringatan: Format USER_LIST tidak valid pada entri '{user_entry}'. Error: {e}")
 
 
 # --- KONFIGURASI FLASK-LOGIN ---
@@ -230,7 +230,7 @@ def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated or not current_user.is_admin:
-            flash('Anda tidak memiliki izin (Admin) untuk mengakses halaman ini.', 'danger')
+            flash('Akses ditolak: Anda tidak memiliki wewenang Administrator untuk mengakses halaman ini.', 'danger')
             return redirect(url_for('index'))
         return f(*args, **kwargs)
     return decorated_function
@@ -248,11 +248,11 @@ def login():
         if user_data_entry and check_password_hash(user_data_entry['password_hash'], form.password.data):
             user = User(user_data_entry) 
             login_user(user)
-            flash('Login berhasil.', 'success')
+            flash('Autentikasi berhasil. Selamat datang.', 'success')
             next_page = request.args.get('next')
             return redirect(next_page or url_for('index'))
         else:
-            flash('Login Gagal. Cek username dan password Anda.', 'danger')
+            flash('Autentikasi Gagal. Periksa kembali nama pengguna dan sandi Anda.', 'danger')
             
     return render_template('login.html', form=form)
 
@@ -260,7 +260,7 @@ def login():
 @login_required
 def logout():
     logout_user()
-    flash('Anda telah keluar.', 'success')
+    flash('Anda telah berhasil keluar dari sistem.', 'success')
     return redirect(url_for('login'))
 
 # --- ENDPOINT UTAMA (MENU CARI) ---
@@ -278,7 +278,7 @@ def search_nomen():
     query_nomen = request.args.get('nomen', '').strip()
 
     if not query_nomen:
-        return jsonify({"status": "fail", "message": "Masukkan NOMEN untuk memulai pencarian terintegrasi."}), 400
+        return jsonify({"status": "fail", "message": "Mohon masukkan NOMEN (Nomor Pelanggan) untuk memulai pencarian terintegrasi."}), 400
 
     try:
         # 1. DATA STATIS (CID) - Master Data Pelanggan
@@ -288,7 +288,7 @@ def search_nomen():
         if not cid_result:
             return jsonify({
                 "status": "not_found",
-                "message": f"NOMEN {query_nomen} tidak ditemukan di Master Data Pelanggan (CID)."
+                "message": f"NOMEN {query_nomen} tidak ditemukan dalam Master Data Pelanggan (CID)."
             }), 404
 
         # 2. PIUTANG BERJALAN (MC) - Snapshot Bulan Ini
@@ -315,25 +315,25 @@ def search_nomen():
         elif piutang_nominal_total > 0:
             status_financial = f"PIUTANG BULAN BERJALAN"
         else:
-            status_financial = "LUNAS / TIDAK ADA TAGIHAN"
+            status_financial = "LUNAS / TIDAK ADA KEWAJIBAN"
             
         # B. Status Pembayaran
-        last_payment_date = last_payment.get('TGL_BAYAR', 'N/A') if last_payment else 'BELUM ADA PEMBAYARAN MB'
+        last_payment_date = last_payment.get('TGL_BAYAR', 'N/A') if last_payment else 'BELUM ADA RIWAYAT PEMBAYARAN'
 
         # C. Status Pemakaian (Anomaly Check)
-        status_pemakaian = "DATA SBRS KURANG"
+        status_pemakaian = "DATA SBRS TIDAK LENGKAP"
         kubik_terakhir = 0
         if len(sbrs_history) >= 1:
             kubik_terakhir = sbrs_history[0].get('CMR_KUBIK', 0)
             
             if kubik_terakhir > 100: # Threshold Ekstrim
-                status_pemakaian = f"EKSTRIM ({kubik_terakhir} m³)"
+                status_pemakaian = f"KONSUMSI EKSTREM ({kubik_terakhir} m³)"
             elif kubik_terakhir <= 5 and kubik_terakhir > 0: # Threshold Rendah
-                status_pemakaian = f"TURUN DRASITS / RENDAH ({kubik_terakhir} m³)"
+                status_pemakaian = f"KONSUMSI RENDAH/TURUN ({kubik_terakhir} m³)"
             elif kubik_terakhir == 0:
-                status_pemakaian = "ZERO (0 m³) / NON-AKTIF"
+                status_pemakaian = "KONSUMSI NOL (ZERO)"
             else:
-                status_pemakaian = f"NORMAL ({kubik_terakhir} m³)"
+                status_pemakaian = f"KONSUMSI NORMAL ({kubik_terakhir} m³)"
 
 
         health_summary = {
@@ -364,70 +364,13 @@ def search_nomen():
 
     except Exception as e:
         print(f"Error saat mencari data terintegrasi: {e}")
-        return jsonify({"message": f"Gagal mengambil data terintegrasi: {e}"}), 500
+        return jsonify({"message": f"Gagal mengambil data terintegrasi. Detail Teknis: {e}"}), 500
 
 # --- ENDPOINT KOLEKSI DAN ANALISIS LAINNYA ---
 @app.route('/daily_collection', methods=['GET'])
 @login_required 
 def daily_collection_unified_page():
     return render_template('collection_unified.html', is_admin=current_user.is_admin)
-
-# --- FUNGSI LAMA DIHAPUS: collection_report_api (Ringkasan KPI dan Tabel Besar) ---
-# --- FUNGSI LAMA DIHAPUS: collection_detail_api (Pencarian Detail Transaksi MB) ---
-# --- FUNGSI LAMA DIHAPUS: export_collection_report (Export Laporan yang Dihapus) ---
-
-# --- FUNGSI BARU UNTUK EXPORT LAPORAN KOLEKSI/REPORT (DIHAPUS, BIARKAN SAJA) ---
-# @app.route('/api/export/collection_report', methods=['GET'])
-# @login_required
-# def export_collection_report():
-#     ... (Removed)
-
-# --- ENDPOINT ANALISIS DATA LANJUTAN (SUB-MENU DASHBOARD) ---
-
-@app.route('/analyze', methods=['GET'])
-@login_required
-def analyze_reports_landing():
-    return render_template('analyze_landing.html', is_admin=current_user.is_admin)
-
-@app.route('/analyze/full_mc_report', methods=['GET'])
-@login_required
-def analyze_full_mc_report():
-    return render_template('analyze_report_template.html', 
-                           title="Laporan Grup Master Cetak (MC) Lengkap", 
-                           description="Menyajikan data agregasi NOMEN, Kubik, dan Nominal berdasarkan Rayon, Metode Baca, Tarif, dan Jenis Meter.",
-                           is_admin=current_user.is_admin)
-
-@app.route('/analyze/extreme', methods=['GET'])
-@login_required
-def analyze_extreme_usage():
-    return render_template('analyze_report_template.html', 
-                           title="Pemakaian Air Ekstrim", 
-                           description="Menampilkan pelanggan dengan konsumsi air di atas ambang batas (memerlukan join MC, CID, dan SBRS).",
-                           is_admin=current_user.is_admin)
-
-@app.route('/analyze/reduced', methods=['GET'])
-@login_required
-def analyze_reduced_usage():
-    return render_template('analyze_report_template.html', 
-                           title="Pemakaian Air Naik/Turun (Fluktuasi Volume)", 
-                           description="Menampilkan pelanggan dengan fluktuasi konsumsi air signifikan (naik atau turun) dengan membandingkan 2 periode SBRS terakhir.",
-                           is_admin=current_user.is_admin)
-
-@app.route('/analyze/zero', methods=['GET'])
-@login_required
-def analyze_zero_usage():
-    return render_template('analyze_report_template.html', 
-                           title="Tidak Ada Pemakaian (Zero)", 
-                           description="Menampilkan pelanggan dengan konsumsi air nol (Zero) di periode tagihan terakhir.",
-                           is_admin=current_user.is_admin)
-
-@app.route('/analyze/standby', methods=['GET'])
-@login_required
-def analyze_stand_tungggu():
-    return render_template('analyze_report_template.html', 
-                           title="Stand Tunggu", 
-                           description="Menampilkan pelanggan yang berstatus Stand Tunggu (Freeze/Blokir).",
-                           is_admin=current_user.is_admin)
 
 # =========================================================================
 # === API GROUPING MC KUSTOM (HELPER FUNCTION) ===
@@ -551,7 +494,7 @@ def analyze_mc_grouping_api():
 
     except Exception as e:
         print(f"Error saat menganalisis custom grouping MC: {e}")
-        return jsonify({"status": "error", "message": f"Gagal mengambil data grouping MC: {e}"}), 500
+        return jsonify({"status": "error", "message": f"Gagal mengambil data grouping MC. Detail Teknis: {e}"}), 500
 
 # =========================================================================
 # === API GROUPING MB KUSTOM (HELPER FUNCTION) ===
@@ -673,6 +616,7 @@ def _aggregate_mb_grouping(collection_mb, collection_cid, rayon_filter=None):
     arrears_metrics = arrears_result[0] if arrears_result else {'CountOfNOMEN_TUNGGAKAN': 0, 'SumOfNOMINAL_TUNGGAKAN': 0}
 
     # --- 6. Daily Summary (TGL_BAYAR | Nomen Count | Nominal Total) ---
+    # Group by Payment Date to get daily summary: TGL_BAYAR | Nomen Count | Nominal Total
     pipeline_details = pipeline + [
         {'$group': {
             '_id': '$TGL_BAYAR', # Group by Payment Date
@@ -725,7 +669,7 @@ def analyze_mb_grouping_api():
 
     except Exception as e:
         print(f"Error saat menganalisis custom grouping MB: {e}")
-        return jsonify({"status": "error", "message": f"Gagal mengambil data grouping MB: {e}"}), 500
+        return jsonify({"status": "error", "message": f"Gagal mengambil data grouping MB. Detail Teknis: {e}"}), 500
 
 # =========================================================================
 # === END API GROUPING MB KUSTOM ===
@@ -1009,7 +953,7 @@ def upload_mc_data():
         # --- RETURN REPORT ---
         return jsonify({
             "status": "success",
-            "message": f"Sukses! {count} baris Master Cetak (MC) berhasil MENGGANTI data lama.",
+            "message": f"Sukses! {count} baris Master Data Tagihan (MC) berhasil MENGGANTI data lama.",
             "summary_report": {
                 "total_rows": count,
                 "type": "REPLACE",
@@ -1021,7 +965,7 @@ def upload_mc_data():
 
     except Exception as e:
         print(f"Error saat memproses file MC: {e}")
-        return jsonify({"message": f"Gagal memproses file MC: {e}. Pastikan format data benar."}), 500
+        return jsonify({"message": f"Gagal memproses file MC. Detail Teknis: {e}. Pastikan format data benar."}), 500
 
 @app.route('/upload/mb', methods=['POST'])
 @login_required 
@@ -1112,11 +1056,11 @@ def upload_mb_data():
              # Jika terjadi error lain (bukan hanya duplikasi)
              if inserted_count == 0 and total_rows > 0 and 'writeErrors' in bwe.details and bwe.details['writeErrors'][0]['code'] not in [11000, 11001]: # 11000/11001 = Duplicate Key Error
                  # Mengembalikan error jika terjadi kegagalan total
-                 return jsonify({"message": f"Gagal memproses file MB: Terjadi error Bulk Write. Error: {bwe.details['writeErrors'][0]['errmsg']}"}), 500
+                 return jsonify({"message": f"Gagal memproses file Koleksi (MB): Terjadi error Bulk Write. Error: {bwe.details['writeErrors'][0]['errmsg']}"}), 500
 
         except Exception as e:
             print(f"Error saat memproses Bulk Write MB: {e}")
-            return jsonify({"message": f"Gagal memproses file MB: Terjadi error jaringan/DB. Error: {e}"}), 500
+            return jsonify({"message": f"Gagal memproses file Koleksi (MB): Terjadi error jaringan/DB. Detail Teknis: {e}"}), 500
         
         # ===============================================================
         # >>> END MODIFIKASI KRITIS <<<
@@ -1125,7 +1069,7 @@ def upload_mb_data():
         # --- RETURN REPORT ---
         return jsonify({
             "status": "success",
-            "message": f"Sukses Append! {inserted_count} baris Master Bayar (MB) baru ditambahkan. ({skipped_count} duplikat diabaikan).",
+            "message": f"Pemrosesan Sukses! {inserted_count} entri Koleksi (MB) baru ditambahkan. ({skipped_count} entri duplikat diabaikan).",
             "summary_report": {
                 "total_rows": total_rows,
                 "type": "APPEND",
@@ -1138,7 +1082,7 @@ def upload_mb_data():
 
     except Exception as e:
         print(f"Error saat memproses file MB: {e}")
-        return jsonify({"message": f"Gagal memproses file MB: {e}. Pastikan format data benar."}), 500
+        return jsonify({"message": f"Gagal memproses file Koleksi (MB). Detail Teknis: {e}. Pastikan format data benar."}), 500
 
 @app.route('/upload/cid', methods=['POST'])
 @login_required 
@@ -1204,7 +1148,7 @@ def upload_cid_data():
         # --- RETURN REPORT ---
         return jsonify({
             "status": "success",
-            "message": f"Sukses! {count} baris Customer Data (CID) berhasil MENGGANTI data lama.",
+            "message": f"Sukses! {count} baris Data Pelanggan (CID) berhasil MENGGANTI data lama.",
             "summary_report": {
                 "total_rows": count,
                 "type": "REPLACE",
@@ -1216,7 +1160,7 @@ def upload_cid_data():
 
     except Exception as e:
         print(f"Error saat memproses file CID: {e}")
-        return jsonify({"message": f"Gagal memproses file CID: {e}. Pastikan format data benar."}), 500
+        return jsonify({"message": f"Gagal memproses file CID. Detail Teknis: {e}. Pastikan format data benar."}), 500
 
 @app.route('/upload/sbrs', methods=['POST'])
 @login_required 
@@ -1282,7 +1226,7 @@ def upload_sbrs_data():
         UNIQUE_KEYS = ['CMR_ACCOUNT', 'CMR_RD_DATE'] 
         
         if not all(key in df.columns for key in UNIQUE_KEYS):
-            return jsonify({"message": f"Gagal Append: File SBRS harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)}. Cek file Anda."}), 400
+            return jsonify({"message": f"Gagal Append: File Riwayat Baca Meter (SBRS) harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)}. Cek file Anda."}), 400
 
         for record in data_to_insert:
             filter_query = {key: record.get(key) for key in UNIQUE_KEYS}
@@ -1307,7 +1251,7 @@ def upload_sbrs_data():
         # --- RETURN REPORT ---
         return jsonify({
             "status": "success",
-            "message": f"Sukses Append! {inserted_count} baris Riwayat Baca Meter (SBRS) baru ditambahkan. ({skipped_count} duplikat diabaikan).",
+            "message": f"Pemrosesan Sukses! {inserted_count} baris Riwayat Baca Meter (SBRS) baru ditambahkan. ({skipped_count} entri duplikat diabaikan).",
             "summary_report": {
                 "total_rows": total_rows,
                 "type": "APPEND",
@@ -1320,7 +1264,7 @@ def upload_sbrs_data():
 
     except Exception as e:
         print(f"Error saat memproses file SBRS: {e}")
-        return jsonify({"message": f"Gagal memproses file SBRS: {e}. Pastikan format data benar."}), 500
+        return jsonify({"message": f"Gagal memproses file Riwayat Baca Meter (SBRS). Detail Teknis: {e}. Pastikan format data benar."}), 500
 
 @app.route('/upload/ardebt', methods=['POST'])
 @login_required 
@@ -1395,7 +1339,7 @@ def upload_ardebt_data():
 
     except Exception as e:
         print(f"Error saat memproses file ARDEBT: {e}")
-        return jsonify({"message": f"Gagal memproses file ARDEBT: {e}. Pastikan format data benar."}), 500
+        return jsonify({"message": f"Gagal memproses file Detail Tunggakan (ARDEBT). Detail Teknis: {e}. Pastikan format data benar."}), 500
 
 
 # =========================================================================
@@ -1479,12 +1423,12 @@ def dashboard_summary_api():
         for item in anomalies:
             status = item.get('STATUS_PEMAKAIAN', 'UNKNOWN')
             # Gunakan logika pengelompokan yang lebih sederhana untuk dashboard summary
-            if 'EKSTRIM' in status or 'NAIK' in status:
+            if 'EKSTREM' in status or 'KENAIKAN' in status:
                 key = 'KENAIKAN_SIGNIFIKAN'
-            elif 'TURUN' in status:
+            elif 'PENURUNAN' in status:
                 key = 'PENURUNAN_SIGNIFIKAN'
-            elif 'ZERO' in status:
-                key = 'ZERO_USAGE'
+            elif 'NOL' in status:
+                key = 'KONSUMSI_NOL'
             else:
                 key = 'LAINNYA'
                 
@@ -1549,7 +1493,7 @@ def dashboard_summary_api():
         
     except Exception as e:
         print(f"Error fetching dashboard summary: {e}")
-        return jsonify({"message": f"Gagal mengambil data dashboard: {e}"}), 500
+        return jsonify({"message": f"Gagal mengambil data ringkasan dashboard. Detail teknis error: {e}"}), 500
 
 
 @app.route('/api/dashboard/rayon_analysis', methods=['GET'])
@@ -1606,7 +1550,7 @@ def rayon_analysis_api():
         
     except Exception as e:
         print(f"Error in rayon analysis: {e}")
-        return jsonify({"message": f"Gagal menganalisis data rayon: {e}"}), 500
+        return jsonify({"message": f"Gagal menganalisis data Rayon. Detail teknis: {e}"}), 500
 
 
 @app.route('/api/dashboard/anomaly_summary', methods=['GET'])
@@ -1618,10 +1562,10 @@ def anomaly_summary_api():
     try:
         all_anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
         
-        ekstrim = [a for a in all_anomalies if 'EKSTRIM' in a['STATUS_PEMAKAIAN']]
-        naik = [a for a in all_anomalies if 'NAIK' in a['STATUS_PEMAKAIAN'] and 'EKSTRIM' not in a['STATUS_PEMAKAIAN']]
-        turun = [a for a in all_anomalies if 'TURUN' in a['STATUS_PEMAKAIAN']]
-        zero = [a for a in all_anomalies if 'ZERO' in a['STATUS_PEMAKAIAN']]
+        ekstrim = [a for a in all_anomalies if 'EKSTREM' in a['STATUS_PEMAKAIAN']]
+        naik = [a for a in all_anomalies if 'KENAIKAN' in a['STATUS_PEMAKAIAN'] and 'EKSTREM' not in a['STATUS_PEMAKAIAN']]
+        turun = [a for a in all_anomalies if 'PENURUNAN' in a['STATUS_PEMAKAIAN']]
+        zero = [a for a in all_anomalies if 'NOL' in a['STATUS_PEMAKAIAN']]
         
         summary = {
             'total_anomali': len(all_anomalies),
@@ -1649,7 +1593,7 @@ def anomaly_summary_api():
         
     except Exception as e:
         print(f"Error in anomaly summary: {e}")
-        return jsonify({"message": f"Gagal mengambil summary anomali: {e}"}), 500
+        return jsonify({"message": f"Gagal mengambil ringkasan anomali. Detail teknis: {e}"}), 500
 
 
 @app.route('/api/dashboard/critical_alerts', methods=['GET'])
@@ -1664,7 +1608,7 @@ def critical_alerts_api():
         anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
         ekstrim_alerts = [
             {'nomen': a['NOMEN'], 'status': a['STATUS_PEMAKAIAN'], 'ray': a['RAYON'], 'category': 'VOLUME_EKSTRIM'}
-            for a in anomalies if 'EKSTRIM' in a['STATUS_PEMAKAIAN'] or 'ZERO' in a['STATUS_PEMAKAIAN']
+            for a in anomalies if 'EKSTREM' in a['STATUS_PEMAKAIAN'] or 'NOL' in a['STATUS_PEMAKAIAN']
         ]
         alerts.extend(ekstrim_alerts[:20])
 
@@ -1735,7 +1679,7 @@ def export_dashboard_data():
 
     except Exception as e:
         print(f"Error during dashboard export: {e}")
-        return jsonify({"message": f"Gagal mengekspor data dashboard: {e}"}), 500
+        return jsonify({"message": f"Gagal mengekspor data dashboard. Detail teknis: {e}"}), 500
 
 
 @app.route('/api/export/anomalies', methods=['GET'])
@@ -1754,7 +1698,7 @@ def export_anomalies_data():
         
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_anomalies.to_excel(writer, sheet_name='Anomali Pemakaian Air', index=False)
+            df_anomalies.to_excel(writer, sheet_name='Anomali Konsumsi Air', index=False)
             
         output.seek(0)
         
@@ -1765,7 +1709,7 @@ def export_anomalies_data():
 
     except Exception as e:
         print(f"Error during anomaly export: {e}")
-        return jsonify({"message": f"Gagal mengekspor data anomali: {e}"}), 500
+        return jsonify({"message": f"Gagal mengekspor data anomali. Detail teknis: {e}"}), 500
 
 
 if __name__ == '__main__':
