@@ -26,100 +26,111 @@
     width: 100%; 
     margin-top: 15px;
     margin-bottom: 20px; 
+    border-radius: var(--border-radius);
+    overflow-y: hidden;
 }
 
 /* General Report Table Styling: Enforce consistency, scroll, and alignment */
-.report-table {
+.report-table, .collection-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 14px;
     min-width: 700px; /* Ensure horizontal scroll on main tables */
 }
-.report-table th, .report-table td {
+.report-table th, .report-table td, .collection-table th, .collection-table td {
     border: 1px solid #f0f0f0; 
     padding: 10px; 
     text-align: right;
     white-space: nowrap;
 }
-.report-table th {
+.report-table th, .collection-table th {
     font-weight: 600;
     text-align: center;
 }
 .report-table td:first-child, .report-table th:first-child,
-.report-table td:nth-child(2), .report-table th:nth-child(2) {
-    text-align: left; /* Keep Rayon/PCEZ left-aligned */
+.report-table td:nth-child(2), .report-table th:nth-child(2),
+.collection-table td:first-child, .collection-table th:first-child {
+    text-align: left; /* Keep Rayon/PCEZ/Nomen left-aligned */
 }
-.report-table tr.grand-total-row {
+.report-table tr.grand-total-row, .collection-table tr.total-row {
     font-weight: bold;
     background-color: #f8f9fa; /* Light grey background for totals */
 }
-
-/* MB Detail Table Class (Used for the lower table listing) */
-.collection-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 14px;
-    min-width: 700px;
-}
-.collection-table th, .collection-table td {
-    border: 1px solid #f0f0f0; 
-    padding: 10px; 
-    text-align: left;
-    white-space: nowrap;
-}
 .collection-table th {
     background-color: #e9ecef;
-    font-weight: 600;
 }
 .collection-table tr.total-row {
-    font-weight: bold;
     background-color: #e0f7fa; /* Light cyan for MB totals */
 }
 
-/* Mobile Layout (Card View for Tables) */
+
+/* Filter/Search Input Group Layout */
+.filter-input-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    align-items: center; 
+}
+#filterInput {
+    flex-grow: 1;
+    padding: 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+
+/* -------------------------------------------------------------------------- */
+/* FIX TOTAL DESIGN: Mobile Layout (Card View for Tables) */
+/* -------------------------------------------------------------------------- */
 @media screen and (max-width: 600px) {
+    /* Hide desktop table structure and enable vertical stacking */
     .report-table-wrapper, .result-table-wrapper {
-        overflow-x: visible; /* Disable scroll for card view */
+        overflow-x: visible; /* Disable horizontal scroll in card view */
+        border: none;
     }
     .report-table, .collection-table {
         min-width: 100%;
         width: 100%;
-        box-shadow: none;
-        border: none;
     }
     .report-table thead, .collection-table thead {
-        display: none; /* Hide headers */
+        display: none; /* Hide original headers */
     }
+    /* Set rows to stack and act as cards */
     .report-table tr, .collection-table tr {
         display: block;
-        margin-bottom: 10px;
+        margin-bottom: 15px;
         border: 1px solid #ddd;
         border-radius: var(--border-radius);
+        box-shadow: var(--shadow-light); /* Give it a card look */
     }
+    .report-table tr.grand-total-row, .collection-table tr.total-row {
+        background-color: #f0f8ff; /* Unique background for totals */
+    }
+    /* Set cells to display side-by-side within the card */
     .report-table td, .collection-table td {
         display: flex;
         justify-content: space-between;
-        padding: 8px 12px;
+        padding: 10px 15px;
         border: none;
         border-bottom: 1px solid #eee;
         text-align: right;
         white-space: normal; /* Allow text wrapping */
     }
+    /* Style the generated label (key) on the left */
     .report-table td:before, .collection-table td:before {
         content: attr(data-label);
         font-weight: 600;
         text-align: left;
         width: 50%;
-        color: var(--text-color);
+        color: #6c757d; /* Muted color for label */
         padding-right: 10px;
     }
-    .report-table tr.grand-total-row, .collection-table tr.total-row {
-        margin-top: 5px;
+    .report-table td:last-child, .collection-table td:last-child {
+        border-bottom: none; /* Remove separator on last item in the card */
     }
 }
-/* -------------------------------------------------------------------------- */
-/* Perbaikan Selesai: Layout Card View untuk mobile diterapkan.
-/* -------------------------------------------------------------------------- */
 {% endblock %}
 
 {% block content %}
