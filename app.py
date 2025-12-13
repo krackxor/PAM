@@ -277,8 +277,8 @@ def search_nomen():
 
     try:
         # 1. DATA STATIS (CID) - Master Data Pelanggan
-        # Karena CID sudah dibersihkan ke UPPERCASE, cari dengan UPPERCASE
-        cid_result = collection_cid.find_one({'NOMEN': query_nomen.strip().upper()})
+        cleaned_nomen = query_nomen.strip().upper()
+        cid_result = collection_cid.find_one({'NOMEN': cleaned_nomen})
         
         if not cid_result:
             return jsonify({
@@ -287,23 +287,22 @@ def search_nomen():
             }), 404
 
         # 2. PIUTANG BERJALAN (MC) - Snapshot Bulan Ini
-        mc_results = list(collection_mc.find({'NOMEN': query_nomen.strip().upper()}))
+        mc_results = list(collection_mc.find({'NOMEN': cleaned_nomen}))
         piutang_nominal_total = sum(item.get('NOMINAL', 0) for item in mc_results)
         
         # 3. TUNGGAKAN DETAIL (ARDEBT)
-        ardebt_results = list(collection_ardebt.find({'NOMEN': query_nomen.strip().upper()}))
+        ardebt_results = list(collection_ardebt.find({'NOMEN': cleaned_nomen}))
         tunggakan_nominal_total = sum(item.get('JUMLAH', 0) for item in ardebt_results)
         
         # 4. RIWAYAT PEMBAYARAN TERAKHIR (MB)
-        mb_last_payment_cursor = collection_mb.find({'NOMEN': query_nomen.strip().upper()}).sort('TGL_BAYAR', -1).limit(1)
+        mb_last_payment_cursor = collection_mb.find({'NOMEN': cleaned_nomen}).sort('TGL_BAYAR', -1).limit(1)
         last_payment = list(mb_last_payment_cursor)[0] if list(mb_last_payment_cursor) else None
         
         # 5. RIWAYAT BACA METER (SBRS)
-        sbrs_last_read_cursor = collection_sbrs.find({'CMR_ACCOUNT': query_nomen.strip().upper()}).sort('CMR_RD_DATE', -1).limit(2)
+        sbrs_last_read_cursor = collection_sbrs.find({'CMR_ACCOUNT': cleaned_nomen}).sort('CMR_RD_DATE', -1).limit(2)
         sbrs_history = list(sbrs_last_read_cursor)
         
         # --- LOGIKA KECERDASAN (INTEGRASI & DIAGNOSTIK) ---
-        # (Logika ini tetap karena dia hanya membaca data yang sudah bersih)
         
         # A. Status Tunggakan/Piutang
         if tunggakan_nominal_total > 0:
@@ -378,7 +377,6 @@ def collection_report_api():
 
     initial_project = {
         '$project': {
-            # Asumsi data sudah dibersihkan ke UPPERCASE/String di upload
             'RAYON': { '$ifNull': [ '$RAYON', 'N/A' ] }, 
             'PCEZ': { '$ifNull': [ '$PCEZ', 'N/A' ] },   
             'NOMEN': 1,
@@ -554,14 +552,12 @@ def collection_detail_api():
     mongo_query = {} 
     
     if query_str:
-        safe_query_str = re.escape(query_str.upper()) # Filter menggunakan UPPERCASE
-        # Filter harus menggunakan UPPERCASE/string bersih
+        safe_query_str = re.escape(query_str.upper())
         search_filter = {
             '$or': [
-                {'RAYON': {'$regex': safe_query_str}}, # Filter menggunakan string kapital yang sudah bersih
+                {'RAYON': {'$regex': safe_query_str}}, 
                 {'PCEZ': {'$regex': safe_query_str}},
                 {'NOMEN': {'$regex': safe_query_str}},
-                # Asumsi ZONA_NOREK dan LKS_BAYAR juga sudah di-UPPERCASE saat upload
                 {'ZONA_NOREK': {'$regex': safe_query_str}}, 
                 {'LKS_BAYAR': {'$regex': safe_query_str}} 
             ]
@@ -582,7 +578,7 @@ def collection_detail_api():
             pay_dt = doc.get('TGL_BAYAR', '')
             bulan_rek = doc.get('BULAN_REK', '')
             
-            is_undue = bulan_rek == doc.get('BULAN_REK', 'N/A') # Cek konsistensi BULAN_REK
+            is_undue = bulan_rek == doc.get('BULAN_REK', 'N/A')
             
             cleaned_results.append({
                 'NOMEN': doc.get('NOMEN', 'N/A'),
@@ -728,10 +724,10 @@ def analyze_mc_grouping_api():
     try:
         pipeline_grouping = [
             {'$project': {
-                'NOMEN': {'$toString': '$NOMEN'},
+                'NOMEN': '$NOMEN', # Relying on clean string from upload
                 'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
                 'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
-                'TARIF': {'$toString': '$TARIF'},
+                'TARIF': '$TARIF', # Relying on clean string from upload
             }},
             {'$lookup': {
                'from': 'CustomerData', 
@@ -762,7 +758,7 @@ def analyze_mc_grouping_api():
                 '_id': {
                     'TIPEPLGGN': '$CLEAN_TIPEPLGGN',
                     'RAYON': '$CLEAN_RAYON',
-                    'TARIF': {'$ifNull': ['$TARIF', 'N/A']},
+                    'TARIF': '$TARIF', 
                     
                     # Grouping Key Paling Kokoh
                     'MERK': '$CLEAN_MERK', 
@@ -875,7 +871,6 @@ def analyze_mc_tarif_breakdown_api():
             }},
             # --- END NORMALISASI ---
             
-            # 2. Filter Kriteria Kustom
             {'$match': {
                 'CLEAN_TIPEPLGGN': 'REG',
                 'CLEAN_RAYON': {'$in': ['34', '35']}
@@ -894,7 +889,7 @@ def analyze_mc_tarif_breakdown_api():
             {'$project': {
                 '_id': 0,
                 'RAYON': '$_id.RAYON',
-                'TARIF': {'$ifNull': ['$_id.TARIF', 'N/A']},
+                'TARIF': '$_id.TARIF',
                 'JumlahPelanggan': {'$size': '$CountOfNOMEN'}
             }},
             {'$sort': {'RAYON': 1, 'TARIF': 1}}
@@ -1021,7 +1016,7 @@ def upload_mc_data():
         # ===============================================================
         
         # Target kolom kunci MC untuk konsistensi
-        columns_to_normalize_mc = ['RAYON', 'PCEZ', 'NOMEN', 'STATUS', 'TARIF'] 
+        columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF'] 
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize_mc:
@@ -1034,6 +1029,13 @@ def upload_mc_data():
             if col in ['NOMINAL', 'NOMINAL_AKHIR', 'KUBIK', 'SUBNOMINAL', 'ANG_BP', 'DENDA', 'PPN']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
+        # PETA ULANG KOLOM: MC.PC digunakan sebagai RAYON
+        if 'PC' in df.columns:
+             df = df.rename(columns={'PC': 'RAYON'})
+        
+        # Hapus kolom RAYON lama jika ada konflik, tapi karena MC sampel tidak ada RAYON, ini aman.
+        # Jika kode production mengandalkan RAYON, ini akan membuat data konsisten.
+
         # ===============================================================
         # >>> END PERBAIKAN KRITIS MC <<<
         # ===============================================================
@@ -1093,7 +1095,7 @@ def upload_mb_data():
         # ===============================================================
 
         # Target kolom kunci MB untuk konsistensi
-        columns_to_normalize_mb = ['NOMEN', 'RAYON', 'PCEZ', 'ZONA_NOREK', 'LKS_BAYAR', 'BULAN_REK'] 
+        columns_to_normalize_mb = ['NOMEN', 'RAYON', 'PCEZ', 'ZONA_NOREK', 'LKS_BAYAR', 'BULAN_REK', 'NOTAGIHAN'] 
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize_mb:
@@ -1104,6 +1106,9 @@ def upload_mb_data():
 
             if col in ['NOMINAL', 'SUBNOMINAL', 'BEATETAP', 'BEA_SEWA']: # Kolom finansial MB
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        # Catatan: Kolom MB NOMEN dan ZONA_NOREK sama-sama menjadi kunci NOMEN/ID. 
+        # Kita andalkan NOMEN untuk join, yang sudah di-clean.
 
         # ===============================================================
         # >>> END PERBAIKAN KRITIS MB <<<
@@ -1188,7 +1193,7 @@ def upload_cid_data():
         # ===============================================================
         
         # Target kolom yang sering bermasalah pada Grouping Key
-        columns_to_normalize = ['MERK', 'READ_METHOD', 'TIPEPLGGN', 'RAYON']
+        columns_to_normalize = ['MERK', 'READ_METHOD', 'TIPEPLGGN', 'RAYON', 'NOMEN', 'TARIFF']
         
         for col in columns_to_normalize:
             if col in df.columns:
@@ -1197,6 +1202,11 @@ def upload_cid_data():
                 # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
         
+        # CID menggunakan TARIFF untuk Tarif, rename agar konsisten dengan MC (TARIF)
+        if 'TARIFF' in df.columns:
+             df = df.rename(columns={'TARIFF': 'TARIF'})
+
+
         # ===============================================================
         # >>> END PERBAIKAN KRITIS CID <<<
         # ===============================================================
