@@ -26,7 +26,7 @@
     margin-top: 20px; 
 }
 
-/* Style Tabel Umum */
+/* Style Tabel */
 .data-table {
     width: 100%;
     border-collapse: collapse;
@@ -36,46 +36,9 @@
     border: 1px solid #ddd;
     padding: 8px;
     white-space: nowrap; 
-    /* NEW: Atur default text alignment ke kanan */
-    text-align: right; 
 }
 .data-table th {
     background-color: #f2f2f2;
-}
-
-/* Style tambahan untuk laporan MB baru */
-.mb-category-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 30px;
-    font-size: 14px;
-}
-.mb-category-table th, .mb-category-table td {
-    border: 1px solid #ddd;
-    padding: 10px;
-    text-align: center;
-}
-.mb-category-table th {
-    background-color: #e9ecef;
-}
-.mb-category-table .total-row {
-    font-weight: bold;
-    background-color: #d0e7ff;
-}
-
-/* Style untuk kelompok tabel kustom (AB Sunter) - MC Grouping */
-.breakdown-group {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* 3 kolom yang responsif */
-    gap: 20px;
-    margin-top: 15px;
-    margin-bottom: 30px;
-}
-.breakdown-table-container {
-    padding: 15px;
-    border: 1px solid #e0e0e0;
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow-light);
 }
 
 /* Mobile Layout Fix */
@@ -104,26 +67,12 @@
         color: var(--text-color);
         padding-right: 10px;
     }
-    /* Mobile for MB Category Table */
-    .mb-category-table thead {
-        display: none;
-    }
-    .mb-category-table tr {
-        margin-bottom: 15px;
-        border: 2px solid var(--primary-color);
-    }
-    .mb-category-table td {
-        display: flex;
-        justify-content: space-between;
-        text-align: right;
-        border: none;
-    }
 }
 {% endblock %}
 
 {% block content %}
     <h2 style="text-align: left; border-bottom: none; margin-bottom: 10px; color: var(--primary-color);">
-        <i class="fas fa-list-alt" style="margin-right: 10px;"></i> Laporan Analisis: {{ title }}
+        <i class="fas fa-list-alt" style="margin-right: 10px;"></i> Laporan Anomali: {{ title }}
     </h2>
     
     <div class="report-info">
@@ -144,51 +93,54 @@
     </div>
 
     <script>
-        // Fungsi pembantu untuk memformat angka persentase
-        function formatPercent(number) {
-            return (parseFloat(number) || 0).toFixed(2) + '%';
+        // Fungsi pembantu untuk memformat angka Rupiah dan angka biasa
+        function formatRupiah(number) {
+            return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
         }
         
         function formatNumber(number) {
             return (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
         }
         
-        function formatRupiah(number) {
-            return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        // Fungsi pembantu untuk memformat angka persentase
+        function formatPercent(number) {
+            return (parseFloat(number) || 0).toFixed(2) + '%';
         }
-
 
         async function fetchReportData(reportName) {
             const dataArea = document.getElementById('reportDataArea');
             dataArea.innerHTML = `<p style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Menghubungkan ke MongoDB untuk ${reportName}...</p>`;
             
             let endpoint = '';
-            let isMBReport = false;
-            let isMCReport = false;
-            let isTarifBreakdown = false;
-            let isAnomalyReport = false;
+            let isApiImplemented = true;
 
-            // Mapping Laporan ke Endpoint API
-            if (reportName.includes('Master Bayar (MB)')) {
-                endpoint = '{{ url_for("analyze_mb_grouping_api") }}';
-                isMBReport = true;
-            } else if (reportName.includes('Master Cetak (MC) Lengkap')) {
-                endpoint = '{{ url_for("analyze_mc_grouping_api") }}';
-                isMCReport = true;
-            } else if (reportName.includes('Distribusi Pelanggan Berdasarkan TARIF')) {
-                endpoint = '{{ url_for("analyze_mc_tarif_breakdown_api") }}';
-                isTarifBreakdown = true;
-            } else if (reportName.includes('Naik/Turun')) {
+            // Mapping Laporan ke Endpoint API yang baru
+            if (reportName.includes('Fluktuasi Volume')) {
                 endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}';
-                isAnomalyReport = true;
-            } else if (reportName.includes('Ekstrim') || reportName.includes('Zero')) {
-                 endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}';
-                 isAnomalyReport = true;
+            } else if (reportName.includes('Grup Master Cetak')) {
+                endpoint = '{{ url_for("analyze_mc_grouping_api") }}';
+            } else if (reportName.includes('Detail Master Bayar')) {
+                endpoint = '{{ url_for("analyze_mb_grouping_api") }}';
+            } else if (reportName.includes('Distribusi Pelanggan Tarif Kustom')) {
+                endpoint = '{{ url_for("analyze_mc_tarif_breakdown_api") }}';
+            } else if (reportName.includes('Ekstrim')) {
+                endpoint = '/api/analyze/extreme_usage'; 
+                isApiImplemented = false;
+            } else if (reportName.includes('Zero')) {
+                endpoint = '/api/analyze/zero_usage'; 
+                isApiImplemented = false;
+            } else if (reportName.includes('Stand Tunggu')) {
+                endpoint = '/api/analyze/standby'; 
+                isApiImplemented = false;
             } else {
-                 dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini belum diimplementasi: ${reportName}</p>`;
+                 dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini tidak valid atau belum dipetakan.</p>`;
                  return;
             }
 
+            if (!isApiImplemented) {
+                dataArea.innerHTML = `<p style="text-align: center; color: orange;"><i class="fas fa-exclamation-triangle"></i> Laporan ${reportName} belum diimplementasi. Endpoint: ${endpoint}</p>`;
+                return;
+            }
 
             try {
                 const response = await fetch(endpoint);
@@ -199,32 +151,19 @@
                     return;
                 }
                 
-                if (response.status !== 200 || 
-                    (isAnomalyReport && data.length === 0) || 
-                    (isTarifBreakdown && data.length === 0) ||
-                    (isMCReport && data.status !== 'success') || 
-                    (isMBReport && data.status !== 'success')) {
-                    dataArea.innerHTML = `<p style="text-align: center;">Tidak ada data ditemukan untuk laporan ${reportName}.</p>`;
+                if (data.length === 0 && data.status !== 'success') {
+                    dataArea.innerHTML = `<p style="text-align: center;">Tidak ada data anomali ditemukan untuk laporan ${reportName}.</p>`;
                     return;
                 }
                 
-                if (isMBReport) {
-                    renderMBReport(data);
-                } else if (isMCReport) {
-                    renderMCGroupingReport(data); 
-                } else if (isTarifBreakdown) {
-                    renderTarifBreakdownTable(data); 
-                } else if (isAnomalyReport) {
-                    // Apply filtering if specific anomaly report is requested (Ekstrim/Zero)
-                    let filteredData = data;
-                    if (reportName.includes('Ekstrim')) {
-                        filteredData = data.filter(item => item.STATUS_PEMAKAIAN.includes('EKSTRIM'));
-                    } else if (reportName.includes('Zero')) {
-                        filteredData = data.filter(item => item.STATUS_PEMAKAIAN.includes('ZERO'));
-                    }
-                    renderDynamicTable(filteredData, reportName);
+                // Cek jika response adalah objek status kustom (misal dari analyze_mc_grouping_api)
+                if (data.status === 'success' && data.breakdowns) {
+                    renderCustomReportTable(data, dataArea);
+                } else if (reportName.includes('Distribusi Pelanggan Tarif Kustom')) {
+                    renderTarifBreakdownTable(data, dataArea);
+                } else {
+                    renderDynamicTable(data, reportName, dataArea);
                 }
-
 
             } catch (error) {
                 dataArea.innerHTML = `<p style="text-align: center; color: red;">❌ Gagal mengambil data: ${error}</p>`;
@@ -232,294 +171,14 @@
             }
         }
         
-        // =========================================================================================
-        // 1. MB GROUPING REPORT RENDERER
-        // =========================================================================================
-        function renderMBReport(data) {
-            const dataArea = document.getElementById('reportDataArea');
-            const categoryReport = data.category_report;
-            const dailyTrend = data.daily_trend;
-            const detailR34 = data.detail_r34;
-            const detailR35 = data.detail_r35;
-            
-            let html = `
-                <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px;">Laporan Grup MB (Koleksi) Berdasarkan Kategori Bayar</h3>
-                <p style="font-size: 0.9em; margin-bottom: 20px;">*Data difilter hanya untuk pelanggan Reguler (REG) Rayon 34 dan 35. Konteks bulan adalah November 2025.</p>
-                
-                ${renderCategoryTable('KOLEKSI UNDUE (BULAN REK: 112025)', categoryReport.undue, '#28a745')}
-                ${renderCategoryTable('KOLEKSI CURRENT (BULAN REK: 102025)', categoryReport.current, '#ffc107')}
-                ${renderCategoryTable('KOLEKSI TUNGGAKAN (BULAN REK: < 102025)', categoryReport.tunggakan, '#dc3545')}
-                
-                <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; margin-top: 40px;">Tabel Tren Koleksi Harian (Nov 2025)</h3>
-                ${renderDailyTrendTable(dailyTrend)}
-                
-                <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; margin-top: 40px;">Detail Transaksi MB Rayon 34 (Nov 2025)</h3>
-                ${renderDetailTransactionTable(detailR34, 'RAYON 34')}
-                
-                <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; margin-top: 40px;">Detail Transaksi MB Rayon 35 (Nov 2025)</h3>
-                ${renderDetailTransactionTable(detailR35, 'RAYON 35')}
-            `;
-
-            dataArea.innerHTML = html;
-        }
-
-        function renderCategoryTable(title, data, color) {
-            
-            const total = data.TOTAL_AB_SUNTER || { NomenCount: 0, TotalNominal: 0 };
-            const r34 = data[34] || { NomenCount: 0, TotalNominal: 0 };
-            const r35 = data[35] || { NomenCount: 0, TotalNominal: 0 };
-            
-            let tableHTML = `
-                <h4 style="color: ${color}; margin-top: 25px;">${title}</h4>
-                <div class="result-table-wrapper">
-                    <table class="mb-category-table" style="border-left: 5px solid ${color};">
-                        <thead>
-                            <tr>
-                                <th>RAYON</th>
-                                <th>Nomen Count</th>
-                                <th>Total Nominal</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr class="total-row" style="background-color: ${color}22;">
-                                <td data-label="RAYON" style="text-align: left;">TOTAL AB SUNTER</td>
-                                <td data-label="Nomen Count">${total.NomenCount.toLocaleString('id-ID')}</td>
-                                <td data-label="Total Nominal" style="text-align: right;">${formatRupiah(total.TotalNominal)}</td>
-                            </tr>
-                            <tr>
-                                <td data-label="RAYON" style="text-align: left;">Rayon 34</td>
-                                <td data-label="Nomen Count">${r34.NomenCount.toLocaleString('id-ID')}</td>
-                                <td data-label="Total Nominal" style="text-align: right;">${formatRupiah(r34.TotalNominal)}</td>
-                            </tr>
-                            <tr>
-                                <td data-label="RAYON" style="text-align: left;">Rayon 35</td>
-                                <td data-label="Nomen Count">${r35.NomenCount.toLocaleString('id-ID')}</td>
-                                <td data-label="Total Nominal" style="text-align: right;">${formatRupiah(r35.TotalNominal)}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            return tableHTML;
-        }
-
-        function renderDailyTrendTable(data) {
-            if (data.length === 0) return '<p>Tidak ada data koleksi harian ditemukan untuk bulan ini.</p>';
-            
-            let totalTransaksi = 0;
-            let totalNominal = 0;
-            
-            data.forEach(item => {
-                totalTransaksi += item.JumlahTransaksi;
-                totalNominal += item.TotalNominal;
-            });
-            
-            let tableHTML = `
-                <div class="result-table-wrapper">
-                    <table class="data-table">
-                        <thead>
-                            <tr style="background-color: #d4edda;">
-                                <th>TANGGAL BAYAR</th>
-                                <th>JML TRANSAKSI (Nomen Count)</th>
-                                <th>TOTAL NOMINAL (Rp)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-            
-            data.forEach(item => {
-                tableHTML += `
-                    <tr>
-                        <td data-label="TANGGAL BAYAR" style="text-align: left;">${item.TANGGAL_BAYAR}</td>
-                        <td data-label="JML TRANSAKSI" style="text-align: center;">${item.JumlahTransaksi.toLocaleString('id-ID')}</td>
-                        <td data-label="TOTAL NOMINAL" style="text-align: right;">${formatRupiah(item.TotalNominal)}</td>
-                    </tr>
-                `;
-            });
-            
-            tableHTML += `
-                <tr class="total-row" style="background-color: #f2f2f2; font-weight: bold;">
-                    <td style="text-align: left;">GRAND TOTAL</td>
-                    <td data-label="GRAND TOTAL TRANSAKSI" style="text-align: center;">${totalTransaksi.toLocaleString('id-ID')}</td>
-                    <td data-label="GRAND TOTAL NOMINAL" style="text-align: right;">${formatRupiah(totalNominal)}</td>
-                </tr>
-            `;
-            
-            tableHTML += `
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            return tableHTML;
-        }
+        // --- Fungsi Tambahan untuk Rendering Laporan Spesifik ---
         
-        function renderDetailTransactionTable(data, title) {
-            if (data.length === 0) return `<p>Tidak ada data detail transaksi MB untuk ${title} di bulan ini.</p>`;
-            
-            let tableHTML = `
-                <div class="result-table-wrapper">
-                    <table class="data-table">
-                        <thead>
-                            <tr style="background-color: #f0f8ff;">
-                                <th>TANGGAL BAYAR</th>
-                                <th>NOMEN</th>
-                                <th>NOMINAL (Rp)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-            
-            data.forEach(item => {
-                tableHTML += `
-                    <tr>
-                        <td data-label="TANGGAL BAYAR" style="text-align: left;">${item.TANGGAL_BAYAR}</td>
-                        <td data-label="NOMEN" style="text-align: left;">${item.NOMEN}</td>
-                        <td data-label="NOMINAL" style="text-align: right;">${formatRupiah(item.NOMINAL)}</td>
-                    </tr>
-                `;
-            });
-            
-            tableHTML += `
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            return tableHTML;
-        }
-
-        
-        // =========================================================================================
-        // 2. MC GROUPING REPORT RENDERER (Copied from collection_unified.html)
-        // =========================================================================================
-        function renderMCGroupingReport(data) {
-            const customArea = document.getElementById('reportDataArea');
-            if (data.status !== 'success') {
-                 customArea.innerHTML = `<p class="no-results" style="color: red;">❌ ${data.message || 'Gagal memuat laporan kustom.'}</p>`;
-                 return;
-            }
-
-            const totals = data.totals;
-            const breakdowns = data.breakdowns;
-            
-            
-            // -------------------------------------------------------------------------
-            // 1. RENDER RINGKASAN TOTAL
-            // -------------------------------------------------------------------------
-            
-            let totalSummaryHTML = `
-                <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px;">Ringkasan Nomen, Nominal, dan Kubikasi (Reguler Rayon 34/35)</h3>
-                <div class="result-table-wrapper" style="max-width: 800px; margin-left: auto; margin-right: auto;">
-                    <table class="data-table" style="min-width: 100%;">
-                        <thead>
-                            <tr style="background-color: #f8d7da; color: #721c24;">
-                                <th style="text-align: left;">AREA</th>
-                                <th>Nomen Count</th>
-                                <th>Total Nominal</th>
-                                <th>Total Kubik (m³)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td data-label="AREA" style="text-align: left; font-weight: bold;">AB SUNTER (Total R34 + R35)</td>
-                                <td data-label="Nomen Count" style="text-align: center;">${formatNumber(totals.TOTAL_34_35.CountOfNOMEN)}</td>
-                                <td data-label="Total Nominal" style="text-align: right;">${formatRupiah(totals.TOTAL_34_35.SumOfNOMINAL)}</td>
-                                <td data-label="Total Kubik" style="text-align: right;">${formatNumber(totals.TOTAL_34_35.SumOfKUBIK)}</td>
-                            </tr>
-                            <tr>
-                                <td data-label="AREA" style="text-align: left; font-weight: 600;">Rayon 34</td>
-                                <td data-label="Nomen Count" style="text-align: center;">${formatNumber(totals[34].CountOfNOMEN)}</td>
-                                <td data-label="Total Nominal" style="text-align: right;">${formatRupiah(totals[34].SumOfNOMINAL)}</td>
-                                <td data-label="Total Kubik" style="text-align: right;">${formatNumber(totals[34].SumOfKUBIK)}</td>
-                            </tr>
-                            <tr>
-                                <td data-label="AREA" style="text-align: left; font-weight: 600;">Rayon 35</td>
-                                <td data-label="Nomen Count" style="text-align: center;">${formatNumber(totals[35].CountOfNOMEN)}</td>
-                                <td data-label="Total Nominal" style="text-align: right;">${formatRupiah(totals[35].SumOfNOMINAL)}</td>
-                                <td data-label="Total Kubik" style="text-align: right;">${formatNumber(totals[35].SumOfKUBIK)}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                
-                <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; margin-top: 40px;">Detail Breakdown Per Dimensi</h3>
-            `;
-
-            // -------------------------------------------------------------------------
-            // 2. RENDER BREAKDOWN PER DIMENSI (3x Tabel Terpisah per Dimensi)
-            // -------------------------------------------------------------------------
-            
-            // Helper function to create a single breakdown table (for one area: Total, R34, or R35)
-            function createSingleBreakdownTable(title, dataArray, dimensionKey) {
-                let tableHTML = `
-                    <div class="breakdown-table-container">
-                        <h5 style="margin-top: 0; color: #17a2b8;">${title}</h5>
-                        <div class="result-table-wrapper" style="margin-top: 10px;">
-                            <table class="data-table" style="min-width: 100%;">
-                                <thead>
-                                    <tr style="background-color: #f0f8ff;">
-                                        <th style="text-align: left; width: 40%;">${dimensionKey.replace(/_/g, ' ').toUpperCase()}</th>
-                                        <th>Nomen Count</th>
-                                        <th>Nominal</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                `;
-                
-                dataArray.forEach(item => {
-                    const dimValue = item[dimensionKey] || 'N/A';
-                    const nomenCount = formatNumber(item.CountOfNOMEN);
-                    const nominal = formatRupiah(item.SumOfNOMINAL);
-                    
-                    tableHTML += `
-                        <tr>
-                            <td data-label="${dimensionKey.toUpperCase()}" style="text-align: left;">${dimValue}</td>
-                            <td data-label="Nomen Count" style="text-align: center;">${nomenCount}</td>
-                            <td data-label="Nominal" style="text-align: right;">${nominal}</td>
-                        </tr>
-                    `;
-                });
-                
-                tableHTML += `
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                `;
-                return tableHTML;
-            }
-
-            // Function to render the entire group of 3 tables for a dimension
-            function renderDimensionGroup(dimensionName, dimensionKey, breakdownData) {
-                let groupHTML = `
-                    <h4 style="color: #007bff; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">Breakdown Berdasarkan: ${dimensionName}</h4>
-                    <div class="breakdown-group">
-                        ${createSingleBreakdownTable(`AB SUNTER (Total)`, breakdownData.TOTAL_34_35, dimensionKey)}
-                        ${createSingleBreakdownTable(`Rayon 34`, breakdownData[34], dimensionKey)}
-                        ${createSingleBreakdownTable(`Rayon 35`, breakdownData[35], dimensionKey)}
-                    </div>
-                `;
-                return groupHTML;
-            }
-
-            // Gabungkan semua output
-            let breakdownHTML = '';
-            breakdownHTML += renderDimensionGroup('Jenis TARIF', 'TARIF', breakdowns.TARIF);
-            breakdownHTML += renderDimensionGroup('Merek Meter', 'MERK', breakdowns.MERK);
-            breakdownHTML += renderDimensionGroup('Metode Baca', 'READ_METHOD', breakdowns.READ_METHOD);
-
-            customArea.innerHTML = totalSummaryHTML + breakdownHTML;
-        }
-
-        // =========================================================================================
-        // 3. TARIF BREAKDOWN REPORT RENDERER (Copied from collection_unified.html)
-        // =========================================================================================
-
-        function renderTarifBreakdownTable(data) {
-            const dataArea = document.getElementById('reportDataArea');
+        // Rendering Tarif Breakdown (Diadaptasi dari collection_unified.html)
+        function renderTarifBreakdownTable(data, dataArea) {
             let totalPelanggan = data.reduce((sum, item) => sum + item.JumlahPelanggan, 0);
 
             let tableHTML = `
-                <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px;">Ringkasan Distribusi Pelanggan</h3>
+                <h3 style="margin-top: 20px;">Distribusi Pelanggan (Rayon 34/35 Reguler)</h3>
                 <div class="result-table-wrapper" style="max-width: 600px; margin-left: 0;"> 
                 <table class="data-table">
                     <thead>
@@ -539,18 +198,18 @@
                     <tr>
                         <td data-label="RAYON" style="text-align: left;">${item.RAYON}</td>
                         <td data-label="TARIF" style="text-align: left;">${item.TARIF}</td>
-                        <td data-label="JML Pelanggan" style="text-align: center;">${formatNumber(item.JumlahPelanggan)}</td>
-                        <td data-label="Persentase" style="text-align: right; font-weight: bold; color: var(--secondary-color);">${formatPercent(percentage)}</td>
+                        <td data-label="JML Pelanggan">${formatNumber(item.JumlahPelanggan)}</td>
+                        <td data-label="Persentase">${formatPercent(percentage)}</td>
                     </tr>
                 `;
             });
             
             tableHTML += `
-                <tr class="total-row" style="font-weight: bold; background-color: #d0e7ff; color: var(--text-color);">
-                    <td data-label="TOTAL" style="text-align: left;">TOTAL</td>
-                    <td>-</td> 
-                    <td data-label="JML Pelanggan Total" style="text-align: center;">${formatNumber(totalPelanggan)}</td>
-                    <td data-label="Persentase Total" style="text-align: right;">100.00%</td>
+                <tr style="font-weight: bold; background-color: #d0e7ff;">
+                    <td data-label="Total" style="text-align: left;">TOTAL</td>
+                    <td data-label="">-</td> 
+                    <td data-label="JML Pelanggan Total">${formatNumber(totalPelanggan)}</td>
+                    <td data-label="Persentase Total">100.00%</td>
                 </tr>
             `;
             
@@ -561,14 +220,51 @@
             `;
             dataArea.innerHTML = tableHTML;
         }
+        
+        // Rendering Custom Report (MC Grouping) - Placeholder
+        function renderCustomReportTable(data, dataArea) {
+             const totals = data.totals;
+             let html = `
+                <h3 style="margin-top: 20px;">Ringkasan Grouping MC (Rayon 34 & 35 Reguler)</h3>
+                <div class="result-table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr style="background-color: #f8d7da;">
+                                <th style="text-align: left;">AREA</th>
+                                <th>Nomen Count</th>
+                                <th>Total Nominal</th>
+                                <th>Total Kubik (m³)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td data-label="AREA" style="text-align: left; font-weight: bold;">AB SUNTER (Total R34 + R35)</td>
+                                <td data-label="Nomen Count">${formatNumber(totals.TOTAL_34_35.CountOfNOMEN)}</td>
+                                <td data-label="Total Nominal">${formatRupiah(totals.TOTAL_34_35.SumOfNOMINAL)}</td>
+                                <td data-label="Total Kubik">${formatNumber(totals.TOTAL_34_35.SumOfKUBIK)}</td>
+                            </tr>
+                            <tr>
+                                <td data-label="AREA" style="text-align: left;">Rayon 34</td>
+                                <td data-label="Nomen Count">${formatNumber(totals[34].CountOfNOMEN)}</td>
+                                <td data-label="Total Nominal">${formatRupiah(totals[34].SumOfNOMINAL)}</td>
+                                <td data-label="Total Kubik">${formatNumber(totals[34].SumOfKUBIK)}</td>
+                            </tr>
+                            <tr>
+                                <td data-label="AREA" style="text-align: left;">Rayon 35</td>
+                                <td data-label="Nomen Count">${formatNumber(totals[35].CountOfNOMEN)}</td>
+                                <td data-label="Total Nominal">${formatRupiah(totals[35].SumOfNOMINAL)}</td>
+                                <td data-label="Total Kubik">${formatNumber(totals[35].SumOfKUBIK)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p style="margin-top: 20px; color: #6c757d;">*Data breakdown per tarif/merk/metode baca tersedia dalam format JSON.</p>
+             `;
+             dataArea.innerHTML = html;
+        }
 
-
-        // =========================================================================================
-        // 4. GENERIC / ANOMALY REPORT RENDERER (Alignment diperbaiki di sini)
-        // =========================================================================================
-
-        function renderDynamicTable(data, title) {
-            const dataArea = document.getElementById('reportDataArea');
+        // Rendering Tabel Dinamis Umum
+        function renderDynamicTable(data, title, dataArea) {
             if (data.length === 0) {
                 dataArea.innerHTML = `<p style="text-align: center;">Tidak ada data ditemukan untuk laporan ${title}.</p>`;
                 return;
@@ -577,32 +273,28 @@
             // Dapatkan headers dari kunci objek pertama
             const headers = Object.keys(data[0]);
             
-            let tableHTML = `<div class="result-table-wrapper"><table class="data-table"><thead><tr>`;
+            let tableHTML = `<h3 style="margin-top: 20px;">Detail Data (${data.length} Baris)</h3>`;
+            tableHTML += `<div class="result-table-wrapper"><table class="data-table"><thead><tr>`;
             headers.forEach(h => {
-                // Headers tetap default/center
                 tableHTML += `<th>${h.replace(/_/g, ' ')}</th>`;
             });
             tableHTML += `</tr></thead><tbody>`;
-
-            // Kolom yang seharusnya rata kiri (textual data)
-            const leftAlignColumns = ['NOMEN', 'NAMA', 'RAYON', 'STATUS_PEMAKAIAN'];
 
             data.forEach(item => {
                 tableHTML += `<tr>`;
                 headers.forEach(h => {
                     let cellValue = item[h];
-                    let cellStyle = '';
-                    
-                    if (leftAlignColumns.includes(h.toUpperCase())) {
-                        cellStyle = 'style="text-align: left;"';
-                    }
                     
                     if (h === 'PERSEN_SELISIH') {
                         cellValue = formatPercent(cellValue);
+                    } else if (typeof cellValue === 'number' && (h.includes('NOMINAL') || h.includes('JUMLAH'))) {
+                        cellValue = formatRupiah(cellValue);
+                    } else if (typeof cellValue === 'number') {
+                        cellValue = formatNumber(cellValue);
                     }
                     
                     // PENTING: Tambahkan data-label untuk mobile view
-                    tableHTML += `<td data-label="${h.replace(/_/g, ' ')}" ${cellStyle}>${cellValue}</td>`;
+                    tableHTML += `<td data-label="${h.replace(/_/g, ' ')}">${cellValue}</td>`;
                 });
                 tableHTML += `</tr>`;
             });
