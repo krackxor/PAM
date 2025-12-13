@@ -603,6 +603,17 @@
             
             // Helper function to create a single breakdown table (for one area: Total, R34, or R35)
             function createSingleBreakdownTable(title, dataArray, dimensionKey) {
+                
+                // --- Kalkulasi Grand Total ---
+                let totalNomenCount = 0;
+                let totalNominal = 0;
+                
+                dataArray.forEach(item => {
+                    totalNomenCount += item.CountOfNOMEN || 0;
+                    totalNominal += item.SumOfNOMINAL || 0;
+                });
+                // -----------------------------
+
                 let tableHTML = `
                     <div class="breakdown-table-container">
                         <h5 style="margin-top: 0; color: #17a2b8;">${title}</h5>
@@ -632,6 +643,16 @@
                     `;
                 });
                 
+                // --- Tambahkan Baris Grand Total ---
+                tableHTML += `
+                    <tr class="grand-total-row">
+                        <td style="text-align: left;">GRAND TOTAL</td>
+                        <td>${formatNumber(totalNomenCount)}</td>
+                        <td>${formatRupiah(totalNominal)}</td>
+                    </tr>
+                `;
+                // -----------------------------------
+
                 tableHTML += `
                                 </tbody>
                             </table>
