@@ -669,15 +669,26 @@ def analyze_full_mc_report():
                            description="Menyajikan data agregasi NOMEN, Kubik, dan Nominal berdasarkan Rayon, Metode Baca, Tarif, dan Jenis Meter.",
                            is_admin=current_user.is_admin)
 
-# --- NEW ROUTE FOR MB GROUPING REPORT ---
+# --- START NEW/MODIFIED ROUTES ---
+
+@app.route('/analyze/tarif_breakdown', methods=['GET'])
+@login_required
+def analyze_tarif_breakdown_page():
+    # Menggunakan template laporan umum untuk Tarif Breakdown
+    return render_template('analyze_report_template.html', 
+                           title="Distribusi Pelanggan Berdasarkan TARIF (Rayon 34/35 Reguler)", 
+                           description="Menyajikan total jumlah pelanggan MC yang berstatus Reguler di Rayon 34 dan 35, dikelompokkan berdasarkan Jenis Tarif.",
+                           is_admin=current_user.is_admin)
+
 @app.route('/analyze/full_mb_report', methods=['GET'])
 @login_required
 def analyze_full_mb_report():
     return render_template('analyze_report_template.html', 
                            title="Laporan Grup Master Bayar (MB) Berdasarkan Kategori", 
-                           description="Menyajikan data agregasi Koleksi MB (Undue, Current, Tunggakan) berdasarkan Rayon 34 dan 35.",
+                           description="Menyajikan data agregasi Koleksi MB (Undue, Current, Tunggakan), Tren Harian, dan Detail Transaksi per Rayon 34 dan 35.",
                            is_admin=current_user.is_admin)
-# --- END NEW ROUTE ---
+
+# --- END NEW/MODIFIED ROUTES ---
 
 @app.route('/analyze/extreme', methods=['GET'])
 @login_required
@@ -865,7 +876,7 @@ def _aggregate_mb_category(collection_mb, collection_cid, category_type):
             }
         }
     else:
-        return []
+        return {} # Return empty dict for unknown type
     
     pipeline = [
         # 1. Join MB dengan CID untuk mendapatkan data Rayon dan Tipe Pelanggan yang bersih
@@ -962,10 +973,12 @@ def _aggregate_mb_detail(collection_mb, collection_cid, rayon_filter):
         
         # 2. Normalisasi dan Filter
         {'$addFields': {
-            'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$customer_info.RAYON', 'N/A'}}}}}}
-        },
+            'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
+            'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},
+        }},
         {'$match': {
             'CLEAN_RAYON': rayon_filter, # Filter Rayon spesifik
+            'CLEAN_TIPEPLGGN': 'REG', # Filter Tipe Pelanggan
             'TGL_BAYAR': {'$regex': f'^{TGL_BAYAR_REPORT_MONTH}'}, # Filter Bulan November
         }},
         
