@@ -81,6 +81,10 @@
 .details-nav button:hover:not(.active) {
     background-color: #f0f0f0;
 }
+/* Menyembunyikan tabel secara default */
+.detail-table-section {
+    display: none;
+}
 
 /* Detail Data Table */
 .data-table-wrapper {
@@ -187,7 +191,6 @@
         const initialMessage = document.getElementById('initialMessage');
         const detailsNav = document.getElementById('detailsNav');
         
-        // Simpan data yang sudah diambil di sini
         let fetchedData = null; 
 
         function formatCurrency(amount) {
@@ -196,6 +199,11 @@
             }
             return amount;
         }
+        
+        function formatNumber(number) {
+             return (parseFloat(number) || 0).toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        }
+
 
         function determineStatusClass(statusText) {
             if (statusText.includes('TUNGGAKAN') || statusText.includes('EKSTRIM')) return 'status-danger';
@@ -205,6 +213,7 @@
         
         function renderTable(title, data, id) {
             if (!data || (Array.isArray(data) && data.length === 0)) {
+                // Pastikan div container tetap ada meskipun kosong
                 return `<div id="table-${id}" class="detail-table-section"><h4 style="margin-top: 20px; color: #2c3e50;">${title}</h4><p>Tidak ada data ditemukan.</p></div>`;
             }
             
@@ -225,9 +234,16 @@
                 tableHtml += '<tr>';
                 headers.forEach(h => {
                     let cellValue = item[h];
-                    if (h.includes('NOMINAL') || h.includes('JUMLAH')) {
+                    
+                    // Formatting Data
+                    if (typeof cellValue === 'number' && (h.includes('NOMINAL') || h.includes('JUMLAH') || h.includes('AMOUNT'))) {
                         cellValue = formatCurrency(cellValue);
+                    } else if (typeof cellValue === 'number' && h.includes('KUBIK')) {
+                         cellValue = formatNumber(cellValue);
+                    } else if (cellValue === null) {
+                        cellValue = 'N/A';
                     }
+                    
                     tableHtml += `<td data-label="${h.replace(/_/g, ' ')}">${cellValue}</td>`;
                 });
                 tableHtml += '</tr>';
@@ -275,8 +291,7 @@
                 </div>
             `;
             
-            // 2. Render ALL Detail Tables to the Container
-            // They are all rendered first, then visibility is managed by showDetail()
+            // 2. Render ALL Detail Tables to the Container (semua disembunyikan secara default oleh CSS)
             detailsContainer.innerHTML = '';
             detailsContainer.innerHTML += renderTable("Master Data Pelanggan (CID)", data.cid_data, 'CID');
             detailsContainer.innerHTML += renderTable("Riwayat Piutang (MC - Semua Periode)", data.mc_data, 'MC');
