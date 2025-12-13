@@ -887,7 +887,7 @@ def _aggregate_mb_grouping(collection_mb, collection_cid, rayon_filter=None):
                     # Jika MMYYYY pembayaran sama dengan BULAN_REK, itu UNDUE
                     'if': { '$eq': ['$PAY_MONTH_YEAR', '$BULAN_REK'] },
                     'then': 'UNDUE',
-                    'default': 'TUNGGAKAN' # Arrears/Tunggakan
+                    'else': 'TUNGGAKAN' # Arrears/Tunggakan (FIXED: changed 'default' to 'else')
                 }
             }
         }
@@ -1535,17 +1535,6 @@ def upload_sbrs_data():
                 collection_sbrs.insert_one(record)
                 inserted_count += 1
         
-        # === ANALISIS ANOMALI INSTAN SETELAH INSERT ===
-        anomaly_list = []
-        try:
-            if inserted_count > 0:
-                # Dapatkan anomali dari SBRS yang baru diupdate
-                anomaly_list = _get_sbrs_anomalies(collection_sbrs, collection_cid)
-        except Exception as e:
-            # Jika analisis gagal, jangan hentikan respons sukses upload
-            print(f"Peringatan: Gagal menjalankan analisis anomali instan: {e}")
-        # ============================================
-
         # --- RETURN REPORT ---
         return jsonify({
             "status": "success",
