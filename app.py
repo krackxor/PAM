@@ -734,7 +734,7 @@ def analyze_mc_grouping_api():
             }},
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
             
-            # --- NORMALISASI DATA UNTUK FILTER ---
+            # --- NORMALISASI DATA UNTUK FILTER (FIX 1) ---
             {'$addFields': {
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '']}}}}}, # Diubah ke huruf besar
                 'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '']}}}},
@@ -756,8 +756,8 @@ def analyze_mc_grouping_api():
                     'RAYON': '$CLEAN_RAYON',
                     'TARIF': {'$ifNull': ['$TARIF', 'N/A']},
                     
-                    # PERBAIKAN AKHIR: Tambahkan $ifNull dan $toString di sini sebagai lapisan pelindung terakhir 
-                    # terhadap tipe data aneh pada grouping key.
+                    # PERBAIKAN AKHIR (FIX 2): Memastikan GROUPING KEY adalah STRING,
+                    # meskipun data sudah dibersihkan di tahap upload CID.
                     'MERK': {'$toString': {'$ifNull': ['$CLEAN_MERK', 'N/A']}}, 
                     'READ_METHOD': {'$toString': {'$ifNull': ['$CLEAN_READ_METHOD', 'N/A']}}, 
                 },
@@ -1115,7 +1115,7 @@ def upload_mb_data():
 @login_required 
 @admin_required 
 def upload_cid_data():
-    """Mode GANTI: Untuk Customer Data (CID) / Data Pelanggan Statis."""
+    """Mode GANTI: Untuk Customer Data (CID) / Data Pelanggan Statis. (SUDAH DIPERBAIKI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -1142,6 +1142,23 @@ def upload_cid_data():
             if df[col].dtype == 'object':
                 df[col] = df[col].astype(str).str.strip()
         
+        # ===============================================================
+        # >>> PERBAIKAN KRITIS: NORMALISASI DATA KOTOR PANDAS SEBELUM INSERT <<<
+        # ===============================================================
+        
+        columns_to_normalize = ['MERK', 'READ_METHOD', 'TIPEPLGGN', 'RAYON']
+        
+        for col in columns_to_normalize:
+            if col in df.columns:
+                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
+                df[col] = df[col].astype(str).str.strip().str.upper()
+                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
+                df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
+        
+        # ===============================================================
+        # >>> END PERBAIKAN KRITIS <<<
+        # ===============================================================
+
         data_to_insert = df.to_dict('records')
         
         # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE)
