@@ -735,6 +735,7 @@ def analyze_mc_grouping_api():
                'foreignField': 'NOMEN',
                'as': 'customer_info'
             }},
+            # Unwind dipertahankan, karena filter akan menyingkirkan hasil join yang gagal
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
             
             # --- NORMALISASI DATA UNTUK FILTER ---
@@ -836,7 +837,7 @@ def analyze_mc_grouping_summary_api():
         print(f"Error saat mengambil summary grouping MC: {e}")
         return jsonify({"message": f"Gagal mengambil summary grouping MC. Detail teknis error: {e}"}), 500
 
-// 3. API BREAKDOWN TARIF (Untuk Tabel Distribusi di collection_unified.html)
+# 3. API BREAKDOWN TARIF (Untuk Tabel Distribusi di collection_unified.html)
 @app.route('/api/analyze/mc_tarif_breakdown', methods=['GET'])
 @login_required 
 def analyze_mc_tarif_breakdown_api():
@@ -845,7 +846,7 @@ def analyze_mc_tarif_breakdown_api():
 
     try:
         pipeline_tarif_breakdown = [
-            // 1. Join MC ke CID
+            # 1. Join MC ke CID
             {'$lookup': {
                'from': 'CustomerData', 
                'localField': 'NOMEN',
@@ -854,19 +855,19 @@ def analyze_mc_tarif_breakdown_api():
             }},
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}},
             
-            // --- NORMALISASI DATA UNTUK FILTER ---
+            # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}}, 
                 'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
             }},
-            // --- END NORMALISASI ---
+            # --- END NORMALISASI ---
             
             {'$match': {
                 'CLEAN_TIPEPLGGN': 'REG',
                 'CLEAN_RAYON': {'$in': ['34', '35']}
             }},
             
-            // 3. Grouping berdasarkan RAYON dan TARIF
+            # 3. Grouping berdasarkan RAYON dan TARIF
             {'$group': {
                 '_id': {
                     'RAYON': '$CLEAN_RAYON',
@@ -875,7 +876,7 @@ def analyze_mc_tarif_breakdown_api():
                 'CountOfNOMEN': {'$addToSet': '$NOMEN'},
             }},
             
-            // 4. Proyeksi Akhir dan Penghitungan Size
+            # 4. Proyeksi Akhir dan Penghitungan Size
             {'$project': {
                 '_id': 0,
                 'RAYON': '$_id.RAYON',
@@ -886,7 +887,7 @@ def analyze_mc_tarif_breakdown_api():
         ]
         breakdown_data = list(collection_mc.aggregate(pipeline_tarif_breakdown))
         
-        // Perbaiki penanganan error/empty result: jika kosong, kembalikan [] dan status 200
+        # Perbaiki penanganan error/empty result: jika kosong, kembalikan [] dan status 200
         if not breakdown_data:
             return jsonify([]), 200 
 
@@ -895,11 +896,11 @@ def analyze_mc_tarif_breakdown_api():
     except Exception as e:
         print(f"Error saat mengambil tarif breakdown MC: {e}")
         return jsonify({"message": f"Gagal mengambil tarif breakdown MC. Detail teknis error: {e}"}), 500
-// =========================================================================
-// === END API GROUPING MC KUSTOM ===
-// =========================================================================
+# =========================================================================
+# === END API GROUPING MC KUSTOM ===
+# =========================================================================
 
-// Endpoint File Upload/Merge (Dinamis)
+# Endpoint File Upload/Merge (Dinamis)
 @app.route('/analyze/upload', methods=['GET'])
 @login_required 
 def analyze_data_page():
@@ -968,7 +969,7 @@ def analyze_data():
         "head": merged_df.head().to_html(classes='table table-striped') 
     }), 200
 
-// --- ENDPOINT KELOLA UPLOAD (ADMIN) ---
+# --- ENDPOINT KELOLA UPLOAD (ADMIN) ---
 @app.route('/admin/upload', methods=['GET'])
 @login_required 
 @admin_required 
@@ -1201,7 +1202,7 @@ def upload_cid_data():
         collection_cid.insert_many(data_to_insert)
         count = len(data_to_insert)
 
-        // --- RETURN REPORT ---
+        # --- RETURN REPORT ---
         return jsonify({
             "status": "success",
             "message": f"Sukses! {count} baris Customer Data (CID) berhasil MENGGANTI data lama.",
@@ -1212,7 +1213,7 @@ def upload_cid_data():
             },
             "anomaly_list": []
         }), 200
-        // --- END RETURN REPORT ---
+        # --- END RETURN REPORT ---
 
     except Exception as e:
         print(f"Error saat memproses file CID: {e}")
@@ -1504,7 +1505,7 @@ def dashboard_summary_api():
             for item in top_rayon
         ]
         
-        // 8. TREN KOLEKSI 7 HARI TERAKHIR
+        # 8. TREN KOLEKSI 7 HARI TERAKHIR
         trend_data = []
         for i in range(7):
             date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
@@ -1525,7 +1526,7 @@ def dashboard_summary_api():
             })
         summary_data['tren_koleksi_7_hari'] = sorted(trend_data, key=lambda x: x['tanggal'])
         
-        // 9. PERSENTASE KOLEKSI
+        # 9. PERSENTASE KOLEKSI
         if summary_data['total_piutang'] > 0:
             summary_data['persentase_koleksi'] = (summary_data['koleksi_bulan_ini'] / summary_data['total_piutang']) * 100
         else:
