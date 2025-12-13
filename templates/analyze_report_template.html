@@ -36,6 +36,8 @@
     border: 1px solid #ddd;
     padding: 8px;
     white-space: nowrap; 
+    /* NEW: Atur default text alignment ke kanan */
+    text-align: right; 
 }
 .data-table th {
     background-color: #f2f2f2;
@@ -370,8 +372,8 @@
             data.forEach(item => {
                 tableHTML += `
                     <tr>
-                        <td data-label="TANGGAL BAYAR">${item.TANGGAL_BAYAR}</td>
-                        <td data-label="NOMEN">${item.NOMEN}</td>
+                        <td data-label="TANGGAL BAYAR" style="text-align: left;">${item.TANGGAL_BAYAR}</td>
+                        <td data-label="NOMEN" style="text-align: left;">${item.NOMEN}</td>
                         <td data-label="NOMINAL" style="text-align: right;">${formatRupiah(item.NOMINAL)}</td>
                     </tr>
                 `;
@@ -562,7 +564,7 @@
 
 
         // =========================================================================================
-        // 4. GENERIC / ANOMALY REPORT RENDERER (EXISTING FUNCTION)
+        // 4. GENERIC / ANOMALY REPORT RENDERER (Alignment diperbaiki di sini)
         // =========================================================================================
 
         function renderDynamicTable(data, title) {
@@ -577,21 +579,30 @@
             
             let tableHTML = `<div class="result-table-wrapper"><table class="data-table"><thead><tr>`;
             headers.forEach(h => {
+                // Headers tetap default/center
                 tableHTML += `<th>${h.replace(/_/g, ' ')}</th>`;
             });
             tableHTML += `</tr></thead><tbody>`;
+
+            // Kolom yang seharusnya rata kiri (textual data)
+            const leftAlignColumns = ['NOMEN', 'NAMA', 'RAYON', 'STATUS_PEMAKAIAN'];
 
             data.forEach(item => {
                 tableHTML += `<tr>`;
                 headers.forEach(h => {
                     let cellValue = item[h];
+                    let cellStyle = '';
+                    
+                    if (leftAlignColumns.includes(h.toUpperCase())) {
+                        cellStyle = 'style="text-align: left;"';
+                    }
                     
                     if (h === 'PERSEN_SELISIH') {
                         cellValue = formatPercent(cellValue);
                     }
                     
                     // PENTING: Tambahkan data-label untuk mobile view
-                    tableHTML += `<td data-label="${h.replace(/_/g, ' ')}">${cellValue}</td>`;
+                    tableHTML += `<td data-label="${h.replace(/_/g, ' ')}" ${cellStyle}>${cellValue}</td>`;
                 });
                 tableHTML += `</tr>`;
             });
