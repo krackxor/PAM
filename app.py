@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, make_response
-from pymongo import MongoClient
+from pymongo import MongoClient, ReplaceOne # FIX: Import ReplaceOne untuk operasi UPSERT
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -42,11 +42,11 @@ try:
     db = client[DB_NAME]
     
     # 🚨 KOLEKSI DIPISAH BERDASARKAN SUMBER DATA
-    collection_mc = db['MasterCetak']   # MC (Piutang/Tagihan Bulanan - REPLACE)
-    collection_mb = db['MasterBayar']   # MB (Koleksi Harian - APPEND)
+    collection_mc = db['MasterCetak']   # MC (Piutang/Tagihan Bulanan - UPSERT)
+    collection_mb = db['MasterBayar']   # MB (Koleksi Harian - APPEND/UPSERT Transaksi)
     collection_cid = db['CustomerData'] # CID (Data Pelanggan Statis - REPLACE)
-    collection_sbrs = db['MeterReading'] # SBRS (Baca Meter Harian/Parsial - APPEND)
-    collection_ardebt = db['AccountReceivable'] # ARDEBT (Tunggakan Detail - REPLACE)
+    collection_sbrs = db['MeterReading'] # SBRS (Baca Meter Harian/Parsial - APPEND/UPSERT Pembacaan)
+    collection_ardebt = db['AccountReceivable'] # ARDEBT (Tunggakan Detail - UPSERT)
     
     # ==========================================================
     # === START OPTIMASI: INDEXING KRITIS (SOLUSI KECEPATAN PERMANEN) ===
@@ -61,6 +61,8 @@ try:
     collection_mc.create_index([('RAYON', 1), ('PCEZ', 1)], name='idx_mc_rayon_pcez') 
     collection_mc.create_index([('STATUS', 1)], name='idx_mc_status')
     collection_mc.create_index([('TARIF', 1), ('KUBIK', 1), ('NOMINAL', 1)], name='idx_mc_tarif_volume')
+    # INDEKS KRITIS BARU UNTUK UPSERT MC
+    collection_mc.create_index([('NOMEN', 1), ('MASA', 1), ('TAHUN2', 1)], name='idx_mc_unique_period', unique=True)
 
     # MB (MasterBayar): Untuk Detail Transaksi dan Undue Check
     collection_mb.create_index([('TGL_BAYAR', -1)], name='idx_mb_paydate_desc')
@@ -72,6 +74,8 @@ try:
     
     # ARDEBT (AccountReceivable): Untuk Cek Tunggakan
     collection_ardebt.create_index([('NOMEN', 1)], name='idx_ardebt_nomen')
+    # INDEKS KRITIS BARU UNTUK UPSERT ARDEBT
+    collection_ardebt.create_index([('NOMEN', 1), ('CountOfPERIODE_BILL', 1)], name='idx_ardebt_unique_period', unique=True)
     
     # ==========================================================
     # === END OPTIMASI: INDEXING KRITIS ===
@@ -286,7 +290,7 @@ def search_nomen():
                 "message": f"NOMEN {query_nomen} tidak ditemukan di Master Data Pelanggan (CID)."
             }), 404
 
-        # 2. PIUTANG BERJALAN (MC) - Snapshot Bulan Ini
+        # 2. PIUTANG BERJALAN (MC) - Snapshot Bulan Ini (Semua riwayat)
         # MC Nomen adalah Induk (master)
         mc_results = list(collection_mc.find({'NOMEN': cleaned_nomen}))
         piutang_nominal_total = sum(item.get('NOMINAL', 0) for item in mc_results)
@@ -297,7 +301,6 @@ def search_nomen():
         
         # 4. RIWAYAT PEMBAYARAN TERAKHIR (MB)
         # FIX KRITIS: Menggunakan find_one dengan sort untuk menghindari list index out of range 
-        # dan memastikan kursor tidak digunakan dua kali.
         last_payment = collection_mb.find_one(
             {'NOMEN': cleaned_nomen},
             sort=[('TGL_BAYAR', -1)]
@@ -650,7 +653,7 @@ def export_collection_report():
         output.seek(0)
         
         response = make_response(output.read())
-        response.headers['Content-Disposition'] = 'attachment; filename=Laporan_Koleksi_Piutang_Terpadu.xlsx'
+        response.headers['Content-Disposition'] = 'attachment; filename=Laporan_Dashboard_Analytics.xlsx'
         response.headers['Content-type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         return response
 
@@ -1098,9 +1101,8 @@ def admin_upload_unified_page():
 @login_required 
 @admin_required 
 def upload_mc_data():
-    """Mode GANTI: Untuk Master Cetak (MC) / Piutang Bulanan. (DIPERBAIKI)"""
-    if client is None:
-        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    """Mode UPSERT: Untuk Master Cetak (MC) / Piutang Bulanan. (FIXED FOR HISTORY)"""
+    from pymongo import ReplaceOne 
     
     if 'file' not in request.files:
         return jsonify({"message": "Tidak ada file di permintaan"}), 400
@@ -1124,26 +1126,18 @@ def upload_mc_data():
         # >>> PERBAIKAN KRITIS MC: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
         # ===============================================================
         
-        # Target kolom kunci MC untuk konsistensi
         columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF'] 
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize_mc:
-                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
                 df[col] = df[col].astype(str).str.strip().str.upper()
-                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
             
-            # Kolom finansial MC
             if col in ['NOMINAL', 'NOMINAL_AKHIR', 'KUBIK', 'SUBNOMINAL', 'ANG_BP', 'DENDA', 'PPN']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
-        # PETA ULANG KOLOM: MC.PC digunakan sebagai RAYON
         if 'PC' in df.columns:
              df = df.rename(columns={'PC': 'RAYON'})
-        
-        # Hapus kolom RAYON lama jika ada konflik, tapi karena MC sampel tidak ada RAYON, ini aman.
-        # Jika kode production mengandalkan RAYON, ini akan membuat data konsisten.
 
         # ===============================================================
         # >>> END PERBAIKAN KRITIS MC <<<
@@ -1151,23 +1145,45 @@ def upload_mc_data():
 
         data_to_insert = df.to_dict('records')
         
-        # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE)
-        collection_mc.delete_many({})
-        collection_mc.insert_many(data_to_insert)
-        count = len(data_to_insert)
+        if not data_to_insert:
+            return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
+
+        # OPERASI KRITIS: UPSERT BERDASARKAN NOMEN dan PERIODE TAGIHAN (untuk melacak histori)
+        requests = []
+        for record in data_to_insert:
+            # Composite key: NOMEN, MASA (Bulan), dan TAHUN2 (Tahun Akhir Tagihan)
+            filter_query = {
+                'NOMEN': record.get('NOMEN'),
+                'MASA': record.get('MASA'),
+                'TAHUN2': record.get('TAHUN2')
+            }
+            # Hapus kunci jika tidak ada (untuk menghindari pencarian yang salah)
+            filter_query = {k: v for k, v in filter_query.items() if v is not None and v != 'N/A'}
+            
+            # ReplaceOne dengan upsert=True akan memperbarui jika kunci ditemukan, atau menyisipkan baru
+            requests.append(ReplaceOne(
+                filter_query,
+                record,
+                upsert=True
+            ))
+        
+        # Menggunakan bulk_write untuk kinerja yang lebih baik
+        bulk_result = collection_mc.bulk_write(requests, ordered=False)
+        
+        upserted_count = bulk_result.upserted_count + bulk_result.modified_count
         
         # --- RETURN REPORT ---
         return jsonify({
             "status": "success",
-            "message": f"Sukses! {count} baris Master Cetak (MC) berhasil MENGGANTI data lama.",
+            "message": f"Sukses! {upserted_count} baris Master Cetak (MC) berhasil diperbarui/disimpan (Mode Historis UPSERT).",
             "summary_report": {
-                "total_rows": count,
-                "type": "REPLACE",
-                "replaced_count": count
+                "total_rows": len(data_to_insert),
+                "type": "UPSERT (Historis)",
+                "upserted_count": bulk_result.upserted_count,
+                "modified_count": bulk_result.modified_count,
             },
             "anomaly_list": []
         }), 200
-        # --- END RETURN REPORT ---
 
     except Exception as e:
         print(f"Error saat memproses file MC: {e}")
@@ -1242,6 +1258,7 @@ def upload_mb_data():
         for record in data_to_insert:
             filter_query = {key: record.get(key) for key in UNIQUE_KEYS}
             
+            # Menggunakan find_one untuk mengecek duplikasi (sudah aman)
             if collection_mb.find_one(filter_query):
                 skipped_count += 1
             else:
@@ -1440,7 +1457,7 @@ def upload_sbrs_data():
                 "inserted_count": inserted_count,
                 "skipped_count": skipped_count
             },
-            "anomaly_list": []
+            "anomaly_list": anomaly_list # FIX: Mengirimkan daftar anomali yang baru dibuat
         }), 200
         # --- END RETURN REPORT ---
 
@@ -1452,10 +1469,9 @@ def upload_sbrs_data():
 @login_required 
 @admin_required 
 def upload_ardebt_data():
-    """Mode GANTI: Untuk data Detail Tunggakan (ARDEBT). (DIPERBAIKI)"""
-    if client is None:
-        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
-    
+    """Mode UPSERT: Untuk data Detail Tunggakan (ARDEBT). (FIXED FOR HISTORY)"""
+    from pymongo import ReplaceOne
+
     if 'file' not in request.files:
         return jsonify({"message": "Tidak ada file di permintaan"}), 400
 
@@ -1478,18 +1494,15 @@ def upload_ardebt_data():
         # >>> PERBAIKAN KRITIS ARDEBT: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
         # ===============================================================
 
-        # Target kolom kunci ARDEBT untuk konsistensi
         columns_to_normalize_ardebt = ['NOMEN', 'RAYON', 'TIPEPLGGN'] 
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize_ardebt:
-                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
                 df[col] = df[col].astype(str).str.strip().str.upper()
-                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
             
-            # Kolom numerik penting
-            if col in ['JUMLAH', 'VOLUME']: 
+            # Penting: Pastikan CountOfPERIODE_BILL dikonversi ke numerik/integer
+            if col in ['JUMLAH', 'VOLUME', 'COUNTOFPERIODE_BILL']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
         # ===============================================================
@@ -1500,24 +1513,40 @@ def upload_ardebt_data():
         
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
+
+        # OPERASI KRITIS: UPSERT BERDASARKAN NOMEN dan PERIODE TUNGGAKAN
+        requests = []
+        for record in data_to_insert:
+            # Composite key: NOMEN dan CountOfPERIODE_BILL (unique per debt record/month)
+            filter_query = {
+                'NOMEN': record.get('NOMEN'),
+                # Menggunakan CountOfPERIODE_BILL sebagai kunci unik per baris/periode tunggakan
+                'COUNTOFPERIODE_BILL': record.get('COUNTOFPERIODE_BILL') 
+            }
+            filter_query = {k: v for k, v in filter_query.items() if v is not None and v != 'N/A'}
+            
+            requests.append(ReplaceOne(
+                filter_query,
+                record,
+                upsert=True
+            ))
+
+        bulk_result = collection_ardebt.bulk_write(requests, ordered=False)
         
-        # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE)
-        collection_ardebt.delete_many({})
-        collection_ardebt.insert_many(data_to_insert)
-        count = len(data_to_insert)
-        
+        upserted_count = bulk_result.upserted_count + bulk_result.modified_count
+
         # --- RETURN REPORT ---
         return jsonify({
             "status": "success",
-            "message": f"Sukses! {count} baris Detail Tunggakan (ARDEBT) berhasil MENGGANTI data lama.",
+            "message": f"Sukses! {upserted_count} baris Detail Tunggakan (ARDEBT) berhasil diperbarui/disimpan (Mode Historis UPSERT).",
             "summary_report": {
-                "total_rows": count,
-                "type": "REPLACE",
-                "replaced_count": count
+                "total_rows": len(data_to_insert),
+                "type": "UPSERT (Historis)",
+                "upserted_count": bulk_result.upserted_count,
+                "modified_count": bulk_result.modified_count,
             },
             "anomaly_list": []
         }), 200
-        # --- END RETURN REPORT ---
 
     except Exception as e:
         print(f"Error saat memproses file ARDEBT: {e}")
