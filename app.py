@@ -627,7 +627,7 @@ def export_collection_report():
             'RAYON', 'PCEZ', 
             'MC_TotalNominal', 'MC_TotalKubik',
             'MC_CollectedNominal', 'MC_CollectedKubik',
-            'MB_UNDUE_NOMINAL', 'MB_UndueKubik',
+            'MB_UndueNominal', 'MB_UndueKubik',
             'PercentNominal', 'UnduePercentNominal'
         ]]
         df_export.columns = [
@@ -824,6 +824,180 @@ def analyze_mc_grouping_api():
     except Exception as e:
         print(f"Error saat menganalisis custom grouping MC: {e}")
         return jsonify({"status": "error", "message": f"Gagal mengambil data grouping MC: {e}"}), 500
+
+# =========================================================================
+# === API GROUPING MB KUSTOM (HELPER FUNCTION) - BARU!!! ===
+# =========================================================================
+
+def _aggregate_mb_grouping(collection_mb, collection_cid, rayon_filter=None):
+    """
+    Mengagregasi data Master Bayar (MB) untuk Rayon 34/35 berdasarkan status bayar
+    (UNDUE: BULAN_REK == TGL_BAYAR bulan/tahun) dan TUNGGAKAN (sisanya).
+    """
+    
+    rayon_keys = ['34', '35']
+    
+    # 1. Base Pipeline: Project, Join to CID, Normalize, Filter Rayon/Type
+    pipeline = [
+        # Match payments where NOMINAL is > 0
+        {'$match': {'NOMINAL': {'$gt': 0}}}, 
+        {'$project': {
+            'NOMEN': 1,
+            'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
+            # TGL_BAYAR dipastikan format YYYY-MM-DD untuk ekstraksi
+            'TGL_BAYAR': 1, 
+            # BULAN_REK dipastikan format MMYYYY (misal: 112025)
+            'BULAN_REK': 1,
+        }},
+        # Join to CID to get definitive Rayon and TIPEPLGGN
+        {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
+        {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
+        {'$addFields': {
+            'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
+            'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},
+        }},
+        {'$match': {'CLEAN_TIPEPLGGN': 'REG'}} # Always filter to REG
+    ]
+    
+    # Apply Rayon filter
+    if rayon_filter in rayon_keys:
+        pipeline.append({'$match': {'CLEAN_RAYON': rayon_filter}})
+    elif rayon_filter == 'TOTAL_34_35':
+        pipeline.append({'$match': {'CLEAN_RAYON': {'$in': rayon_keys}}})
+    else:
+        return {} # Jika tidak ada filter Rayon yang valid, kembalikan kosong
+
+    # 2. Classification Stage: Undue vs Arrears (Tunggakan)
+    pipeline.append({
+        '$addFields': {
+            # Ekstraksi MMYYYY dari TGL_BAYAR (contoh: 2025-11-25 -> 112025)
+            'PAY_MONTH_YEAR': {
+                '$concat': [
+                    {'$substr': ['$TGL_BAYAR', 5, 2]},  # MM
+                    {'$substr': ['$TGL_BAYAR', 0, 4]}   # YYYY
+                ]
+            },
+        }
+    })
+    
+    pipeline.append({
+        '$addFields': {
+            'STATUS_BAYAR': {
+                '$cond': {
+                    # Jika MMYYYY pembayaran sama dengan BULAN_REK, itu UNDUE
+                    'if': { '$eq': ['$PAY_MONTH_YEAR', '$BULAN_REK'] },
+                    'then': 'UNDUE',
+                    'default': 'TUNGGAKAN' # Arrears/Tunggakan
+                }
+            }
+        }
+    })
+
+    # --- 3. Hitung Total Collection ---
+    pipeline_total = pipeline + [
+        {'$group': {
+            '_id': None,
+            'CountOfNOMEN': {'$addToSet': '$NOMEN'},
+            'SumOfNOMINAL': {'$sum': '$NOMINAL'},
+        }},
+        {'$project': {
+            '_id': 0,
+            'CountOfNOMEN': {'$size': '$CountOfNOMEN'},
+            'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 0]},
+        }}
+    ]
+    total_result = list(collection_mb.aggregate(pipeline_total, allowDiskUse=True))
+    total_metrics = total_result[0] if total_result else {'CountOfNOMEN': 0, 'SumOfNOMINAL': 0}
+
+    # --- 4. Hitung Undue Collection ---
+    pipeline_undue = pipeline + [
+        {'$match': {'STATUS_BAYAR': 'UNDUE'}},
+        {'$group': {
+            '_id': None,
+            'CountOfNOMEN_UNDUE': {'$addToSet': '$NOMEN'},
+            'SumOfNOMINAL_UNDUE': {'$sum': '$NOMINAL'},
+        }},
+        {'$project': {
+            '_id': 0,
+            'CountOfNOMEN_UNDUE': {'$size': '$CountOfNOMEN_UNDUE'},
+            'SumOfNOMINAL_UNDUE': {'$round': ['$SumOfNOMINAL_UNDUE', 0]},
+        }}
+    ]
+    undue_result = list(collection_mb.aggregate(pipeline_undue, allowDiskUse=True))
+    undue_metrics = undue_result[0] if undue_result else {'CountOfNOMEN_UNDUE': 0, 'SumOfNOMINAL_UNDUE': 0}
+
+    # --- 5. Hitung Arrears Collection (Tunggakan) ---
+    pipeline_arrears = pipeline + [
+        {'$match': {'STATUS_BAYAR': 'TUNGGAKAN'}},
+        {'$group': {
+            '_id': None,
+            'CountOfNOMEN_TUNGGAKAN': {'$addToSet': '$NOMEN'},
+            'SumOfNOMINAL_TUNGGAKAN': {'$sum': '$NOMINAL'},
+        }},
+        {'$project': {
+            '_id': 0,
+            'CountOfNOMEN_TUNGGAKAN': {'$size': '$CountOfNOMEN_TUNGGAKAN'},
+            'SumOfNOMINAL_TUNGGAKAN': {'$round': ['$SumOfNOMINAL_TUNGGAKAN', 0]},
+        }}
+    ]
+    arrears_result = list(collection_mb.aggregate(pipeline_arrears, allowDiskUse=True))
+    arrears_metrics = arrears_result[0] if arrears_result else {'CountOfNOMEN_TUNGGAKAN': 0, 'SumOfNOMINAL_TUNGGAKAN': 0}
+
+    # --- 6. Ambil Detail Listing (Dibatasi 500 baris per Rayon) ---
+    pipeline_details = pipeline + [
+        {'$project': {
+            '_id': 0,
+            'TGL_BAYAR': 1,
+            'NOMEN': 1,
+            'NOMINAL': {'$round': ['$NOMINAL', 0]},
+            'STATUS_BAYAR': 1
+        }},
+        {'$sort': {'TGL_BAYAR': -1}}, # Sort Descending by Date
+        {'$limit': 500}
+    ]
+    details = list(collection_mb.aggregate(pipeline_details, allowDiskUse=True))
+    
+    return {
+        'total': total_metrics,
+        'undue': undue_metrics,
+        'tunggakan': arrears_metrics,
+        'details': details
+    }
+
+
+@app.route('/api/analyze/mb_grouping', methods=['GET'])
+@login_required 
+def analyze_mb_grouping_api():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+
+    try:
+        # 1. Aggregasi untuk Rayon 34
+        r34_data = _aggregate_mb_grouping(collection_mb, collection_cid, rayon_filter='34')
+
+        # 2. Aggregasi untuk Rayon 35
+        r35_data = _aggregate_mb_grouping(collection_mb, collection_cid, rayon_filter='35')
+        
+        # 3. Aggregasi untuk Total AB Sunter (R34 + R35)
+        ab_sunter_data = _aggregate_mb_grouping(collection_mb, collection_cid, rayon_filter='TOTAL_34_35')
+
+        response_data = {
+            'status': 'success',
+            'rayon_34': r34_data,
+            'rayon_35': r35_data,
+            'ab_sunter': ab_sunter_data
+        }
+        
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        print(f"Error saat menganalisis custom grouping MB: {e}")
+        return jsonify({"status": "error", "message": f"Gagal mengambil data grouping MB: {e}"}), 500
+
+# =========================================================================
+# === END API GROUPING MB KUSTOM ===
+# =========================================================================
+
 
 # =========================================================================
 # === API UNTUK ANALISIS AKURAT (Fluktuasi Volume Naik/Turun) ===
@@ -1085,8 +1259,7 @@ def upload_mc_data():
         if 'PC' in df.columns:
              df = df.rename(columns={'PC': 'RAYON'})
         
-        # Hapus kolom RAYON lama jika ada konflik, tapi karena MC sampel tidak ada RAYON, ini aman.
-        # Jika kode production mengandalkan RAYON, ini akan membuat data konsisten.
+        # Hapus kolom RAYON lama jika ada konflik, tapi karena MC sampel tidak ada RAYON, ini akan membuat data konsisten.
 
         # ===============================================================
         # >>> END PERBAIKAN KRITIS MC <<<
@@ -1805,6 +1978,7 @@ def export_dashboard_data():
     except Exception as e:
         print(f"Error during dashboard export: {e}")
         return jsonify({"message": f"Gagal mengekspor data dashboard: {e}"}), 500
+
 
 @app.route('/api/export/anomalies', methods=['GET'])
 @login_required
