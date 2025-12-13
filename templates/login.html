@@ -75,6 +75,20 @@
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
+
+        /* NEW: Responsive adjustments for mobile */
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 25px 20px; /* Reduce vertical padding slightly */
+                margin: 15px; /* Add margin around the container */
+                box-shadow: none; /* Remove box shadow for a cleaner look on mobile */
+                border: 1px solid #e0e0e0; /* Add subtle border */
+            }
+            h2 {
+                font-size: 1.5em; /* Slightly reduce heading size */
+                margin-bottom: 20px;
+            }
+        }
     </style>
 </head>
 <body>
