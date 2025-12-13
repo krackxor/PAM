@@ -1,21 +1,24 @@
 {% extends "base.html" %}
 
-{% block title %}Pencarian Terintegrasi{% endblock %}
+{% block title %}Target Acquisition{% endblock %}
 
 {% block custom_styles %}
 /* CSS Khusus untuk Halaman Pencarian */
 .search-box {
-    margin-bottom: 30px;
-    padding: 20px;
-    border: 1px solid #ddd;
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid var(--secondary-color);
     border-radius: var(--border-radius);
     text-align: center;
     box-shadow: var(--shadow-light); 
+    background-color: var(--card-bg);
 }
 #nomenInput {
-    padding: 12px; 
-    border: 1px solid #ced4da;
-    border-radius: 4px;
+    padding: 10px; 
+    border: 1px solid #555;
+    background-color: #111;
+    color: var(--primary-color);
+    border-radius: 0px;
     width: 100%;
     max-width: 350px; 
     margin-bottom: 10px;
@@ -24,120 +27,100 @@
 }
 .btn-search {
     background-color: var(--primary-color);
-    color: white;
+    color: var(--bg-color);
     border: none;
-    padding: 12px 25px; 
-    border-radius: 4px;
+    padding: 10px 20px; 
+    border-radius: 0px;
     cursor: pointer;
-    font-weight: 600;
+    font-weight: 700;
     transition: background-color 0.3s;
+    box-shadow: 0 0 5px var(--primary-color);
 }
 .btn-search:hover {
-    background-color: #0056b3;
+    background-color: var(--secondary-color);
 }
 
 /* Status Summary Grid */
 .summary-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
-    gap: 15px;
-    margin-bottom: 30px;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); /* Adjusted minmax for mobile */
+    gap: 10px;
+    margin-bottom: 20px;
 }
 .summary-card {
     background-color: var(--card-bg);
-    padding: 15px;
+    padding: 10px;
     border-radius: var(--border-radius);
-    border-left: 5px solid; /* Aksen visual */
+    border-left: 3px solid; /* Aksen visual */
     box-shadow: var(--shadow-light);
     transition: transform 0.2s;
 }
 .summary-card:hover {
     transform: translateY(-2px);
-    box-shadow: var(--shadow-medium);
+    box-shadow: 0 0 10px var(--primary-color);
 }
-.summary-card h4 { margin: 0 0 5px 0; font-size: 0.9em; text-transform: uppercase; color: #6c757d; }
-.summary-card p { margin: 0; font-size: 1.3em; font-weight: bold; }
+.summary-card h4 { margin: 0 0 5px 0; font-size: 0.75em; text-transform: uppercase; color: #777; }
+.summary-card p { margin: 0; font-size: 1.1em; font-weight: bold; color: var(--secondary-color); }
 
 /* Aksen Warna Status */
-.status-ok { color: var(--secondary-color); border-color: var(--secondary-color); }
+.status-ok { color: var(--primary-color); border-color: var(--primary-color); }
 .status-warning { color: var(--accent-color); border-color: var(--accent-color); }
-.status-danger { color: #dc3545; border-color: #dc3545; }
+.status-danger { color: #ff0000; border-color: #ff0000; }
 
 /* Detail Data Table */
 .data-table-wrapper {
     overflow-x: auto;
     margin-top: 15px;
-    border: 1px solid #e0e0e0; 
+    border: 1px solid #333; 
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-light);
     overflow: hidden;
+    background-color: #111;
 }
 .data-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 14px; 
-    min-width: 700px; 
+    font-size: 12px; 
+    min-width: 600px; /* Ensure horizontal scroll on mobile */
 }
 .data-table th, .data-table td {
-    border: 1px solid #f0f0f0; 
-    padding: 10px; 
+    border: 1px solid #333; 
+    padding: 8px; 
     text-align: left;
     white-space: nowrap;
 }
 .data-table th {
-    background-color: #e9ecef; 
+    background-color: #222; 
+    color: var(--primary-color);
     text-align: center;
     font-weight: 600;
+    text-transform: uppercase;
+}
+.data-table td {
+    color: var(--secondary-color);
 }
 
-/* Mobile Layout for Tables/Details (Card View) */
+/* Mobile Layout for Tables/Details (Card View) - Disabled for Hacker Theme scroll focus */
 @media screen and (max-width: 600px) {
-    .data-table-wrapper {
-        border: none;
-        box-shadow: none;
-    }
-    .data-table {
-        min-width: 100%;
-    }
-    .data-table thead {
-        display: none;
-    }
-    .data-table tr {
-        display: block;
-        margin-bottom: 10px;
-        border: 1px solid #ddd;
-        border-radius: var(--border-radius);
-    }
-    .data-table td {
-        display: flex;
-        justify-content: space-between;
-        padding: 8px 12px;
-        border: none;
-        border-bottom: 1px solid #eee;
-    }
-    .data-table td:before {
-        content: attr(data-label);
-        font-weight: 600;
-        text-align: left;
-        width: 50%;
-        padding-right: 10px;
+    .summary-grid {
+        grid-template-columns: 1fr; /* Stack cards on mobile */
     }
 }
 {% endblock %}
 
 {% block content %}
-    <h2 style="text-align: left; border-bottom: none; margin-bottom: 20px; color: var(--primary-color);">
-        <i class="fas fa-search" style="margin-right: 10px;"></i> Pencarian Pelanggan Terintegrasi
+    <h2 style="text-align: left; border-bottom: none; margin-bottom: 15px; color: var(--secondary-color);">
+        <i class="fas fa-search" style="margin-right: 10px;"></i> TARGET ACQUISITION: HOST LOOKUP
     </h2>
     
     <div class="search-box">
-        <input type="text" id="nomenInput" placeholder="Masukkan NOMEN Pelanggan">
-        <button id="searchBtn" class="btn-search">Cari Data Lengkap</button>
+        <input type="text" id="nomenInput" placeholder="ENTER TARGET ID (NOMEN)">
+        <button id="searchBtn" class="btn-search">INITIATE TRACE</button>
         <div id="searchStatus" style="margin-top: 10px;"></div>
     </div>
 
     <div id="resultsArea" style="display: none;">
-        <h3>Status Kesehatan Pelanggan <span id="nomenTitle"></span></h3>
+        <h3>STATUS REPORT: TARGET <span id="nomenTitle"></span></h3>
         <div class="summary-grid" id="healthSummary">
             </div>
 
@@ -145,8 +128,8 @@
             </div>
     </div>
     
-    <div id="initialMessage" style="text-align: center; color: #6c757d;">
-        <p>Gunakan NOMEN untuk mencari semua data pelanggan dari Master Cetak, Tunggakan, CID, dan Riwayat Baca Meter secara bersamaan.</p>
+    <div id="initialMessage" style="text-align: center; color: #777; text-shadow: none;">
+        <p>Use TARGET ID to retrieve all linked data: CID, Arrears, Billing, and Meter History.</p>
     </div>
 
     <script>
@@ -161,26 +144,26 @@
 
         function formatCurrency(amount) {
             if (typeof amount === 'number') {
-                 return `Rp ${amount.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+                 return `IDR ${amount.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
             }
             return amount;
         }
 
         function determineStatusClass(statusText) {
-            if (statusText.includes('TUNGGAKAN') || statusText.includes('EKSTRIM')) return 'status-danger';
-            if (statusText.includes('PIUTANG') || statusText.includes('ZERO') || statusText.includes('TURUN')) return 'status-warning';
+            if (statusText.includes('TUNGGAKAN') || statusText.includes('EKSTRIM') || statusText.includes('DANGER')) return 'status-danger';
+            if (statusText.includes('PIUTANG') || statusText.includes('ZERO') || statusText.includes('TURUN') || statusText.includes('WARNING')) return 'status-warning';
             return 'status-ok';
         }
         
         function renderTable(title, data, singleRow = false) {
             if (!data || (Array.isArray(data) && data.length === 0)) {
-                return `<h4 style="margin-top: 20px; color: #2c3e50;">${title}</h4><p>Tidak ada data ditemukan.</p>`;
+                return `<h4 style="margin-top: 20px; color: #ff00ff;">${title}</h4><p style="color:#ff00ff;">[!] No data payload found.</p>`;
             }
             
             const listData = Array.isArray(data) ? data : [data];
             const headers = Object.keys(listData[0]);
             
-            let tableHtml = `<h4 style="margin-top: 20px; color: #2c3e50;">${title} (${listData.length} baris)</h4>`;
+            let tableHtml = `<h4 style="margin-top: 20px; color: var(--primary-color);">${title} (${listData.length} RECORDS)</h4>`;
             tableHtml += '<div class="data-table-wrapper"><table class="data-table"><thead><tr>';
             
             // Header Row
@@ -194,7 +177,7 @@
                 tableHtml += '<tr>';
                 headers.forEach(h => {
                     let cellValue = item[h];
-                    if (h.includes('NOMINAL') || h.includes('JUMLAH')) {
+                    if (h.includes('NOMINAL') || h.includes('JUMLAH') || h.includes('AMOUNT')) {
                         cellValue = formatCurrency(cellValue);
                     }
                     tableHtml += `<td data-label="${h.replace(/_/g, ' ')}">${cellValue}</td>`;
@@ -214,31 +197,43 @@
             
             const statusFinancialClass = determineStatusClass(statusFinansial);
             const statusUsageClass = determineStatusClass(statusPemakaian);
+            
+            // Mapping names to Hacker Theme
+            const NAMA = data.summary.NAMA || 'TARGET NAME UNKNOWN';
+            const ALAMAT = data.summary.ALAMAT || 'N/A';
+            const TIPE_PLGGN = data.summary.TIPE_PLGGN || 'N/A';
+            const PEMBAYARAN_TERAKHIR = data.summary.PEMBAYARAN_TERAKHIR || 'NO RECENT ACTIVITY';
+            const STATUS_FINANSIAL_DISPLAY = statusFinansial.toUpperCase().replace(/PIUTANG/g, 'BILL').replace(/TUNGGAKAN/g, 'DEBT');
+            const STATUS_PEMAKAIAN_DISPLAY = statusPemakaian.toUpperCase().replace(/PEMAKAIAN/g, 'USAGE').replace(/ZERO/g, 'Z-FLOW');
 
             healthSummary.innerHTML = `
                 <div class="summary-card status-ok">
-                    <h4>NOMEN</h4>
+                    <h4>TARGET ID</h4>
                     <p>${data.summary.NOMEN}</p>
                 </div>
-                <div class="summary-card" style="border-left-color: var(--primary-color);">
-                    <h4>NAMA PELANGGAN</h4>
-                    <p>${data.summary.NAMA}</p>
+                <div class="summary-card" style="border-left-color: var(--secondary-color);">
+                    <h4>TARGET NAME</h4>
+                    <p>${NAMA}</p>
+                </div>
+                 <div class="summary-card" style="border-left-color: var(--primary-color);">
+                    <h4>SEGMENT</h4>
+                    <p>${TIPE_PLGGN}</p>
                 </div>
                 <div class="summary-card ${statusFinancialClass}">
-                    <h4>TOTAL PIUTANG</h4>
+                    <h4>TOTAL OBLIGATION</h4>
                     <p>${totalPiutang}</p>
                 </div>
                 <div class="summary-card ${statusFinancialClass}">
-                    <h4>STATUS FINANSIAL</h4>
-                    <p>${statusFinansial}</p>
+                    <h4>FINANCIAL STATUS</h4>
+                    <p>${STATUS_FINANSIAL_DISPLAY}</p>
                 </div>
                 <div class="summary-card ${statusUsageClass}">
-                    <h4>STATUS PEMAKAIAN</h4>
-                    <p>${statusPemakaian}</p>
+                    <h4>USAGE ANOMALY</h4>
+                    <p>${STATUS_PEMAKAIAN_DISPLAY}</p>
                 </div>
-                <div class="summary-card" style="border-left-color: #6c757d;">
-                    <h4>PEMBAYARAN TERAKHIR</h4>
-                    <p>${data.summary.PEMBAYARAN_TERAKHIR}</p>
+                <div class="summary-card" style="border-left-color: #777;">
+                    <h4>LAST PAYMENT DATE</h4>
+                    <p>${PEMBAYARAN_TERAKHIR}</p>
                 </div>
             `;
             
@@ -246,16 +241,16 @@
             detailsContainer.innerHTML = '';
             
             // CID Data (Master Statis)
-            detailsContainer.innerHTML += renderTable("Master Data Pelanggan (CID)", data.cid_data);
+            detailsContainer.innerHTML += renderTable("DATA PAYLOAD 1: HOST MASTER (CID)", data.cid_data);
 
             // MC Data (Piutang Berjalan Bulan Ini)
-            detailsContainer.innerHTML += renderTable("Piutang Berjalan (MC - Bulan Ini)", data.mc_data);
+            detailsContainer.innerHTML += renderTable("DATA PAYLOAD 2: CURRENT BILLING (MC)", data.mc_data);
             
             // ARDEBT Data (Tunggakan Historis)
-            detailsContainer.innerHTML += renderTable("Detail Tunggakan (ARDEBT)", data.ardebt_data);
+            detailsContainer.innerHTML += renderTable("DATA PAYLOAD 3: ARREARS DETAIL (ARDEBT)", data.ardebt_data);
 
             // SBRS Data (Riwayat Baca Meter)
-            detailsContainer.innerHTML += renderTable("Riwayat Baca Meter (SBRS - Terakhir)", data.sbrs_data);
+            detailsContainer.innerHTML += renderTable("DATA PAYLOAD 4: METER LOG HISTORY (SBRS - RECENT)", data.sbrs_data);
             
             resultsArea.style.display = 'block';
             initialMessage.style.display = 'none';
@@ -264,12 +259,12 @@
         async function performSearch() {
             const nomen = nomenInput.value.trim();
             if (!nomen) {
-                searchStatus.innerHTML = '<span class="status-danger">Masukkan NOMEN yang valid.</span>';
+                searchStatus.innerHTML = `<span class="status-danger">[ERROR] INPUT REQUIRED. ENTER TARGET ID.</span>`;
                 resultsArea.style.display = 'none';
                 return;
             }
 
-            searchStatus.innerHTML = '<span style="color: orange;"><i class="fas fa-spinner fa-spin"></i> Mencari data terintegrasi...</span>';
+            searchStatus.innerHTML = `<span style="color: var(--secondary-color);"><i class="fas fa-spinner fa-spin"></i> TRACING TARGET ID: ${nomen}...</span>`;
             nomenTitle.textContent = nomen;
             resultsArea.style.display = 'none';
             initialMessage.style.display = 'none';
@@ -279,17 +274,17 @@
                 const result = await response.json();
 
                 if (response.status === 200 && result.status === 'success') {
-                    searchStatus.innerHTML = `<span class="status-ok">✅ Ditemukan. Klik tombol 'Cari' lagi untuk NOMEN lain.</span>`;
+                    searchStatus.innerHTML = `<span class="status-ok">✅ TRACE COMPLETE. TARGET ACQUIRED.</span>`;
                     renderResults(result);
                 } else if (response.status === 404 || result.status === 'not_found') {
-                    searchStatus.innerHTML = `<span class="status-danger">❌ NOMEN ${nomen} tidak ditemukan di Master Data.</span>`;
+                    searchStatus.innerHTML = `<span class="status-danger">❌ TARGET ${nomen} NOT FOUND IN MASTER DB.</span>`;
                     detailsContainer.innerHTML = '';
                     resultsArea.style.display = 'none';
                 } else {
-                    searchStatus.innerHTML = `<span class="status-danger">❌ Error Server: ${result.message || 'Gagal memuat data.'}</span>`;
+                    searchStatus.innerHTML = `<span class="status-danger">❌ SERVER ERROR: ${result.message || 'FAILED TO RETRIEVE PAYLOAD.'}</span>`;
                 }
             } catch (error) {
-                searchStatus.innerHTML = `<span class="status-danger">❌ Error Jaringan.</span>`;
+                searchStatus.innerHTML = `<span class="status-danger">❌ NETWORK ERROR. CONNECTION FAILURE.</span>`;
                 console.error('Fetch Error:', error);
             }
         }
