@@ -42,11 +42,11 @@ try:
     db = client[DB_NAME]
     
     # 🚨 KOLEKSI DIPISAH BERDASARKAN SUMBER DATA
-    collection_mc = db['MasterCetak']   # MC (Piutang/Tagihan Bulanan - ARCHIVAL)
-    collection_mb = db['MasterBayar']   # MB (Koleksi Harian - ARCHIVAL)
-    collection_cid = db['CustomerData'] # CID (Data Pelanggan Statis - REPLACE TOTAL)
-    collection_sbrs = db['MeterReading'] # SBRS (Baca Meter Harian/Parsial - ARCHIVAL)
-    collection_ardebt = db['AccountReceivable'] # ARDEBT (Tunggakan Detail - REPLACE TOTAL)
+    collection_mc = db['MasterCetak']   # MC (Piutang/Tagihan Bulanan - REPLACE)
+    collection_mb = db['MasterBayar']   # MB (Koleksi Harian - APPEND)
+    collection_cid = db['CustomerData'] # CID (Data Pelanggan Statis - REPLACE)
+    collection_sbrs = db['MeterReading'] # SBRS (Baca Meter Harian/Parsial - APPEND)
+    collection_ardebt = db['AccountReceivable'] # ARDEBT (Tunggakan Detail - REPLACE)
     
     # ==========================================================
     # === START OPTIMASI: INDEXING KRITIS (SOLUSI KECEPATAN PERMANEN) ===
@@ -61,17 +61,14 @@ try:
     collection_mc.create_index([('RAYON', 1), ('PCEZ', 1)], name='idx_mc_rayon_pcez') 
     collection_mc.create_index([('STATUS', 1)], name='idx_mc_status')
     collection_mc.create_index([('TARIF', 1), ('KUBIK', 1), ('NOMINAL', 1)], name='idx_mc_tarif_volume')
-    collection_mc.create_index([('BULAN_TAHUN_DATA', 1)], name='idx_mc_bulan_tahun') # Index baru untuk Archival
 
     # MB (MasterBayar): Untuk Detail Transaksi dan Undue Check
     collection_mb.create_index([('TGL_BAYAR', -1)], name='idx_mb_paydate_desc')
     collection_mb.create_index([('NOMEN', 1)], name='idx_mb_nomen')
     collection_mb.create_index([('RAYON', 1), ('PCEZ', 1), ('TGL_BAYAR', -1)], name='idx_mb_rayon_pcez_date')
-    collection_mb.create_index([('BULAN_TAHUN_DATA', 1)], name='idx_mb_bulan_tahun') # Index baru untuk Archival
 
     # SBRS (MeterReading): Untuk Anomaly Check
     collection_sbrs.create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', -1)], name='idx_sbrs_history')
-    collection_sbrs.create_index([('BULAN_TAHUN_DATA', 1)], name='idx_sbrs_bulan_tahun') # Index baru untuk Archival
     
     # ARDEBT (AccountReceivable): Untuk Cek Tunggakan
     collection_ardebt.create_index([('NOMEN', 1)], name='idx_ardebt_nomen')
@@ -188,14 +185,8 @@ if user_list_str:
     for user_entry in user_list_str.split(','):
         try:
             username, plain_password, is_admin_str = user_entry.strip().split(':')
-            # Catatan: Hashing terjadi di sini. Pastikan raw password di .env TIDAK memiliki spasi.
             hashed_password = generate_password_hash(plain_password)
             is_admin = is_admin_str.lower() == 'true'
-            
-            # --- DEBUGGING CODE SNIPPET 1: Tampilkan password yang di-hash di startup ---
-            print(f"DEBUG: User loaded: {username}, Raw Pass: {plain_password}, Hashed Pass: {hashed_password}")
-            # --- END DEBUGGING CODE SNIPPET 1 ---
-            
             STATIC_USERS[username] = {
                 'id': username, 'password_hash': hashed_password,
                 'is_admin': is_admin, 'username': username
@@ -249,15 +240,6 @@ def login():
     if form.validate_on_submit():
         user_data_entry = STATIC_USERS.get(form.username.data)
 
-        # --- DEBUGGING CODE SNIPPET 2: Tampilkan password yang dimasukkan ---
-        print(f"DEBUG: Attempting login for user: {form.username.data}")
-        if user_data_entry:
-            stored_hash = user_data_entry['password_hash']
-            # Penting: string dari form.password.data ini akan menunjukkan spasi di awal/akhir jika ada
-            print(f"DEBUG: Input Password Received: '{form.password.data}' (Check for SPACES or CAPS!)")
-            print(f"DEBUG: Stored Hash: {stored_hash}")
-        # --- END DEBUGGING CODE SNIPPET 2 ---
-        
         if user_data_entry and check_password_hash(user_data_entry['password_hash'], form.password.data):
             user = User(user_data_entry) 
             login_user(user)
@@ -304,7 +286,7 @@ def search_nomen():
                 "message": f"NOMEN {query_nomen} tidak ditemukan di Master Data Pelanggan (CID)."
             }), 404
 
-        # 2. PIUTANG BERJALAN (MC) - Snapshot Bulan Ini (Tidak ada filter bulan terbaru di sini)
+        # 2. PIUTANG BERJALAN (MC) - Snapshot Bulan Ini
         mc_results = list(collection_mc.find({'NOMEN': cleaned_nomen}))
         piutang_nominal_total = sum(item.get('NOMINAL', 0) for item in mc_results)
         
@@ -1233,7 +1215,7 @@ def admin_upload_unified_page():
 @login_required 
 @admin_required 
 def upload_mc_data():
-    """Mode GANTI PER BULAN (Archival): Untuk Master Cetak (MC) / Piutang Bulanan."""
+    """Mode GANTI: Untuk Master Cetak (MC) / Piutang Bulanan. (DIPERBAIKI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
     
@@ -1243,12 +1225,6 @@ def upload_mc_data():
     file = request.files['file']
     if file.filename == '' or not allowed_file(file.filename):
         return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
-
-    # >>> ARCHIVAL CHANGE 1/3: Get Month/Year
-    data_month_year = request.form.get('data_month_year') 
-    if not data_month_year or not re.match(r'^\d{6}$', data_month_year): 
-        return jsonify({"message": "Gagal: Harap tentukan Periode Data (MMYYYY) untuk arsip historis MC."}), 400
-    # <<<
 
     filename = secure_filename(file.filename)
     file_extension = filename.rsplit('.', 1)[1].lower()
@@ -1261,40 +1237,48 @@ def upload_mc_data():
         
         df.columns = [col.strip().upper() for col in df.columns]
         
-        # --- NORMALISASI MC ---
+        # ===============================================================
+        # >>> PERBAIKAN KRITIS MC: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        # ===============================================================
+        
+        # Target kolom kunci MC untuk konsistensi
         columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF'] 
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize_mc:
+                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
                 df[col] = df[col].astype(str).str.strip().str.upper()
+                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
             
+            # Kolom finansial MC
             if col in ['NOMINAL', 'NOMINAL_AKHIR', 'KUBIK', 'SUBNOMINAL', 'ANG_BP', 'DENDA', 'PPN']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
+        # PETA ULANG KOLOM: MC.PC digunakan sebagai RAYON
         if 'PC' in df.columns:
              df = df.rename(columns={'PC': 'RAYON'})
-        # --- END NORMALISASI ---
+        
+        # Hapus kolom RAYON lama jika ada konflik, tapi karena MC sampel tidak ada RAYON, ini akan membuat data konsisten.
 
-        # >>> ARCHIVAL CHANGE 2/3: Add Month/Year Column
-        df['BULAN_TAHUN_DATA'] = data_month_year
-        # <<<
+        # ===============================================================
+        # >>> END PERBAIKAN KRITIS MC <<<
+        # ===============================================================
 
         data_to_insert = df.to_dict('records')
         
-        # >>> ARCHIVAL CHANGE 3/3: REPLACE only for this month
-        delete_result = collection_mc.delete_many({'BULAN_TAHUN_DATA': data_month_year})
-        
+        # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE)
+        collection_mc.delete_many({})
         collection_mc.insert_many(data_to_insert)
         count = len(data_to_insert)
         
         # --- RETURN REPORT ---
         return jsonify({
             "status": "success",
-            "message": f"Sukses! {count} baris Master Cetak (MC) untuk periode {data_month_year} berhasil MENGGANTI data periode yang sama. ({delete_result.deleted_count} baris lama dihapus).",
+            "message": f"Sukses! {count} baris Master Cetak (MC) berhasil MENGGANTI data lama.",
             "summary_report": {
                 "total_rows": count,
-                "type": "REPLACE_MONTHLY",
+                "type": "REPLACE",
                 "replaced_count": count
             },
             "anomaly_list": []
@@ -1309,7 +1293,7 @@ def upload_mc_data():
 @login_required 
 @admin_required 
 def upload_mb_data():
-    """Mode GANTI PER BULAN (Archival): Untuk Master Bayar (MB) / Koleksi Harian."""
+    """Mode APPEND: Untuk Master Bayar (MB) / Koleksi Harian. (DIPERBAIKI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -1319,12 +1303,6 @@ def upload_mb_data():
     file = request.files['file']
     if file.filename == '' or not allowed_file(file.filename):
         return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
-        
-    # >>> ARCHIVAL CHANGE 1/3: Get Month/Year
-    data_month_year = request.form.get('data_month_year') 
-    if not data_month_year or not re.match(r'^\d{6}$', data_month_year): 
-        return jsonify({"message": "Gagal: Harap tentukan Periode Data (MMYYYY) untuk arsip historis MB."}), 400
-    # <<<
 
     filename = secure_filename(file.filename)
     file_extension = filename.rsplit('.', 1)[1].lower()
@@ -1337,41 +1315,64 @@ def upload_mb_data():
         
         df.columns = [col.strip().upper() for col in df.columns]
         
-        # --- NORMALISASI MB ---
+        # ===============================================================
+        # >>> PERBAIKAN KRITIS MB: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        # ===============================================================
+
+        # Target kolom kunci MB untuk konsistensi
         columns_to_normalize_mb = ['NOMEN', 'RAYON', 'PCEZ', 'ZONA_NOREK', 'LKS_BAYAR', 'BULAN_REK', 'NOTAGIHAN'] 
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize_mb:
+                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
                 df[col] = df[col].astype(str).str.strip().str.upper()
+                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
 
-            if col in ['NOMINAL', 'SUBNOMINAL', 'BEATETAP', 'BEA_SEWA']:
+            if col in ['NOMINAL', 'SUBNOMINAL', 'BEATETAP', 'BEA_SEWA']: # Kolom finansial MB
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        # --- END NORMALISASI ---
+        
+        # Catatan: Kolom MB NOMEN dan ZONA_NOREK sama-sama menjadi kunci NOMEN/ID. 
+        # Kita andalkan NOMEN untuk join, yang sudah di-clean.
 
-        # >>> ARCHIVAL CHANGE 2/3: Add Month/Year Column
-        df['BULAN_TAHUN_DATA'] = data_month_year
-        # <<<
+        # ===============================================================
+        # >>> END PERBAIKAN KRITIS MB <<<
+        # ===============================================================
 
         data_to_insert = df.to_dict('records')
         
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
-        # >>> ARCHIVAL CHANGE 3/3: REPLACE only for this month
-        delete_result = collection_mb.delete_many({'BULAN_TAHUN_DATA': data_month_year})
+        # OPERASI KRITIS: APPEND DATA BARU DENGAN PENCEGAHAN DUPLIKASI
+        inserted_count = 0
+        skipped_count = 0
+        total_rows = len(data_to_insert)
         
-        collection_mb.insert_many(data_to_insert)
-        count = len(data_to_insert)
+        # Kunci unik: NOTAGIHAN (dari MB) + TGL_BAYAR
+        UNIQUE_KEYS = ['NOTAGIHAN', 'TGL_BAYAR', 'NOMINAL'] 
+        
+        if not all(key in df.columns for key in UNIQUE_KEYS):
+            return jsonify({"message": f"Gagal Append: File MB harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)}. Cek file Anda."}), 400
+
+        for record in data_to_insert:
+            filter_query = {key: record.get(key) for key in UNIQUE_KEYS}
+            
+            if collection_mb.find_one(filter_query):
+                skipped_count += 1
+            else:
+                collection_mb.insert_one(record)
+                inserted_count += 1
         
         # --- RETURN REPORT ---
         return jsonify({
             "status": "success",
-            "message": f"Sukses! {count} baris Master Bayar (MB) untuk periode {data_month_year} berhasil MENGGANTI data periode yang sama. ({delete_result.deleted_count} baris lama dihapus).",
+            "message": f"Sukses Append! {inserted_count} baris Master Bayar (MB) baru ditambahkan. ({skipped_count} duplikat diabaikan).",
             "summary_report": {
-                "total_rows": count,
-                "type": "REPLACE_MONTHLY",
-                "replaced_count": count
+                "total_rows": total_rows,
+                "type": "APPEND",
+                "inserted_count": inserted_count,
+                "skipped_count": skipped_count
             },
             "anomaly_list": []
         }), 200
@@ -1385,7 +1386,7 @@ def upload_mb_data():
 @login_required 
 @admin_required 
 def upload_cid_data():
-    """Mode GANTI: Untuk Customer Data (CID) / Data Pelanggan Statis. (REPLACE TOTAL)"""
+    """Mode GANTI: Untuk Customer Data (CID) / Data Pelanggan Statis. (DIPERBAIKI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -1412,21 +1413,32 @@ def upload_cid_data():
             if df[col].dtype == 'object':
                 df[col] = df[col].astype(str).str.strip()
         
-        # --- NORMALISASI CID ---
+        # ===============================================================
+        # >>> PERBAIKAN KRITIS CID: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        # ===============================================================
+        
+        # Target kolom yang sering bermasalah pada Grouping Key
         columns_to_normalize = ['MERK', 'READ_METHOD', 'TIPEPLGGN', 'RAYON', 'NOMEN', 'TARIFF']
         
         for col in columns_to_normalize:
             if col in df.columns:
+                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
                 df[col] = df[col].astype(str).str.strip().str.upper()
+                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
         
+        # CID menggunakan TARIFF untuk Tarif, rename agar konsisten dengan MC (TARIF)
         if 'TARIFF' in df.columns:
              df = df.rename(columns={'TARIFF': 'TARIF'})
-        # --- END NORMALISASI ---
+
+
+        # ===============================================================
+        # >>> END PERBAIKAN KRITIS CID <<<
+        # ===============================================================
 
         data_to_insert = df.to_dict('records')
         
-        # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE TOTAL)
+        # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE)
         collection_cid.delete_many({})
         collection_cid.insert_many(data_to_insert)
         count = len(data_to_insert)
@@ -1452,7 +1464,7 @@ def upload_cid_data():
 @login_required 
 @admin_required 
 def upload_sbrs_data():
-    """Mode GANTI PER BULAN (Archival): Untuk Riwayat Baca Meter (SBRS)."""
+    """Mode APPEND: Untuk data Baca Meter (SBRS) / Riwayat Stand Meter. (DIPERBAIKI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -1462,12 +1474,6 @@ def upload_sbrs_data():
     file = request.files['file']
     if file.filename == '' or not allowed_file(file.filename):
         return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
-
-    # >>> ARCHIVAL CHANGE 1/3: Get Month/Year
-    data_month_year = request.form.get('data_month_year') 
-    if not data_month_year or not re.match(r'^\d{6}$', data_month_year): 
-        return jsonify({"message": "Gagal: Harap tentukan Periode Data (MMYYYY) untuk arsip historis SBRS."}), 400
-    # <<<
 
     filename = secure_filename(file.filename)
     file_extension = filename.rsplit('.', 1)[1].lower()
@@ -1481,37 +1487,58 @@ def upload_sbrs_data():
         
         df.columns = [col.strip().upper() for col in df.columns]
 
-        # --- NORMALISASI SBRS ---
+        # ===============================================================
+        # >>> PERBAIKAN KRITIS SBRS: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        # ===============================================================
+        
+        # Target kolom kunci SBRS untuk join konsisten dengan CID
         columns_to_normalize_sbrs = ['CMR_ACCOUNT', 'CMR_RD_DATE', 'CMR_READER'] 
 
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize_sbrs:
+                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
                 df[col] = df[col].astype(str).str.strip().str.upper()
+                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
 
+            # Kolom numerik penting untuk SBRS
             if col in ['CMR_PREV_READ', 'CMR_READING', 'CMR_KUBIK']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        # --- END NORMALISASI ---
+        
+        # ===============================================================
+        # >>> END PERBAIKAN KRITIS SBRS <<<
+        # ===============================================================
 
-        # >>> ARCHIVAL CHANGE 2/3: Add Month/Year Column
-        df['BULAN_TAHUN_DATA'] = data_month_year
-        # <<<
 
         data_to_insert = df.to_dict('records')
         
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
-        # >>> ARCHIVAL CHANGE 3/3: REPLACE only for this month
-        delete_result = collection_sbrs.delete_many({'BULAN_TAHUN_DATA': data_month_year})
+        # OPERASI KRITIS: APPEND DATA BARU DENGAN PENCEGAHAN DUPLIKASI
+        inserted_count = 0
+        skipped_count = 0
+        total_rows = len(data_to_insert)
         
-        collection_sbrs.insert_many(data_to_insert)
-        count = len(data_to_insert)
+        # Kunci unik: cmr_account (NOMEN) + cmr_rd_date (Tanggal Baca)
+        UNIQUE_KEYS = ['CMR_ACCOUNT', 'CMR_RD_DATE'] 
+        
+        if not all(key in df.columns for key in UNIQUE_KEYS):
+            return jsonify({"message": f"Gagal Append: File SBRS harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)}. Cek file Anda."}), 400
+
+        for record in data_to_insert:
+            filter_query = {key: record.get(key) for key in UNIQUE_KEYS}
+            
+            if collection_sbrs.find_one(filter_query):
+                skipped_count += 1
+            else:
+                collection_sbrs.insert_one(record)
+                inserted_count += 1
         
         # === ANALISIS ANOMALI INSTAN SETELAH INSERT ===
         anomaly_list = []
         try:
-            if count > 0:
+            if inserted_count > 0:
                 # Dapatkan anomali dari SBRS yang baru diupdate
                 anomaly_list = _get_sbrs_anomalies(collection_sbrs, collection_cid)
         except Exception as e:
@@ -1522,13 +1549,14 @@ def upload_sbrs_data():
         # --- RETURN REPORT ---
         return jsonify({
             "status": "success",
-            "message": f"Sukses! {count} baris Riwayat Baca Meter (SBRS) untuk periode {data_month_year} berhasil MENGGANTI data periode yang sama. ({delete_result.deleted_count} baris lama dihapus).",
+            "message": f"Sukses Append! {inserted_count} baris Riwayat Baca Meter (SBRS) baru ditambahkan. ({skipped_count} duplikat diabaikan).",
             "summary_report": {
-                "total_rows": count,
-                "type": "REPLACE_MONTHLY",
-                "replaced_count": count
+                "total_rows": total_rows,
+                "type": "APPEND",
+                "inserted_count": inserted_count,
+                "skipped_count": skipped_count
             },
-            "anomaly_list": anomaly_list
+            "anomaly_list": []
         }), 200
         # --- END RETURN REPORT ---
 
@@ -1540,7 +1568,7 @@ def upload_sbrs_data():
 @login_required 
 @admin_required 
 def upload_ardebt_data():
-    """Mode GANTI: Untuk data Detail Tunggakan (ARDEBT). (REPLACE TOTAL)"""
+    """Mode GANTI: Untuk data Detail Tunggakan (ARDEBT). (DIPERBAIKI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
     
@@ -1562,24 +1590,34 @@ def upload_ardebt_data():
         
         df.columns = [col.strip().upper() for col in df.columns]
         
-        # --- NORMALISASI ARDEBT ---
+        # ===============================================================
+        # >>> PERBAIKAN KRITIS ARDEBT: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        # ===============================================================
+
+        # Target kolom kunci ARDEBT untuk konsistensi
         columns_to_normalize_ardebt = ['NOMEN', 'RAYON', 'TIPEPLGGN'] 
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize_ardebt:
+                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
                 df[col] = df[col].astype(str).str.strip().str.upper()
+                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
             
+            # Kolom numerik penting
             if col in ['JUMLAH', 'VOLUME']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        # --- END NORMALISASI ---
+
+        # ===============================================================
+        # >>> END PERBAIKAN KRITIS ARDEBT <<<
+        # ===============================================================
 
         data_to_insert = df.to_dict('records')
         
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
-        # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE TOTAL)
+        # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE)
         collection_ardebt.delete_many({})
         collection_ardebt.insert_many(data_to_insert)
         count = len(data_to_insert)
