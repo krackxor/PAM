@@ -552,14 +552,13 @@ def collection_detail_api():
     mongo_query = {} 
     
     if query_str:
-        safe_query_str = re.escape(query_str.upper())
+        safe_query_str = re.escape(query_str)
         search_filter = {
             '$or': [
-                {'RAYON': {'$regex': safe_query_str}}, 
-                {'PCEZ': {'$regex': safe_query_str}},
-                {'NOMEN': {'$regex': safe_query_str}},
-                {'ZONA_NOREK': {'$regex': safe_query_str}}, 
-                {'LKS_BAYAR': {'$regex': safe_query_str}} 
+                {'RAYON': {'$regex': safe_query_str, '$options': 'i'}}, 
+                {'PCEZ': {'$regex': safe_query_str, '$options': 'i'}},
+                {'NOMEN': {'$regex': safe_query_str, '$options': 'i'}},
+                {'ZONA_NOREK': {'$regex': safe_query_str, '$options': 'i'}} 
             ]
         }
         mongo_query.update(search_filter)
@@ -578,7 +577,7 @@ def collection_detail_api():
             pay_dt = doc.get('TGL_BAYAR', '')
             bulan_rek = doc.get('BULAN_REK', '')
             
-            is_undue = bulan_rek == doc.get('BULAN_REK', 'N/A')
+            is_undue = bulan_rek == this_month_str 
             
             cleaned_results.append({
                 'NOMEN': doc.get('NOMEN', 'N/A'),
@@ -714,7 +713,7 @@ def analyze_volume_fluctuation_api():
 # === API GROUPING MC KUSTOM (BARU DARI PERMINTAAN USER) ===
 # =========================================================================
 
-# 1. API DETAIL (Mengembalikan Summary Total Kustom)
+# 1. API DETAIL (Mengembalikan Summary Total Kustom + Breakdowns)
 @app.route('/api/analyze/mc_grouping', methods=['GET'])
 @login_required 
 def analyze_mc_grouping_api():
@@ -724,10 +723,10 @@ def analyze_mc_grouping_api():
     try:
         pipeline_grouping = [
             {'$project': {
-                'NOMEN': '$NOMEN', 
+                'NOMEN': '$NOMEN', # Relying on clean string from upload
                 'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
                 'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
-                'TARIF': '$TARIF', 
+                'TARIF': '$TARIF', # Relying on clean string from upload
             }},
             {'$lookup': {
                'from': 'CustomerData', 
@@ -751,9 +750,8 @@ def analyze_mc_grouping_api():
                 'CLEAN_RAYON': {'$in': ['34', '35']} 
             }},
             
-            # >>> START GROUPING: CALCULATING ALL REQUESTED METRICS <<<
             {'$facet': {
-                // 1. Overall and Rayon Totals
+                # 1. Overall and Rayon Totals (Summary)
                 "summaryTotals": [
                     {'$group': {
                         '_id': { 'rayon': '$CLEAN_RAYON' }, 
@@ -775,7 +773,7 @@ def analyze_mc_grouping_api():
                     }}
                 ],
                 
-                // 2. Breakdown by TARIF
+                # 2. Breakdown by TARIF
                 "breakdown_tarif": [
                     {'$group': {
                         '_id': '$TARIF',
@@ -791,7 +789,7 @@ def analyze_mc_grouping_api():
                     {'$sort': {'TARIF': 1}}
                 ],
                 
-                // 3. Breakdown by MERK
+                # 3. Breakdown by MERK
                 "breakdown_merk": [
                     {'$group': {
                         '_id': '$CLEAN_MERK',
@@ -807,7 +805,7 @@ def analyze_mc_grouping_api():
                     {'$sort': {'MERK': 1}}
                 ],
                 
-                // 4. Breakdown by READ_METHOD
+                # 4. Breakdown by READ_METHOD
                 "breakdown_read_method": [
                     {'$group': {
                         '_id': '$CLEAN_READ_METHOD',
@@ -824,7 +822,7 @@ def analyze_mc_grouping_api():
                 ]
             }},
             
-            // 5. Final Output Restructuring
+            # 5. Final Output Restructuring
             {'$project': {
                 '_id': 0,
                 'summary_totals': {
@@ -834,6 +832,7 @@ def analyze_mc_grouping_api():
                             'TotalPelangganAll': '$$summary.TotalPelangganAll',
                             'TotalNominalAll': {'$round': ['$$summary.TotalNominalAll', 2]},
                             'TotalKubikAll': {'$round': ['$$summary.TotalKubikAll', 2]},
+                            # Calculate Rayon 34 and 35 totals from RayonDetails array
                             'TotalPelanggan34': {'$ifNull': [{'$arrayElemAt': ['$summary.RayonDetails.NomenCount', {'$indexOfArray': ['$summary.RayonDetails.Rayon', '34']}]}, 0]},
                             'TotalPelanggan35': {'$ifNull': [{'$arrayElemAt': ['$summary.RayonDetails.NomenCount', {'$indexOfArray': ['$summary.RayonDetails.Rayon', '35']}]}, 0]},
                             'TotalNominal34': {'$round': [{'$ifNull': [{'$arrayElemAt': ['$summary.RayonDetails.Nominal', {'$indexOfArray': ['$summary.RayonDetails.Rayon', '34']}]}, 0]}, 2]},
@@ -847,13 +846,11 @@ def analyze_mc_grouping_api():
                 'breakdown_merk': '$breakdown_merk',
                 'breakdown_read_method': '$breakdown_read_method',
             }}
-            // >>> END GROUPING: CALCULATING ALL REQUESTED METRICS <<<
         ]
         grouping_data = list(collection_mc.aggregate(pipeline_grouping))
         
         # Perbaiki penanganan error/empty result: jika kosong, kembalikan [] dan status 200
         if not grouping_data:
-            # Mengembalikan struktur summary kosong jika tidak ada data yang cocok
              return jsonify({
                 "summary_totals": {
                     "TotalPelangganAll": 0, "TotalPelanggan34": 0, "TotalPelanggan35": 0,
@@ -873,7 +870,6 @@ def analyze_mc_grouping_api():
         return jsonify({"message": f"Gagal mengambil data grouping MC. Detail teknis error: {e}"}), 500
 
 # 2. API SUMMARY (Untuk KPI Cards di collection_unified.html)
-# Fungsi ini tetap ada untuk kompatibilitas dan summary cepat di KPI cards
 @app.route('/api/analyze/mc_grouping/summary', methods=['GET'])
 @login_required 
 def analyze_mc_grouping_summary_api():
