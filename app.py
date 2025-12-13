@@ -295,7 +295,7 @@ def search_nomen():
         tunggakan_nominal_total = sum(item.get('JUMLAH', 0) for item in ardebt_results)
         
         # 4. RIWAYAT PEMBAYARAN TERAKHIR (MB)
-        # FIX KRITIS: Menggunakan find_one dengan sort untuk mencegah cursor consumption/list index out of range
+        # FIX KRITIS: Menggunakan find_one dengan sort untuk menghindari list index out of range dan konsumsi kursor ganda
         last_payment = collection_mb.find_one(
             {'NOMEN': cleaned_nomen},
             sort=[('TGL_BAYAR', -1)]
@@ -303,9 +303,7 @@ def search_nomen():
         
         # 5. RIWAYAT BACA METER (SBRS)
         # FIX KRITIS: Mengambil list secara eksplisit
-        sbrs_history = list(collection_sbrs.find(
-            {'CMR_ACCOUNT': cleaned_nomen}
-        ).sort('CMR_RD_DATE', -1).limit(2))
+        sbrs_history = list(collection_sbrs.find({'CMR_ACCOUNT': cleaned_nomen}).sort('CMR_RD_DATE', -1).limit(2))
         
         # --- LOGIKA KECERDASAN (INTEGRASI & DIAGNOSTIK) ---
         
@@ -323,8 +321,9 @@ def search_nomen():
         # C. Status Pemakaian (Anomaly Check)
         status_pemakaian = "DATA SBRS KURANG"
         kubik_terakhir = 0
+        
+        # Cek Aman: Memastikan list tidak kosong sebelum diakses
         if len(sbrs_history) >= 1:
-            # Akses aman karena list length sudah dicek
             kubik_terakhir = sbrs_history[0].get('CMR_KUBIK', 0)
             
             if kubik_terakhir > 100: # Threshold Ekstrim
@@ -365,6 +364,7 @@ def search_nomen():
 
     except Exception as e:
         print(f"Error saat mencari data terintegrasi: {e}")
+        # Jika terjadi error Python internal, kembalikan JSON error yang valid
         return jsonify({"message": f"Gagal mengambil data terintegrasi: {e}"}), 500
 
 # --- ENDPOINT KOLEKSI DAN ANALISIS LAINNYA ---
@@ -1420,7 +1420,7 @@ def upload_sbrs_data():
                 collection_sbrs.insert_one(record)
                 inserted_count += 1
         
-        # === ANALISIS ANOMALI INSTAN SETELAN INSERT ===
+        # === ANALISIS ANOMALI INSTAN SETELAH INSERT ===
         anomaly_list = []
         try:
             if inserted_count > 0:
