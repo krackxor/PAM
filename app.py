@@ -711,7 +711,7 @@ def analyze_volume_fluctuation_api():
         return jsonify({"message": f"Gagal mengambil data fluktuasi volume. Detail teknis error: {e}"}), 500
         
 # =========================================================================
-# === API GROUPING MC KUSTOM (KEMBALI KE MODE GROUPING KOKOH) ===
+# === API GROUPING MC KUSTOM (BARU DARI PERMINTAAN USER) ===
 # =========================================================================
 
 # 1. API DETAIL (Untuk Laporan Grouping Penuh - MODE GROUPING KOKOH -> SIMPLIFIKASI)
@@ -738,25 +738,25 @@ def analyze_mc_grouping_api():
             # Unwind dipertahankan, karena filter akan menyingkirkan hasil join yang gagal
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
             
-            # --- NORMALISASI DATA UNTUK FILTER ---
+            // --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
-                # Normalisasi di sini menggunakan data yang sudah di-clean saat upload (UPPERCASE STRING)
+                // Normalisasi di sini menggunakan data yang sudah di-clean saat upload (UPPERCASE STRING)
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},
                 'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
                 'CLEAN_MERK': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
                 'CLEAN_READ_METHOD': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}}}}},
             }},
-            # --- END NORMALISASI ---
+            // --- END NORMALISASI ---
             
             {'$match': {
-                # Filter menggunakan STRING KAPITAL yang sudah di-clean
+                // Filter menggunakan STRING KAPITAL yang sudah di-clean
                 'CLEAN_TIPEPLGGN': 'REG',
-                'CLEAN_RAYON': {'$in': ['34', '35']} # Filter menggunakan string, konsisten dengan CID upload
+                'CLEAN_RAYON': {'$in': ['34', '35']} // Filter menggunakan string, konsisten dengan CID upload
             }},
             
-            # >>> START SIMPLIFIKASI: Mengubah ke Summary Total <<<
+            // >>> START SIMPLIFIKASI: Mengubah ke Summary Total <<<
             {'$group': {
-                '_id': None, // Group semua dokumen menjadi satu untuk mendapatkan grand totals
+                '_id': None, # Group semua dokumen menjadi satu untuk mendapatkan grand totals
                 'TotalNomenKustom': {'$addToSet': '$NOMEN'}, 
                 'SumOfKUBIK': {'$sum': '$KUBIK'},
                 'SumOfNOMINAL': {'$sum': '$NOMINAL'},
@@ -768,7 +768,7 @@ def analyze_mc_grouping_api():
                 'TotalPiutangKubik': {'$round': ['$SumOfKUBIK', 2]},
                 'Keterangan': 'Ringkasan Total Kustom (Rayon 34/35 REG)'
             }}
-            # >>> END SIMPLIFIKASI <<<
+            // >>> END SIMPLIFIKASI <<<
         ]
         grouping_data = list(collection_mc.aggregate(pipeline_grouping))
         
@@ -783,7 +783,12 @@ def analyze_mc_grouping_api():
         print(f"Error saat menganalisis grouping MC: {e}")
         return jsonify({"message": f"Gagal mengambil data grouping MC. Detail teknis error: {e}"}), 500
 
-# 2. API SUMMARY (Untuk KPI Cards di collection_unified.html)
+// --------------------------------------------------------------------------------
+// NOTE: FUNGSI analyze_mc_tarif_breakdown_api (ITEM 3) TELAH DIPERBAIKI UNTUK MENGGUNAKAN CLEAN STRING
+// SEHINGGA SEMUA BREAKDOWN REPORT SEKARANG KONSISTEN DENGAN LOGIKA CLEANING TERBARU.
+// --------------------------------------------------------------------------------
+
+// 2. API SUMMARY (Untuk KPI Cards di collection_unified.html)
 @app.route('/api/analyze/mc_grouping/summary', methods=['GET'])
 @login_required 
 def analyze_mc_grouping_summary_api():
@@ -800,12 +805,12 @@ def analyze_mc_grouping_summary_api():
             }},
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}},
             
-            # --- NORMALISASI DATA UNTUK FILTER ---
+            // --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}}, 
                 'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
             }},
-            # --- END NORMALISASI ---
+            // --- END NORMALISASI ---
             
             {'$match': {
                 'CLEAN_TIPEPLGGN': 'REG',
@@ -839,7 +844,7 @@ def analyze_mc_grouping_summary_api():
         print(f"Error saat mengambil summary grouping MC: {e}")
         return jsonify({"message": f"Gagal mengambil summary grouping MC. Detail teknis error: {e}"}), 500
 
-# 3. API BREAKDOWN TARIF (Untuk Tabel Distribusi di collection_unified.html)
+// 3. API BREAKDOWN TARIF (Untuk Tabel Distribusi di collection_unified.html)
 @app.route('/api/analyze/mc_tarif_breakdown', methods=['GET'])
 @login_required 
 def analyze_mc_tarif_breakdown_api():
@@ -848,7 +853,7 @@ def analyze_mc_tarif_breakdown_api():
 
     try:
         pipeline_tarif_breakdown = [
-            # 1. Join MC ke CID
+            // 1. Join MC ke CID
             {'$lookup': {
                'from': 'CustomerData', 
                'localField': 'NOMEN',
@@ -857,19 +862,19 @@ def analyze_mc_tarif_breakdown_api():
             }},
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}},
             
-            # --- NORMALISASI DATA UNTUK FILTER ---
+            // --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}}, 
                 'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
             }},
-            # --- END NORMALISASI ---
+            // --- END NORMALISASI ---
             
             {'$match': {
                 'CLEAN_TIPEPLGGN': 'REG',
                 'CLEAN_RAYON': {'$in': ['34', '35']}
             }},
             
-            # 3. Grouping berdasarkan RAYON dan TARIF
+            // 3. Grouping berdasarkan RAYON dan TARIF
             {'$group': {
                 '_id': {
                     'RAYON': '$CLEAN_RAYON',
@@ -878,7 +883,7 @@ def analyze_mc_tarif_breakdown_api():
                 'CountOfNOMEN': {'$addToSet': '$NOMEN'},
             }},
             
-            # 4. Proyeksi Akhir dan Penghitungan Size
+            // 4. Proyeksi Akhir dan Penghitungan Size
             {'$project': {
                 '_id': 0,
                 'RAYON': '$_id.RAYON',
@@ -889,7 +894,7 @@ def analyze_mc_tarif_breakdown_api():
         ]
         breakdown_data = list(collection_mc.aggregate(pipeline_tarif_breakdown))
         
-        # Perbaiki penanganan error/empty result: jika kosong, kembalikan [] dan status 200
+        // Perbaiki penanganan error/empty result: jika kosong, kembalikan [] dan status 200
         if not breakdown_data:
             return jsonify([]), 200 
 
@@ -898,11 +903,11 @@ def analyze_mc_tarif_breakdown_api():
     except Exception as e:
         print(f"Error saat mengambil tarif breakdown MC: {e}")
         return jsonify({"message": f"Gagal mengambil tarif breakdown MC. Detail teknis error: {e}"}), 500
-# =========================================================================
-# === END API GROUPING MC KUSTOM ===
-# =========================================================================
+// =========================================================================
+// === END API GROUPING MC KUSTOM ===
+// =========================================================================
 
-# Endpoint File Upload/Merge (Dinamis)
+// Endpoint File Upload/Merge (Dinamis)
 @app.route('/analyze/upload', methods=['GET'])
 @login_required 
 def analyze_data_page():
@@ -953,7 +958,7 @@ def analyze_data():
     for i in range(1, len(all_dfs)):
         merged_df = pd.merge(merged_df, all_dfs[i], on=JOIN_KEY, how='outer', suffixes=(f'_f{i}', f'_f{i+1}'))
 
-    # Analisis Data Gabungan
+    // Analisis Data Gabungan
     data_summary = {
         "file_name": f"Gabungan ({len(uploaded_files)} files)",
         "join_key": JOIN_KEY,
@@ -971,7 +976,7 @@ def analyze_data():
         "head": merged_df.head().to_html(classes='table table-striped') 
     }), 200
 
-# --- ENDPOINT KELOLA UPLOAD (ADMIN) ---
+// --- ENDPOINT KELOLA UPLOAD (ADMIN) ---
 @app.route('/admin/upload', methods=['GET'])
 @login_required 
 @admin_required 
@@ -1004,40 +1009,40 @@ def upload_mc_data():
         
         df.columns = [col.strip().upper() for col in df.columns]
         
-        # ===============================================================
-        # >>> PERBAIKAN KRITIS MC: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
-        # ===============================================================
+        // ===============================================================
+        // >>> PERBAIKAN KRITIS MC: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        // ===============================================================
         
-        # Target kolom kunci MC untuk konsistensi
+        // Target kolom kunci MC untuk konsistensi
         columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF', 'RAYON', 'PCEZ'] 
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize_mc:
-                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
+                // Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
                 df[col] = df[col].astype(str).str.strip().str.upper()
-                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi
+                // Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
             
-            # Kolom finansial MC
+            // Kolom finansial MC
             if col in ['NOMINAL', 'NOMINAL_AKHIR', 'KUBIK', 'SUBNOMINAL', 'ANG_BP', 'DENDA', 'PPN']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
-        # PETA ULANG KOLOM: MC.PC digunakan sebagai RAYON (jika MC tidak punya RAYON)
+        // PETA ULANG KOLOM: MC.PC digunakan sebagai RAYON (jika MC tidak punya RAYON)
         if 'PC' in df.columns and 'RAYON' not in df.columns:
              df = df.rename(columns={'PC': 'RAYON'})
         
-        # ===============================================================
-        # >>> END PERBAIKAN KRITIS MC <<<
-        # ===============================================================
+        // ===============================================================
+        // >>> END PERBAIKAN KRITIS MC <<<
+        // ===============================================================
 
         data_to_insert = df.to_dict('records')
         
-        # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE)
+        // OPERASI KRITIS: HAPUS DAN GANTI (REPLACE)
         collection_mc.delete_many({})
         collection_mc.insert_many(data_to_insert)
         count = len(data_to_insert)
         
-        # --- RETURN REPORT ---
+        // --- RETURN REPORT ---
         return jsonify({
             "status": "success",
             "message": f"Sukses! {count} baris Master Cetak (MC) berhasil MENGGANTI data lama.",
@@ -1048,7 +1053,7 @@ def upload_mc_data():
             },
             "anomaly_list": []
         }), 200
-        # --- END RETURN REPORT ---
+        // --- END RETURN REPORT ---
 
     except Exception as e:
         print(f"Error saat memproses file MC: {e}")
@@ -1080,38 +1085,38 @@ def upload_mb_data():
         
         df.columns = [col.strip().upper() for col in df.columns]
         
-        # ===============================================================
-        # >>> PERBAIKAN KRITIS MB: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
-        # ===============================================================
+        // ===============================================================
+        // >>> PERBAIKAN KRITIS MB: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        // ===============================================================
 
-        # Target kolom kunci MB untuk konsistensi
+        // Target kolom kunci MB untuk konsistensi
         columns_to_normalize_mb = ['NOMEN', 'RAYON', 'PCEZ', 'ZONA_NOREK', 'LKS_BAYAR', 'BULAN_REK', 'NOTAGIHAN'] 
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize_mb:
-                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
+                // Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
                 df[col] = df[col].astype(str).str.strip().str.upper()
-                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
+                // Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
 
-            if col in ['NOMINAL', 'SUBNOMINAL', 'BEATETAP', 'BEA_SEWA']: # Kolom finansial MB
+            if col in ['NOMINAL', 'SUBNOMINAL', 'BEATETAP', 'BEA_SEWA']: // Kolom finansial MB
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
-        # ===============================================================
-        # >>> END PERBAIKAN KRITIS MB <<<
-        # ===============================================================
+        // ===============================================================
+        // >>> END PERBAIKAN KRITIS MB <<<
+        // ===============================================================
 
         data_to_insert = df.to_dict('records')
         
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
-        # OPERASI KRITIS: APPEND DATA BARU DENGAN PENCEGAHAN DUPLIKASI
+        // OPERASI KRITIS: APPEND DATA BARU DENGAN PENCEGAHAN DUPLIKASI
         inserted_count = 0
         skipped_count = 0
         total_rows = len(data_to_insert)
         
-        # Kunci unik: NOTAGIHAN (dari MB) + TGL_BAYAR
+        // Kunci unik: NOTAGIHAN (dari MB) + TGL_BAYAR
         UNIQUE_KEYS = ['NOTAGIHAN', 'TGL_BAYAR', 'NOMINAL'] 
         
         if not all(key in df.columns for key in UNIQUE_KEYS):
@@ -1126,7 +1131,7 @@ def upload_mb_data():
                 collection_mb.insert_one(record)
                 inserted_count += 1
         
-        # --- RETURN REPORT ---
+        // --- RETURN REPORT ---
         return jsonify({
             "status": "success",
             "message": f"Sukses Append! {inserted_count} baris Master Bayar (MB) baru ditambahkan. ({skipped_count} duplikat diabaikan).",
@@ -1138,7 +1143,7 @@ def upload_mb_data():
             },
             "anomaly_list": []
         }), 200
-        # --- END RETURN REPORT ---
+        // --- END RETURN REPORT ---
 
     except Exception as e:
         print(f"Error saat memproses file MB: {e}")
@@ -1170,41 +1175,41 @@ def upload_cid_data():
         
         df.columns = [col.strip().upper() for col in df.columns]
 
-        # PEMBERSIHAN DATA AMAN
+        // PEMBERSIHAN DATA AMAN
         for col in df.columns:
             if df[col].dtype == 'object':
                 df[col] = df[col].astype(str).str.strip()
         
-        # ===============================================================
-        # >>> PERBAIKAN KRITIS CID: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
-        # ===============================================================
+        // ===============================================================
+        // >>> PERBAIKAN KRITIS CID: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        // ===============================================================
         
-        # Target kolom yang sering bermasalah pada Grouping Key
+        // Target kolom yang sering bermasalah pada Grouping Key
         columns_to_normalize = ['MERK', 'READ_METHOD', 'TIPEPLGGN', 'RAYON', 'NOMEN', 'TARIFF']
         
         for col in columns_to_normalize:
             if col in df.columns:
-                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
+                // Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
                 df[col] = df[col].astype(str).str.strip().str.upper()
-                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
+                // Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
         
-        # CID menggunakan TARIFF untuk Tarif, rename agar konsisten dengan MC (TARIF)
+        // CID menggunakan TARIFF untuk Tarif, rename agar konsisten dengan MC (TARIF)
         if 'TARIFF' in df.columns:
              df = df.rename(columns={'TARIFF': 'TARIF'})
         
-        # ===============================================================
-        # >>> END PERBAIKAN KRITIS CID <<<
-        # ===============================================================
+        // ===============================================================
+        // >>> END PERBAIKAN KRITIS CID <<<
+        // ===============================================================
 
         data_to_insert = df.to_dict('records')
         
-        # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE)
+        // OPERASI KRITIS: HAPUS DAN GANTI (REPLACE)
         collection_cid.delete_many({})
         collection_cid.insert_many(data_to_insert)
         count = len(data_to_insert)
 
-        # --- RETURN REPORT ---
+        // --- RETURN REPORT ---
         return jsonify({
             "status": "success",
             "message": f"Sukses! {count} baris Customer Data (CID) berhasil MENGGANTI data lama.",
@@ -1215,7 +1220,7 @@ def upload_cid_data():
             },
             "anomaly_list": []
         }), 200
-        # --- END RETURN REPORT ---
+        // --- END RETURN REPORT ---
 
     except Exception as e:
         print(f"Error saat memproses file CID: {e}")
@@ -1240,7 +1245,7 @@ def upload_sbrs_data():
     file_extension = filename.rsplit('.', 1)[1].lower()
 
     try:
-        # Load data
+        // Load data
         if file_extension == 'csv':
             df = pd.read_csv(file)
         elif file_extension in ['xlsx', 'xls']:
@@ -1248,27 +1253,27 @@ def upload_sbrs_data():
         
         df.columns = [col.strip().upper() for col in df.columns]
 
-        # ===============================================================
-        # >>> PERBAIKAN KRITIS SBRS: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
-        # ===============================================================
+        // ===============================================================
+        // >>> PERBAIKAN KRITIS SBRS: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        // ===============================================================
         
-        # Target kolom kunci SBRS untuk join konsisten dengan CID
+        // Target kolom kunci SBRS untuk join konsisten dengan CID
         columns_to_normalize_sbrs = ['CMR_ACCOUNT', 'CMR_RD_DATE', 'CMR_READER'] 
 
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize_sbrs:
-                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
+                // Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
                 df[col] = df[col].astype(str).str.strip().str.upper()
-                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
+                // Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
 
-            # Kolom numerik penting untuk SBRS
+            // Kolom numerik penting untuk SBRS
             if col in ['CMR_PREV_READ', 'CMR_READING', 'CMR_KUBIK']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
-        # ===============================================================
-        # >>> END PERBAIKAN KRITIS SBRS <<<
-        # ===============================================================
+        // ===============================================================
+        // >>> END PERBAIKAN KRITIS SBRS <<<
+        // ===============================================================
 
 
         data_to_insert = df.to_dict('records')
@@ -1276,12 +1281,12 @@ def upload_sbrs_data():
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
-        # OPERASI KRITIS: APPEND DATA BARU DENGAN PENCEGAHAN DUPLIKASI
+        // OPERASI KRITIS: APPEND DATA BARU DENGAN PENCEGAHAN DUPLIKASI
         inserted_count = 0
         skipped_count = 0
         total_rows = len(data_to_insert)
         
-        # Kunci unik: cmr_account (NOMEN) + cmr_rd_date (Tanggal Baca)
+        // Kunci unik: cmr_account (NOMEN) + cmr_rd_date (Tanggal Baca)
         UNIQUE_KEYS = ['CMR_ACCOUNT', 'CMR_RD_DATE'] 
         
         if not all(key in df.columns for key in UNIQUE_KEYS):
@@ -1296,18 +1301,18 @@ def upload_sbrs_data():
                 collection_sbrs.insert_one(record)
                 inserted_count += 1
         
-        # === ANALISIS ANOMALI INSTAN SETELAH INSERT ===
+        // === ANALISIS ANOMALI INSTAN SETELAH INSERT ===
         anomaly_list = []
         try:
             if inserted_count > 0:
-                # Dapatkan anomali dari SBRS yang baru diupdate
+                // Dapatkan anomali dari SBRS yang baru diupdate
                 anomaly_list = _get_sbrs_anomalies(collection_sbrs, collection_cid)
         except Exception as e:
-            # Jika analisis gagal, jangan hentikan respons sukses upload
+            // Jika analisis gagal, jangan hentikan respons sukses upload
             print(f"Peringatan: Gagal menjalankan analisis anomali instan: {e}")
-        # ============================================
+        // ============================================
 
-        # --- RETURN REPORT ---
+        // --- RETURN REPORT ---
         return jsonify({
             "status": "success",
             "message": f"Sukses Append! {inserted_count} baris Riwayat Baca Meter (SBRS) baru ditambahkan. ({skipped_count} duplikat diabaikan).",
@@ -1319,7 +1324,7 @@ def upload_sbrs_data():
             },
             "anomaly_list": []
         }), 200
-        # --- END RETURN REPORT ---
+        // --- END RETURN REPORT ---
 
     except Exception as e:
         print(f"Error saat memproses file SBRS: {e}")
@@ -1351,11 +1356,11 @@ def upload_ardebt_data():
         
         df.columns = [col.strip().upper() for col in df.columns]
 
-        # PEMBERSIHAN DATA AMAN
+        // PEMBERSIHAN DATA AMAN
         for col in df.columns:
             if df[col].dtype == 'object':
                 df[col] = df[col].astype(str).str.strip()
-            # Kolom numerik penting
+            // Kolom numerik penting
             if col in ['JUMLAH', 'VOLUME']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
@@ -1364,12 +1369,12 @@ def upload_ardebt_data():
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
-        # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE)
+        // OPERASI KRITIS: HAPUS DAN GANTI (REPLACE)
         collection_ardebt.delete_many({})
         collection_ardebt.insert_many(data_to_insert)
         count = len(data_to_insert)
         
-        # --- RETURN REPORT ---
+        // --- RETURN REPORT ---
         return jsonify({
             "status": "success",
             "message": f"Sukses! {count} baris Detail Tunggakan (ARDEBT) berhasil MENGGANTI data lama.",
@@ -1380,16 +1385,16 @@ def upload_ardebt_data():
             },
             "anomaly_list": []
         }), 200
-        # --- END RETURN REPORT ---
+        // --- END RETURN REPORT ---
 
     except Exception as e:
         print(f"Error saat memproses file ARDEBT: {e}")
         return jsonify({"message": f"Gagal memproses file ARDEBT: {e}. Pastikan format data benar."}), 500
 
 
-# =========================================================================
-# === DASHBOARD ANALYTICS ENDPOINTS (INTEGRATED) ===
-# =========================================================================
+// =========================================================================
+// === DASHBOARD ANALYTICS ENDPOINTS (INTEGRATED) ===
+// =========================================================================
 
 @app.route('/dashboard', methods=['GET'])
 @login_required
@@ -1405,10 +1410,10 @@ def dashboard_summary_api():
     try:
         summary_data = {}
         
-        # 1. TOTAL PELANGGAN (dari CID)
+        // 1. TOTAL PELANGGAN (dari CID)
         summary_data['total_pelanggan'] = collection_cid.count_documents({})
         
-        # 2. TOTAL PIUTANG & TUNGGAKAN
+        // 2. TOTAL PIUTANG & TUNGGAKAN
         pipeline_piutang = [
             {'$group': {
                 '_id': None,
@@ -1431,7 +1436,7 @@ def dashboard_summary_api():
         summary_data['total_tunggakan'] = tunggakan_result[0]['total_tunggakan'] if tunggakan_result else 0
         summary_data['jumlah_tunggakan'] = tunggakan_result[0]['jumlah_tunggakan'] if tunggakan_result else 0
         
-        # 3. KOLEKSI HARI INI (dari MB)
+        // 3. KOLEKSI HARI INI (dari MB)
         today = pd.Timestamp.now().strftime('%Y-%m-%d')
         pipeline_koleksi_today = [
             {'$match': {'TGL_BAYAR': {'$regex': today}}},
@@ -1445,7 +1450,7 @@ def dashboard_summary_api():
         summary_data['koleksi_hari_ini'] = koleksi_result[0]['koleksi_hari_ini'] if koleksi_result else 0
         summary_data['transaksi_hari_ini'] = koleksi_result[0]['transaksi_hari_ini'] if koleksi_result else 0
         
-        # 4. TOTAL KOLEKSI BULAN INI
+        // 4. TOTAL KOLEKSI BULAN INI
         this_month = pd.Timestamp.now().strftime('%Y-%m')
         pipeline_koleksi_month = [
             {'$match': {'TGL_BAYAR': {'$regex': this_month}}},
@@ -1459,15 +1464,15 @@ def dashboard_summary_api():
         summary_data['koleksi_bulan_ini'] = koleksi_month_result[0]['koleksi_bulan_ini'] if koleksi_month_result else 0
         summary_data['transaksi_bulan_ini'] = koleksi_month_result[0]['transaksi_bulan_ini'] if koleksi_month_result else 0
         
-        # 5. ANOMALI PEMAKAIAN (dari fungsi existing)
+        // 5. ANOMALI PEMAKAIAN (dari fungsi existing)
         anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
         summary_data['total_anomali'] = len(anomalies)
         
-        # Breakdown anomali per tipe
+        // Breakdown anomali per tipe
         anomali_breakdown = {}
         for item in anomalies:
             status = item.get('STATUS_PEMAKAIAN', 'UNKNOWN')
-            # Gunakan logika pengelompokan yang lebih sederhana untuk dashboard summary
+            // Gunakan logika pengelompokan yang lebih sederhana untuk dashboard summary
             if 'EKSTRIM' in status or 'NAIK' in status:
                 key = 'KENAIKAN_SIGNIFIKAN'
             elif 'TURUN' in status:
@@ -1481,11 +1486,11 @@ def dashboard_summary_api():
             
         summary_data['anomali_breakdown'] = anomali_breakdown
         
-        # 6. PELANGGAN DENGAN TUNGGAKAN (Distinct NOMEN)
+        // 6. PELANGGAN DENGAN TUNGGAKAN (Distinct NOMEN)
         pelanggan_tunggakan = collection_ardebt.distinct('NOMEN')
         summary_data['pelanggan_dengan_tunggakan'] = len(pelanggan_tunggakan)
         
-        # 7. TOP 5 RAYON DENGAN PIUTANG TERTINGGI
+        // 7. TOP 5 RAYON DENGAN PIUTANG TERTINGGI
         pipeline_top_rayon = [
             {'$group': {
                 '_id': '$RAYON',
@@ -1507,7 +1512,7 @@ def dashboard_summary_api():
             for item in top_rayon
         ]
         
-        # 8. TREN KOLEKSI 7 HARI TERAKHIR
+        // 8. TREN KOLEKSI 7 HARI TERAKHIR
         trend_data = []
         for i in range(7):
             date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
@@ -1528,7 +1533,7 @@ def dashboard_summary_api():
             })
         summary_data['tren_koleksi_7_hari'] = sorted(trend_data, key=lambda x: x['tanggal'])
         
-        # 9. PERSENTASE KOLEKSI
+        // 9. PERSENTASE KOLEKSI
         if summary_data['total_piutang'] > 0:
             summary_data['persentase_koleksi'] = (summary_data['koleksi_bulan_ini'] / summary_data['total_piutang']) * 100
         else:
