@@ -4,7 +4,55 @@
 
 {% block custom_styles %}
 /* Custom CSS untuk Tampilan Report/Detail yang Responsif */
-/* ... (CSS yang sudah ada) ... */
+.report-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+    gap: 15px;
+    margin-bottom: 30px;
+}
+.summary-card {
+    background-color: var(--card-bg);
+    padding: 15px;
+    border-radius: var(--border-radius);
+    border-left: 5px solid; 
+    box-shadow: var(--shadow-light);
+}
+.summary-card h4 { margin: 0 0 5px 0; font-size: 0.9em; text-transform: uppercase; color: #6c757d; }
+.summary-card p { margin: 0; font-size: 1.3em; font-weight: bold; }
+
+/* Wrapper scroll untuk responsivitas tabel lebar */
+.report-table-wrapper { 
+    overflow-x: auto; 
+    margin-top: 15px; 
+}
+
+/* Style Tabel Report */
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    min-width: 1000px; /* Minimal width untuk scroll horizontal yang jelas */
+}
+.report-table th, .report-table td {
+    border: 1px solid #ddd;
+    padding: 8px 6px; 
+    white-space: nowrap; 
+    text-align: right;
+}
+.report-table th {
+    background-color: #f2f2f2;
+    text-align: center;
+}
+.report-table th[rowspan="2"] {
+    min-width: 80px; /* Tambahkan min-width untuk header Rayon/PCEZ */
+}
+.report-table td:first-child, .report-table td:nth-child(2) {
+    text-align: left;
+}
+.grand-total-row td {
+    font-weight: bold;
+    background-color: #fff3cd;
+}
 
 /* Styling untuk kelompok tabel kustom (AB Sunter) */
 .breakdown-group {
@@ -20,12 +68,114 @@
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-light);
 }
-/* ... (CSS yang sudah ada) ... */
+.breakdown-table-container table {
+    min-width: auto; /* Hilangkan min-width untuk breakdown tables */
+}
+.breakdown-table-container table th:nth-child(1), 
+.breakdown-table-container table td:nth-child(1) {
+    text-align: left !important;
+}
 
-/* -------------------------------------------------------------------------- */
-/* Dihapus: Seluruh blok @media screen and (max-width: 600px) untuk tabel.
-   Sekarang tabel akan diskroll secara horizontal di perangkat mobile.
-/* -------------------------------------------------------------------------- */
+/* Filter Group Responsiveness */
+.filter-input-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 30px;
+    margin-bottom: 20px;
+}
+#filterInput {
+    flex-grow: 1;
+    padding: 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+}
+
+/* ========================================================== */
+/* MOBILE LAYOUT FIXES (< 600px) */
+/* ========================================================== */
+@media screen and (max-width: 600px) {
+    
+    /* General Grid */
+    .report-grid {
+        grid-template-columns: 1fr;
+    }
+    .breakdown-group {
+        grid-template-columns: 1fr;
+    }
+    
+    /* Filter Group: Tumpuk input dan tombol */
+    .filter-input-group {
+        flex-direction: column;
+        gap: 15px;
+    }
+    #filterInput, #searchBtn {
+        width: 100%;
+        box-sizing: border-box;
+    }
+    
+    /* Tables: Keep horizontal scroll but make it more compact/readable */
+    /* Berlaku untuk tabel utama report dan grouping MB */
+    .report-table, .collection-table {
+        min-width: 700px; /* Pertahankan min-width agar horizontal scroll berfungsi */
+        width: auto;
+    }
+    .report-table th, .report-table td, 
+    .collection-table th, .collection-table td {
+        padding: 6px 4px; /* Kompakkan padding */
+        font-size: 11px;
+    }
+    
+    /* Tabel Tarif Breakdown & Detail Listing MB: Implement Card View */
+    
+    /* Hapus bayangan/border wrapper agar tampilan card lebih bersih */
+    #tarifBreakdownArea .report-table-wrapper,
+    #customMBReportArea .report-table-wrapper {
+        border: none;
+        box-shadow: none;
+    }
+    
+    /* Card View Logic (Tabel Tarif & Detail Listing MB) */
+    #tarifBreakdownArea .report-table,
+    #customMBReportArea .report-table[style*="min-width: 600px"] { /* Hanya tabel detail listing */
+        min-width: 100% !important;
+    }
+    
+    #tarifBreakdownArea .report-table thead,
+    #customMBReportArea .report-table[style*="min-width: 600px"] thead {
+        display: none;
+    }
+    #tarifBreakdownArea .report-table tr,
+    #customMBReportArea .report-table[style*="min-width: 600px"] tr {
+        display: block;
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        border-radius: var(--border-radius);
+    }
+    #tarifBreakdownArea .report-table td,
+    #customMBReportArea .report-table[style*="min-width: 600px"] td {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 12px;
+        border: none;
+        border-bottom: 1px solid #eee;
+        text-align: right;
+        font-size: 13px; /* Ukuran font standar untuk konten card */
+    }
+    #tarifBreakdownArea .report-table td:before,
+    #customMBReportArea .report-table[style*="min-width: 600px"] td:before {
+        content: attr(data-label);
+        font-weight: bold;
+        text-align: left;
+        width: 50%;
+        color: var(--text-color);
+        padding-right: 10px;
+    }
+    #tarifBreakdownArea .grand-total-row td,
+    #customMBReportArea .grand-total-row td {
+        background-color: #f8f8f8;
+    }
+    
+}
 {% endblock %}
 
 {% block content %}
@@ -74,6 +224,9 @@
     <div id="customMBReportArea">
         <p class="no-results">Tekan "Muat Laporan Koleksi AB Sunter" untuk melihat hasil agregasi.</p>
     </div>
+    <h3 style="margin-top: 40px; color: var(--primary-color); border-top: 1px solid var(--primary-color); padding-top: 20px;">
+        <i class="fas fa-filter"></i> Pencarian Detail Transaksi MB
+    </h3>
     <div class="filter-input-group">
         <input type="text" id="filterInput" placeholder="Filter Detail (Rayon, PCEZ, NOMEN)...">
         <button id="searchBtn" class="btn-primary" style="background-color: var(--primary-color); color: white; padding: 12px 18px; border: none; border-radius: 4px;">
@@ -204,8 +357,8 @@
                 <table class="report-table">
                     <thead>
                         <tr>
-                            <th rowspan="2">RAYON</th>
-                            <th rowspan="2">PCEZ</th>
+                            <th rowspan="2" style="min-width: 80px; text-align: left;">RAYON</th>
+                            <th rowspan="2" style="min-width: 80px; text-align: left;">PCEZ</th>
                             <th colspan="2" style="background-color: #ffeeba;">MC (PIUTANG)</th>
                             <th colspan="2" style="background-color: #d4edda;">MC (KOLEKSI)</th>
                             <th colspan="2" style="background-color: #d1ecf1;">MB ("UNDUE")</th>
@@ -226,8 +379,8 @@
             data.forEach(item => {
                 tableHTML += `
                     <tr>
-                        <td data-label="Rayon">${item.RAYON}</td>
-                        <td data-label="PCEZ">${item.PCEZ}</td>
+                        <td data-label="Rayon" style="text-align: left !important;">${item.RAYON}</td>
+                        <td data-label="PCEZ" style="text-align: left !important;">${item.PCEZ}</td>
                         <td data-label="MC Piutang Nom">${formatRupiah(item.MC_TotalNominal)}</td>
                         <td data-label="MC Piutang Kubik">${formatNumber(item.MC_TotalKubik)}</td>
                         <td data-label="MC Koleksi Nom">${formatRupiah(item.MC_CollectedNominal)}</td>
@@ -242,8 +395,8 @@
             
             tableHTML += `
                 <tr class="grand-total-row">
-                    <td>GRAND TOTAL</td>
-                    <td>-</td>
+                    <td style="text-align: left !important;">GRAND TOTAL</td>
+                    <td style="text-align: left !important;">-</td>
                     <td>${formatRupiah(grandTotal.MC_TotalNominal)}</td>
                     <td>${formatNumber(grandTotal.MC_TotalKubik)}</td>
                     <td>${formatRupiah(grandTotal.MC_CollectedNominal)}</td>
@@ -297,10 +450,10 @@
                 <table class="report-table">
                     <thead>
                         <tr>
-                            <th style="text-align: left;">RAYON</th>
-                            <th style="text-align: left;">TARIF</th>
-                            <th>JML Pelanggan</th>
-                            <th>Persentase (%)</th>
+                            <th data-label="RAYON" style="text-align: left;">RAYON</th>
+                            <th data-label="TARIF" style="text-align: left;">TARIF</th>
+                            <th data-label="JML Pelanggan">JML Pelanggan</th>
+                            <th data-label="Persentase">Persentase (%)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -320,10 +473,10 @@
             
             tableHTML += `
                 <tr class="grand-total-row">
-                    <td style="text-align: left;">TOTAL</td>
-                    <td>-</td> 
-                    <td>${formatNumber(totalPelanggan)}</td>
-                    <td>100.00%</td>
+                    <td data-label="TOTAL" style="text-align: left;">TOTAL</td>
+                    <td data-label="TARIF" style="text-align: left;">-</td> 
+                    <td data-label="JML Pelanggan">${formatNumber(totalPelanggan)}</td>
+                    <td data-label="Persentase">100.00%</td>
                 </tr>
             `;
             
@@ -435,9 +588,9 @@
                             <table class="report-table" style="min-width: 100%;">
                                 <thead>
                                     <tr style="background-color: #f0f8ff;">
-                                        <th style="text-align: left; width: 40%;">${dimensionKey.replace(/_/g, ' ').toUpperCase()}</th>
-                                        <th>Nomen Count</th>
-                                        <th>Nominal</th>
+                                        <th style="text-align: left; width: 40%;" data-label="Dimensi">${dimensionKey.replace(/_/g, ' ').toUpperCase()}</th>
+                                        <th data-label="Nomen">Nomen Count</th>
+                                        <th data-label="Nominal">Nominal</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -459,9 +612,9 @@
                 
                 tableHTML += `
                     <tr class="grand-total-row">
-                        <td style="text-align: left;">GRAND TOTAL</td>
-                        <td>${formatNumber(totalNomenCount)}</td>
-                        <td>${formatRupiah(totalNominal)}</td>
+                        <td style="text-align: left;" data-label="TOTAL">GRAND TOTAL</td>
+                        <td data-label="Total Nomen">${formatNumber(totalNomenCount)}</td>
+                        <td data-label="Total Nominal">${formatRupiah(totalNominal)}</td>
                     </tr>
                 `;
 
@@ -539,7 +692,7 @@
                     <table class="report-table" style="min-width: 900px;">
                         <thead>
                             <tr style="background-color: #d1ecf1; color: #0c5460;">
-                                <th rowspan="2">AREA</th>
+                                <th rowspan="2" style="min-width: 100px; text-align: left;">AREA</th>
                                 <th colspan="2" style="background-color: #007bff; color: white;">TOTAL KOLEKSI</th>
                                 <th colspan="2" style="background-color: #28a745; color: white;">UNDUE (Bulan Berjalan)</th>
                                 <th colspan="2" style="background-color: #dc3545; color: white;">TUNGGAKAN (Piutang Lama)</th>
@@ -614,10 +767,10 @@
                         <table class="report-table" style="min-width: 600px;">
                             <thead>
                                 <tr style="background-color: #f0f8ff;">
-                                    <th>TGL BAYAR</th>
-                                    <th>NOMEN</th>
-                                    <th>NOMINAL</th>
-                                    <th>STATUS BAYAR</th>
+                                    <th data-label="TGL BAYAR">TGL BAYAR</th>
+                                    <th data-label="NOMEN">NOMEN</th>
+                                    <th data-label="NOMINAL">NOMINAL</th>
+                                    <th data-label="STATUS BAYAR">STATUS BAYAR</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -627,20 +780,20 @@
                     const statusClass = item.STATUS_BAYAR === 'UNDUE' ? 'status-ok' : 'status-danger';
                     tableHTML += `
                         <tr>
-                            <td>${item.TGL_BAYAR}</td>
-                            <td>${item.NOMEN}</td>
-                            <td>${formatRupiah(item.NOMINAL)}</td>
-                            <td class="${statusClass}" style="text-align: center;">${item.STATUS_BAYAR}</td>
+                            <td data-label="TGL BAYAR">${item.TGL_BAYAR}</td>
+                            <td data-label="NOMEN">${item.NOMEN}</td>
+                            <td data-label="NOMINAL">${formatRupiah(item.NOMINAL)}</td>
+                            <td data-label="STATUS BAYAR" class="${statusClass}" style="text-align: center;">${item.STATUS_BAYAR}</td>
                         </tr>
                     `;
                 });
                 
                 tableHTML += `
                     <tr class="grand-total-row">
-                        <td>GRAND TOTAL</td>
-                        <td></td>
-                        <td>${formatRupiah(totalNominal)}</td>
-                        <td></td>
+                        <td data-label="TOTAL" style="text-align: left;">GRAND TOTAL</td>
+                        <td data-label="NOMEN"></td>
+                        <td data-label="NOMINAL">${formatRupiah(totalNominal)}</td>
+                        <td data-label="STATUS"></td>
                     </tr>
                 `;
 
@@ -711,13 +864,13 @@
                 <table class="collection-table">
                     <thead>
                         <tr>
-                            <th>NOMEN</th>
-                            <th>RAYON</th>
-                            <th>PCEZ</th>
-                            <th>TGL BAYAR</th>
-                            <th>NOMINAL</th>
-                            <th>KUBIK BAYAR (m³)</th> 
-                            <th>STATUS</th>
+                            <th data-label="NOMEN">NOMEN</th>
+                            <th data-label="RAYON">RAYON</th>
+                            <th data-label="PCEZ">PCEZ</th>
+                            <th data-label="TGL BAYAR">TGL BAYAR</th>
+                            <th data-label="NOMINAL">NOMINAL</th>
+                            <th data-label="KUBIK BAYAR">KUBIK BAYAR (m³)</th> 
+                            <th data-label="STATUS">STATUS</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -731,13 +884,13 @@
 
                 tableHTML += `
                     <tr>
-                        <td>${item.NOMEN}</td>
-                        <td>${item.RAYON}</td>
-                        <td>${item.PCEZ}</td>
-                        <td>${item.PAY_DT || '-'}</td>
-                        <td>Rp ${nominal.toLocaleString('id-ID')}</td>
-                        <td>${kubik.toLocaleString('id-ID', { maximumFractionDigits: 0 })}</td> 
-                        <td class="${statusClass}">${statusText}</td>
+                        <td data-label="NOMEN">${item.NOMEN}</td>
+                        <td data-label="RAYON">${item.RAYON}</td>
+                        <td data-label="PCEZ">${item.PCEZ}</td>
+                        <td data-label="TGL BAYAR">${item.PAY_DT || '-'}</td>
+                        <td data-label="NOMINAL">Rp ${nominal.toLocaleString('id-ID')}</td>
+                        <td data-label="KUBIK BAYAR">${kubik.toLocaleString('id-ID', { maximumFractionDigits: 0 })}</td> 
+                        <td data-label="STATUS" class="${statusClass}">${statusText}</td>
                     </tr>
                 `;
             });
