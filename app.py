@@ -1036,6 +1036,47 @@ def analyze_mb_grouping_api():
 # =========================================================================
 
 # =========================================================================
+# === API GROUPING MC KUSTOM (GENERATES COMPLEX JSON FOR CUSTOM REPORT) ===
+# =========================================================================
+
+@app.route('/api/analyze/mc_grouping', methods=['GET'])
+@login_required 
+def analyze_mc_grouping_api():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+
+    try:
+        # 1. Total Aggregations
+        totals = {
+            'TOTAL_34_35': _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, rayon_filter='TOTAL_34_35'),
+            '34': _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, rayon_filter='34'),
+            '35': _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, rayon_filter='35'),
+        }
+
+        # 2. Dimension Breakdowns (for R34, R35, and R34+R35 Total)
+        dimensions = ['TARIF', 'MERK', 'READ_METHOD']
+        breakdowns = {}
+
+        for dim in dimensions:
+            breakdowns[dim] = {
+                'TOTAL_34_35': _aggregate_custom_mc_report(collection_mc, collection_cid, dim, rayon_filter='TOTAL_34_35'),
+                '34': _aggregate_custom_mc_report(collection_mc, collection_cid, dim, rayon_filter='34'),
+                '35': _aggregate_custom_mc_report(collection_mc, collection_cid, dim, rayon_filter='35'),
+            }
+
+        response_data = {
+            'status': 'success',
+            'totals': totals,
+            'breakdowns': breakdowns
+        }
+        
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        print(f"Error saat menganalisis custom grouping MC: {e}")
+        return jsonify({"status": "error", "message": f"Gagal mengambil data grouping MC: {e}"}), 500
+
+# =========================================================================
 # === API UNTUK ANALISIS AKURAT (Fluktuasi Volume Naik/Turun) ===
 # =========================================================================
 @app.route('/api/analyze/volume_fluctuation', methods=['GET'])
@@ -1415,7 +1456,7 @@ def upload_mb_data():
         # --- RETURN REPORT ---
         return jsonify({
             "status": "success",
-            "message": f"Sukses Append! {inserted_count} baris Master Bayar (MB) baru ditambahkan. ({skipped_count} duplikat diabaikan).",
+            "message": f"Sukses Append! {inserted_count} baris Riwayat Baca Meter (SBRS) baru ditambahkan. ({skipped_count} duplikat diabaikan).",
             "summary_report": {
                 "total_rows": total_rows,
                 "type": "APPEND",
