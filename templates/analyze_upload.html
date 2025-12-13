@@ -1,280 +1,358 @@
 {% extends "base.html" %}
 
-{% block title %}Dynamic File Analysis{% endblock %}
+{% block title %}Data Injection | Admin Console{% endblock %}
 
 {% block custom_styles %}
-/* CSS Khusus untuk Halaman Upload Analisis */
-.upload-section { 
-    border: 2px dashed var(--secondary-color); 
-    padding: 20px; 
-    border-radius: 0px;
+/* Custom CSS untuk Tampilan Tab/Sub-Menu */
+.tab-menu {
+    border-bottom: 2px solid var(--primary-color);
     margin-bottom: 20px;
-    text-align: center;
-    background-color: #050505; 
-    box-shadow: 0 0 10px var(--secondary-color);
+    display: flex;
+    overflow-x: auto; 
+    white-space: nowrap;
 }
-.btn-analyze { 
-    background-color: var(--secondary-color); 
+.tab-button {
+    padding: 10px 15px;
+    cursor: pointer;
+    background-color: #111;
+    border: 1px solid #333;
+    border-bottom: none;
+    border-radius: 0px;
+    font-weight: 600;
+    color: #777;
+    transition: all 0.3s;
+    flex-shrink: 0; 
+}
+.tab-button.active {
+    background-color: var(--card-bg);
+    border-color: var(--secondary-color);
+    border-bottom: 2px solid var(--card-bg); 
+    color: var(--secondary-color);
+    box-shadow: 0 0 8px var(--secondary-color);
+}
+.tab-content {
+    padding: 10px;
+    border: 1px solid var(--secondary-color);
+    border-top: none;
+    background-color: #050505;
+}
+.upload-section { 
+    padding: 15px; 
+    border-radius: 0px; 
+    margin-bottom: 20px; 
+    text-align: left; 
+}
+.upload-section h3 {
+    text-align: center;
+    color: var(--secondary-color);
+}
+.btn-upload-replace { 
+    background-color: #ff0000; 
     color: var(--bg-color); 
     border: none; 
-    padding: 10px 20px; 
+    padding: 8px 15px; 
     border-radius: 0px; 
-    cursor: pointer; 
+    transition: all 0.3s;
     font-weight: 700;
-    transition: background-color 0.3s; 
-    box-shadow: 0 0 5px var(--secondary-color);
+    box-shadow: 0 0 5px #ff0000;
 }
-.btn-analyze:hover { 
+.btn-upload-replace:hover { background-color: #aa0000; box-shadow: 0 0 10px #ff0000; }
+
+.btn-upload-append { 
     background-color: var(--primary-color); 
-    box-shadow: 0 0 10px var(--primary-color);
-}
-#analyzeStatus { 
-    margin-top: 15px; 
-    font-weight: 700; 
-    font-size: 1.0em;
-}
-
-.analysis-result { 
-    margin-top: 20px; 
-    border-top: 1px dashed #333; 
-    padding-top: 15px; 
-}
-.data-summary {
-    background-color: #0a0a0a;
-    border: 1px solid #333;
-    border-radius: 0px;
-    padding: 10px;
-    margin-bottom: 15px;
-    color: var(--primary-color);
-}
-.data-summary div { 
-    padding: 5px 0; 
-    border-bottom: 1px dashed #222; 
-}
-.data-summary div:last-child {
-    border-bottom: none;
-}
-.data-summary strong {
-    color: var(--secondary-color);
-}
-.data-summary div {
-    display: flex;
-    justify-content: space-between;
-}
-
-/* Style Tabel Hasil Analisis */
-.result-table-wrapper { 
-    overflow-x: auto; 
-    margin-top: 15px;
-    box-shadow: 0 0 5px var(--primary-color);
-    overflow: hidden;
-    background-color: #111;
-}
-table { 
-    width: 100%; 
-    border-collapse: collapse; 
-    font-size: 12px; 
-    color: var(--primary-color);
-}
-th, td { 
-    border: 1px solid #333; 
-    padding: 8px; 
-    text-align: left; 
-    white-space: nowrap; 
-}
-th { 
-    background-color: #222; 
+    color: var(--bg-color); 
+    border: none; 
+    padding: 8px 15px; 
+    border-radius: 0px; 
+    transition: all 0.3s;
     font-weight: 700;
-    color: var(--secondary-color);
-    text-transform: uppercase;
+    box-shadow: 0 0 5px var(--primary-color);
 }
+.btn-upload-append:hover { background-color: #00cc00; box-shadow: 0 0 10px #00cc00; }
 
-/* Tombol Kembali ke Dashboard Analisis */
-.btn-back-analysis {
-    display: inline-block;
-    margin-bottom: 15px;
-    padding: 8px 15px;
-    background-color: #555;
-    color: white;
+/* Status Summary Card Styling */
+.upload-summary-card {
+    margin-top: 15px;
+    padding: 15px;
+    border: 1px solid #333;
+    border-left: 5px solid; 
     border-radius: 0px;
-    text-decoration: none;
-    font-weight: 600;
+    background-color: #050505;
+    box-shadow: 0 0 5px rgba(255, 255, 255, 0.1);
 }
-.btn-back-analysis:hover {
-    background-color: #777;
+.summary-message {
+    font-weight: 700;
+    font-size: 1.0em;
+    margin-left: 10px;
+    color: var(--secondary-color);
+}
+.summary-details {
+    padding-left: 15px;
+    border-left: 3px solid #555;
+    font-size: 0.85em;
+    margin-bottom: 10px;
+    color: var(--primary-color);
 }
 
-/* Mobile Layout for Tables (Card View) */
-@media screen and (max-width: 600px) {
-    .result-table-wrapper {
-        box-shadow: none;
-        border: none;
-    }
-    table {
-        min-width: 100%;
-    }
-    table thead {
-        display: none;
-    }
-    table tr {
-        display: block;
-        margin-bottom: 10px;
-        border: 1px solid #333;
-        border-radius: 0px;
-        background-color: #050505;
-    }
-    table td {
-        display: flex;
-        justify-content: space-between;
-        padding: 8px 12px;
-        border: none;
-        border-bottom: 1px solid #333;
-    }
-    table td:before {
-        content: attr(data-label);
-        font-weight: 700;
-        text-align: left;
-        width: 45%;
-        color: var(--secondary-color);
-        padding-right: 10px;
+/* Style for individual sections inside the Monthly tab */
+.monthly-group {
+    border: 1px dashed #555;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 0px;
+    text-align: center;
+}
+.monthly-group p {
+    font-size: 0.8em;
+    color: #999;
+}
+.monthly-group input[type="file"], .monthly-group input[type="text"] {
+    display: block;
+    margin: 5px auto 10px auto;
+    padding: 8px;
+    background: #111;
+    color: var(--primary-color);
+    border: 1px solid #555;
+    border-radius: 0px;
+    width: 90%;
+    max-width: 300px;
+    box-sizing: border-box;
+}
+
+
+@media (max-width: 480px) {
+    .tab-button {
+        padding: 8px 10px;
+        font-size: 0.7em;
     }
 }
 {% endblock %}
 
 {% block content %}
-    <h2 style="text-align: left; border-bottom: none; margin-bottom: 10px; color: var(--secondary-color);">
-        <i class="fas fa-file-upload" style="margin-right: 10px;"></i> DYNAMIC FILE INGESTION & ANALYSIS
+    <h2 style="text-align: left; border-bottom: none; margin-bottom: 15px; color: var(--primary-color);">
+        <i class="fas fa-upload" style="margin-right: 10px;"></i> DATA INJECTION CONSOLE
     </h2>
     
-    <a href="{{ url_for('analyze_reports_landing') }}" class="btn-back-analysis">
-        ← BACK TO ANALYSIS SUITE
-    </a>
+    <div class="tab-menu">
+        <button class="tab-button active" onclick="showTab('monthly')" id="tab-monthly">
+            <i class="fas fa-calendar-alt"></i> SNAPSHOT (CID, ARDEBT)
+        </button>
+        <button class="tab-button" onclick="showTab('monthly_archival')" id="tab-monthly_archival">
+            <i class="fas fa-chart-line"></i> ARCHIVE: BILLING (MC)
+        </button>
+        <button class="tab-button" onclick="showTab('daily')" id="tab-daily">
+            <i class="fas fa-money-check-alt"></i> ARCHIVE: COLLECTION (MB)
+        </button>
+        <button class="tab-button" onclick="showTab('cycle')" id="tab-cycle">
+            <i class="fas fa-tachometer-alt"></i> ARCHIVE: METER LOGS (SBRS)
+        </button>
+    </div>
 
-    <div class="upload-section">
-        <h3>INITIATE DATA MESH MERGE</h3>
-        <p style="color: #999; text-shadow: none;">Upload **two or more** CSV/XLSX files. The system will merge them using the **HOST ID (NOMEN)** and generate descriptive statistics.</p>
-        <form id="analyzeForm" enctype="multipart/form-data">
-            <input 
-                type="file" 
-                id="analyzeFile" 
-                name="file" 
-                accept=".csv, .xlsx, .xls" 
-                multiple 
-                required
-                style="color: var(--primary-color); background: #111; border: 1px solid #333; padding: 10px; margin-bottom: 15px; width: 100%; box-sizing: border-box;"
-            >
-            <button type="submit" class="btn-analyze">EXECUTE MERGE & ANALYZE</button>
-        </form>
-        <div id="analyzeStatus"></div>
+    <div id="content-monthly" class="tab-content">
+        <div class="upload-section">
+            <h3>HOST MASTER & ARREARS STATUS (REPLACE TOTAL)</h3>
+            <p style="font-weight: bold; color: #ff0000; text-align: center;">WARNING: Uploading these files will DELETE ALL previous data in the collection.</p>
+
+            <div class="monthly-group" style="border-color: #ff00ff;">
+                <h4>CID: HOST MASTER DATA</h4>
+                <p>Static Host Profile. **REPLACE ALL** data in `CustomerData`.</p>
+                <form id="uploadFormCID" action="{{ url_for('upload_cid_data') }}" method="POST" enctype="multipart/form-data">
+                    <input type="file" id="csvFileCID" name="file" accept=".csv, .xlsx, .xls" required>
+                    <button type="submit" class="btn-upload-replace">ERASE & INJECT CID</button>
+                </form>
+                <div id="uploadStatusCID"></div>
+            </div>
+            
+            <div class="monthly-group" style="border-color: #ff0000;">
+                <h4>ARDEBT: ARREARS DETAIL</h4>
+                <p>Historic Debt Detail. **REPLACE ALL** data in `AccountReceivable`.</p>
+                <form id="uploadFormARDEBT" action="{{ url_for('upload_ardebt_data') }}" method="POST" enctype="multipart/form-data">
+                    <input type="file" id="csvFileARDEBT" name="file" accept=".csv, .xlsx, .xls" required>
+                    <button type="submit" class="btn-upload-replace">ERASE & INJECT ARDEBT</button>
+                </form>
+                <div id="uploadStatusARDEBT"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="content-monthly_archival" class="tab-content" style="display: none;">
+        <div class="upload-section" style="border: 1px dashed var(--primary-color); text-align: center;">
+            <h3>MC: BILLING SNAPSHOT (ARCHIVAL MODE)</h3>
+            <p style="font-weight: bold; color: var(--primary-color);">Stores monthly billing history. Data for the same MMYYYY period will be overwritten.</p>
+            <form id="uploadFormMC" action="{{ url_for('upload_mc_data') }}" method="POST" enctype="multipart/form-data">
+                <input 
+                    type="text" 
+                    name="data_month_year" 
+                    placeholder="Data Period (MMYYYY) e.g., 122025" 
+                    required 
+                    pattern="\d{6}"
+                    style="border: 2px solid var(--primary-color);"
+                >
+                <input type="file" id="csvFileMC" name="file" accept=".csv, .xlsx, .xls" required>
+                <button type="submit" class="btn-upload-append">INJECT MC ARCHIVE</button>
+            </form>
+            <div id="uploadStatusMC"></div>
+        </div>
+    </div>
+
+    <div id="content-daily" class="tab-content" style="display: none;">
+        <div class="upload-section" style="border: 1px dashed var(--secondary-color); text-align: center;">
+            <h3>MB: COLLECTION LOGS (ARCHIVAL MODE)</h3>
+            <p style="font-weight: bold; color: var(--secondary-color);">Stores transactional collection history. Data for the same MMYYYY period will be overwritten.</p>
+            <form id="uploadFormMB" action="{{ url_for('upload_mb_data') }}" method="POST" enctype="multipart/form-data">
+                 <input 
+                    type="text" 
+                    name="data_month_year" 
+                    placeholder="Data Period (MMYYYY) e.g., 122025" 
+                    required 
+                    pattern="\d{6}"
+                    style="border: 2px solid var(--secondary-color);"
+                >
+                <input type="file" id="csvFileMB" name="file" accept=".csv, .xlsx, .xls" required>
+                <button type="submit" class="btn-upload-append">INJECT MB ARCHIVE</button>
+            </form>
+            <div id="uploadStatusMB"></div>
+        </div>
     </div>
     
-    <div class="analysis-result" id="analysisResult">
-        <p style="text-align: center; color: #777;">[OUTPUT] Analysis results will be displayed here.</p>
+    <div id="content-cycle" class="tab-content" style="display: none;">
+        <div class="upload-section" style="border: 1px dashed #00ffff; text-align: center;">
+            <h3>SBRS: METER READ LOGS (ARCHIVAL MODE)</h3>
+            <p style="font-weight: bold; color: #00ffff;">Stores meter read history. Data for the same MMYYYY period will be overwritten.</p>
+            <form id="uploadFormSBRS" action="{{ url_for('upload_sbrs_data') }}" method="POST" enctype="multipart/form-data">
+                <input 
+                    type="text" 
+                    name="data_month_year" 
+                    placeholder="Data Period (MMYYYY) e.g., 122025" 
+                    required 
+                    pattern="\d{6}"
+                    style="border: 2px solid #00ffff;"
+                >
+                <input type="file" id="csvFileSBRS" name="file" accept=".csv, .xlsx, .xls" required>
+                <button type="submit" class="btn-upload-append">INJECT SBRS ARCHIVE</button>
+            </form>
+            <div id="uploadStatusSBRS"></div>
+        </div>
     </div>
 
-    <script>
-        const analyzeForm = document.getElementById('analyzeForm');
-        const analyzeStatus = document.getElementById('analyzeStatus');
-        const analysisResult = document.getElementById('analysisResult');
 
-        analyzeForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
+    <script>
+        const formMC = document.getElementById('uploadFormMC');
+        const formMB = document.getElementById('uploadFormMB');
+        const formCID = document.getElementById('uploadFormCID');
+        const formSBRS = document.getElementById('uploadFormSBRS');
+        const formARDEBT = document.getElementById('uploadFormARDEBT');
+
+        const statusMC = document.getElementById('uploadStatusMC');
+        const statusMB = document.getElementById('uploadStatusMB');
+        const statusCID = document.getElementById('uploadStatusCID');
+        const statusSBRS = document.getElementById('uploadStatusSBRS');
+        const statusARDEBT = document.getElementById('uploadStatusARDEBT');
+
+        function showTab(tabName) {
+            // Mapping dari nama tab baru ke ID konten
+            const contentMap = {
+                'monthly': 'content-monthly',
+                'monthly_archival': 'content-monthly_archival',
+                'daily': 'content-daily',
+                'cycle': 'content-cycle'
+            };
             
-            const fileInput = document.getElementById('analyzeFile');
-            if (fileInput.files.length < 1) {
-                analyzeStatus.innerHTML = `<span style="color: #ff0000;">❌ [ERROR] At least one file must be selected.</span>`;
-                return;
+            document.querySelectorAll('.tab-content').forEach(div => div.style.display = 'none');
+            
+            const contentId = contentMap[tabName];
+            if (contentId) {
+                document.getElementById(contentId).style.display = 'block';
             }
 
-            const formData = new FormData(this);
-            analyzeStatus.innerHTML = `<span style="color: var(--secondary-color);"><i class="fas fa-spinner fa-spin"></i> Merging data streams... Please standby...</span>`;
-            analysisResult.innerHTML = `<p style="text-align: center; color: #777;">Processing...</p>`;
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            // Check if the tab button ID exists before adding 'active' class
+            const tabButton = document.getElementById(`tab-${tabName}`);
+            if (tabButton) {
+                tabButton.classList.add('active');
+            }
+        }
+        
+        // This function is for demonstration and is only included for brevity, 
+        // the full function body is assumed from the previous context.
+        function renderSummaryReport(summary, message, color, anomalyList) {
+            let detailRows = '';
 
+            const formatNumber = (num) => (num || 0).toLocaleString('id-ID');
+
+            if (summary.type === 'REPLACE_MONTHLY') {
+                detailRows = `
+                    <div class="summary-item"><strong>File Records:</strong> <span>${formatNumber(summary.total_rows)}</span></div>
+                    <div class="summary-item status-replace"><strong>Records Overwritten:</strong> <span>${formatNumber(summary.replaced_count)}</span></div>
+                    <div class="summary-item status-info"><strong>Mode:</strong> <span>ARCHIVAL SNAPSHOT</span></div>
+                `;
+            } else if (summary.type === 'REPLACE') {
+                detailRows = `
+                    <div class="summary-item"><strong>File Records:</strong> <span>${formatNumber(summary.total_rows)}</span></div>
+                    <div class="summary-item status-replace"><strong>Records Replaced:</strong> <span>${formatNumber(summary.replaced_count)}</span></div>
+                    <div class="summary-item status-danger"><strong>Mode:</strong> <span>REPLACE TOTAL</span></div>
+                `;
+            } else if (summary.type === 'APPEND') {
+                 detailRows = `
+                    <div class="summary-item"><strong>Total File Records:</strong> <span>${formatNumber(summary.total_rows)}</span></div>
+                    <div class="summary-item status-success"><strong>New Records Injected:</strong> <span>${formatNumber(summary.inserted_count)}</span></div>
+                    <div class="summary-item status-info"><strong>Duplicates Skipped:</strong> <span>${formatNumber(summary.skipped_count)}</span></div>
+                    <div class="summary-item status-info"><strong>Mode:</strong> <span>APPEND (Historical)</span></div>
+                `;
+            }
+
+            let reportHtml = `
+                <div class="upload-summary-card" style="border-left-color: ${color};">
+                    <div class="summary-header" style="display: flex; align-items: center; margin-bottom: 10px;">
+                        <span class="status-icon" style="color: ${color};"><i class="fas fa-check-circle"></i></span>
+                        <div class="summary-message">${message}</div>
+                    </div>
+                    <div class="summary-details">
+                        ${detailRows}
+                    </div>
+                </div>
+            `;
+            
+            return reportHtml;
+        }
+
+
+        async function handleUpload(event, form, statusElement, successColor) {
+            event.preventDefault();
+            
+            const formData = new FormData(form);
+            statusElement.innerHTML = `<span style="color: var(--accent-color); font-weight: 500;"><i class="fas fa-spinner fa-spin"></i> EXECUTING INJECTION... STANDBY.</span>`;
+            
             try {
-                const response = await fetch('{{ url_for("analyze_data") }}', {
+                const response = await fetch(form.action, { 
                     method: 'POST',
                     body: formData
                 });
 
                 const result = await response.json();
 
-                if (response.ok && result.status === 'success') {
-                    analyzeStatus.innerHTML = `<span style="color: var(--primary-color);">✅ ANALYSIS COMPLETE: ${result.summary.file_name}</span>`;
-                    renderAnalysis(result);
+                if (response.ok) {
+                    const summary = result.summary_report;
+                    const anomalies = result.anomaly_list || [];
+
+                    const reportHtml = renderSummaryReport(summary, result.message, successColor, anomalies);
+                    statusElement.innerHTML = reportHtml;
+
                 } else if (response.status === 401) {
                     window.location.href = '{{ url_for("login") }}'; 
                 } else {
-                    analyzeStatus.innerHTML = `<span style="color: #ff0000;">❌ [FATAL ERROR] ${result.message}</span>`;
-                    analysisResult.innerHTML = `<p style="color: #ff0000; text-align: center;">${result.message}</p>`;
+                    statusElement.innerHTML = `<span style="color: #ff0000;">❌ [FATAL ERROR] ${result.message}</span>`;
                 }
             } catch (error) {
-                analyzeStatus.innerHTML = `<span style="color: #ff0000;">❌ [NETWORK ERROR] Connection failure.</span>`;
-                analysisResult.innerHTML = '';
+                statusElement.innerHTML = `<span style="color: #ff0000;">❌ [NETWORK ERROR] Connection failure.</span>`;
                 console.error('Error:', error);
             }
-        });
-        
-        function renderAnalysis(data) {
-            
-            // 1. Ringkasan Dasar
-            let summaryHtml = `
-                <h3 style="color: var(--secondary-color);">[MERGE SUMMARY]</h3>
-                <div class="data-summary">
-                    <div><strong>OUTPUT FILE:</strong> <span>${data.summary.file_name}</span></div>
-                    <div><strong>MERGE KEY:</strong> <span>${data.summary.join_key}</span></div>
-                    <div><strong>TOTAL RECORDS:</strong> <span>${data.summary.row_count.toLocaleString('id-ID')}</span></div>
-                    <div><strong>COLUMN COUNT:</strong> <span>${data.summary.column_count}</span></div>
-                    <div><strong>COLUMNS DETECTED:</strong> <span>${data.summary.columns.join(', ')}</span></div>
-                </div>
-                
-                <h3 style="margin-top: 20px; color: var(--secondary-color);">[DATA HEAD (5 RECORDS)]</h3>
-                <div class="result-table-wrapper">${data.head}</div>
-                
-                <h3 style="margin-top: 20px; color: var(--secondary-color);">[DESCRIPTIVE STATISTICS]</h3>
-                <div id="stats-table"></div>
-            `;
-            analysisResult.innerHTML = summaryHtml;
-            
-            // 2. Statistik Deskriptif (Tabel Pandas Describe)
-            const stats = JSON.parse(data.stats);
-            const statsElement = document.getElementById('stats-table');
-            
-            let statsTableHtml = '<div class="result-table-wrapper"><table><thead><tr><th>STATISTIC</th>';
-            
-            const columnNames = Object.keys(stats);
-            columnNames.forEach(col => {
-                statsTableHtml += `<th>${col}</th>`;
-            });
-            statsTableHtml += '</tr></thead><tbody>';
-            
-            const statNames = Object.keys(stats[columnNames[0]]);
-            
-            statNames.forEach(stat => {
-                statsTableHtml += `<tr><td data-label="STATISTIC"><strong>${stat.charAt(0).toUpperCase() + stat.slice(1)}</strong></td>`;
-                columnNames.forEach(col => {
-                    let value = stats[col][stat];
-                    let displayValue;
-                    
-                    if (value === null || typeof value === 'undefined') {
-                         displayValue = `-`;
-                    } else if (typeof value === 'number' && stat !== 'top' && stat !== 'freq') {
-                         // Format angka besar dengan pemisah ribuan, dan float dengan 2 desimal
-                         if (Math.abs(value) >= 1000) {
-                            displayValue = value.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-                         } else {
-                            displayValue = value.toFixed(2);
-                         }
-                    } else {
-                        displayValue = value;
-                    }
-                    statsTableHtml += `<td data-label="${col}">${displayValue}</td>`;
-                });
-                statsTableHtml += `</tr>`;
-            });
-            
-            statsTableHtml += '</tbody></table></div>';
-            statsElement.innerHTML = statsTableHtml;
         }
+        
+        // Event Listeners untuk semua Form
+        formMC.addEventListener('submit', (e) => handleUpload(e, formMC, statusMC, 'var(--primary-color)'));
+        formCID.addEventListener('submit', (e) => handleUpload(e, formCID, statusCID, '#ff00ff'));
+        formARDEBT.addEventListener('submit', (e) => handleUpload(e, formARDEBT, statusARDEBT, '#ff0000'));
 
-    </script>
-{% endblock %}
+        formMB.addEventListener('submit', (e) => handleUpload(e, formMB, statusMB, 'var(--secondary-color)'));
+        formSBRS.addEventListener('submit', (e) => handleUpload(e, formSBRS, statusSBRS
