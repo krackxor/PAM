@@ -842,23 +842,27 @@ def analyze_volume_fluctuation_api():
         return jsonify({"message": f"Gagal mengambil data fluktuasi volume. Detail teknis error: {e}"}), 500
         
 # =========================================================================
-# === API GROUPING MC KUSTOM (KEMBALI KE MODE GROUPING KOKOH) ===
+# === API GROUPING MC KUSTOM (KINI MENGEMBALIKAN BREAKDOWN SEDERHANA) ===
 # =========================================================================
 
-# 1. API DETAIL (Untuk Laporan Grouping Penuh - MODE GROUPING KOKOH)
 @app.route('/api/analyze/mc_grouping', methods=['GET'])
 @login_required 
 def analyze_mc_grouping_api():
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    # Helper function to perform aggregation by a single dimension for R34/R35 REG
+    def _get_simple_breakdown(dimension_key):
+        dimension_map = {'TARIF': '$TARIF_CID', 'READ_METHOD': '$READ_METHOD', 'MERK': '$MERK_CID'}
+        group_key_field = dimension_map.get(dimension_key.upper())
 
-    try:
-        pipeline_grouping = [
+        if not group_key_field:
+            return []
+
+        pipeline = [
             {'$project': {
-                'NOMEN': '$NOMEN', # Relying on clean string from upload
-                'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
+                'NOMEN': '$NOMEN', 
                 'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
-                'TARIF': '$TARIF', # Relying on clean string from upload
             }},
             {'$lookup': {
                'from': 'CustomerData', 
@@ -866,60 +870,62 @@ def analyze_mc_grouping_api():
                'foreignField': 'NOMEN',
                'as': 'customer_info'
             }},
-            # Unwind dipertahankan, karena filter akan menyingkirkan hasil join yang gagal
-            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
+            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}},
             
-            # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
-                # Normalisasi di sini menggunakan data yang sudah di-clean saat upload (UPPERCASE STRING)
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},
                 'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
-                'CLEAN_MERK': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
-                'CLEAN_READ_METHOD': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}}}}},
+                'TARIF_CID': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TARIF', 'N/A']}}}}},
+                'MERK_CID': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
+                'READ_METHOD': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}}}}},
             }},
-            # --- END NORMALISASI ---
             
             {'$match': {
-                # Filter menggunakan STRING KAPITAL yang sudah di-clean
                 'CLEAN_TIPEPLGGN': 'REG',
-                'CLEAN_RAYON': {'$in': ['34', '35']} # Filter menggunakan string, konsisten dengan CID upload
+                'CLEAN_RAYON': {'$in': ['34', '35']} 
             }},
             
             {'$group': {
-                '_id': {
-                    'TIPEPLGGN': '$CLEAN_TIPEPLGGN',
-                    'RAYON': '$CLEAN_RAYON',
-                    'TARIF': '$TARIF', 
-                    
-                    # Grouping Key Paling Kokoh
-                    'MERK': '$CLEAN_MERK', 
-                    'READ_METHOD': '$CLEAN_READ_METHOD', 
-                },
+                '_id': group_key_field,
                 'CountOfNOMEN': {'$addToSet': '$NOMEN'}, 
-                'SumOfKUBIK': {'$sum': '$KUBIK'},
                 'SumOfNOMINAL': {'$sum': '$NOMINAL'},
             }},
             {'$project': {
                 '_id': 0,
-                'TIPEPLGGN': '$_id.TIPEPLGGN', 'RAYON': '$_id.RAYON', 'TARIF': '$_id.TARIF',
-                'MERK': '$_id.MERK', 'READ_METHOD': '$_id.READ_METHOD',
+                'DIMENSION_KEY': '$_id',
                 'CountOfNOMEN': {'$size': '$CountOfNOMEN'},
-                'SumOfKUBIK': {'$round': ['$SumOfKUBIK', 2]},
-                'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 2]},
+                'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 0]},
             }},
-            {'$sort': {'RAYON': 1, 'TARIF': 1}}
+            {'$sort': {'DIMENSION_KEY': 1}}
         ]
-        grouping_data = list(collection_mc.aggregate(pipeline_grouping))
         
-        # Perbaiki penanganan error/empty result: jika kosong, kembalikan [] dan status 200
-        if not grouping_data:
-            return jsonify([]), 200 
-            
-        return jsonify(grouping_data), 200
+        results = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
+        
+        for item in results:
+             # Rename DIMENSION_KEY field back to the dimension name for easy consumption in JS
+             item[dimension_key.upper()] = item.pop('DIMENSION_KEY')
+             
+        return results
+
+    try:
+        # Panggil helper untuk setiap breakdown yang diminta
+        tarif_data = _get_simple_breakdown('TARIF')
+        merk_data = _get_simple_breakdown('MERK')
+        read_method_data = _get_simple_breakdown('READ_METHOD')
+
+        response_data = {
+            'status': 'success',
+            # Kembalikan data dalam struktur yang mudah dipisahkan
+            'tarif_breakdown': tarif_data,
+            'merk_breakdown': merk_data,
+            'read_method_breakdown': read_method_data
+        }
+        
+        return jsonify(response_data), 200
 
     except Exception as e:
-        print(f"Error saat menganalisis grouping MC: {e}")
-        return jsonify({"message": f"Gagal mengambil data grouping MC. Detail teknis error: {e}"}), 500
+        print(f"Error saat menganalisis simple grouping MC: {e}")
+        return jsonify({"status": "error", "message": f"Gagal mengambil data grouping MC. Detail teknis error: {e}"}), 500
 
 # 2. API SUMMARY (Untuk KPI Cards di collection_unified.html)
 @app.route('/api/analyze/mc_grouping/summary', methods=['GET'])
