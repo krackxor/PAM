@@ -82,6 +82,18 @@
 }
 
 /* -------------------------------------------------------------------------- */
+/* FIX UKURAN ZOOM HP: Mobile Layout (Mengecilkan ukuran font dan padding) */
+/* -------------------------------------------------------------------------- */
+@media screen and (max-width: 600px) {
+    .report-table, .collection-table {
+        font-size: 11px; /* Mengecilkan ukuran font */
+        min-width: 500px; /* Sedikit mengurangi min-width untuk memungkinkan zoom out lebih jauh */
+    }
+    .report-table th, .report-table td, .collection-table th, .collection-table td {
+        padding: 6px 4px; /* Mengurangi padding */
+    }
+}
+/* -------------------------------------------------------------------------- */
 /* Perbaikan Selesai: Menggunakan Horizontal Scroll (Tampilan Tabel Biasa) di HP.
 /* -------------------------------------------------------------------------- */
 {% endblock %}
