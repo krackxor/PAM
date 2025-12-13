@@ -295,12 +295,17 @@ def search_nomen():
         tunggakan_nominal_total = sum(item.get('JUMLAH', 0) for item in ardebt_results)
         
         # 4. RIWAYAT PEMBAYARAN TERAKHIR (MB)
-        mb_last_payment_cursor = collection_mb.find({'NOMEN': cleaned_nomen}).sort('TGL_BAYAR', -1).limit(1)
-        last_payment = list(mb_last_payment_cursor)[0] if list(mb_last_payment_cursor) else None
+        # FIX KRITIS: Menggunakan find_one dengan sort untuk mencegah cursor consumption/list index out of range
+        last_payment = collection_mb.find_one(
+            {'NOMEN': cleaned_nomen},
+            sort=[('TGL_BAYAR', -1)]
+        )
         
         # 5. RIWAYAT BACA METER (SBRS)
-        sbrs_last_read_cursor = collection_sbrs.find({'CMR_ACCOUNT': cleaned_nomen}).sort('CMR_RD_DATE', -1).limit(2)
-        sbrs_history = list(sbrs_last_read_cursor)
+        # FIX KRITIS: Mengambil list secara eksplisit
+        sbrs_history = list(collection_sbrs.find(
+            {'CMR_ACCOUNT': cleaned_nomen}
+        ).sort('CMR_RD_DATE', -1).limit(2))
         
         # --- LOGIKA KECERDASAN (INTEGRASI & DIAGNOSTIK) ---
         
@@ -319,6 +324,7 @@ def search_nomen():
         status_pemakaian = "DATA SBRS KURANG"
         kubik_terakhir = 0
         if len(sbrs_history) >= 1:
+            # Akses aman karena list length sudah dicek
             kubik_terakhir = sbrs_history[0].get('CMR_KUBIK', 0)
             
             if kubik_terakhir > 100: # Threshold Ekstrim
