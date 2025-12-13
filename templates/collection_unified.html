@@ -82,55 +82,8 @@
 }
 
 /* -------------------------------------------------------------------------- */
-/* FIX TOTAL DESIGN: Mobile Layout (Card View for Tables) */
+/* Perbaikan Selesai: Menggunakan Horizontal Scroll (Tampilan Tabel Biasa) di HP.
 /* -------------------------------------------------------------------------- */
-@media screen and (max-width: 600px) {
-    /* Hide desktop table structure and enable vertical stacking */
-    .report-table-wrapper, .result-table-wrapper {
-        overflow-x: visible; /* Disable horizontal scroll in card view */
-        border: none;
-    }
-    .report-table, .collection-table {
-        min-width: 100%;
-        width: 100%;
-    }
-    .report-table thead, .collection-table thead {
-        display: none; /* Hide original headers */
-    }
-    /* Set rows to stack and act as cards */
-    .report-table tr, .collection-table tr {
-        display: block;
-        margin-bottom: 15px;
-        border: 1px solid #ddd;
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow-light); /* Give it a card look */
-    }
-    .report-table tr.grand-total-row, .collection-table tr.total-row {
-        background-color: #f0f8ff; /* Unique background for totals */
-    }
-    /* Set cells to display side-by-side within the card */
-    .report-table td, .collection-table td {
-        display: flex;
-        justify-content: space-between;
-        padding: 10px 15px;
-        border: none;
-        border-bottom: 1px solid #eee;
-        text-align: right;
-        white-space: normal; /* Allow text wrapping */
-    }
-    /* Style the generated label (key) on the left */
-    .report-table td:before, .collection-table td:before {
-        content: attr(data-label);
-        font-weight: 600;
-        text-align: left;
-        width: 50%;
-        color: #6c757d; /* Muted color for label */
-        padding-right: 10px;
-    }
-    .report-table td:last-child, .collection-table td:last-child {
-        border-bottom: none; /* Remove separator on last item in the card */
-    }
-}
 {% endblock %}
 
 {% block content %}
