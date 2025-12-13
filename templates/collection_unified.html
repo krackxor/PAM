@@ -186,7 +186,7 @@
         const tarifBreakdownArea = document.getElementById('tarifBreakdownArea');
         
         function formatRupiah(number) {
-            return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+            return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
         }
         
         function formatNumber(number) {
@@ -660,7 +660,7 @@
             breakdownHTML += renderDimensionGroup('Merek Meter', 'MERK', breakdowns.MERK);
             breakdownHTML += renderDimensionGroup('Metode Baca', 'READ_METHOD', breakdowns.READ_METHOD);
 
-            customArea.innerHTML = totalSummaryHTML + breakdownHTML;
+            customReportArea.innerHTML = totalSummaryHTML + breakdownHTML;
         }
 
 
