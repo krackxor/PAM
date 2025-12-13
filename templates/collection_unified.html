@@ -61,6 +61,41 @@
 
 .no-results { text-align: center; color: #555; padding: 20px; }
 
+/* ----------------- CUSTOM MC GROUPING STYLES ----------------- */
+.group-list { list-style-type: none; padding: 0; margin-top: 10px; }
+.group-list li {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: var(--border-radius);
+    padding: 10px 15px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1.0em;
+}
+.dim-value { font-weight: 700; color: var(--primary-color); flex-basis: 30%; text-align: left; }
+.badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.85em;
+    margin-left: 10px;
+}
+.badge-nomen { background-color: #e0f7fa; color: #00796b; }
+.badge-nominal { background-color: #ffe0b2; color: #e65100; }
+.breakdown-card-container { margin-top: 15px; }
+
+@media (max-width: 600px) {
+    .group-list li {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .dim-value { flex-basis: 100%; margin-bottom: 5px; }
+    .badge { margin-left: 0; margin-right: 5px; }
+}
+
 /* -------------------------------------------------------------------------- */
 /* --- ROMBAK TOTAL UI: LAYOUT MOBILE (LIST TRANSAKSI) --- */
 /* -------------------------------------------------------------------------- */
@@ -534,7 +569,7 @@
             function renderTotalCard(title, nomen, nominal, kubik=null) {
                  const cardHTML = `
                     <div class="summary-card" style="border-left-color: #007bff; text-align: left; padding: 10px;">
-                        <h4 style="color: #007bff; margin-bottom: 5px;">${title}</h4>
+                        <h4 style="color: #007bff; margin-bottom: 5px;"><i class="fas fa-info-circle"></i> ${title}</h4>
                         <p style="font-size: 1.1em; margin-bottom: 3px;">Nomen: <strong>${formatNumber(nomen)}</strong></p>
                         ${kubik !== null ? `<p style="font-size: 1.1em; margin-bottom: 3px;">Kubikasi: <strong>${formatNumber(kubik)} m³</strong></p>` : ''}
                         <p style="font-size: 1.2em; font-weight: bold; color: #dc3545;">Nominal: ${formatRupiah(nominal)}</p>
@@ -545,19 +580,25 @@
 
             // Helper function to render data in list format: [Value] - [Nomen Count] - [Nominal]
             function renderBreakdownList(title, breakdownArray, dimensionKey) {
-                let listHTML = `<h4 style="margin-top: 15px; color: var(--primary-color);">${title}</h4><ul>`;
+                let listHTML = `<h5 style="margin-top: 15px; color: var(--primary-color); border-bottom: 1px dotted #ccc; padding-bottom: 5px;">${title}</h5><ul class="group-list">`;
                 
                 if (breakdownArray.length === 0) {
-                    listHTML += `<li>Tidak ada data ditemukan.</li>`;
+                    listHTML += `<li style="justify-content: center; color: #6c757d;">Tidak ada data ditemukan untuk kriteria ini.</li>`;
                 } else {
                     breakdownArray.forEach(item => {
                         const dimValue = item[dimensionKey] || 'N/A';
                         const nomenCount = formatNumber(item.CountOfNOMEN);
                         const nominal = formatRupiah(item.SumOfNOMINAL);
                         
-                        // Format: [Dimension Value] - [Nomen Count] - [Nominal]
-                        // Contoh: 2A2 - 3535 NOMEN - Rp 545.004
-                        listHTML += `<li style="list-style-type: square; margin-left: 20px;"><strong>${dimValue}</strong> - ${nomenCount} NOMEN - ${nominal}</li>`;
+                        listHTML += `
+                            <li>
+                                <span class="dim-value">${dimValue}</span>
+                                <div>
+                                    <span class="badge badge-nomen">${nomenCount} NOMEN</span>
+                                    <span class="badge badge-nominal">${nominal}</span>
+                                </div>
+                            </li>
+                        `;
                     });
                 }
                 
@@ -569,7 +610,7 @@
             const breakdowns = data.breakdowns;
 
             let reportHTML = `
-                <h3 style="color: #dc3545; margin-bottom: 20px;">Laporan Grouping MC Kustom (Rayon 34/35 Reguler)</h3>
+                <h3 style="color: #dc3545; margin-bottom: 20px;"><i class="fas fa-layer-group"></i> Laporan Grouping MC Kustom (Rayon 34/35 Reguler)</h3>
                 
                 <h4 style="color: var(--primary-color);">1. Total Agregasi Pelanggan Reguler Rayon 34/35</h4>
                 <div class="report-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
@@ -581,26 +622,28 @@
                 <p style="font-size: 0.9em; color: #6c757d; margin-top: 15px;">*Total Nomen R34 + R35 mencerminkan pelanggan unik yang muncul di kedua rayon.</p>
 
                 <h4 style="color: var(--primary-color); margin-top: 30px;">2. Breakdown Berdasarkan Dimensi</h4>
+                <div class="breakdown-card-container">
             `;
 
             // --- BREAKDOWN TARIF ---
-            reportHTML += `<h5 style="color: #007bff; margin-top: 25px;">2.1. Breakdown Jenis TARIF</h5>`;
+            reportHTML += `<h5 style="color: #dc3545; margin-top: 25px; font-weight: bold;"><i class="fas fa-tags"></i> 2.1. Jenis TARIF</h5>`;
             reportHTML += renderBreakdownList('Total Rayon 34 & 35', breakdowns.TARIF.TOTAL_34_35, 'TARIF');
             reportHTML += renderBreakdownList('Hanya Rayon 34', breakdowns.TARIF[34], 'TARIF');
             reportHTML += renderBreakdownList('Hanya Rayon 35', breakdowns.TARIF[35], 'TARIF');
             
             // --- BREAKDOWN MERK ---
-            reportHTML += `<h5 style="color: #007bff; margin-top: 25px;">2.2. Breakdown Merek Meter (MERK)</h5>`;
+            reportHTML += `<h5 style="color: #dc3545; margin-top: 25px; font-weight: bold;"><i class="fas fa-wrench"></i> 2.2. Merek Meter (MERK)</h5>`;
             reportHTML += renderBreakdownList('Total Rayon 34 & 35', breakdowns.MERK.TOTAL_34_35, 'MERK');
             reportHTML += renderBreakdownList('Hanya Rayon 34', breakdowns.MERK[34], 'MERK');
             reportHTML += renderBreakdownList('Hanya Rayon 35', breakdowns.MERK[35], 'MERK');
 
             // --- BREAKDOWN READ METHOD ---
-            reportHTML += `<h5 style="color: #007bff; margin-top: 25px;">2.3. Breakdown Metode Baca (READ_METHOD)</h5>`;
+            reportHTML += `<h5 style="color: #dc3545; margin-top: 25px; font-weight: bold;"><i class="fas fa-mobile-alt"></i> 2.3. Metode Baca (READ_METHOD)</h5>`;
             reportHTML += renderBreakdownList('Total Rayon 34 & 35', breakdowns.READ_METHOD.TOTAL_34_35, 'READ_METHOD');
             reportHTML += renderBreakdownList('Hanya Rayon 34', breakdowns.READ_METHOD[34], 'READ_METHOD');
             reportHTML += renderBreakdownList('Hanya Rayon 35', breakdowns.READ_METHOD[35], 'READ_METHOD');
 
+            reportHTML += `</div>`; // Close breakdown-card-container
             customReportArea.innerHTML = reportHTML;
         }
 
