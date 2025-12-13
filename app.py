@@ -676,9 +676,55 @@ def analyze_mb_grouping_api():
 # =========================================================================
 
 
-# =========================================================================
-# === API UNTUK ANALISIS AKURAT (Fluktuasi Volume Naik/Turun) ===
-# =========================================================================
+# --- ENDPOINT ANALISIS LANDING PAGE ---
+@app.route('/analyze', methods=['GET'])
+@login_required
+def analyze_reports_landing():
+    return render_template('analyze_landing.html', is_admin=current_user.is_admin)
+
+# --- ENDPOINT ANALISIS DETAIL PAGE (DAN LAINNYA) ---
+@app.route('/analyze/full_mc_report', methods=['GET'])
+@login_required
+def analyze_full_mc_report():
+    return render_template('analyze_report_template.html', 
+                           title="Laporan Grup Master Data Tagihan (MC) Lengkap", 
+                           description="Menyajikan data agregasi Nomen, Kubikasi, dan Nominal berdasarkan Rayon, Metode Baca, Tarif, dan Jenis Meter.",
+                           is_admin=current_user.is_admin)
+
+@app.route('/analyze/extreme', methods=['GET'])
+@login_required
+def analyze_extreme_usage():
+    return render_template('analyze_report_template.html', 
+                           title="Analisis Konsumsi Air Ekstrem", 
+                           description="Menampilkan pelanggan dengan konsumsi air di atas ambang batas yang ditentukan.",
+                           is_admin=current_user.is_admin)
+# ... (lanjutan endpoint analyze)
+@app.route('/analyze/reduced', methods=['GET'])
+@login_required
+def analyze_reduced_usage():
+    return render_template('analyze_report_template.html', 
+                           title="Analisis Fluktuasi Volume (Kenaikan/Penurunan Signifikan)", 
+                           description="Menampilkan pelanggan dengan fluktuasi konsumsi air signifikan (naik atau turun) berdasarkan perbandingan riwayat SBRS.",
+                           is_admin=current_user.is_admin)
+
+@app.route('/analyze/zero', methods=['GET'])
+@login_required
+def analyze_zero_usage():
+    return render_template('analyze_report_template.html', 
+                           title="Analisis Konsumsi Nol (Zero Usage)", 
+                           description="Menampilkan pelanggan yang teridentifikasi memiliki konsumsi air nol (Zero) pada periode tagihan terakhir.",
+                           is_admin=current_user.is_admin)
+
+@app.route('/analyze/standby', methods=['GET'])
+@login_required
+def analyze_stand_tungggu():
+    return render_template('analyze_report_template.html', 
+                           title="Analisis Status Stand Tunggu", 
+                           description="Menampilkan pelanggan yang berstatus Stand Tunggu (Freeze/Blokir) di Master Data Pelanggan.",
+                           is_admin=current_user.is_admin)
+# ... (lanjutan endpoint analyze)
+
+
 @app.route('/api/analyze/volume_fluctuation', methods=['GET'])
 @login_required 
 def analyze_volume_fluctuation_api():
@@ -693,8 +739,7 @@ def analyze_volume_fluctuation_api():
         print(f"Error saat menganalisis fluktuasi volume: {e}")
         return jsonify({"message": f"Gagal mengambil data fluktuasi volume. Detail teknis error: {e}"}), 500
         
-# 2. API SUMMARY (Untuk KPI Cards di collection_unified.html)
-# Fungsi ini dipertahankan karena digunakan di dashboard_analytics.html
+# 2. API SUMMARY (Untuk KPI Cards di dashboard_analytics.html)
 @app.route('/api/analyze/mc_grouping/summary', methods=['GET'])
 @login_required 
 def analyze_mc_grouping_summary_api():
@@ -750,7 +795,7 @@ def analyze_mc_grouping_summary_api():
         print(f"Error saat mengambil summary grouping MC: {e}")
         return jsonify({"message": f"Gagal mengambil summary grouping MC. Detail teknis error: {e}"}), 500
 
-# 3. API BREAKDOWN TARIF (Untuk Tabel Distribusi di collection_unified.html)
+# 3. API BREAKDOWN TARIF (Digunakan oleh Grouping MC)
 @app.route('/api/analyze/mc_tarif_breakdown', methods=['GET'])
 @login_required 
 def analyze_mc_tarif_breakdown_api():
@@ -809,9 +854,7 @@ def analyze_mc_tarif_breakdown_api():
     except Exception as e:
         print(f"Error saat mengambil tarif breakdown MC: {e}")
         return jsonify({"message": f"Gagal mengambil tarif breakdown MC. Detail teknis error: {e}"}), 500
-# =========================================================================
-# === END API GROUPING MC KUSTOM ===
-# =========================================================================
+
 
 # Endpoint File Upload/Merge (Dinamis)
 @app.route('/analyze/upload', methods=['GET'])
@@ -854,7 +897,7 @@ def analyze_data():
 
         except Exception as e:
             print(f"Error membaca file {filename}: {e}")
-            return jsonify({"message": f"Gagal membaca file {filename}: {e}"}), 500
+            return jsonify({"message": f"Gagal membaca file {filename}. Detail Teknis: {e}"}), 500
 
     if not all_dfs:
         return jsonify({"message": "Tidak ada file yang valid untuk digabungkan."}), 400
