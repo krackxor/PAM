@@ -684,6 +684,16 @@ def analyze_reduced_usage():
                            title="Pemakaian Air Naik/Turun (Fluktuasi Volume)", 
                            description="Menampilkan pelanggan dengan fluktuasi konsumsi air signifikan (naik atau turun) dengan membandingkan 2 periode SBRS terakhir.",
                            is_admin=current_user.is_admin)
+# >>> START OF FIX: ADDING MISSING VIEW FUNCTION <<<
+@app.route('/analyze/tarif_breakdown', methods=['GET'])
+@login_required
+def analyze_tarif_breakdown_page():
+    """Rute untuk menampilkan halaman laporan Tarif Breakdown (menggunakan template yang ada)."""
+    return render_template('analyze_report_template.html', 
+                           title="Distribusi Pelanggan Tarif Kustom", 
+                           description="Menampilkan distribusi pelanggan (REG) berdasarkan tarif di Rayon 34/35.",
+                           is_admin=current_user.is_admin)
+# >>> END OF FIX <<<
 
 @app.route('/analyze/zero', methods=['GET'])
 @login_required
@@ -1362,7 +1372,7 @@ def upload_sbrs_data():
                 collection_sbrs.insert_one(record)
                 inserted_count += 1
         
-        # === ANALISIS ANOMALI INSTAN SETELAH INSERT ===
+        # === ANALISIS ANOMALI INSTAN SETELAN INSERT ===
         anomaly_list = []
         try:
             if inserted_count > 0:
@@ -1383,7 +1393,7 @@ def upload_sbrs_data():
                 "inserted_count": inserted_count,
                 "skipped_count": skipped_count
             },
-            "anomaly_list": anomaly_list # <<< PERBAIKAN KRITIS DI SINI
+            "anomaly_list": anomaly_list # Diperbarui untuk mengirimkan hasil analisis
         }), 200
         # --- END RETURN REPORT ---
 
