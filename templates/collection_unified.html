@@ -78,55 +78,9 @@
 
 /* -------------------------------------------------------------------------- */
 /* --- ROMBAK TOTAL UI: LAYOUT MOBILE (LIST TRANSAKSI) --- */
+/* Dihapus: Seluruh blok @media screen and (max-width: 600px) untuk tabel.
+   Sekarang tabel akan diskroll secara horizontal di perangkat mobile.
 /* -------------------------------------------------------------------------- */
-@media screen and (max-width: 600px) {
-    
-    .collection-table thead, .report-table thead {
-        display: none;
-    }
-
-    .collection-table tr:not(.total-row) {
-        display: block;
-        margin-bottom: 10px;
-        border: 1px solid #ddd;
-        border-radius: var(--border-radius);
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    }
-    
-    .collection-table td {
-        display: flex;
-        justify-content: space-between;
-        padding: 8px 12px;
-        border: none;
-        border-bottom: 1px solid #eee;
-        position: relative;
-        text-align: right; 
-    }
-
-    .collection-table td:before {
-        content: attr(data-label); 
-        font-weight: 600;
-        text-align: left;
-        width: 50%; 
-        color: var(--text-color);
-        padding-right: 10px;
-    }
-    
-    .collection-table .total-row td {
-        display: table-cell;
-        border: 1px solid #ddd;
-        text-align: center;
-        font-weight: bold;
-    }
-    .collection-table .total-row {
-        margin-top: 20px;
-        display: table-row-group;
-    }
-    
-    .report-table {
-        min-width: 100%;
-    }
-}
 {% endblock %}
 
 {% block content %}
