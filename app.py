@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, make_response
-from pymongo import MongoClient, ReplaceOne # FIX: Import ReplaceOne untuk operasi UPSERT
+from pymongo import MongoClient, ReplaceOne 
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -42,11 +42,11 @@ try:
     db = client[DB_NAME]
     
     # 🚨 KOLEKSI DIPISAH BERDASARKAN SUMBER DATA
-    collection_mc = db['MasterCetak']   # MC (Piutang/Tagihan Bulanan - UPSERT)
+    collection_mc = db['MasterCetak']   # MC (Piutang/Tagihan Bulanan - UPSERT Historis)
     collection_mb = db['MasterBayar']   # MB (Koleksi Harian - APPEND/UPSERT Transaksi)
     collection_cid = db['CustomerData'] # CID (Data Pelanggan Statis - REPLACE)
     collection_sbrs = db['MeterReading'] # SBRS (Baca Meter Harian/Parsial - APPEND/UPSERT Pembacaan)
-    collection_ardebt = db['AccountReceivable'] # ARDEBT (Tunggakan Detail - UPSERT)
+    collection_ardebt = db['AccountReceivable'] # ARDEBT (Tunggakan Detail - UPSERT Historis)
     
     # ==========================================================
     # === START OPTIMASI: INDEXING KRITIS (SOLUSI KECEPATAN PERMANEN) ===
@@ -1021,6 +1021,143 @@ def analyze_mc_tarif_breakdown_api():
 # === END API GROUPING MC KUSTOM ===
 # =========================================================================
 
+# =========================================================================
+# === NEW ANALYTIC ENDPOINTS (VIP, RISK, DQC) ===
+# =========================================================================
+
+@app.route('/api/analyze/vip_payers', methods=['GET'])
+@login_required 
+def analyze_vip_payers():
+    """Mencari pelanggan Premium yang TIDAK PERNAH menunggak (zero debt)."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    try:
+        # 1. Dapatkan daftar NOMEN yang sedang menunggak (ARDEBT)
+        debtors = collection_ardebt.distinct('NOMEN')
+        
+        # 2. Pipeline untuk mencari pelanggan Premium (CID) yang TIDAK menunggak (NOT IN ARDEBT)
+        pipeline = [
+            {'$match': {
+                'NOMEN': {'$nin': debtors}, # Pelanggan TIDAK ADA di daftar penunggak
+                '$or': [
+                    {'TARIFF': {'$in': ['4A', '3Q']}}, # Kriteria Tarif Premium
+                    {'UKURAN_METER': {'$gte': '0.70'}}, # Kriteria Ukuran Meter Besar
+                ],
+                'TIPEPLGGN': 'REG' # Hanya pelanggan Reguler (asumsi)
+            }},
+            {'$project': {
+                '_id': 0,
+                'NOMEN': 1,
+                'NAMA': 1,
+                'RAYON': 1,
+                'TARIFF': '$TARIF',
+                'UKURAN_METER': '$UKURAN_METER'
+            }},
+            {'$limit': 100}
+        ]
+        
+        vip_list = list(collection_cid.aggregate(pipeline))
+        return jsonify(vip_list), 200
+
+    except Exception as e:
+        print(f"Error saat menganalisis VIP Payers: {e}")
+        return jsonify({"message": f"Gagal mengambil data VIP Payers: {e}"}), 500
+
+@app.route('/api/analyze/high_risk', methods=['GET'])
+@login_required 
+def analyze_high_risk():
+    """Mencari pelanggan dengan tunggakan kritis (>= 5 bulan) ATAU anomali ekstrem."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    try:
+        # 1. Ambil data Pelanggan dengan Tunggakan Kritis (>= 5 bulan)
+        pipeline_debt_risk = [
+            {'$match': {'CountOfPERIODE_BILL': {'$gte': 5}}},
+            {'$group': {
+                '_id': '$NOMEN',
+                'months': {'$first': '$CountOfPERIODE_BILL'},
+                'amount': {'$first': '$SumOfJUMLAH'}
+            }},
+            {'$lookup': {
+               'from': 'CustomerData', 
+               'localField': '_id',
+               'foreignField': 'NOMEN',
+               'as': 'customer_info'
+            }},
+            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+            {'$project': {
+                '_id': 0,
+                'NOMEN': '$_id',
+                'NAMA': {'$ifNull': ['$customer_info.NAMA', 'N/A']},
+                'STATUS_RISIKO': f"TUNGGAKAN KRITIS {d['months']} BULAN",
+                'JUMLAH_TUNGGAKAN': '$amount',
+                'RAYON': {'$ifNull': ['$customer_info.RAYON', 'N/A']}
+            }}
+        ]
+        debt_risk = list(collection_ardebt.aggregate(pipeline_debt_risk))
+        
+        # 2. Ambil data Anomali Ekstrem (dari SBRS)
+        sbrs_anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        extreme_risk = [
+            {'NOMEN': a['NOMEN'], 'NAMA': a['NAMA'], 'STATUS_RISIKO': a['STATUS_PEMAKAIAN'], 
+             'JUMLAH_TUNGGAKAN': 'N/A', 'RAYON': a['RAYON']} 
+            for a in sbrs_anomalies if 'EKSTRIM' in a['STATUS_PEMAKAIAN'] or 'ZERO' in a['STATUS_PEMAKAIAN']
+        ]
+
+        # 3. Gabungkan dan hapus duplikasi (NOMEN adalah kuncinya)
+        combined_risk = {item['NOMEN']: item for item in (debt_risk + extreme_risk)}
+        
+        return jsonify(list(combined_risk.values())), 200
+
+    except Exception as e:
+        print(f"Error saat menganalisis High Risk: {e}")
+        return jsonify({"message": f"Gagal mengambil data High Risk: {e}"}), 500
+
+@app.route('/api/dqc/inconsistencies', methods=['GET'])
+@login_required 
+@admin_required
+def dqc_inconsistencies():
+    """Cek kualitas data: NOMEN di MC yang tidak ada di CID (Master Data Hilang)."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    try:
+        # Menggunakan agregasi untuk menemukan perbedaan
+        pipeline = [
+            {'$lookup': {
+                'from': 'CustomerData', 
+                'localField': 'NOMEN',
+                'foreignField': 'NOMEN',
+                'as': 'cid_match'
+            }},
+            {'$match': {'cid_match': {'$eq': []}}}, # Cari yang tidak ada pasangannya di CID
+            {'$group': {'_id': '$NOMEN', 'count': {'$sum': 1}}},
+            {'$project': {
+                '_id': 0,
+                'NOMEN': '$_id',
+                'MC_Records_Missing_CID': '$count'
+            }},
+            {'$limit': 100}
+        ]
+        
+        inconsistencies = list(collection_mc.aggregate(pipeline))
+        
+        # Contoh lain: Cek NOMEN di ARDEBT tapi tidak ada di MC (Tunggakan tanpa tagihan aktif)
+        # (Ini kompleks, jadi kita fokus ke MC vs CID dulu)
+        
+        return jsonify(inconsistencies), 200
+
+    except Exception as e:
+        print(f"Error saat menjalankan DQC: {e}")
+        return jsonify({"message": f"Gagal menjalankan DQC: {e}"}), 500
+
+# =========================================================================
+# === END NEW ANALYTIC ENDPOINTS ===
+# =========================================================================
+
+
 # Endpoint File Upload/Merge (Dinamis)
 @app.route('/analyze/upload', methods=['GET'])
 @login_required 
@@ -1104,6 +1241,9 @@ def upload_mc_data():
     """Mode UPSERT: Untuk Master Cetak (MC) / Piutang Bulanan. (FIXED FOR HISTORY)"""
     from pymongo import ReplaceOne 
     
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
     if 'file' not in request.files:
         return jsonify({"message": "Tidak ada file di permintaan"}), 400
 
@@ -1133,7 +1273,7 @@ def upload_mc_data():
                 df[col] = df[col].astype(str).str.strip().str.upper()
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
             
-            if col in ['NOMINAL', 'NOMINAL_AKHIR', 'KUBIK', 'SUBNOMINAL', 'ANG_BP', 'DENDA', 'PPN']: 
+            if col in ['NOMINAL', 'NOMINAL_AKHIR', 'KUBIK', 'SUBNOMINAL', 'ANG_BP', 'DENDA', 'PPN', 'MASA', 'TAHUN2']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
         if 'PC' in df.columns:
@@ -1158,7 +1298,7 @@ def upload_mc_data():
                 'TAHUN2': record.get('TAHUN2')
             }
             # Hapus kunci jika tidak ada (untuk menghindari pencarian yang salah)
-            filter_query = {k: v for k, v in filter_query.items() if v is not None and v != 'N/A'}
+            filter_query = {k: v for k, v in filter_query.items() if v is not None and v != 'N/A' and v != 0}
             
             # ReplaceOne dengan upsert=True akan memperbarui jika kunci ditemukan, atau menyisipkan baru
             requests.append(ReplaceOne(
@@ -1472,6 +1612,9 @@ def upload_ardebt_data():
     """Mode UPSERT: Untuk data Detail Tunggakan (ARDEBT). (FIXED FOR HISTORY)"""
     from pymongo import ReplaceOne
 
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
     if 'file' not in request.files:
         return jsonify({"message": "Tidak ada file di permintaan"}), 400
 
@@ -1523,7 +1666,7 @@ def upload_ardebt_data():
                 # Menggunakan CountOfPERIODE_BILL sebagai kunci unik per baris/periode tunggakan
                 'COUNTOFPERIODE_BILL': record.get('COUNTOFPERIODE_BILL') 
             }
-            filter_query = {k: v for k, v in filter_query.items() if v is not None and v != 'N/A'}
+            filter_query = {k: v for k, v in filter_query.items() if v is not None and v != 'N/A' and v != 0}
             
             requests.append(ReplaceOne(
                 filter_query,
@@ -1920,6 +2063,44 @@ def export_anomalies_data():
     except Exception as e:
         print(f"Error during anomaly export: {e}")
         return jsonify({"message": f"Gagal mengekspor data anomali: {e}"}), 500
+
+# =========================================================================
+# === DQC ENDPOINT (ADMIN ONLY) ===
+# =========================================================================
+
+@app.route('/api/dqc/mc_missing_cid', methods=['GET'])
+@login_required
+@admin_required
+def dqc_mc_missing_cid():
+    """Cek NOMEN di MC (aktif) yang tidak ada di CID (Master Data Hilang)."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    try:
+        pipeline = [
+            {'$lookup': {
+                'from': 'CustomerData', 
+                'localField': 'NOMEN',
+                'foreignField': 'NOMEN',
+                'as': 'cid_match'
+            }},
+            {'$match': {'cid_match': {'$eq': []}}}, # Cari yang tidak ada pasangannya di CID
+            {'$group': {'_id': '$NOMEN', 'count': {'$sum': 1}}},
+            {'$project': {
+                '_id': 0,
+                'NOMEN': '$_id',
+                'MC_Records_Missing_CID': '$count'
+            }},
+            {'$limit': 1000}
+        ]
+        
+        inconsistencies = list(collection_mc.aggregate(pipeline))
+        
+        return jsonify(inconsistencies), 200
+
+    except Exception as e:
+        print(f"Error saat menjalankan DQC: {e}")
+        return jsonify({"message": f"Gagal menjalankan DQC: {e}"}), 500
 
 
 if __name__ == '__main__':
