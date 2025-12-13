@@ -25,7 +25,7 @@
     overflow-x: auto;
     width: 100%; 
     margin-top: 15px;
-    margin-bottom: 20px; /* Tambahkan ruang bawah */
+    margin-bottom: 20px; 
 }
 
 /* General Report Table Styling: Enforce consistency, scroll, and alignment */
@@ -54,23 +54,6 @@
     background-color: #f8f9fa; /* Light grey background for totals */
 }
 
-/* Filter/Search Input Group Layout */
-.filter-input-group {
-    display: flex;
-    gap: 10px;
-    margin-top: 20px;
-    margin-bottom: 20px;
-    align-items: center; 
-}
-#filterInput {
-    flex-grow: 1;
-    padding: 12px;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-    font-size: 16px;
-    box-sizing: border-box;
-}
-
 /* MB Detail Table Class (Used for the lower table listing) */
 .collection-table {
     width: 100%;
@@ -93,9 +76,49 @@
     background-color: #e0f7fa; /* Light cyan for MB totals */
 }
 
+/* Mobile Layout (Card View for Tables) */
+@media screen and (max-width: 600px) {
+    .report-table-wrapper, .result-table-wrapper {
+        overflow-x: visible; /* Disable scroll for card view */
+    }
+    .report-table, .collection-table {
+        min-width: 100%;
+        width: 100%;
+        box-shadow: none;
+        border: none;
+    }
+    .report-table thead, .collection-table thead {
+        display: none; /* Hide headers */
+    }
+    .report-table tr, .collection-table tr {
+        display: block;
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        border-radius: var(--border-radius);
+    }
+    .report-table td, .collection-table td {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 12px;
+        border: none;
+        border-bottom: 1px solid #eee;
+        text-align: right;
+        white-space: normal; /* Allow text wrapping */
+    }
+    .report-table td:before, .collection-table td:before {
+        content: attr(data-label);
+        font-weight: 600;
+        text-align: left;
+        width: 50%;
+        color: var(--text-color);
+        padding-right: 10px;
+    }
+    .report-table tr.grand-total-row, .collection-table tr.total-row {
+        margin-top: 5px;
+    }
+}
 /* -------------------------------------------------------------------------- */
-/* Dihapus: Seluruh blok @media screen and (max-width: 600px) untuk tabel.
-   Sekarang tabel akan diskroll secara horizontal di perangkat mobile.
+/* Perbaikan Selesai: Layout Card View untuk mobile diterapkan.
 /* -------------------------------------------------------------------------- */
 {% endblock %}
 
@@ -297,16 +320,16 @@
             data.forEach(item => {
                 tableHTML += `
                     <tr>
-                        <td data-label="Rayon">${item.RAYON}</td>
+                        <td data-label="RAYON">${item.RAYON}</td>
                         <td data-label="PCEZ">${item.PCEZ}</td>
-                        <td data-label="MC Piutang Nom">${formatRupiah(item.MC_TotalNominal)}</td>
-                        <td data-label="MC Piutang Kubik">${formatNumber(item.MC_TotalKubik)}</td>
-                        <td data-label="MC Koleksi Nom">${formatRupiah(item.MC_CollectedNominal)}</td>
-                        <td data-label="MC Koleksi Kubik">${formatNumber(item.MC_CollectedKubik)}</td>
-                        <td data-label="MB Undue Nom" class="undue-cell">${formatRupiah(item.MB_UndueNominal)}</td>
-                        <td data-label="MB Undue Kubik" class="undue-cell">${formatNumber(item.MB_UndueKubik)}</td>
-                        <td data-label="% Nom" class="percentage-cell">${formatPercent(item.PercentNominal)}</td>
-                        <td data-label="% Undue" class="undue-cell">${formatPercent(item.UnduePercentNominal)}</td>
+                        <td data-label="MC PIUTANG NOMINAL">${formatRupiah(item.MC_TotalNominal)}</td>
+                        <td data-label="MC PIUTANG KUBIK">${formatNumber(item.MC_TotalKubik)}</td>
+                        <td data-label="MC KOLEKSI NOMINAL">${formatRupiah(item.MC_CollectedNominal)}</td>
+                        <td data-label="MC KOLEKSI KUBIK">${formatNumber(item.MC_CollectedKubik)}</td>
+                        <td data-label="MB UNDUE NOMINAL" class="undue-cell">${formatRupiah(item.MB_UndueNominal)}</td>
+                        <td data-label="MB UNDUE KUBIK" class="undue-cell">${formatNumber(item.MB_UndueKubik)}</td>
+                        <td data-label="MC KOLEKSI %" class="percentage-cell">${formatPercent(item.PercentNominal)}</td>
+                        <td data-label="MB UNDUE %" class="undue-cell">${formatPercent(item.UnduePercentNominal)}</td>
                     </tr>
                 `;
             });
@@ -383,8 +406,8 @@
                     <tr>
                         <td data-label="RAYON" style="text-align: left;">${item.RAYON}</td>
                         <td data-label="TARIF" style="text-align: left;">${item.TARIF}</td>
-                        <td data-label="JML Pelanggan">${formatNumber(item.JumlahPelanggan)}</td>
-                        <td data-label="Persentase">${formatPercent(percentage)}</td>
+                        <td data-label="JML PELANGGAN">${formatNumber(item.JumlahPelanggan)}</td>
+                        <td data-label="PERSENTASE">${formatPercent(percentage)}</td>
                     </tr>
                 `;
             });
@@ -522,8 +545,8 @@
                     tableHTML += `
                         <tr>
                             <td style="text-align: left;" data-label="${dimensionKey.toUpperCase()}">${dimValue}</td>
-                            <td data-label="Nomen Count">${nomenCount}</td>
-                            <td data-label="Nominal">${nominal}</td>
+                            <td data-label="NOMEN COUNT">${nomenCount}</td>
+                            <td data-label="NOMINAL">${nominal}</td>
                         </tr>
                     `;
                 });
@@ -626,35 +649,35 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td style="text-align: left; font-weight: bold;">AB SUNTER (Total R34 + R35)</td>
-                                <td>${formatNumber(abSunter.total.CountOfNOMEN)}</td>
-                                <td>${formatRupiah(abSunter.total.SumOfNOMINAL)}</td>
-                                <td>${formatNumber(abSunter.undue.CountOfNOMEN_UNDUE)}</td>
-                                <td>${formatRupiah(abSunter.undue.SumOfNOMINAL_UNDUE)}</td>
-                                <td>${formatNumber(abSunter.tunggakan.CountOfNOMEN_TUNGGAKAN)}</td>
-                                <td>${formatRupiah(abSunter.tunggakan.SumOfNOMINAL_TUNGGAKAN)}</td>
+                                <td data-label="AREA" style="text-align: left; font-weight: bold;">AB SUNTER (Total R34 + R35)</td>
+                                <td data-label="TOTAL KOLEKSI NOMEN">${formatNumber(abSunter.total.CountOfNOMEN)}</td>
+                                <td data-label="TOTAL KOLEKSI NOMINAL">${formatRupiah(abSunter.total.SumOfNOMINAL)}</td>
+                                <td data-label="UNDUE NOMEN">${formatNumber(abSunter.undue.CountOfNOMEN_UNDUE)}</td>
+                                <td data-label="UNDUE NOMINAL">${formatRupiah(abSunter.undue.SumOfNOMINAL_UNDUE)}</td>
+                                <td data-label="TUNGGAKAN NOMEN">${formatNumber(abSunter.tunggakan.CountOfNOMEN_TUNGGAKAN)}</td>
+                                <td data-label="TUNGGAKAN NOMINAL">${formatRupiah(abSunter.tunggakan.SumOfNOMINAL_TUNGGAKAN)}</td>
                             </tr>
                             <tr>
-                                <td style="text-align: left; font-weight: 600;">Rayon 34</td>
-                                <td>${formatNumber(r34.total.CountOfNOMEN)}</td>
-                                <td>${formatRupiah(r34.total.SumOfNOMINAL)}</td>
+                                <td data-label="AREA" style="text-align: left; font-weight: 600;">Rayon 34</td>
+                                <td data-label="TOTAL KOLEKSI NOMEN">${formatNumber(r34.total.CountOfNOMEN)}</td>
+                                <td data-label="TOTAL KOLEKSI NOMINAL">${formatRupiah(r34.total.SumOfNOMINAL)}</td>
                                 
-                                <td>${formatNumber(r34.undue.CountOfNOMEN_UNDUE)}</td>
-                                <td>${formatRupiah(r34.undue.SumOfNOMINAL_UNDUE)}</td>
+                                <td data-label="UNDUE NOMEN">${formatNumber(r34.undue.CountOfNOMEN_UNDUE)}</td>
+                                <td data-label="UNDUE NOMINAL">${formatRupiah(r34.undue.SumOfNOMINAL_UNDUE)}</td>
                                 
-                                <td>${formatNumber(r34.tunggakan.CountOfNOMEN_TUNGGAKAN)}</td>
-                                <td>${formatRupiah(r34.tunggakan.SumOfNOMINAL_TUNGGAKAN)}</td>
+                                <td data-label="TUNGGAKAN NOMEN">${formatNumber(r34.tunggakan.CountOfNOMEN_TUNGGAKAN)}</td>
+                                <td data-label="TUNGGAKAN NOMINAL">${formatRupiah(r34.tunggakan.SumOfNOMINAL_TUNGGAKAN)}</td>
                             </tr>
                             <tr>
-                                <td style="text-align: left; font-weight: 600;">Rayon 35</td>
-                                <td>${formatNumber(r35.total.CountOfNOMEN)}</td>
-                                <td>${formatRupiah(r35.total.SumOfNOMINAL)}</td>
+                                <td data-label="AREA" style="text-align: left; font-weight: 600;">Rayon 35</td>
+                                <td data-label="TOTAL KOLEKSI NOMEN">${formatNumber(r35.total.CountOfNOMEN)}</td>
+                                <td data-label="TOTAL KOLEKSI NOMINAL">${formatRupiah(r35.total.SumOfNOMINAL)}</td>
                                 
-                                <td>${formatNumber(r35.undue.CountOfNOMEN_UNDUE)}</td>
-                                <td>${formatRupiah(r35.undue.SumOfNOMINAL_UNDUE)}</td>
+                                <td data-label="UNDUE NOMEN">${formatNumber(r35.undue.CountOfNOMEN_UNDUE)}</td>
+                                <td data-label="UNDUE NOMINAL">${formatRupiah(r35.undue.SumOfNOMINAL_UNDUE)}</td>
                                 
-                                <td>${formatNumber(r35.tunggakan.CountOfNOMEN_TUNGGAKAN)}</td>
-                                <td>${formatRupiah(r35.tunggakan.SumOfNOMINAL_TUNGGAKAN)}</td>
+                                <td data-label="TUNGGAKAN NOMEN">${formatNumber(r35.tunggakan.CountOfNOMEN_TUNGGAKAN)}</td>
+                                <td data-label="TUNGGAKAN NOMINAL">${formatRupiah(r35.tunggakan.SumOfNOMINAL_TUNGGAKAN)}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -698,10 +721,10 @@
                     const statusClass = item.STATUS_BAYAR === 'UNDUE' ? 'status-ok' : 'status-danger';
                     tableHTML += `
                         <tr>
-                            <td>${item.TGL_BAYAR}</td>
-                            <td>${item.NOMEN}</td>
-                            <td>${formatRupiah(item.NOMINAL)}</td>
-                            <td class="${statusClass}" style="text-align: center;">${item.STATUS_BAYAR}</td>
+                            <td data-label="TGL BAYAR">${item.TGL_BAYAR}</td>
+                            <td data-label="NOMEN">${item.NOMEN}</td>
+                            <td data-label="NOMINAL">${formatRupiah(item.NOMINAL)}</td>
+                            <td data-label="STATUS BAYAR" class="${statusClass}" style="text-align: center;">${item.STATUS_BAYAR}</td>
                         </tr>
                     `;
                 });
@@ -802,13 +825,13 @@
 
                 tableHTML += `
                     <tr>
-                        <td>${item.NOMEN}</td>
-                        <td>${item.RAYON}</td>
-                        <td>${item.PCEZ}</td>
-                        <td>${item.PAY_DT || '-'}</td>
-                        <td>Rp ${nominal.toLocaleString('id-ID')}</td>
-                        <td>${kubik.toLocaleString('id-ID', { maximumFractionDigits: 0 })}</td> 
-                        <td class="${statusClass}">${statusText}</td>
+                        <td data-label="NOMEN">${item.NOMEN}</td>
+                        <td data-label="RAYON">${item.RAYON}</td>
+                        <td data-label="PCEZ">${item.PCEZ}</td>
+                        <td data-label="TGL BAYAR">${item.PAY_DT || '-'}</td>
+                        <td data-label="NOMINAL">Rp ${nominal.toLocaleString('id-ID')}</td>
+                        <td data-label="KUBIK BAYAR (m³)">${kubik.toLocaleString('id-ID', { maximumFractionDigits: 0 })}</td>
+                        <td data-label="STATUS" class="${statusClass}">${statusText}</td>
                     </tr>
                 `;
             });
