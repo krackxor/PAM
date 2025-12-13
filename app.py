@@ -711,10 +711,10 @@ def analyze_volume_fluctuation_api():
         return jsonify({"message": f"Gagal mengambil data fluktuasi volume. Detail teknis error: {e}"}), 500
         
 # =========================================================================
-# === API GROUPING MC KUSTOM (KEMBALI KE MODE GROUPING KOKOH) ===
+# === API GROUPING MC KUSTOM (BARU DARI PERMINTAAN USER) ===
 # =========================================================================
 
-# 1. API DETAIL (Untuk Laporan Grouping Penuh - MODE GROUPING KOKOH -> SIMPLIFIKASI)
+# 1. API DETAIL (Mengembalikan Summary Total Kustom)
 @app.route('/api/analyze/mc_grouping', methods=['GET'])
 @login_required 
 def analyze_mc_grouping_api():
@@ -740,7 +740,6 @@ def analyze_mc_grouping_api():
             
             # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
-                # Normalisasi di sini menggunakan data yang sudah di-clean saat upload (UPPERCASE STRING)
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},
                 'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
                 'CLEAN_MERK': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
@@ -749,14 +748,13 @@ def analyze_mc_grouping_api():
             # --- END NORMALISASI ---
             
             {'$match': {
-                # Filter menggunakan STRING KAPITAL yang sudah di-clean
                 'CLEAN_TIPEPLGGN': 'REG',
-                'CLEAN_RAYON': {'$in': ['34', '35']} # Filter menggunakan string, konsisten dengan CID upload
+                'CLEAN_RAYON': {'$in': ['34', '35']} 
             }},
             
             # >>> START SIMPLIFIKASI: Mengubah ke Summary Total <<<
             {'$group': {
-                '_id': None, // Group semua dokumen menjadi satu untuk mendapatkan grand totals
+                '_id': None, # Group semua dokumen menjadi satu untuk mendapatkan grand totals
                 'TotalNomenKustom': {'$addToSet': '$NOMEN'}, 
                 'SumOfKUBIK': {'$sum': '$KUBIK'},
                 'SumOfNOMINAL': {'$sum': '$NOMINAL'},
@@ -982,7 +980,7 @@ def admin_upload_unified_page():
 @login_required 
 @admin_required 
 def upload_mc_data():
-    """Mode GANTI: Untuk Master Cetak (MC) / Piutang Bulanan. (DIPERBAIKI)"""
+    """Mode GANTI: Untuk Master Cetak (MC) / Piutang Bulanan."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
     
@@ -1009,7 +1007,7 @@ def upload_mc_data():
         # ===============================================================
         
         # Target kolom kunci MC untuk konsistensi
-        columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF', 'RAYON'] 
+        columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF', 'RAYON', 'PCEZ'] 
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize_mc:
@@ -1058,7 +1056,7 @@ def upload_mc_data():
 @login_required 
 @admin_required 
 def upload_mb_data():
-    """Mode APPEND: Untuk Master Bayar (MB) / Koleksi Harian. (DIPERBAIKI)"""
+    """Mode APPEND: Untuk Master Bayar (MB) / Koleksi Harian."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -1148,7 +1146,7 @@ def upload_mb_data():
 @login_required 
 @admin_required 
 def upload_cid_data():
-    """Mode GANTI: Untuk Customer Data (CID) / Data Pelanggan Statis. (DIPERBAIKI)"""
+    """Mode GANTI: Untuk Customer Data (CID) / Data Pelanggan Statis."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -1225,7 +1223,7 @@ def upload_cid_data():
 @login_required 
 @admin_required 
 def upload_sbrs_data():
-    """Mode APPEND: Untuk data Baca Meter (SBRS) / Riwayat Stand Meter. (DIPERBAIKI)"""
+    """Mode APPEND: Untuk data Baca Meter (SBRS) / Riwayat Stand Meter."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
