@@ -41,6 +41,26 @@
     background-color: #f2f2f2;
 }
 
+/* Style tambahan untuk laporan MB baru */
+.mb-category-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 30px;
+    font-size: 14px;
+}
+.mb-category-table th, .mb-category-table td {
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: center;
+}
+.mb-category-table th {
+    background-color: #e9ecef;
+}
+.mb-category-table .total-row {
+    font-weight: bold;
+    background-color: #d0e7ff;
+}
+
 /* Mobile Layout Fix */
 @media screen and (max-width: 600px) {
     .data-table thead {
@@ -66,6 +86,20 @@
         width: 50%;
         color: var(--text-color);
         padding-right: 10px;
+    }
+    /* Mobile for MB Category Table */
+    .mb-category-table thead {
+        display: none;
+    }
+    .mb-category-table tr {
+        margin-bottom: 15px;
+        border: 2px solid var(--primary-color);
+    }
+    .mb-category-table td {
+        display: flex;
+        justify-content: space-between;
+        text-align: right;
+        border: none;
     }
 }
 {% endblock %}
@@ -97,24 +131,49 @@
         function formatPercent(number) {
             return (parseFloat(number) || 0).toFixed(2) + '%';
         }
+        
+        function formatRupiah(number) {
+            return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        }
 
         async function fetchReportData(reportName) {
             const dataArea = document.getElementById('reportDataArea');
             dataArea.innerHTML = `<p style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Menghubungkan ke MongoDB untuk ${reportName}...</p>`;
             
             let endpoint = '';
+            let isMBReport = false;
+            let isMCReport = false;
+            let isAnomalyReport = false;
 
             // Mapping Laporan ke Endpoint API yang baru
-            if (reportName.includes('Naik/Turun')) {
+            if (reportName.includes('Master Bayar (MB)')) {
+                endpoint = '{{ url_for("analyze_mb_grouping_api") }}';
+                isMBReport = true;
+            } else if (reportName.includes('Master Cetak (MC)')) {
+                endpoint = '{{ url_for("analyze_mc_grouping_api") }}';
+                isMCReport = true;
+            } else if (reportName.includes('Naik/Turun')) {
                 endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}';
-            } else if (reportName.includes('Ekstrim')) {
-                endpoint = '/api/analyze/extreme_usage'; // Placeholder untuk Ekstrim
-            } else if (reportName.includes('Zero')) {
-                endpoint = '/api/analyze/zero_usage'; // Placeholder untuk Zero
+                isAnomalyReport = true;
+            } else if (reportName.includes('Ekstrim') || reportName.includes('Zero') || reportName.includes('Stand Tunggu')) {
+                 // Placeholder untuk Ekstrim, Zero, Stand Tunggu (yang memerlukan logika agregasi yang berbeda)
+                 // Untuk Ekstrim/Zero/Reduced, logika yang ada di app.py (_get_sbrs_anomalies) sudah dikaitkan ke analyze_volume_fluctuation_api
+                 // Untuk menyederhanakan, kita asumsikan laporan anomali lainnya menggunakan endpoint yang sama atau belum diimplementasikan.
+                 if (reportName.includes('Ekstrim') || reportName.includes('Zero')) {
+                     // Logika di app.py saat ini hanya di analyze_volume_fluctuation_api.
+                     // Jika Anda ingin report Ekstrim/Zero bekerja, perlu ditambahkan API spesifik.
+                     // Untuk Ekstrim/Zero, kita akan gunakan endpoint yang sama untuk mendapatkan semua data anomali dan client-side filter.
+                     endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}';
+                     isAnomalyReport = true;
+                 } else {
+                    dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini belum diimplementasi.</p>`;
+                    return;
+                 }
             } else {
-                 dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini belum diimplementasi.</p>`;
+                 dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini tidak valid.</p>`;
                  return;
             }
+
 
             try {
                 const response = await fetch(endpoint);
@@ -125,18 +184,195 @@
                     return;
                 }
                 
-                if (data.length === 0) {
-                    dataArea.innerHTML = `<p style="text-align: center;">Tidak ada data anomali ditemukan untuk laporan ${reportName}.</p>`;
+                if (response.status !== 200 || (isAnomalyReport && data.length === 0) || (isMCReport && data.status !== 'success') || (isMBReport && data.status !== 'success')) {
+                    dataArea.innerHTML = `<p style="text-align: center; color: red;">Tidak ada data ditemukan untuk laporan ${reportName}.</p>`;
                     return;
                 }
                 
-                renderDynamicTable(data, reportName);
+                if (isMBReport) {
+                    renderMBReport(data);
+                } else if (isMCReport) {
+                    // Re-use existing MC render logic if implemented elsewhere, 
+                    // or use the dynamic table if it's meant to show the breakdown only.
+                    // For now, assume it should render the full JSON structure
+                    renderMCGroupingReport(data); 
+                } else if (isAnomalyReport) {
+                    // Apply filtering if specific anomaly report is requested (Ekstrim/Zero)
+                    let filteredData = data;
+                    if (reportName.includes('Ekstrim')) {
+                        filteredData = data.filter(item => item.STATUS_PEMAKAIAN.includes('EKSTRIM'));
+                    } else if (reportName.includes('Zero')) {
+                        filteredData = data.filter(item => item.STATUS_PEMAKAIAN.includes('ZERO'));
+                    }
+                    renderDynamicTable(filteredData, reportName);
+                }
+
 
             } catch (error) {
                 dataArea.innerHTML = `<p style="text-align: center; color: red;">❌ Gagal mengambil data: ${error}</p>`;
                 console.error('Fetch Error:', error);
             }
         }
+        
+        // =========================================================================================
+        // NEW MB REPORT RENDERER
+        // =========================================================================================
+        function renderMBReport(data) {
+            const dataArea = document.getElementById('reportDataArea');
+            const categoryReport = data.category_report;
+            const dailyTrend = data.daily_trend;
+            const detailR34 = data.detail_r34;
+            const detailR35 = data.detail_r35;
+            
+            let html = `
+                <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px;">Laporan Grup MB (Koleksi) Berdasarkan Kategori Bayar</h3>
+                <p style="font-size: 0.9em; margin-bottom: 20px;">*Data difilter hanya untuk pelanggan Reguler (REG) Rayon 34 dan 35. Konteks bulan adalah November 2025.</p>
+                
+                ${renderCategoryTable('KOLEKSI UNDUE (BULAN REK: 112025)', categoryReport.undue, '#28a745')}
+                ${renderCategoryTable('KOLEKSI CURRENT (BULAN REK: 102025)', categoryReport.current, '#ffc107')}
+                ${renderCategoryTable('KOLEKSI TUNGGAKAN (BULAN REK: < 102025)', categoryReport.tunggakan, '#dc3545')}
+                
+                <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; margin-top: 40px;">Tabel Tren Koleksi Harian (Nov 2025)</h3>
+                ${renderDailyTrendTable(dailyTrend)}
+                
+                <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; margin-top: 40px;">Detail Transaksi MB Rayon 34 (Nov 2025)</h3>
+                ${renderDetailTransactionTable(detailR34, 'RAYON 34')}
+                
+                <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; margin-top: 40px;">Detail Transaksi MB Rayon 35 (Nov 2025)</h3>
+                ${renderDetailTransactionTable(detailR35, 'RAYON 35')}
+            `;
+
+            dataArea.innerHTML = html;
+        }
+
+        function renderCategoryTable(title, data, color) {
+            
+            const total = data.TOTAL_AB_SUNTER || { NomenCount: 0, TotalNominal: 0 };
+            const r34 = data[34] || { NomenCount: 0, TotalNominal: 0 };
+            const r35 = data[35] || { NomenCount: 0, TotalNominal: 0 };
+            
+            let tableHTML = `
+                <h4 style="color: ${color}; margin-top: 25px;">${title}</h4>
+                <div class="result-table-wrapper">
+                    <table class="mb-category-table" style="border-left: 5px solid ${color};">
+                        <thead>
+                            <tr>
+                                <th>RAYON</th>
+                                <th>Nomen Count</th>
+                                <th>Total Nominal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="total-row" style="background-color: ${color}22;">
+                                <td data-label="RAYON" style="text-align: left;">TOTAL AB SUNTER</td>
+                                <td data-label="Nomen Count">${total.NomenCount.toLocaleString('id-ID')}</td>
+                                <td data-label="Total Nominal">${formatRupiah(total.TotalNominal)}</td>
+                            </tr>
+                            <tr>
+                                <td data-label="RAYON" style="text-align: left;">Rayon 34</td>
+                                <td data-label="Nomen Count">${r34.NomenCount.toLocaleString('id-ID')}</td>
+                                <td data-label="Total Nominal">${formatRupiah(r34.TotalNominal)}</td>
+                            </tr>
+                            <tr>
+                                <td data-label="RAYON" style="text-align: left;">Rayon 35</td>
+                                <td data-label="Nomen Count">${r35.NomenCount.toLocaleString('id-ID')}</td>
+                                <td data-label="Total Nominal">${formatRupiah(r35.TotalNominal)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            return tableHTML;
+        }
+
+        function renderDailyTrendTable(data) {
+            if (data.length === 0) return '<p>Tidak ada data koleksi harian ditemukan untuk bulan ini.</p>';
+            
+            let totalTransaksi = 0;
+            let totalNominal = 0;
+            
+            data.forEach(item => {
+                totalTransaksi += item.JumlahTransaksi;
+                totalNominal += item.TotalNominal;
+            });
+            
+            let tableHTML = `
+                <div class="result-table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr style="background-color: #d4edda;">
+                                <th>TANGGAL BAYAR</th>
+                                <th>JML TRANSAKSI (Nomen Count)</th>
+                                <th>TOTAL NOMINAL (Rp)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            data.forEach(item => {
+                tableHTML += `
+                    <tr>
+                        <td data-label="TANGGAL BAYAR" style="text-align: left;">${item.TANGGAL_BAYAR}</td>
+                        <td data-label="JML TRANSAKSI">${item.JumlahTransaksi.toLocaleString('id-ID')}</td>
+                        <td data-label="TOTAL NOMINAL" style="text-align: right;">${formatRupiah(item.TotalNominal)}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                <tr class="total-row" style="background-color: #f2f2f2; font-weight: bold;">
+                    <td style="text-align: left;">GRAND TOTAL</td>
+                    <td data-label="GRAND TOTAL TRANSAKSI">${totalTransaksi.toLocaleString('id-ID')}</td>
+                    <td data-label="GRAND TOTAL NOMINAL" style="text-align: right;">${formatRupiah(totalNominal)}</td>
+                </tr>
+            `;
+            
+            tableHTML += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            return tableHTML;
+        }
+        
+        function renderDetailTransactionTable(data, title) {
+            if (data.length === 0) return `<p>Tidak ada data detail transaksi MB untuk ${title} di bulan ini.</p>`;
+            
+            let tableHTML = `
+                <div class="result-table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr style="background-color: #f0f8ff;">
+                                <th>TANGGAL BAYAR</th>
+                                <th>NOMEN</th>
+                                <th>NOMINAL (Rp)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            data.forEach(item => {
+                tableHTML += `
+                    <tr>
+                        <td data-label="TANGGAL BAYAR">${item.TANGGAL_BAYAR}</td>
+                        <td data-label="NOMEN">${item.NOMEN}</td>
+                        <td data-label="NOMINAL" style="text-align: right;">${formatRupiah(item.NOMINAL)}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            return tableHTML;
+        }
+
+        
+        // =========================================================================================
+        // GENERIC / ANOMALY REPORT RENDERER (EXISTING FUNCTION)
+        // =========================================================================================
 
         function renderDynamicTable(data, title) {
             const dataArea = document.getElementById('reportDataArea');
@@ -172,6 +408,16 @@
             tableHTML += `</tbody></table></div>`;
             dataArea.innerHTML = tableHTML;
         }
+        
+        // Placeholder function for MC Report (assuming it uses the complex MC grouping JSON)
+        function renderMCGroupingReport(data) {
+             const dataArea = document.getElementById('reportDataArea');
+             // This is complex and assumes the render logic is identical to collection_unified.html's custom report
+             // Since the logic is extensive, we'll use a simplified message here
+             dataArea.innerHTML = `<p style="text-align: center; color: green;">✅ Data Grup MC (Master Cetak) berhasil dimuat. Render laporan ini mirip dengan bagian "Laporan Grouping MC: AB Sunter" di menu Report/Koleksi.</p>`;
+             // Actual implementation would copy the renderCustomReportTable logic from collection_unified.html
+        }
+
 
     </script>
 {% endblock %}
