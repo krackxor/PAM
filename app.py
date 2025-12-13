@@ -885,7 +885,6 @@ def _aggregate_mb_grouping(collection_mb, collection_cid, rayon_filter=None):
         }
     })
     
-    # >>> START FIX KRITIS: MENGGANTI 'default' dengan 'else' <<<
     pipeline.append({
         '$addFields': {
             'STATUS_BAYAR': {
@@ -893,12 +892,11 @@ def _aggregate_mb_grouping(collection_mb, collection_cid, rayon_filter=None):
                     # Jika MMYYYY pembayaran sama dengan BULAN_REK, itu UNDUE
                     'if': { '$eq': ['$PAY_MONTH_YEAR', '$BULAN_REK'] },
                     'then': 'UNDUE',
-                    'else': 'TUNGGAKAN' # Fix: Mengganti 'default' dengan 'else'
+                    'else': 'TUNGGAKAN' 
                 }
             }
         }
     })
-    # >>> END FIX KRITIS <<<
 
     # --- 3. Hitung Total Collection ---
     pipeline_total = pipeline + [
@@ -950,17 +948,22 @@ def _aggregate_mb_grouping(collection_mb, collection_cid, rayon_filter=None):
     arrears_result = list(collection_mb.aggregate(pipeline_arrears, allowDiskUse=True))
     arrears_metrics = arrears_result[0] if arrears_result else {'CountOfNOMEN_TUNGGAKAN': 0, 'SumOfNOMINAL_TUNGGAKAN': 0}
 
-    # --- 6. Ambil Detail Listing (Dibatasi 500 baris per Rayon) ---
+    # --- 6. Ambil Detail Listing (Daily Summary - MODIFIKASI KRITIS UNTUK USER) ---
+    # Group by Payment Date to get daily summary: TGL_BAYAR | Nomen Count | Nominal Total
     pipeline_details = pipeline + [
+        {'$group': {
+            '_id': '$TGL_BAYAR', # Group by Payment Date
+            'CountOfNOMEN_HARI': {'$addToSet': '$NOMEN'},
+            'SumOfNOMINAL_HARI': {'$sum': '$NOMINAL'},
+        }},
         {'$project': {
             '_id': 0,
-            'TGL_BAYAR': 1,
-            'NOMEN': 1,
-            'NOMINAL': {'$round': ['$NOMINAL', 0]},
-            'STATUS_BAYAR': 1
+            'TGL_BAYAR': '$_id',
+            'CountOfNOMEN': {'$size': '$CountOfNOMEN_HARI'},
+            'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL_HARI', 0]},
         }},
-        {'$sort': {'TGL_BAYAR': -1}}, # Sort Descending by Date
-        {'$limit': 500}
+        {'$sort': {'TGL_BAYAR': -1}}, # Sort Descending by Date (Terbaru dulu)
+        {'$limit': 500} # Keep limit for performance
     ]
     details = list(collection_mb.aggregate(pipeline_details, allowDiskUse=True))
     
@@ -1994,7 +1997,7 @@ def export_dashboard_data():
         })
         
         output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        with pd.ExcelWriter(output, engine='openypxl') as writer:
             df_summary.to_excel(writer, sheet_name='Ringkasan KPI', index=False)
             df_rayon.to_excel(writer, sheet_name='Analisis Rayon', index=False)
             pd.DataFrame(summary_data['tren_koleksi_7_hari']).to_excel(writer, sheet_name='Tren Koleksi 7 Hari', index=False)
