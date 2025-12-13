@@ -4,7 +4,62 @@
 
 {% block custom_styles %}
 /* Custom CSS untuk Tampilan Report/Detail yang Responsif */
-/* ... (CSS yang sudah ada) ... */
+.report-header { text-align: center; margin-bottom: 20px; }
+.report-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); 
+    gap: 20px;
+    margin-bottom: 30px;
+}
+.summary-card { 
+    background-color: var(--card-bg); 
+    padding: 15px; 
+    border-radius: var(--border-radius); 
+    box-shadow: var(--shadow-light);
+    text-align: center; 
+    border: 1px solid #e0e0e0;
+    border-left: 5px solid;
+    transition: transform 0.2s;
+}
+.summary-card:hover {
+     transform: translateY(-2px);
+     box-shadow: var(--shadow-medium);
+}
+.summary-card h4 { margin: 0 0 5px 0; font-size: 0.9em; color: #6c757d; }
+.summary-card p { margin: 0; font-size: 1.6em; font-weight: bold; }
+
+.filter-input-group { 
+    margin-top: 30px; padding-top: 20px; border-top: 1px dashed #ddd; 
+    display: flex; align-items: stretch; gap: 10px; 
+}
+#filterInput { 
+    padding: 12px; 
+    border: 1px solid #ced4da; 
+    border-radius: var(--border-radius); 
+    font-size: 16px; 
+    flex-grow: 1; 
+}
+.report-table-wrapper { overflow-x: auto; margin-top: 20px; }
+
+/* --- TABLE LAYOUT --- */
+.report-table, .collection-table { 
+    width: 100%; border-collapse: collapse; font-size: 14px; 
+    box-shadow: var(--shadow-light); 
+    border-radius: var(--border-radius);
+    overflow: hidden; 
+}
+.report-table th, .report-table td, .collection-table th, .collection-table td { 
+    border: 1px solid #f0f0f0; padding: 10px; text-align: right; white-space: nowrap; 
+}
+.report-table th, .collection-table th { background-color: #e9ecef; text-align: center; font-weight: 600; }
+/* New styles for improved report table */
+.report-table { min-width: 1000px; }
+.undue-cell { font-weight: bold; color: #17a2b8 !important; }
+
+.grand-total-row { font-weight: bold; background-color: #d0e7ff; color: var(--text-color); } 
+.percentage-cell { font-weight: bold; color: var(--secondary-color); }
+
+.no-results { text-align: center; color: #555; padding: 20px; }
 
 /* Styling untuk kelompok tabel kustom (AB Sunter) */
 .breakdown-group {
@@ -20,12 +75,58 @@
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-light);
 }
-/* ... (CSS yang sudah ada) ... */
 
 /* -------------------------------------------------------------------------- */
-/* Dihapus: Seluruh blok @media screen and (max-width: 600px) untuk tabel.
-   Sekarang tabel akan diskroll secara horizontal di perangkat mobile.
+/* --- ROMBAK TOTAL UI: LAYOUT MOBILE (LIST TRANSAKSI) --- */
 /* -------------------------------------------------------------------------- */
+@media screen and (max-width: 600px) {
+    
+    .collection-table thead, .report-table thead {
+        display: none;
+    }
+
+    .collection-table tr:not(.total-row) {
+        display: block;
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        border-radius: var(--border-radius);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+    
+    .collection-table td {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 12px;
+        border: none;
+        border-bottom: 1px solid #eee;
+        position: relative;
+        text-align: right; 
+    }
+
+    .collection-table td:before {
+        content: attr(data-label); 
+        font-weight: 600;
+        text-align: left;
+        width: 50%; 
+        color: var(--text-color);
+        padding-right: 10px;
+    }
+    
+    .collection-table .total-row td {
+        display: table-cell;
+        border: 1px solid #ddd;
+        text-align: center;
+        font-weight: bold;
+    }
+    .collection-table .total-row {
+        margin-top: 20px;
+        display: table-row-group;
+    }
+    
+    .report-table {
+        min-width: 100%;
+    }
+}
 {% endblock %}
 
 {% block content %}
@@ -63,17 +164,6 @@
         <p class="no-results">Tekan "Muat Laporan AB Sunter" untuk melihat hasil agregasi.</p>
     </div>
     
-    <h3 style="margin-top: 40px; color: #17a2b8; border-top: 1px solid #17a2b8; padding-top: 20px;">
-        <i class="fas fa-money-check-alt"></i> Laporan Grouping MB: AB Sunter (Koleksi)
-    </h3>
-    
-    <button id="fetchCustomMBReportBtn" class="btn-primary" style="background-color: #17a2b8; color: white; margin-bottom: 20px;">
-        <i class="fas fa-sync"></i> Muat Laporan Koleksi AB Sunter
-    </button>
-
-    <div id="customMBReportArea">
-        <p class="no-results">Tekan "Muat Laporan Koleksi AB Sunter" untuk melihat hasil agregasi.</p>
-    </div>
     <div class="filter-input-group">
         <input type="text" id="filterInput" placeholder="Filter Detail (Rayon, PCEZ, NOMEN)...">
         <button id="searchBtn" class="btn-primary" style="background-color: var(--primary-color); color: white; padding: 12px 18px; border: none; border-radius: 4px;">
@@ -91,17 +181,10 @@
         const searchBtn = document.getElementById('searchBtn');
         const detailsArea = document.getElementById('detailsArea');
         const exportReportBtn = document.getElementById('exportReportBtn');
-        
-        // MC Constants
         const fetchCustomBtn = document.getElementById('fetchCustomReportBtn'); 
         const customReportArea = document.getElementById('customReportArea');
         const tarifBreakdownArea = document.getElementById('tarifBreakdownArea');
         
-        // MB Constants
-        const fetchCustomMBBtn = document.getElementById('fetchCustomMBReportBtn');
-        const customMBReportArea = document.getElementById('customMBReportArea');
-
-        // ... (Fungsi formatRupiah, formatNumber, formatPercent tetap sama) ...
         function formatRupiah(number) {
             return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
         }
@@ -113,9 +196,8 @@
         function formatPercent(number) {
             return (parseFloat(number) || 0).toFixed(2) + '%';
         }
-        
+
         // --- FUNGSI 1: MEMUAT REPORT RINGKAS ---
-        // ... (fetchCollectionReport dan renderReport tetap sama) ...
         async function fetchCollectionReport() {
             try {
                 // 1. Fetch Main Report Data (MC vs MB)
@@ -264,8 +346,7 @@
             reportArea.innerHTML = summaryHTML + tableHTML;
         }
 
-        // --- FUNGSI BARU: MEMUAT BREAKDOWN TARIF (MC) ---
-        // ... (fetchTarifBreakdown dan renderTarifBreakdownTable tetap sama) ...
+        // --- FUNGSI BARU: MEMUAT BREAKDOWN TARIF ---
         async function fetchTarifBreakdown() {
             tarifBreakdownArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Breakdown Tarif...</p>';
             
@@ -292,7 +373,6 @@
 
             // Perbesar lebar untuk kolom Rayon
             let tableHTML = `
-                <h4 style="margin-bottom: 15px; color: #17a2b8;">Distribusi Pelanggan (Rayon 34/35 Reguler)</h4>
                 <div class="report-table-wrapper" style="max-width: 600px; margin-left: 0;"> 
                 <table class="report-table">
                     <thead>
@@ -335,335 +415,7 @@
             tarifBreakdownArea.innerHTML = tableHTML;
         }
 
-        // --- FUNGSI MC GROUPING KUSTOM ---
-        // ... (fetchCustomReport dan renderCustomReportTable tetap sama) ...
-        async function fetchCustomReport() {
-            customReportArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Menghubungkan ke MongoDB untuk Laporan AB Sunter...</p>';
-            
-            try {
-                const response = await fetch('{{ url_for("analyze_mc_grouping_api") }}'); 
-                const data = await response.json();
-                
-                if (response.status === 401) {
-                    window.location.href = '{{ url_for("login") }}';
-                    return;
-                }
-                
-                if (data.status !== 'success') {
-                     customReportArea.innerHTML = `<p class="no-results" style="color: red;">❌ Gagal memuat report: ${data.message || 'Tidak ada data kustom ditemukan.'}</p>`;
-                     return;
-                }
-                
-                renderCustomReportTable(data);
-
-            } catch (error) {
-                customReportArea.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data report kustom dari server.</p>';
-                console.error('Custom Report Error:', error);
-            }
-        }
-        
-        function renderCustomReportTable(data) {
-            const customArea = document.getElementById('customReportArea');
-            if (data.status !== 'success') {
-                 customArea.innerHTML = `<p class="no-results" style="color: red;">❌ ${data.message || 'Gagal memuat laporan kustom.'}</p>`;
-                 return;
-            }
-
-            const totals = data.totals;
-            const breakdowns = data.breakdowns;
-            
-            
-            // -------------------------------------------------------------------------
-            // 1. RENDER RINGKASAN TOTAL MC
-            // -------------------------------------------------------------------------
-            
-            let totalSummaryHTML = `
-                <h4 style="color: #dc3545; margin-bottom: 15px;">Ringkasan Nomen, Nominal, dan Kubikasi (Reguler - MC)</h4>
-                <div class="report-table-wrapper" style="max-width: 800px; margin-left: auto; margin-right: auto;">
-                    <table class="report-table" style="min-width: 100%;">
-                        <thead>
-                            <tr style="background-color: #f8d7da; color: #721c24;">
-                                <th style="text-align: left;">AREA</th>
-                                <th>Nomen Count</th>
-                                <th>Total Nominal</th>
-                                <th>Total Kubik (m³)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td style="text-align: left; font-weight: bold;">AB SUNTER (Total R34 + R35)</td>
-                                <td>${formatNumber(totals.TOTAL_34_35.CountOfNOMEN)}</td>
-                                <td>${formatRupiah(totals.TOTAL_34_35.SumOfNOMINAL)}</td>
-                                <td>${formatNumber(totals.TOTAL_34_35.SumOfKUBIK)}</td>
-                            </tr>
-                            <tr>
-                                <td style="text-align: left; font-weight: 600;">Rayon 34</td>
-                                <td>${formatNumber(totals[34].CountOfNOMEN)}</td>
-                                <td>${formatRupiah(totals[34].SumOfNOMINAL)}</td>
-                                <td>${formatNumber(totals[34].SumOfKUBIK)}</td>
-                            </tr>
-                            <tr>
-                                <td style="text-align: left; font-weight: 600;">Rayon 35</td>
-                                <td>${formatNumber(totals[35].CountOfNOMEN)}</td>
-                                <td>${formatRupiah(totals[35].SumOfNOMINAL)}</td>
-                                <td>${formatNumber(totals[35].SumOfKUBIK)}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                
-                <h4 style="color: var(--primary-color); margin-top: 30px;">Detail Breakdown Per Dimensi (MC)</h4>
-            `;
-
-            // -------------------------------------------------------------------------
-            // 2. RENDER BREAKDOWN PER DIMENSI MC
-            // -------------------------------------------------------------------------
-            
-            function createSingleBreakdownTable(title, dataArray, dimensionKey) {
-                let totalNomenCount = 0;
-                let totalNominal = 0;
-                
-                dataArray.forEach(item => {
-                    totalNomenCount += item.CountOfNOMEN || 0;
-                    totalNominal += item.SumOfNOMINAL || 0;
-                });
-
-                let tableHTML = `
-                    <div class="breakdown-table-container">
-                        <h5 style="margin-top: 0; color: #17a2b8;">${title}</h5>
-                        <div class="report-table-wrapper" style="margin-top: 10px;">
-                            <table class="report-table" style="min-width: 100%;">
-                                <thead>
-                                    <tr style="background-color: #f0f8ff;">
-                                        <th style="text-align: left; width: 40%;">${dimensionKey.replace(/_/g, ' ').toUpperCase()}</th>
-                                        <th>Nomen Count</th>
-                                        <th>Nominal</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                `;
-                
-                dataArray.forEach(item => {
-                    const dimValue = item[dimensionKey] || 'N/A';
-                    const nomenCount = formatNumber(item.CountOfNOMEN);
-                    const nominal = formatRupiah(item.SumOfNOMINAL);
-                    
-                    tableHTML += `
-                        <tr>
-                            <td style="text-align: left;" data-label="${dimensionKey.toUpperCase()}">${dimValue}</td>
-                            <td data-label="Nomen Count">${nomenCount}</td>
-                            <td data-label="Nominal">${nominal}</td>
-                        </tr>
-                    `;
-                });
-                
-                tableHTML += `
-                    <tr class="grand-total-row">
-                        <td style="text-align: left;">GRAND TOTAL</td>
-                        <td>${formatNumber(totalNomenCount)}</td>
-                        <td>${formatRupiah(totalNominal)}</td>
-                    </tr>
-                `;
-
-                tableHTML += `
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                `;
-                return tableHTML;
-            }
-
-            function renderDimensionGroup(dimensionName, dimensionKey, breakdownData) {
-                let groupHTML = `
-                    <h5 style="color: #007bff; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">Breakdown Berdasarkan: ${dimensionName}</h5>
-                    <div class="breakdown-group">
-                        ${createSingleBreakdownTable(`AB SUNTER (Total)`, breakdownData.TOTAL_34_35, dimensionKey)}
-                        ${createSingleBreakdownTable(`Rayon 34`, breakdownData[34], dimensionKey)}
-                        ${createSingleBreakdownTable(`Rayon 35`, breakdownData[35], dimensionKey)}
-                    </div>
-                `;
-                return groupHTML;
-            }
-
-            let breakdownHTML = '';
-            breakdownHTML += renderDimensionGroup('Jenis TARIF', 'TARIF', breakdowns.TARIF);
-            breakdownHTML += renderDimensionGroup('Merek Meter', 'MERK', breakdowns.MERK);
-            breakdownHTML += renderDimensionGroup('Metode Baca', 'READ_METHOD', breakdowns.READ_METHOD);
-
-            customArea.innerHTML = totalSummaryHTML + breakdownHTML;
-        }
-
-        // ====================================================================
-        // === FUNGSI MB GROUPING KUSTOM (BARU) ===
-        // ====================================================================
-
-        async function fetchCustomMBReport() {
-            customMBReportArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat data koleksi MB AB Sunter...</p>';
-            
-            try {
-                const response = await fetch('{{ url_for("analyze_mb_grouping_api") }}'); 
-                const data = await response.json();
-                
-                if (response.status === 401) {
-                    window.location.href = '{{ url_for("login") }}';
-                    return;
-                }
-                
-                if (data.status !== 'success') {
-                     customMBReportArea.innerHTML = `<p class="no-results" style="color: red;">❌ Gagal memuat report: ${data.message || 'Tidak ada data koleksi AB Sunter ditemukan.'}</p>`;
-                     return;
-                }
-                
-                renderCustomMBReport(data);
-
-            } catch (error) {
-                customMBReportArea.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data koleksi MB dari server.</p>';
-                console.error('Custom MB Report Error:', error);
-            }
-        }
-        
-        function renderCustomMBReport(data) {
-            const area = document.getElementById('customMBReportArea');
-            const r34 = data.rayon_34;
-            const r35 = data.rayon_35;
-            const abSunter = data.ab_sunter;
-            
-            // -------------------------------------------------------------------------
-            // 1. RINGKASAN KOLEKSI (Total, Undue, Tunggakan)
-            // -------------------------------------------------------------------------
-            
-            let summaryHTML = `
-                <h4 style="color: #17a2b8; margin-bottom: 15px;">Ringkasan Koleksi Berdasarkan Status Pembayaran</h4>
-                <div class="report-table-wrapper">
-                    <table class="report-table" style="min-width: 900px;">
-                        <thead>
-                            <tr style="background-color: #d1ecf1; color: #0c5460;">
-                                <th rowspan="2">AREA</th>
-                                <th colspan="2" style="background-color: #007bff; color: white;">TOTAL KOLEKSI</th>
-                                <th colspan="2" style="background-color: #28a745; color: white;">UNDUE (Bulan Berjalan)</th>
-                                <th colspan="2" style="background-color: #dc3545; color: white;">TUNGGAKAN (Piutang Lama)</th>
-                            </tr>
-                            <tr style="background-color: #f0f8ff;">
-                                <th>Nomen</th>
-                                <th>Nominal</th>
-                                <th>Nomen</th>
-                                <th>Nominal</th>
-                                <th>Nomen</th>
-                                <th>Nominal</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td style="text-align: left; font-weight: bold;">AB SUNTER (Total R34 + R35)</td>
-                                <td>${formatNumber(abSunter.total.CountOfNOMEN)}</td>
-                                <td>${formatRupiah(abSunter.total.SumOfNOMINAL)}</td>
-                                <td>${formatNumber(abSunter.undue.CountOfNOMEN_UNDUE)}</td>
-                                <td>${formatRupiah(abSunter.undue.SumOfNOMINAL_UNDUE)}</td>
-                                <td>${formatNumber(abSunter.tunggakan.CountOfNOMEN_TUNGGAKAN)}</td>
-                                <td>${formatRupiah(abSunter.tunggakan.SumOfNOMINAL_TUNGGAKAN)}</td>
-                            </tr>
-                            <tr>
-                                <td style="text-align: left; font-weight: 600;">Rayon 34</td>
-                                <td>${formatNumber(r34.total.CountOfNOMEN)}</td>
-                                <td>${formatRupiah(r34.total.SumOfNOMINAL)}</td>
-                                
-                                <td>${formatNumber(r34.undue.CountOfNOMEN_UNDUE)}</td>
-                                <td>${formatRupiah(r34.undue.SumOfNOMINAL_UNDUE)}</td>
-                                
-                                <td>${formatNumber(r34.tunggakan.CountOfNOMEN_TUNGGAKAN)}</td>
-                                <td>${formatRupiah(r34.tunggakan.SumOfNOMINAL_TUNGGAKAN)}</td>
-                            </tr>
-                            <tr>
-                                <td style="text-align: left; font-weight: 600;">Rayon 35</td>
-                                <td>${formatNumber(r35.total.CountOfNOMEN)}</td>
-                                <td>${formatRupiah(r35.total.SumOfNOMINAL)}</td>
-                                
-                                <td>${formatNumber(r35.undue.CountOfNOMEN_UNDUE)}</td>
-                                <td>${formatRupiah(r35.undue.SumOfNOMINAL_UNDUE)}</td>
-                                
-                                <td>${formatNumber(r35.tunggakan.CountOfNOMEN_TUNGGAKAN)}</td>
-                                <td>${formatRupiah(r35.tunggakan.SumOfNOMINAL_TUNGGAKAN)}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            
-            // -------------------------------------------------------------------------
-            // 2. DETAIL LISTING KOLEKSI (Per Rayon)
-            // -------------------------------------------------------------------------
-            
-            function renderDetailListing(title, detailsArray) {
-                
-                if (detailsArray.length === 0) {
-                    return `
-                        <h5 style="margin-top: 25px; color: #6c757d;">${title} (${detailsArray.length} Transaksi)</h5>
-                        <p class="no-results" style="font-size: 0.9em;">Tidak ada detail transaksi ditemukan untuk area ini.</p>
-                    `;
-                }
-
-                let totalNominal = 0;
-                detailsArray.forEach(item => {
-                    totalNominal += item.NOMINAL || 0;
-                });
-                
-                let tableHTML = `
-                    <h5 style="margin-top: 25px; color: #007bff;">${title} (${detailsArray.length} Transaksi Terbaru)</h5>
-                    <div class="report-table-wrapper">
-                        <table class="report-table" style="min-width: 600px;">
-                            <thead>
-                                <tr style="background-color: #f0f8ff;">
-                                    <th>TGL BAYAR</th>
-                                    <th>NOMEN</th>
-                                    <th>NOMINAL</th>
-                                    <th>STATUS BAYAR</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                `;
-                
-                detailsArray.forEach(item => {
-                    const statusClass = item.STATUS_BAYAR === 'UNDUE' ? 'status-ok' : 'status-danger';
-                    tableHTML += `
-                        <tr>
-                            <td>${item.TGL_BAYAR}</td>
-                            <td>${item.NOMEN}</td>
-                            <td>${formatRupiah(item.NOMINAL)}</td>
-                            <td class="${statusClass}" style="text-align: center;">${item.STATUS_BAYAR}</td>
-                        </tr>
-                    `;
-                });
-                
-                tableHTML += `
-                    <tr class="grand-total-row">
-                        <td>GRAND TOTAL</td>
-                        <td></td>
-                        <td>${formatRupiah(totalNominal)}</td>
-                        <td></td>
-                    </tr>
-                `;
-
-                tableHTML += `
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-                return tableHTML;
-            }
-            
-            let detailsHTML = `
-                <h4 style="color: var(--primary-color); margin-top: 30px;">Detail Transaksi Harian (Maks. 500 Baris)</h4>
-                ${renderDetailListing('AB SUNTER (Total R34 + R35)', abSunter.details)}
-                ${renderDetailListing('Rayon 34', r34.details)}
-                ${renderDetailListing('Rayon 35', r35.details)}
-            `;
-
-            area.innerHTML = summaryHTML + detailsHTML;
-        }
-
-        // --- FUNGSI 2: MEMUAT DETAIL TRANSAKSIONAL (MB Global) ---
-        // ... (fetchCollectionDetails dan renderDetailTable tetap sama) ...
+        // --- FUNGSI 2: MEMUAT DETAIL TRANSAKSIONAL ---
         async function fetchCollectionDetails(query = '') {
             detailsArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Detail Transaksi...</p>';
             
@@ -731,13 +483,13 @@
 
                 tableHTML += `
                     <tr>
-                        <td>${item.NOMEN}</td>
-                        <td>${item.RAYON}</td>
-                        <td>${item.PCEZ}</td>
-                        <td>${item.PAY_DT || '-'}</td>
-                        <td>Rp ${nominal.toLocaleString('id-ID')}</td>
-                        <td>${kubik.toLocaleString('id-ID', { maximumFractionDigits: 0 })}</td> 
-                        <td class="${statusClass}">${statusText}</td>
+                        <td data-label="NOMEN">${item.NOMEN}</td>
+                        <td data-label="RAYON">${item.RAYON}</td>
+                        <td data-label="PCEZ">${item.PCEZ}</td>
+                        <td data-label="TGL BAYAR">${item.PAY_DT || '-'}</td>
+                        <td data-label="NOMINAL">Rp ${nominal.toLocaleString('id-ID')}</td>
+                        <td data-label="KUBIK BAYAR">${kubik.toLocaleString('id-ID', { maximumFractionDigits: 0 })}</td> 
+                        <td data-label="STATUS" class="${statusClass}">${statusText}</td>
                     </tr>
                 `;
             });
@@ -764,6 +516,153 @@
             
             detailsArea.innerHTML = tableHTML;
         }
+        
+        // --- FUNGSI 3: FUNGSI BARU UNTUK RENDER LAPORAN AB SUNTER (Grouping MC Kustom) ---
+        async function fetchCustomReport() {
+            customReportArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Menghubungkan ke MongoDB untuk Laporan AB Sunter...</p>';
+            
+            try {
+                const response = await fetch('{{ url_for("analyze_mc_grouping_api") }}'); 
+                const data = await response.json();
+                
+                if (response.status === 401) {
+                    window.location.href = '{{ url_for("login") }}';
+                    return;
+                }
+                
+                if (data.status !== 'success') {
+                     customReportArea.innerHTML = `<p class="no-results" style="color: red;">❌ Gagal memuat report: ${data.message || 'Tidak ada data kustom ditemukan.'}</p>`;
+                     return;
+                }
+                
+                renderCustomReportTable(data);
+
+            } catch (error) {
+                customReportArea.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data report kustom dari server.</p>';
+                console.error('Custom Report Error:', error);
+            }
+        }
+        
+        // Fungsi rendering yang dirombak total menjadi format tabel yang dinamis dan bersih
+        function renderCustomReportTable(data) {
+            const customArea = document.getElementById('customReportArea');
+            if (data.status !== 'success') {
+                 customArea.innerHTML = `<p class="no-results" style="color: red;">❌ ${data.message || 'Gagal memuat laporan kustom.'}</p>`;
+                 return;
+            }
+
+            const totals = data.totals;
+            const breakdowns = data.breakdowns;
+            
+            
+            // -------------------------------------------------------------------------
+            // 1. RENDER RINGKASAN TOTAL
+            // -------------------------------------------------------------------------
+            
+            let totalSummaryHTML = `
+                <h4 style="color: #dc3545; margin-bottom: 15px;">Ringkasan Nomen, Nominal, dan Kubikasi (Reguler)</h4>
+                <div class="report-table-wrapper" style="max-width: 800px; margin-left: auto; margin-right: auto;">
+                    <table class="report-table" style="min-width: 100%;">
+                        <thead>
+                            <tr style="background-color: #f8d7da; color: #721c24;">
+                                <th style="text-align: left;">AREA</th>
+                                <th>Nomen Count</th>
+                                <th>Total Nominal</th>
+                                <th>Total Kubik (m³)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="text-align: left; font-weight: bold;">AB SUNTER (Total R34 + R35)</td>
+                                <td>${formatNumber(totals.TOTAL_34_35.CountOfNOMEN)}</td>
+                                <td>${formatRupiah(totals.TOTAL_34_35.SumOfNOMINAL)}</td>
+                                <td>${formatNumber(totals.TOTAL_34_35.SumOfKUBIK)}</td>
+                            </tr>
+                            <tr>
+                                <td style="text-align: left; font-weight: 600;">Rayon 34</td>
+                                <td>${formatNumber(totals[34].CountOfNOMEN)}</td>
+                                <td>${formatRupiah(totals[34].SumOfNOMINAL)}</td>
+                                <td>${formatNumber(totals[34].SumOfKUBIK)}</td>
+                            </tr>
+                            <tr>
+                                <td style="text-align: left; font-weight: 600;">Rayon 35</td>
+                                <td>${formatNumber(totals[35].CountOfNOMEN)}</td>
+                                <td>${formatRupiah(totals[35].SumOfNOMINAL)}</td>
+                                <td>${formatNumber(totals[35].SumOfKUBIK)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <h4 style="color: var(--primary-color); margin-top: 30px;">Detail Breakdown Per Dimensi</h4>
+            `;
+
+            // -------------------------------------------------------------------------
+            // 2. RENDER BREAKDOWN PER DIMENSI (3x Tabel Terpisah per Dimensi)
+            // -------------------------------------------------------------------------
+            
+            // Helper function to create a single breakdown table (for one area: Total, R34, or R35)
+            function createSingleBreakdownTable(title, dataArray, dimensionKey) {
+                let tableHTML = `
+                    <div class="breakdown-table-container">
+                        <h5 style="margin-top: 0; color: #17a2b8;">${title}</h5>
+                        <div class="report-table-wrapper" style="margin-top: 10px;">
+                            <table class="report-table" style="min-width: 100%;">
+                                <thead>
+                                    <tr style="background-color: #f0f8ff;">
+                                        <th style="text-align: left; width: 40%;">${dimensionKey.replace(/_/g, ' ').toUpperCase()}</th>
+                                        <th>Nomen Count</th>
+                                        <th>Nominal</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                `;
+                
+                dataArray.forEach(item => {
+                    const dimValue = item[dimensionKey] || 'N/A';
+                    const nomenCount = formatNumber(item.CountOfNOMEN);
+                    const nominal = formatRupiah(item.SumOfNOMINAL);
+                    
+                    tableHTML += `
+                        <tr>
+                            <td style="text-align: left;" data-label="${dimensionKey.toUpperCase()}">${dimValue}</td>
+                            <td data-label="Nomen Count">${nomenCount}</td>
+                            <td data-label="Nominal">${nominal}</td>
+                        </tr>
+                    `;
+                });
+                
+                tableHTML += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+                return tableHTML;
+            }
+
+            // Function to render the entire group of 3 tables for a dimension
+            function renderDimensionGroup(dimensionName, dimensionKey, breakdownData) {
+                let groupHTML = `
+                    <h5 style="color: #007bff; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">Breakdown Berdasarkan: ${dimensionName}</h5>
+                    <div class="breakdown-group">
+                        ${createSingleBreakdownTable(`AB SUNTER (Total)`, breakdownData.TOTAL_34_35, dimensionKey)}
+                        ${createSingleBreakdownTable(`Rayon 34`, breakdownData[34], dimensionKey)}
+                        ${createSingleBreakdownTable(`Rayon 35`, breakdownData[35], dimensionKey)}
+                    </div>
+                `;
+                return groupHTML;
+            }
+
+            // Gabungkan semua output
+            let breakdownHTML = '';
+            breakdownHTML += renderDimensionGroup('Jenis TARIF', 'TARIF', breakdowns.TARIF);
+            breakdownHTML += renderDimensionGroup('Merek Meter', 'MERK', breakdowns.MERK);
+            breakdownHTML += renderDimensionGroup('Metode Baca', 'READ_METHOD', breakdowns.READ_METHOD);
+
+            customArea.innerHTML = totalSummaryHTML + breakdownHTML;
+        }
+
 
         // Export button handler
         exportReportBtn.addEventListener('click', (e) => {
@@ -783,7 +682,6 @@
         });
         
         fetchCustomBtn.addEventListener('click', fetchCustomReport);
-        fetchCustomMBBtn.addEventListener('click', fetchCustomMBReport); // NEW MB EVENT LISTENER
         
         // Muat semua bagian saat halaman dimuat
         document.addEventListener('DOMContentLoaded', () => {
