@@ -240,12 +240,10 @@
             return (parseFloat(number) || 0).toFixed(2) + '%';
         }
         
-        // MC Constants
+        // Konstanta DOM
         const fetchCustomBtn = document.getElementById('fetchCustomReportBtn'); 
         const customReportArea = document.getElementById('customReportArea');
         const tarifBreakdownArea = document.getElementById('tarifBreakdownArea');
-        
-        // MB Constants
         const fetchCustomMBBtn = document.getElementById('fetchCustomMBReportBtn');
         const customMBReportArea = document.getElementById('customMBReportArea');
         
@@ -354,40 +352,45 @@
             const totals = data.totals;
             const breakdowns = data.breakdowns;
 
-            // 1. RENDER RINGKASAN TOTAL MC
+            // 1. RENDER RINGKASAN TOTAL MC (Format Mirip MB Grouping)
             let totalSummaryHTML = `
                 <h4 style="color: #dc3545; margin-bottom: 15px;">Ringkasan Nomen, Nominal, dan Kubikasi (Reguler - MC)</h4>
-                <div class="report-table-wrapper" style="max-width: 800px; margin-left: auto; margin-right: auto;">
-                    <table class="report-table" style="min-width: 100%;">
-                        <thead>
-                            <tr style="background-color: #f8d7da; color: #721c24;">
-                                <th style="text-align: left;">AREA</th>
-                                <th>Nomen Count</th>
-                                <th>Total Nominal</th>
-                                <th>Total Kubik (m³)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td data-label="AREA" style="text-align: left; font-weight: bold;">AB SUNTER (Total R34 + R35)</td>
-                                <td data-label="Nomen Count">${formatNumber(totals.TOTAL_34_35.CountOfNOMEN)}</td>
-                                <td data-label="Total Nominal">${formatRupiah(totals.TOTAL_34_35.SumOfNOMINAL)}</td>
-                                <td data-label="Total Kubik">${formatNumber(totals.TOTAL_34_35.SumOfKUBIK)}</td>
-                            </tr>
-                            <tr>
-                                <td data-label="AREA" style="text-align: left; font-weight: 600;">Rayon 34</td>
-                                <td data-label="Nomen Count">${formatNumber(totals[34].CountOfNOMEN)}</td>
-                                <td data-label="Total Nominal">${formatRupiah(totals[34].SumOfNOMINAL)}</td>
-                                <td data-label="Total Kubik">${formatNumber(totals[34].SumOfKUBIK)}</td>
-                            </tr>
-                            <tr>
-                                <td data-label="AREA" style="text-align: left; font-weight: 600;">Rayon 35</td>
-                                <td data-label="Nomen Count">${formatNumber(totals[35].CountOfNOMEN)}</td>
-                                <td data-label="Total Nominal">${formatRupiah(totals[35].SumOfNOMINAL)}</td>
-                                <td data-label="Total Kubik">${formatNumber(totals[35].SumOfKUBIK)}</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div class="breakdown-group">
+                    <div class="breakdown-table-container">
+                        <h5 style="margin-top: 0; color: #dc3545;">TOTAL PIUTANG MC</h5>
+                        <div class="report-table-wrapper">
+                            <table class="report-table" style="min-width: 100%; font-size: 13px;">
+                                <thead>
+                                    <tr style="background-color: #f8d7da; color: #721c24;">
+                                        <th style="text-align: left;" data-label="AREA">AREA</th>
+                                        <th data-label="Nomen Count">NOMEN (Count)</th>
+                                        <th data-label="Total Nominal">NOMINAL (Rp)</th>
+                                        <th data-label="Total Kubik">KUBIKASI (m³)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td data-label="AREA" style="text-align: left; font-weight: bold;">AB SUNTER (Total R34 + R35)</td>
+                                        <td data-label="Nomen Count">${formatNumber(totals.TOTAL_34_35.CountOfNOMEN)}</td>
+                                        <td data-label="Total Nominal">${formatRupiah(totals.TOTAL_34_35.SumOfNOMINAL)}</td>
+                                        <td data-label="Total Kubik">${formatNumber(totals.TOTAL_34_35.SumOfKUBIK)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td data-label="AREA" style="text-align: left; font-weight: 600;">Rayon 34</td>
+                                        <td data-label="Nomen Count">${formatNumber(totals[34].CountOfNOMEN)}</td>
+                                        <td data-label="Total Nominal">${formatRupiah(totals[34].SumOfNOMINAL)}</td>
+                                        <td data-label="Total Kubik">${formatNumber(totals[34].SumOfKUBIK)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td data-label="AREA" style="text-align: left; font-weight: 600;">Rayon 35</td>
+                                        <td data-label="Nomen Count">${formatNumber(totals[35].CountOfNOMEN)}</td>
+                                        <td data-label="Total Nominal">${formatRupiah(totals[35].SumOfNOMINAL)}</td>
+                                        <td data-label="Total Kubik">${formatNumber(totals[35].SumOfKUBIK)}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
                 
                 <h4 style="color: var(--primary-color); margin-top: 30px;">Detail Breakdown Per Dimensi (MC)</h4>
@@ -462,7 +465,6 @@
             }
 
             let breakdownHTML = '';
-            // TARIF breakdown dihapus karena sudah dipindahkan ke section terpisah
             breakdownHTML += renderDimensionGroup('Merek Meter', 'MERK', breakdowns.MERK);
             breakdownHTML += renderDimensionGroup('Metode Baca', 'READ_METHOD', breakdowns.READ_METHOD);
 
@@ -660,7 +662,7 @@
         
         // Muat semua bagian saat halaman dimuat
         document.addEventListener('DOMContentLoaded', () => {
-             // fetchCustomMBReport() dihapus dari sini agar tidak auto-load
+             // Tidak ada auto-load
         });
 
     </script>
