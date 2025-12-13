@@ -93,21 +93,21 @@
 
     <h3 style="margin-top: 40px;">Intelijen Pelanggan (Anomali & Risiko)</h3>
 
-    <a href="{{ url_for('analyze_vip_payers') }}" class="report-card-link">
+    <a href="{{ url_for('analyze_vip_payers_page') }}" class="report-card-link">
         <div class="report-card success">
             <div>
                 <h4>Pelanggan VIP (Premium & Zero Debt)</h4>
-                <p>Mengidentifikasi pelanggan premium yang tidak memiliki riwayat tunggakan (VIP). <span style="font-weight: bold;">(NEW)</span></p>
+                <p>Mengidentifikasi pelanggan premium yang tidak memiliki riwayat tunggakan (VIP).</p>
             </div>
             <div class="icon-box success"><i class="fas fa-star"></i></div>
         </div>
     </a>
     
-    <a href="{{ url_for('analyze_high_risk') }}" class="report-card-link">
+    <a href="{{ url_for('analyze_high_risk_page') }}" class="report-card-link">
         <div class="report-card danger">
             <div>
                 <h4>Pelanggan Berisiko Tinggi (Critical Risk)</h4>
-                <p>Daftar pelanggan dengan tunggakan kritis (>=5 bulan) atau anomali pemakaian ekstrem. <span style="font-weight: bold;">(NEW)</span></p>
+                <p>Daftar pelanggan dengan tunggakan kritis (>=5 bulan) atau anomali pemakaian ekstrem.</p>
             </div>
             <div class="icon-box danger"><i class="fas fa-exclamation-triangle"></i></div>
         </div>
@@ -134,8 +134,8 @@
     </a>
 
     <h3 style="margin-top: 40px;">Data Quality Control (DQC)</h3>
-    {% if current_user.is_admin %}
-    <a href="{{ url_for('dqc_mc_missing_cid') }}" class="report-card-link">
+    {% if is_admin %}
+    <a href="{{ url_for('dqc_mc_missing_cid_page') }}" class="report-card-link">
         <div class="report-card danger">
             <div>
                 <h4>DQC: NOMEN di MC tanpa CID Master</h4>
@@ -144,6 +144,14 @@
             <div class="icon-box danger"><i class="fas fa-database"></i></div>
         </div>
     </a>
+    {% else %}
+    <div class="report-card" style="opacity: 0.5;">
+        <div>
+            <h4>DQC: NOMEN di MC tanpa CID Master</h4>
+            <p>Akses terbatas hanya untuk Admin.</p>
+        </div>
+        <div class="icon-box"><i class="fas fa-lock"></i></div>
+    </div>
     {% endif %}
 
 
