@@ -724,10 +724,10 @@ def analyze_mc_grouping_api():
     try:
         pipeline_grouping = [
             {'$project': {
-                'NOMEN': '$NOMEN', # Relying on clean string from upload
+                'NOMEN': '$NOMEN', 
                 'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
                 'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
-                'TARIF': '$TARIF', # Relying on clean string from upload
+                'TARIF': '$TARIF', 
             }},
             {'$lookup': {
                'from': 'CustomerData', 
@@ -735,7 +735,6 @@ def analyze_mc_grouping_api():
                'foreignField': 'NOMEN',
                'as': 'customer_info'
             }},
-            # Unwind dipertahankan, karena filter akan menyingkirkan hasil join yang gagal
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
             
             # --- NORMALISASI DATA UNTUK FILTER ---
@@ -752,36 +751,129 @@ def analyze_mc_grouping_api():
                 'CLEAN_RAYON': {'$in': ['34', '35']} 
             }},
             
-            # >>> START SIMPLIFIKASI: Mengubah ke Summary Total <<<
-            {'$group': {
-                '_id': None, # Group semua dokumen menjadi satu untuk mendapatkan grand totals
-                'TotalNomenKustom': {'$addToSet': '$NOMEN'}, 
-                'SumOfKUBIK': {'$sum': '$KUBIK'},
-                'SumOfNOMINAL': {'$sum': '$NOMINAL'},
+            # >>> START GROUPING: CALCULATING ALL REQUESTED METRICS <<<
+            {'$facet': {
+                // 1. Overall and Rayon Totals
+                "summaryTotals": [
+                    {'$group': {
+                        '_id': { 'rayon': '$CLEAN_RAYON' }, 
+                        'TotalNomen': {'$addToSet': '$NOMEN'}, 
+                        'SumOfKUBIK': {'$sum': '$KUBIK'},
+                        'SumOfNOMINAL': {'$sum': '$NOMINAL'},
+                    }},
+                    {'$group': {
+                        '_id': None,
+                        'TotalPelangganAll': {'$sum': {'$size': '$TotalNomen'}},
+                        'TotalNominalAll': {'$sum': '$SumOfNOMINAL'},
+                        'TotalKubikAll': {'$sum': '$SumOfKUBIK'},
+                        'RayonDetails': {'$push': {
+                            'Rayon': '$_id.rayon',
+                            'NomenCount': {'$size': '$TotalNomen'},
+                            'Nominal': '$SumOfNOMINAL',
+                            'Kubik': '$SumOfKUBIK'
+                        }}
+                    }}
+                ],
+                
+                // 2. Breakdown by TARIF
+                "breakdown_tarif": [
+                    {'$group': {
+                        '_id': '$TARIF',
+                        'NomenCount': {'$addToSet': '$NOMEN'}, 
+                        'TotalNominal': {'$sum': '$NOMINAL'}
+                    }},
+                    {'$project': {
+                        '_id': 0,
+                        'TARIF': '$_id',
+                        'NomenCount': {'$size': '$NomenCount'},
+                        'TotalNominal': {'$round': ['$TotalNominal', 2]}
+                    }},
+                    {'$sort': {'TARIF': 1}}
+                ],
+                
+                // 3. Breakdown by MERK
+                "breakdown_merk": [
+                    {'$group': {
+                        '_id': '$CLEAN_MERK',
+                        'NomenCount': {'$addToSet': '$NOMEN'}, 
+                        'TotalNominal': {'$sum': '$NOMINAL'}
+                    }},
+                    {'$project': {
+                        '_id': 0,
+                        'MERK': '$_id',
+                        'NomenCount': {'$size': '$NomenCount'},
+                        'TotalNominal': {'$round': ['$TotalNominal', 2]}
+                    }},
+                    {'$sort': {'MERK': 1}}
+                ],
+                
+                // 4. Breakdown by READ_METHOD
+                "breakdown_read_method": [
+                    {'$group': {
+                        '_id': '$CLEAN_READ_METHOD',
+                        'NomenCount': {'$addToSet': '$NOMEN'}, 
+                        'TotalNominal': {'$sum': '$NOMINAL'}
+                    }},
+                    {'$project': {
+                        '_id': 0,
+                        'READ_METHOD': '$_id',
+                        'NomenCount': {'$size': '$NomenCount'},
+                        'TotalNominal': {'$round': ['$TotalNominal', 2]}
+                    }},
+                    {'$sort': {'READ_METHOD': 1}}
+                ]
             }},
+            
+            // 5. Final Output Restructuring
             {'$project': {
                 '_id': 0,
-                'TotalPelanggan': {'$size': '$TotalNomenKustom'},
-                'TotalPiutangNominal': {'$round': ['$SumOfNOMINAL', 0]},
-                'TotalPiutangKubik': {'$round': ['$SumOfKUBIK', 2]},
-                'Keterangan': 'Ringkasan Total Kustom (Rayon 34/35 REG)'
+                'summary_totals': {
+                    '$let': {
+                        'vars': { 'summary': {'$arrayElemAt': ['$summaryTotals', 0]}},
+                        'in': {
+                            'TotalPelangganAll': '$$summary.TotalPelangganAll',
+                            'TotalNominalAll': {'$round': ['$$summary.TotalNominalAll', 2]},
+                            'TotalKubikAll': {'$round': ['$$summary.TotalKubikAll', 2]},
+                            'TotalPelanggan34': {'$ifNull': [{'$arrayElemAt': ['$summary.RayonDetails.NomenCount', {'$indexOfArray': ['$summary.RayonDetails.Rayon', '34']}]}, 0]},
+                            'TotalPelanggan35': {'$ifNull': [{'$arrayElemAt': ['$summary.RayonDetails.NomenCount', {'$indexOfArray': ['$summary.RayonDetails.Rayon', '35']}]}, 0]},
+                            'TotalNominal34': {'$round': [{'$ifNull': [{'$arrayElemAt': ['$summary.RayonDetails.Nominal', {'$indexOfArray': ['$summary.RayonDetails.Rayon', '34']}]}, 0]}, 2]},
+                            'TotalNominal35': {'$round': [{'$ifNull': [{'$arrayElemAt': ['$summary.RayonDetails.Nominal', {'$indexOfArray': ['$summary.RayonDetails.Rayon', '35']}]}, 0]}, 2]},
+                            'TotalKubik34': {'$round': [{'$ifNull': [{'$arrayElemAt': ['$summary.RayonDetails.Kubik', {'$indexOfArray': ['$summary.RayonDetails.Rayon', '34']}]}, 0]}, 2]},
+                            'TotalKubik35': {'$round': [{'$ifNull': [{'$arrayElemAt': ['$summary.RayonDetails.Kubik', {'$indexOfArray': ['$summary.RayonDetails.Rayon', '35']}]}, 0]}, 2]}
+                        }
+                    }
+                },
+                'breakdown_tarif': '$breakdown_tarif',
+                'breakdown_merk': '$breakdown_merk',
+                'breakdown_read_method': '$breakdown_read_method',
             }}
-            # >>> END SIMPLIFIKASI <<<
+            // >>> END GROUPING: CALCULATING ALL REQUESTED METRICS <<<
         ]
         grouping_data = list(collection_mc.aggregate(pipeline_grouping))
         
         # Perbaiki penanganan error/empty result: jika kosong, kembalikan [] dan status 200
         if not grouping_data:
-            return jsonify([]), 200 
+            # Mengembalikan struktur summary kosong jika tidak ada data yang cocok
+             return jsonify({
+                "summary_totals": {
+                    "TotalPelangganAll": 0, "TotalPelanggan34": 0, "TotalPelanggan35": 0,
+                    "TotalNominalAll": 0.0, "TotalNominal34": 0.0, "TotalNominal35": 0.0,
+                    "TotalKubikAll": 0.0, "TotalKubik34": 0.0, "TotalKubik35": 0.0,
+                },
+                "breakdown_tarif": [],
+                "breakdown_merk": [],
+                "breakdown_read_method": []
+            }), 200 
 
-        # Mengembalikan summary sebagai array berisi satu objek (sesuai permintaan user)
-        return jsonify(grouping_data), 200
+        # Mengembalikan objek summary yang telah distrukturkan
+        return jsonify(grouping_data[0]), 200
 
     except Exception as e:
         print(f"Error saat menganalisis grouping MC: {e}")
         return jsonify({"message": f"Gagal mengambil data grouping MC. Detail teknis error: {e}"}), 500
 
 # 2. API SUMMARY (Untuk KPI Cards di collection_unified.html)
+# Fungsi ini tetap ada untuk kompatibilitas dan summary cepat di KPI cards
 @app.route('/api/analyze/mc_grouping/summary', methods=['GET'])
 @login_required 
 def analyze_mc_grouping_summary_api():
