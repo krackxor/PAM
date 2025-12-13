@@ -711,7 +711,7 @@ def analyze_volume_fluctuation_api():
 # === API GROUPING MC KUSTOM (BARU DARI PERMINTAAN USER) ===
 # =========================================================================
 
-# 1. API DETAIL (Untuk Laporan Grouping Penuh - Tidak digunakan di collection_unified.html)
+# 1. API DETAIL (Untuk Laporan Grouping Penuh - TIDAK MENGGUNAKAN CLEAN_FIELDS DARI CUSTOMER_INFO)
 @app.route('/api/analyze/mc_grouping', methods=['GET'])
 @login_required 
 def analyze_mc_grouping_api():
@@ -734,7 +734,7 @@ def analyze_mc_grouping_api():
             }},
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
             
-            # --- NORMALISASI DATA UNTUK FILTER (FIX 1) ---
+            # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '']}}}}}, # Diubah ke huruf besar
                 'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '']}}}},
@@ -756,8 +756,8 @@ def analyze_mc_grouping_api():
                     'RAYON': '$CLEAN_RAYON',
                     'TARIF': {'$ifNull': ['$TARIF', 'N/A']},
                     
-                    # PERBAIKAN AKHIR (FIX 2): Memastikan GROUPING KEY adalah STRING,
-                    # meskipun data sudah dibersihkan di tahap upload CID.
+                    # PERBAIKAN AKHIR PALING KOKOH: Gunakan CLEAN_FIELDS yang sudah dibuat,
+                    # dan lindungi dengan $toString dan $ifNull lagi di level group.
                     'MERK': {'$toString': {'$ifNull': ['$CLEAN_MERK', 'N/A']}}, 
                     'READ_METHOD': {'$toString': {'$ifNull': ['$CLEAN_READ_METHOD', 'N/A']}}, 
                 },
@@ -1143,9 +1143,10 @@ def upload_cid_data():
                 df[col] = df[col].astype(str).str.strip()
         
         # ===============================================================
-        # >>> PERBAIKAN KRITIS: NORMALISASI DATA KOTOR PANDAS SEBELUM INSERT <<<
+        # >>> PERBAIKAN KRITIS: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
         # ===============================================================
         
+        # Target kolom yang sering bermasalah pada Grouping Key
         columns_to_normalize = ['MERK', 'READ_METHOD', 'TIPEPLGGN', 'RAYON']
         
         for col in columns_to_normalize:
