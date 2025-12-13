@@ -169,6 +169,7 @@
         width: 50%;
         color: var(--text-color);
         padding-right: 10px;
+        white-space: nowrap;
     }
     #tarifBreakdownArea .grand-total-row td,
     #customMBReportArea .grand-total-row td {
@@ -648,7 +649,7 @@
         }
 
         // ====================================================================
-        // === FUNGSI MB GROUPING KUSTOM (BARU) ===
+        // === FUNGSI MB GROUPING KUSTOM (BARU) - DIPERBAIKI SANGAT KRITIS ===
         // ====================================================================
 
         async function fetchCustomMBReport() {
@@ -682,64 +683,77 @@
             const r35 = data.rayon_35;
             const abSunter = data.ab_sunter;
             
+            // --- Helper function to create one of the three summary tables ---
+            function createSummaryTable(title, metricKey) {
+                let nomenKey, nominalKey;
+                if (metricKey === 'total') {
+                    nomenKey = 'CountOfNOMEN';
+                    nominalKey = 'SumOfNOMINAL';
+                } else if (metricKey === 'undue') {
+                    nomenKey = 'CountOfNOMEN_UNDUE';
+                    nominalKey = 'SumOfNOMINAL_UNDUE';
+                } else { // tunggakan
+                    nomenKey = 'CountOfNOMEN_TUNGGAKAN';
+                    nominalKey = 'SumOfNOMINAL_TUNGGAKAN';
+                }
+
+                let tableHTML = `
+                    <div class="breakdown-table-container">
+                        <h5 style="margin-top: 0; color: ${metricKey === 'total' ? '#007bff' : metricKey === 'undue' ? '#28a745' : '#dc3545'};">
+                            ${title}
+                        </h5>
+                        <div class="report-table-wrapper">
+                            <table class="report-table" style="min-width: 100%; font-size: 13px;">
+                                <thead>
+                                    <tr style="background-color: #f0f8ff;">
+                                        <th style="text-align: left;" data-label="Area">AREA</th>
+                                        <th data-label="Nomen">NOMEN (Count)</th>
+                                        <th data-label="Nominal">NOMINAL (Rp)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td data-label="Area" style="text-align: left; font-weight: bold;">AB SUNTER (Total)</td>
+                                        <td data-label="Nomen">${formatNumber(abSunter[metricKey][nomenKey])}</td>
+                                        <td data-label="Nominal">${formatRupiah(abSunter[metricKey][nominalKey])}</td>
+                                    </tr>
+                                    <tr>
+                                        <td data-label="Area" style="text-align: left; font-weight: 600;">Rayon 34</td>
+                                        <td data-label="Nomen">${formatNumber(r34[metricKey][nomenKey])}</td>
+                                        <td data-label="Nominal">${formatRupiah(r34[metricKey][nominalKey])}</td>
+                                    </tr>
+                                    <tr>
+                                        <td data-label="Area" style="text-align: left; font-weight: 600;">Rayon 35</td>
+                                        <td data-label="Nomen">${formatNumber(r35[metricKey][nomenKey])}</td>
+                                        <td data-label="Nominal">${formatRupiah(r35[metricKey][nominalKey])}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+                return tableHTML;
+            }
+
             // -------------------------------------------------------------------------
-            // 1. RINGKASAN KOLEKSI (Total, Undue, Tunggakan)
+            // 1. RINGKASAN KOLEKSI (3 Tabel Terpisah)
             // -------------------------------------------------------------------------
             
             let summaryHTML = `
                 <h4 style="color: #17a2b8; margin-bottom: 15px;">Ringkasan Koleksi Berdasarkan Status Pembayaran</h4>
-                <div class="report-table-wrapper">
-                    <table class="report-table" style="min-width: 900px;">
-                        <thead>
-                            <tr style="background-color: #d1ecf1; color: #0c5460;">
-                                <th rowspan="2" style="min-width: 100px; text-align: left;">AREA</th>
-                                <th colspan="2" style="background-color: #007bff; color: white;">TOTAL KOLEKSI</th>
-                                <th colspan="2" style="background-color: #28a745; color: white;">UNDUE (Bulan Berjalan)</th>
-                                <th colspan="2" style="background-color: #dc3545; color: white;">TUNGGAKAN (Piutang Lama)</th>
-                            </tr>
-                            <tr style="background-color: #f0f8ff;">
-                                <th>Nomen</th>
-                                <th>Nominal</th>
-                                <th>Nomen</th>
-                                <th>Nominal</th>
-                                <th>Nomen</th>
-                                <th>Nominal</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td style="text-align: left; font-weight: bold;">AB SUNTER (Total R34 + R35)</td>
-                                <td>${formatNumber(abSunter.total.CountOfNOMEN)}</td>
-                                <td>${formatRupiah(abSunter.total.SumOfNOMINAL)}</td>
-                                <td>${formatNumber(abSunter.undue.CountOfNOMEN_UNDUE)}</td>
-                                <td>${formatRupiah(abSunter.undue.SumOfNOMINAL_UNDUE)}</td>
-                                <td>${formatNumber(abSunter.tunggakan.CountOfNOMEN_TUNGGAKAN)}</td>
-                                <td>${formatRupiah(abSunter.tunggakan.SumOfNOMINAL_TUNGGAKAN)}</td>
-                            </tr>
-                            <tr>
-                                <td style="text-align: left; font-weight: 600;">Rayon 34</td>
-                                <td>${formatNumber(r34.total.CountOfNOMEN)}</td>
-                                <td>${formatRupiah(r34.total.SumOfNOMINAL)}</td>
-                                
-                                <td>${formatNumber(r34.undue.CountOfNOMEN_UNDUE)}</td>
-                                <td>${formatRupiah(r34.undue.SumOfNOMINAL_UNDUE)}</td>
-                                
-                                <td>${formatNumber(r34.tunggakan.CountOfNOMEN_TUNGGAKAN)}</td>
-                                <td>${formatRupiah(r34.tunggakan.SumOfNOMINAL_TUNGGAKAN)}</td>
-                            </tr>
-                            <tr>
-                                <td style="text-align: left; font-weight: 600;">Rayon 35</td>
-                                <td>${formatNumber(r35.total.CountOfNOMEN)}</td>
-                                <td>${formatRupiah(r35.total.SumOfNOMINAL)}</td>
-                                
-                                <td>${formatNumber(r35.undue.CountOfNOMEN_UNDUE)}</td>
-                                <td>${formatRupiah(r35.undue.SumOfNOMINAL_UNDUE)}</td>
-                                
-                                <td>${formatNumber(r35.tunggakan.CountOfNOMEN_TUNGGAKAN)}</td>
-                                <td>${formatRupiah(r35.tunggakan.SumOfNOMINAL_TUNGGAKAN)}</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <h5 style="color: #007bff; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">TABEL 1: TOTAL KOLEKSI (UNDUE + TUNGGAKAN)</h5>
+                <div class="breakdown-group">
+                    ${createSummaryTable('Total Koleksi (MB)', 'total')}
+                </div>
+                
+                <h5 style="color: #28a745; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">TABEL 2: KOLEKSI UNDUE (BULAN BERJALAN)</h5>
+                <div class="breakdown-group">
+                    ${createSummaryTable('Koleksi Undue', 'undue')}
+                </div>
+                
+                <h5 style="color: #dc3545; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">TABEL 3: KOLEKSI TUNGGAKAN (PIUTANG LAMA)</h5>
+                <div class="breakdown-group">
+                    ${createSummaryTable('Koleksi Tunggakan', 'tunggakan')}
                 </div>
             `;
             
@@ -748,6 +762,7 @@
             // -------------------------------------------------------------------------
             
             function renderDetailListing(title, detailsArray) {
+                // The user wants: TGL BAYAR - NOMEN - NOMINAL
                 
                 if (detailsArray.length === 0) {
                     return `
@@ -762,7 +777,7 @@
                 });
                 
                 let tableHTML = `
-                    <h5 style="margin-top: 25px; color: #007bff;">${title} (${detailsArray.length} Transaksi Terbaru)</h5>
+                    <h5 style="margin-top: 25px; color: #007bff;">${title} (${detailsArray.length} Transaksi Terbaru, Diurutkan Terbaru)</h5>
                     <div class="report-table-wrapper">
                         <table class="report-table" style="min-width: 600px;">
                             <thead>
@@ -777,6 +792,7 @@
                 `;
                 
                 detailsArray.forEach(item => {
+                    // Note: Keeping STATUS_BAYAR as it provides crucial context (Undue vs Tunggakan)
                     const statusClass = item.STATUS_BAYAR === 'UNDUE' ? 'status-ok' : 'status-danger';
                     tableHTML += `
                         <tr>
@@ -798,15 +814,15 @@
                 `;
 
                 tableHTML += `
-                            </tbody>
-                        </table>
-                    </div>
-                `;
+                        </tbody>
+                    </table>
+                </div>
+            `;
                 return tableHTML;
             }
             
             let detailsHTML = `
-                <h4 style="color: var(--primary-color); margin-top: 30px;">Detail Transaksi Harian (Maks. 500 Baris)</h4>
+                <h4 style="color: var(--primary-color); margin-top: 30px;">TABEL 4: DETAIL TRANSAKSI HARI INI (Diurutkan Tanggal Bayar)</h4>
                 ${renderDetailListing('AB SUNTER (Total R34 + R35)', abSunter.details)}
                 ${renderDetailListing('Rayon 34', r34.details)}
                 ${renderDetailListing('Rayon 35', r35.details)}
