@@ -4,7 +4,6 @@
 
 {% block custom_styles %}
 /* Custom CSS untuk Tampilan Report/Detail yang Responsif */
-/* ... (CSS yang sudah ada) ... */
 
 /* Styling untuk kelompok tabel kustom (AB Sunter) */
 .breakdown-group {
@@ -20,7 +19,71 @@
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-light);
 }
-/* ... (CSS yang sudah ada) ... */
+
+/* General Report Table Styling: Enforce consistency, scroll, and alignment */
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    min-width: 700px; /* Ensure horizontal scroll on main tables */
+}
+.report-table th, .report-table td {
+    border: 1px solid #f0f0f0; 
+    padding: 10px; 
+    text-align: right;
+    white-space: nowrap;
+}
+.report-table th {
+    font-weight: 600;
+    text-align: center;
+}
+.report-table td:first-child, .report-table th:first-child,
+.report-table td:nth-child(2), .report-table th:nth-child(2) {
+    text-align: left; /* Keep Rayon/PCEZ left-aligned */
+}
+.report-table tr.grand-total-row {
+    font-weight: bold;
+    background-color: #f8f9fa; /* Light grey background for totals */
+}
+
+/* Filter/Search Input Group Layout */
+.filter-input-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    align-items: center; 
+}
+#filterInput {
+    flex-grow: 1;
+    padding: 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+
+/* MB Detail Table Class (Used for the lower table listing) */
+.collection-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    min-width: 700px;
+}
+.collection-table th, .collection-table td {
+    border: 1px solid #f0f0f0; 
+    padding: 10px; 
+    text-align: left;
+    white-space: nowrap;
+}
+.collection-table th {
+    background-color: #e9ecef;
+    font-weight: 600;
+}
+.collection-table tr.total-row {
+    font-weight: bold;
+    background-color: #e0f7fa; /* Light cyan for MB totals */
+}
 
 /* -------------------------------------------------------------------------- */
 /* Dihapus: Seluruh blok @media screen and (max-width: 600px) untuk tabel.
@@ -538,13 +601,13 @@
                 <div class="report-table-wrapper">
                     <table class="report-table" style="min-width: 900px;">
                         <thead>
-                            <tr style="background-color: #d1ecf1; color: #0c5460;">
-                                <th rowspan="2">AREA</th>
-                                <th colspan="2" style="background-color: #007bff; color: white;">TOTAL KOLEKSI</th>
-                                <th colspan="2" style="background-color: #28a745; color: white;">UNDUE (Bulan Berjalan)</th>
+                            <tr>
+                                <th rowspan="2" style="background-color: #343a40; color: white; width: 100px;">AREA</th>
+                                <th colspan="2" style="background-color: var(--primary-color); color: white;">TOTAL KOLEKSI</th>
+                                <th colspan="2" style="background-color: var(--secondary-color); color: white;">UNDUE (Bulan Berjalan)</th>
                                 <th colspan="2" style="background-color: #dc3545; color: white;">TUNGGAKAN (Piutang Lama)</th>
                             </tr>
-                            <tr style="background-color: #f0f8ff;">
+                            <tr style="background-color: #e9ecef; color: var(--text-color);">
                                 <th>Nomen</th>
                                 <th>Nominal</th>
                                 <th>Nomen</th>
