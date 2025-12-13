@@ -711,7 +711,7 @@ def analyze_volume_fluctuation_api():
 # === API GROUPING MC KUSTOM (BARU DARI PERMINTAAN USER) ===
 # =========================================================================
 
-# 1. API DETAIL (Untuk Laporan Grouping Penuh - TIDAK MENGGUNAKAN CLEAN_FIELDS DARI CUSTOMER_INFO)
+# 1. API DETAIL (Untuk Laporan Grouping Penuh - MODE DIAGNOSTIK COUNT)
 @app.route('/api/analyze/mc_grouping', methods=['GET'])
 @login_required 
 def analyze_mc_grouping_api():
@@ -750,37 +750,40 @@ def analyze_mc_grouping_api():
                 'CLEAN_RAYON': {'$in': ['34', '35']}
             }},
             
+            # >>> START DIAGNOSTIK AKHIR: HITUNG JUMLAH DOKUMEN YANG LOLOS FILTER/JOIN <<<
             {'$group': {
-                '_id': {
-                    'TIPEPLGGN': '$CLEAN_TIPEPLGGN', # Grouping menggunakan data bersih (REG)
-                    'RAYON': '$CLEAN_RAYON',
-                    'TARIF': {'$ifNull': ['$TARIF', 'N/A']},
-                    
-                    # PERBAIKAN AKHIR PALING KOKOH: Gunakan CLEAN_FIELDS yang sudah dibuat,
-                    # dan lindungi dengan $toString dan $ifNull lagi di level group.
-                    'MERK': {'$toString': {'$ifNull': ['$CLEAN_MERK', 'N/A']}}, 
-                    'READ_METHOD': {'$toString': {'$ifNull': ['$CLEAN_READ_METHOD', 'N/A']}}, 
-                },
-                'CountOfNOMEN': {'$addToSet': '$NOMEN'}, 
-                'SumOfKUBIK': {'$sum': '$KUBIK'},
-                'SumOfNOMINAL': {'$sum': '$NOMINAL'},
-                'CountOfTARIF': {'$sum': 1}, 
-                'CountOfMERK': {'$sum': 1}, 
-                'CountOfREAD_METHOD': {'$sum': 1}
+                '_id': None,
+                'TotalDokumen': {'$sum': 1}
             }},
             {'$project': {
                 '_id': 0,
-                'TIPEPLGGN': '$_id.TIPEPLGGN', 'RAYON': '$_id.RAYON', 'TARIF': '$_id.TARIF',
-                'MERK': '$_id.MERK', 'READ_METHOD': '$_id.READ_METHOD',
-                'CountOfNOMEN': {'$size': '$CountOfNOMEN'},
-                'SumOfKUBIK': {'$round': ['$SumOfKUBIK', 2]},
-                'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 2]},
-                'CountOfTARIF': 1, 'CountOfMERK': 1, 'CountOfREAD_METHOD': 1
-            }},
-            {'$sort': {'RAYON': 1, 'TARIF': 1}}
+                'MESSAGE': 'DIAGNOSIS_COUNT',
+                'JumlahDokumenLolosFilter': '$TotalDokumen'
+            }}
+            # >>> END DIAGNOSTIK AKHIR <<<
         ]
         grouping_data = list(collection_mc.aggregate(pipeline_grouping))
-        return jsonify(grouping_data), 200
+        
+        # Logika Response Berdasarkan Diagnosis
+        if grouping_data and grouping_data[0].get('MESSAGE') == 'DIAGNOSIS_COUNT':
+             
+            count = grouping_data[0].get('JumlahDokumenLolosFilter', 0)
+            
+            if count > 0:
+                 # Jika count > 0, masalah ada di tahap grouping sebelumnya (MERK/READ_METHOD)
+                 # Kita kembalikan pesan ini agar user tahu ada data, dan masalahnya di grouping key.
+                 return jsonify({
+                     "message": f"DIAGNOSIS: Ditemukan {count} dokumen yang lolos Filter/Join. Masalah ASLI ada pada Grouping Key (MERK/READ_METHOD).", 
+                     "status": "diagnosis_success", 
+                     "count": count
+                 }), 200
+
+            else:
+                 # Jika count == 0, masalah ada di filter atau join.
+                 return jsonify({"message": "DIAGNOSIS: Gagal Join / Filter. Jumlah dokumen lolos Filter/Join adalah 0. Cek konsistensi NOMEN, RAYON, dan TIPEPLGGN.", "status": "diagnosis_fail"}), 404
+             
+        # Jika ada error tak terduga, kembalikan 404
+        return jsonify({"message": "Gagal memuat report: Tidak ada data kustom ditemukan."}), 404
 
     except Exception as e:
         print(f"Error saat menganalisis grouping MC: {e}")
