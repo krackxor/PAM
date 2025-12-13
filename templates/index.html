@@ -31,8 +31,6 @@
     cursor: pointer;
     font-weight: 600;
     transition: background-color 0.3s;
-    width: 100%; /* Default width 100% in search box */
-    max-width: 350px; /* Max width to keep desktop form compact */
 }
 .btn-search:hover {
     background-color: #0056b3;
@@ -78,7 +76,7 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 14px; 
-    min-width: 700px; /* Jaga lebar min untuk horizontal scroll di desktop */
+    min-width: 700px; 
 }
 .data-table th, .data-table td {
     border: 1px solid #f0f0f0; 
@@ -92,34 +90,14 @@
     font-weight: 600;
 }
 
-/* ========================================================== */
-/* MOBILE LAYOUT FIXES (< 600px) */
-/* ========================================================== */
+/* Mobile Layout for Tables/Details (Card View) */
 @media screen and (max-width: 600px) {
-    
-    /* Search Box stacking fix (already partially handled by width: 100%) */
-    .search-box {
-        padding: 15px;
-    }
-    .btn-search {
-        max-width: 100%;
-    }
-    
-    /* Summary Grid: Stack cards vertically */
-    .summary-grid {
-        grid-template-columns: 1fr;
-    }
-    .summary-card p {
-        font-size: 1.1em; /* Reduce font size on mobile cards */
-    }
-
-    /* Data Table: Implement Card View */
     .data-table-wrapper {
         border: none;
         box-shadow: none;
     }
     .data-table {
-        min-width: 100%; /* Disable min-width for mobile table content */
+        min-width: 100%;
     }
     .data-table thead {
         display: none;
@@ -136,8 +114,6 @@
         padding: 8px 12px;
         border: none;
         border-bottom: 1px solid #eee;
-        text-align: right;
-        white-space: normal; /* Allow text wrapping in Card View */
     }
     .data-table td:before {
         content: attr(data-label);
@@ -145,7 +121,6 @@
         text-align: left;
         width: 50%;
         padding-right: 10px;
-        white-space: nowrap;
     }
 }
 {% endblock %}
@@ -197,7 +172,7 @@
             return 'status-ok';
         }
         
-        function renderTable(title, data) {
+        function renderTable(title, data, singleRow = false) {
             if (!data || (Array.isArray(data) && data.length === 0)) {
                 return `<h4 style="margin-top: 20px; color: #2c3e50;">${title}</h4><p>Tidak ada data ditemukan.</p>`;
             }
@@ -210,8 +185,7 @@
             
             // Header Row
             headers.forEach(h => {
-                // Remove underscores and capitalize for display in the header and data-label
-                tableHtml += `<th>${h.replace(/_/g, ' ')}</th>`; 
+                tableHtml += `<th>${h.replace(/_/g, ' ')}</th>`;
             });
             tableHtml += '</tr></thead><tbody>';
 
@@ -220,13 +194,10 @@
                 tableHtml += '<tr>';
                 headers.forEach(h => {
                     let cellValue = item[h];
-                    let displayLabel = h.replace(/_/g, ' '); // Label for Card View
-                    
                     if (h.includes('NOMINAL') || h.includes('JUMLAH')) {
                         cellValue = formatCurrency(cellValue);
                     }
-                    // Add data-label to enable Card View on mobile
-                    tableHtml += `<td data-label="${displayLabel}">${cellValue}</td>`;
+                    tableHtml += `<td data-label="${h.replace(/_/g, ' ')}">${cellValue}</td>`;
                 });
                 tableHtml += '</tr>';
             });
