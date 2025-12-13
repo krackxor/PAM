@@ -1,213 +1,147 @@
 {% extends "base.html" %}
 
-{% block title %}ANOMALY LOG: {{ title }}{% endblock %}
+{% block title %}Sub-Menu Analisis Lanjutan{% endblock %}
 
 {% block custom_styles %}
-/* CSS Khusus untuk Laporan Detail (Dinamis) */
-.report-info {
-    padding: 10px;
-    background-color: #330033;
-    color: var(--accent-color);
-    border: 1px solid var(--accent-color);
-    border-radius: 0px;
-    margin-bottom: 15px;
-    text-shadow: none;
-}
-.report-info p {
-    margin: 0;
+/* CSS untuk Grid Kartu Laporan */
+.report-grid-menu {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+    gap: 20px;
+    margin-top: 30px;
 }
 
-.report-actions {
-    margin-bottom: 15px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-direction: column; /* Stack buttons on mobile */
-    gap: 10px;
+.report-card-link {
+    text-decoration: none;
+    color: inherit;
 }
 
-.report-actions button {
-    width: 100%;
-    max-width: none;
+.report-card {
+    background-color: var(--card-bg);
+    border: 1px solid #e0e0e0; 
+    border-radius: var(--border-radius);
+    padding: 25px 20px; 
+    box-shadow: var(--shadow-light);
+    transition: all 0.3s ease;
+    text-align: center;
+    min-height: 150px; 
 }
 
-/* Wrapper scroll untuk responsivitas tabel */
-.result-table-wrapper { 
-    overflow-x: auto; 
-    margin-top: 15px; 
-    background-color: #111;
-    border: 1px solid #333;
+.report-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0, 123, 255, 0.2); 
+    border-color: var(--primary-color);
 }
 
-/* Style Tabel */
-.data-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-    min-width: 600px; /* Ensure scroll */
-}
-.data-table th, .data-table td {
-    border: 1px solid #333;
-    padding: 8px;
-    white-space: nowrap; 
+.report-card i {
+    font-size: 3em; 
     color: var(--primary-color);
-}
-.data-table th {
-    background-color: #222;
-    color: var(--secondary-color);
-    text-transform: uppercase;
-}
-.data-table td:before {
-    /* Ensures data-label works even without the full mobile override */
-    font-weight: 700;
-    color: var(--secondary-color);
+    margin-bottom: 10px;
 }
 
-/* Mobile Layout Fix */
+.report-card h3 {
+    margin: 10px 0 5px 0;
+    color: var(--text-color);
+    font-size: 1.1em;
+}
+
+.report-card p {
+    font-size: 0.9em;
+    color: #6c757d; 
+}
+
+/* Tombol Analisis Dinamis */
+.btn-dynamic-upload {
+    display: inline-block;
+    background-color: var(--secondary-color);
+    color: white;
+    padding: 12px 25px;
+    border-radius: 8px; 
+    text-decoration: none;
+    margin-top: 30px;
+    font-weight: 600;
+    transition: background-color 0.3s;
+}
+.btn-dynamic-upload:hover {
+    background-color: #1e7e34;
+}
+
+/* New Export Button Style */
+.btn-export-anomali {
+    display: inline-block;
+    background-color: var(--accent-color);
+    color: var(--text-color);
+    padding: 10px 20px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: 600;
+    margin-bottom: 20px;
+    transition: background-color 0.3s;
+}
+.btn-export-anomali:hover {
+    background-color: #e0a800;
+}
+
+
 @media screen and (max-width: 600px) {
-    .data-table {
-        min-width: 100%; /* Auto adjust width, allow wrapping for some columns */
-    }
-    .data-table thead {
-        display: none;
-    }
-    .data-table tr {
-        display: block;
-        margin-bottom: 10px;
-        border: 1px solid #333;
-        border-radius: 0px;
-        background-color: #050505;
-    }
-    .data-table td {
-        display: flex;
-        justify-content: space-between;
-        padding: 8px 12px;
-        border: none;
-        border-bottom: 1px solid #333;
-    }
-    .data-table td:before {
-        content: attr(data-label);
-        font-weight: bold;
-        text-align: left;
-        width: 45%;
-        color: var(--secondary-color);
-        padding-right: 10px;
+    .report-grid-menu {
+        grid-template-columns: 1fr; 
     }
 }
 {% endblock %}
 
 {% block content %}
-    <h2 style="text-align: left; border-bottom: none; margin-bottom: 10px; color: var(--secondary-color);">
-        <i class="fas fa-list-alt" style="margin-right: 10px;"></i> ANOMALY LOG: {{ title | upper }}
+    <h2 style="text-align: left; border-bottom: none; margin-bottom: 20px; color: var(--primary-color);">
+        <i class="fas fa-chart-line" style="margin-right: 10px;"></i> Sub-Menu Analisis Lanjutan
     </h2>
     
-    <div class="report-info">
-        <p>[SYSTEM INFO] {{ description }}</p>
+    <div style="text-align: right;">
+        <a href="{{ url_for('export_anomalies_data') }}" class="btn-export-anomali">
+            <i class="fas fa-file-excel"></i> Export Semua Anomali ke Excel
+        </a>
+    </div>
+    
+    <p>Silakan pilih jenis laporan anomali pemakaian air yang ingin Anda analisis:</p>
+
+    <div class="report-grid-menu">
+        
+        <a href="{{ url_for('analyze_extreme_usage') }}" class="report-card-link">
+            <div class="report-card">
+                <i class="fas fa-exclamation-triangle" style="color: var(--accent-color);"></i>
+                <h3>Pemakaian Air Ekstrim</h3>
+                <p>Pelanggan dengan konsumsi air di atas batas normal.</p>
+            </div>
+        </a>
+        
+        <a href="{{ url_for('analyze_reduced_usage') }}" class="report-card-link">
+            <div class="report-card">
+                <i class="fas fa-arrow-down" style="color: #17a2b8;"></i>
+                <h3>Pemakaian Air Turun</h3>
+                <p>Pelanggan yang konsumsinya turun drastis (memerlukan perbandingan periode SBRS).</p>
+            </div>
+        </a>
+
+        <a href="{{ url_for('analyze_zero_usage') }}" class="report-card-link">
+            <div class="report-card">
+                <i class="fas fa-circle-notch" style="color: #343a40;"></i>
+                <h3>Tidak Ada Pemakaian (Zero)</h3>
+                <p>Pelanggan dengan pemakaian air nol (Zero) di periode tagihan terakhir.</p>
+            </div>
+        </a>
+        
+        <a href="{{ url_for('analyze_stand_tungggu') }}" class="report-card-link">
+            <div class="report-card">
+                <i class="fas fa-pause-circle" style="color: #6c757d;"></i>
+                <h3>Stand Tunggu</h3>
+                <p>Pelanggan yang berstatus Stand Tunggu (Blokir/Freeze).</p>
+            </div>
+        </a>
+        
     </div>
 
-    <div class="report-actions">
-        <button onclick="window.history.back()" class="btn-primary" style="background-color: #777; color: var(--bg-color); padding: 8px 15px;">
-            ← BACK TO ANALYSIS SUITE
-        </button>
-        <button class="btn-primary" onclick="fetchReportData('{{ title }}')" style="background-color: var(--primary-color); color: var(--bg-color); padding: 8px 15px;">
-            INITIATE DATA DECRYPTION
-        </button>
+    <div style="text-align: center;">
+        <a href="{{ url_for('analyze_data_page') }}" class="btn-dynamic-upload">
+            <i class="fas fa-file-upload"></i> Analisis File Dinamis (Upload Gabungan)
+        </a>
     </div>
-
-    <div id="reportDataArea">
-        <p style="text-align: center; color: var(--accent-color);">[AWAITING COMMAND] Press INITIATE DATA DECRYPTION to load logs from MongoDB.</p>
-    </div>
-
-    <script>
-        // Fungsi pembantu untuk memformat angka persentase
-        function formatPercent(number) {
-            return (parseFloat(number) || 0).toFixed(2) + '%';
-        }
-
-        async function fetchReportData(reportName) {
-            const dataArea = document.getElementById('reportDataArea');
-            dataArea.innerHTML = `<p style="text-align: center; color: var(--secondary-color);"><i class="fas fa-spinner fa-spin"></i> ACCESSING MONGODB: ${reportName}...</p>`;
-            
-            let endpoint = '';
-
-            // Mapping Laporan ke Endpoint API yang sudah ada/direncanakan
-            if (reportName.includes('Naik/Turun') || reportName.includes('Fluktuasi')) {
-                endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}';
-            } else if (reportName.includes('Ekstrim') || reportName.includes('Extreme')) {
-                // Currently uses the fluctuation endpoint as a placeholder filter will happen client side
-                endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}'; 
-            } else if (reportName.includes('Zero') || reportName.includes('Z-Flow')) {
-                // Currently uses the fluctuation endpoint as a placeholder filter will happen client side
-                endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}'; 
-            } else {
-                 dataArea.innerHTML = `<p style="text-align: center; color: red;">[ERROR] API endpoint for this report is currently OFFLINE.</p>`;
-                 return;
-            }
-
-            try {
-                const response = await fetch(endpoint);
-                const data = await response.json();
-
-                if (response.status === 401) {
-                    window.location.href = '{{ url_for("login") }}';
-                    return;
-                }
-                
-                // Client-side filtering for specific anomaly types (Ekstrim, Zero)
-                let filteredData = data;
-                if (reportName.includes('Ekstrim') || reportName.includes('Extreme')) {
-                    filteredData = data.filter(item => item.STATUS_PEMAKAIAN.includes('EKSTRIM'));
-                } else if (reportName.includes('Zero') || reportName.includes('Z-Flow')) {
-                    filteredData = data.filter(item => item.STATUS_PEMAKAIAN.includes('ZERO'));
-                } else if (reportName.includes('Stand Tunggu') || reportName.includes('Freeze')) {
-                    // Placeholder for when Stand Tunggu logic is implemented
-                    filteredData = []; 
-                }
-                
-                
-                if (filteredData.length === 0) {
-                    dataArea.innerHTML = `<p style="text-align: center; color: #ff00ff;">[!] No anomalies found for the report: ${reportName}.</p>`;
-                    return;
-                }
-                
-                renderDynamicTable(filteredData, reportName);
-
-            } catch (error) {
-                dataArea.innerHTML = `<p style="text-align: center; color: red;">❌ [NETWORK ERROR] Could not retrieve data: ${error}</p>`;
-                console.error('Fetch Error:', error);
-            }
-        }
-
-        function renderDynamicTable(data, title) {
-            const dataArea = document.getElementById('reportDataArea');
-            
-            // Dapatkan headers dari kunci objek pertama
-            const headers = Object.keys(data[0]);
-            
-            let tableHTML = `<div class="result-table-wrapper"><table class="data-table"><thead><tr>`;
-            headers.forEach(h => {
-                tableHTML += `<th>${h.replace(/_/g, ' ')}</th>`;
-            });
-            tableHTML += `</tr></thead><tbody>`;
-
-            data.forEach(item => {
-                tableHTML += `<tr>`;
-                headers.forEach(h => {
-                    let cellValue = item[h];
-                    
-                    if (h === 'PERSEN_SELISIH') {
-                        cellValue = formatPercent(cellValue);
-                    }
-                    
-                    // PENTING: Tambahkan data-label untuk mobile view
-                    tableHTML += `<td data-label="${h.replace(/_/g, ' ')}">${cellValue}</td>`;
-                });
-                tableHTML += `</tr>`;
-            });
-
-            tableHTML += `</tbody></table></div>`;
-            dataArea.innerHTML = tableHTML;
-        }
-
-    </script>
 {% endblock %}
