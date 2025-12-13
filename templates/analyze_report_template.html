@@ -1,121 +1,95 @@
 {% extends "base.html" %}
 
-{% block title %}ANOMALY LOG: {{ title }}{% endblock %}
+{% block title %}Laporan: {{ title }}{% endblock %}
 
 {% block custom_styles %}
 /* CSS Khusus untuk Laporan Detail (Dinamis) */
 .report-info {
-    padding: 10px;
-    background-color: #330033;
-    color: var(--accent-color);
-    border: 1px solid var(--accent-color);
-    border-radius: 0px;
-    margin-bottom: 15px;
-    text-shadow: none;
-}
-.report-info p {
-    margin: 0;
+    padding: 15px;
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeeba;
+    border-radius: var(--border-radius);
+    margin-bottom: 20px;
 }
 
 .report-actions {
-    margin-bottom: 15px;
+    margin-bottom: 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    flex-direction: column; /* Stack buttons on mobile */
-    gap: 10px;
-}
-
-.report-actions button {
-    width: 100%;
-    max-width: none;
 }
 
 /* Wrapper scroll untuk responsivitas tabel */
 .result-table-wrapper { 
     overflow-x: auto; 
-    margin-top: 15px; 
-    background-color: #111;
-    border: 1px solid #333;
+    margin-top: 20px; 
 }
 
 /* Style Tabel */
 .data-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
-    min-width: 600px; /* Ensure scroll */
+    font-size: 14px;
 }
 .data-table th, .data-table td {
-    border: 1px solid #333;
+    border: 1px solid #ddd;
     padding: 8px;
     white-space: nowrap; 
-    color: var(--primary-color);
 }
 .data-table th {
-    background-color: #222;
-    color: var(--secondary-color);
-    text-transform: uppercase;
-}
-.data-table td:before {
-    /* Ensures data-label works even without the full mobile override */
-    font-weight: 700;
-    color: var(--secondary-color);
+    background-color: #f2f2f2;
 }
 
 /* Mobile Layout Fix */
 @media screen and (max-width: 600px) {
-    .data-table {
-        min-width: 100%; /* Auto adjust width, allow wrapping for some columns */
-    }
     .data-table thead {
         display: none;
     }
     .data-table tr {
         display: block;
         margin-bottom: 10px;
-        border: 1px solid #333;
-        border-radius: 0px;
-        background-color: #050505;
+        border: 1px solid #ddd;
+        border-radius: var(--border-radius);
     }
     .data-table td {
         display: flex;
         justify-content: space-between;
         padding: 8px 12px;
         border: none;
-        border-bottom: 1px solid #333;
+        border-bottom: 1px solid #eee;
     }
     .data-table td:before {
         content: attr(data-label);
         font-weight: bold;
         text-align: left;
-        width: 45%;
-        color: var(--secondary-color);
+        width: 50%;
+        color: var(--text-color);
         padding-right: 10px;
     }
 }
 {% endblock %}
 
 {% block content %}
-    <h2 style="text-align: left; border-bottom: none; margin-bottom: 10px; color: var(--secondary-color);">
-        <i class="fas fa-list-alt" style="margin-right: 10px;"></i> ANOMALY LOG: {{ title | upper }}
+    <h2 style="text-align: left; border-bottom: none; margin-bottom: 10px; color: var(--primary-color);">
+        <i class="fas fa-list-alt" style="margin-right: 10px;"></i> Laporan Anomali: {{ title }}
     </h2>
     
     <div class="report-info">
-        <p>[SYSTEM INFO] {{ description }}</p>
+        <p>{{ description }}</p>
     </div>
 
     <div class="report-actions">
-        <button onclick="window.history.back()" class="btn-primary" style="background-color: #777; color: var(--bg-color); padding: 8px 15px;">
-            ← BACK TO ANALYSIS SUITE
+        <button onclick="window.history.back()" class="btn-primary" style="background-color: #6c757d; color: white; padding: 8px 15px; border-radius: 4px; border: none;">
+            ← Kembali ke Analisis
         </button>
-        <button class="btn-primary" onclick="fetchReportData('{{ title }}')" style="background-color: var(--primary-color); color: var(--bg-color); padding: 8px 15px;">
-            INITIATE DATA DECRYPTION
+        <button class="btn-primary" onclick="fetchReportData('{{ title }}')" style="background-color: var(--secondary-color); color: white; padding: 8px 15px; border-radius: 4px; border: none;">
+            Muat Data Laporan
         </button>
     </div>
 
     <div id="reportDataArea">
-        <p style="text-align: center; color: var(--accent-color);">[AWAITING COMMAND] Press INITIATE DATA DECRYPTION to load logs from MongoDB.</p>
+        <p style="text-align: center;">Tekan "Muat Data Laporan" untuk menampilkan hasil dari MongoDB.</p>
     </div>
 
     <script>
@@ -126,21 +100,19 @@
 
         async function fetchReportData(reportName) {
             const dataArea = document.getElementById('reportDataArea');
-            dataArea.innerHTML = `<p style="text-align: center; color: var(--secondary-color);"><i class="fas fa-spinner fa-spin"></i> ACCESSING MONGODB: ${reportName}...</p>`;
+            dataArea.innerHTML = `<p style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Menghubungkan ke MongoDB untuk ${reportName}...</p>`;
             
             let endpoint = '';
 
-            // Mapping Laporan ke Endpoint API yang sudah ada/direncanakan
-            if (reportName.includes('Naik/Turun') || reportName.includes('Fluktuasi')) {
+            // Mapping Laporan ke Endpoint API yang baru
+            if (reportName.includes('Naik/Turun')) {
                 endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}';
-            } else if (reportName.includes('Ekstrim') || reportName.includes('Extreme')) {
-                // Currently uses the fluctuation endpoint as a placeholder filter will happen client side
-                endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}'; 
-            } else if (reportName.includes('Zero') || reportName.includes('Z-Flow')) {
-                // Currently uses the fluctuation endpoint as a placeholder filter will happen client side
-                endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}'; 
+            } else if (reportName.includes('Ekstrim')) {
+                endpoint = '/api/analyze/extreme_usage'; // Placeholder untuk Ekstrim
+            } else if (reportName.includes('Zero')) {
+                endpoint = '/api/analyze/zero_usage'; // Placeholder untuk Zero
             } else {
-                 dataArea.innerHTML = `<p style="text-align: center; color: red;">[ERROR] API endpoint for this report is currently OFFLINE.</p>`;
+                 dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini belum diimplementasi.</p>`;
                  return;
             }
 
@@ -153,34 +125,26 @@
                     return;
                 }
                 
-                // Client-side filtering for specific anomaly types (Ekstrim, Zero)
-                let filteredData = data;
-                if (reportName.includes('Ekstrim') || reportName.includes('Extreme')) {
-                    filteredData = data.filter(item => item.STATUS_PEMAKAIAN.includes('EKSTRIM'));
-                } else if (reportName.includes('Zero') || reportName.includes('Z-Flow')) {
-                    filteredData = data.filter(item => item.STATUS_PEMAKAIAN.includes('ZERO'));
-                } else if (reportName.includes('Stand Tunggu') || reportName.includes('Freeze')) {
-                    // Placeholder for when Stand Tunggu logic is implemented
-                    filteredData = []; 
-                }
-                
-                
-                if (filteredData.length === 0) {
-                    dataArea.innerHTML = `<p style="text-align: center; color: #ff00ff;">[!] No anomalies found for the report: ${reportName}.</p>`;
+                if (data.length === 0) {
+                    dataArea.innerHTML = `<p style="text-align: center;">Tidak ada data anomali ditemukan untuk laporan ${reportName}.</p>`;
                     return;
                 }
                 
-                renderDynamicTable(filteredData, reportName);
+                renderDynamicTable(data, reportName);
 
             } catch (error) {
-                dataArea.innerHTML = `<p style="text-align: center; color: red;">❌ [NETWORK ERROR] Could not retrieve data: ${error}</p>`;
+                dataArea.innerHTML = `<p style="text-align: center; color: red;">❌ Gagal mengambil data: ${error}</p>`;
                 console.error('Fetch Error:', error);
             }
         }
 
         function renderDynamicTable(data, title) {
             const dataArea = document.getElementById('reportDataArea');
-            
+            if (data.length === 0) {
+                dataArea.innerHTML = `<p style="text-align: center;">Tidak ada data ditemukan untuk laporan ${title}.</p>`;
+                return;
+            }
+
             // Dapatkan headers dari kunci objek pertama
             const headers = Object.keys(data[0]);
             
