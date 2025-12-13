@@ -672,7 +672,7 @@ def analyze_full_mc_report():
 @app.route('/analyze/full_mb_report', methods=['GET'])
 @login_required
 def analyze_full_mb_report():
-    """Rute untuk menampilkan halaman laporan Detail Master Bayar (MB) / Koleksi Lengkap."""
+    """Rute untuk menampilkan halaman laporan Detail Master Bayar (MB) / Koleksi Lengkap. (FIX)"""
     return render_template('analyze_report_template.html', 
                            title="Laporan Detail Master Bayar (MB) Lengkap", 
                            description="Menampilkan semua data transaksi koleksi (MB) yang tersimpan di database.",
@@ -697,7 +697,7 @@ def analyze_reduced_usage():
 @app.route('/analyze/tarif_breakdown', methods=['GET'])
 @login_required
 def analyze_tarif_breakdown_page():
-    """Rute untuk menampilkan halaman laporan Tarif Breakdown (menggunakan template yang ada)."""
+    """Rute untuk menampilkan halaman laporan Tarif Breakdown (menggunakan template yang ada). (FIX)"""
     return render_template('analyze_report_template.html', 
                            title="Distribusi Pelanggan Tarif Kustom", 
                            description="Menampilkan distribusi pelanggan (REG) berdasarkan tarif di Rayon 34/35.",
@@ -842,6 +842,34 @@ def analyze_mc_grouping_api():
     except Exception as e:
         print(f"Error saat menganalisis custom grouping MC: {e}")
         return jsonify({"status": "error", "message": f"Gagal mengambil data grouping MC: {e}"}), 500
+
+# =========================================================================
+# === API GROUPING MB (Koleksi) LENGKAP ===
+# =========================================================================
+
+@app.route('/api/analyze/mb_grouping', methods=['GET'])
+@login_required 
+def analyze_mb_grouping_api():
+    """Placeholder API untuk Laporan Detail Master Bayar (MB) Lengkap. (FIX)"""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    # Placeholder: Mengambil 100 data transaksi MB terbaru
+    try:
+        results = list(collection_mb.find().sort('TGL_BAYAR', -1).limit(100))
+        # Hapus _id untuk rendering
+        for doc in results:
+            doc.pop('_id', None)
+        
+        if not results:
+             return jsonify([]), 200
+             
+        return jsonify(results), 200
+        
+    except Exception as e:
+        print(f"Error fetching generic MB data: {e}")
+        return jsonify({"message": f"Gagal mengambil data MB: {e}"}), 500
+
 
 # =========================================================================
 # === API UNTUK ANALISIS AKURAT (Fluktuasi Volume Naik/Turun) ===
@@ -1401,7 +1429,7 @@ def upload_sbrs_data():
                 "inserted_count": inserted_count,
                 "skipped_count": skipped_count
             },
-            "anomaly_list": anomaly_list # Diperbarui untuk mengirimkan hasil analisis
+            "anomaly_list": anomaly_list # FIX: Mengirimkan daftar anomali yang baru dibuat
         }), 200
         # --- END RETURN REPORT ---
 
