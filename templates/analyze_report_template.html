@@ -171,6 +171,46 @@
             }
         }
         
+        // --- HELPER FUNCTION FOR MC GROUPING BREAKDOWN ---
+        function createSingleBreakdownTable(title, dataArray, dimensionKey) {
+            let tableHTML = `
+                <div style="padding: 15px; border: 1px solid #e0e0e0; border-radius: var(--border-radius); box-shadow: var(--shadow-light); margin-bottom: 20px;">
+                    <h5 style="margin-top: 0; color: #17a2b8;">${title}</h5>
+                    <div class="result-table-wrapper" style="margin-top: 10px;">
+                        <table class="data-table" style="min-width: 100%;">
+                            <thead>
+                                <tr style="background-color: #f0f8ff;">
+                                    <th style="text-align: left; width: 40%;">${dimensionKey.replace(/_/g, ' ').toUpperCase()}</th>
+                                    <th>Nomen Count</th>
+                                    <th>Nominal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+            `;
+            
+            dataArray.forEach(item => {
+                const dimValue = item[dimensionKey] || 'N/A';
+                const nomenCount = formatNumber(item.CountOfNOMEN);
+                const nominal = formatRupiah(item.SumOfNOMINAL);
+                
+                tableHTML += `
+                    <tr>
+                        <td data-label="${dimensionKey.toUpperCase()}" style="text-align: left;">${dimValue}</td>
+                        <td data-label="Nomen Count">${nomenCount}</td>
+                        <td data-label="Nominal">${nominal}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+            return tableHTML;
+        }
+
         // --- Fungsi Tambahan untuk Rendering Laporan Spesifik ---
         
         // Rendering Tarif Breakdown (Diadaptasi dari collection_unified.html)
@@ -221,12 +261,14 @@
             dataArea.innerHTML = tableHTML;
         }
         
-        // Rendering Custom Report (MC Grouping) - Placeholder
+        // Rendering Custom Report (MC Grouping) - FULL IMPLEMENTATION
         function renderCustomReportTable(data, dataArea) {
              const totals = data.totals;
+             const breakdowns = data.breakdowns;
+             
              let html = `
-                <h3 style="margin-top: 20px;">Ringkasan Grouping MC (Rayon 34 & 35 Reguler)</h3>
-                <div class="result-table-wrapper">
+                <h3 style="margin-top: 20px; color: var(--primary-color);">Ringkasan Total MC (Rayon 34 & 35 Reguler)</h3>
+                <div class="result-table-wrapper" style="max-width: 800px; margin-left: auto; margin-right: auto;">
                     <table class="data-table">
                         <thead>
                             <tr style="background-color: #f8d7da;">
@@ -258,8 +300,28 @@
                         </tbody>
                     </table>
                 </div>
-                <p style="margin-top: 20px; color: #6c757d;">*Data breakdown per tarif/merk/metode baca tersedia dalam format JSON.</p>
+                
+                <h3 style="margin-top: 40px; color: #2c3e50;">Detail Breakdown Per Dimensi</h3>
              `;
+
+            // --- 1. Breakdown TARIF ---
+             html += `<h4 style="color: #007bff; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">Breakdown Berdasarkan: Jenis TARIF</h4>`;
+             html += createSingleBreakdownTable(`AB SUNTER (Total)`, breakdowns.TARIF.TOTAL_34_35, 'TARIF');
+             html += createSingleBreakdownTable(`Rayon 34`, breakdowns.TARIF[34], 'TARIF');
+             html += createSingleBreakdownTable(`Rayon 35`, breakdowns.TARIF[35], 'TARIF');
+             
+            // --- 2. Breakdown MERK ---
+             html += `<h4 style="color: #007bff; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">Breakdown Berdasarkan: Merek Meter</h4>`;
+             html += createSingleBreakdownTable(`AB SUNTER (Total)`, breakdowns.MERK.TOTAL_34_35, 'MERK');
+             html += createSingleBreakdownTable(`Rayon 34`, breakdowns.MERK[34], 'MERK');
+             html += createSingleBreakdownTable(`Rayon 35`, breakdowns.MERK[35], 'MERK');
+
+            // --- 3. Breakdown READ_METHOD ---
+             html += `<h4 style="color: #007bff; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">Breakdown Berdasarkan: Metode Baca</h4>`;
+             html += createSingleBreakdownTable(`AB SUNTER (Total)`, breakdowns.READ_METHOD.TOTAL_34_35, 'READ_METHOD');
+             html += createSingleBreakdownTable(`Rayon 34`, breakdowns.READ_METHOD[34], 'READ_METHOD');
+             html += createSingleBreakdownTable(`Rayon 35`, breakdowns.READ_METHOD[35], 'READ_METHOD');
+             
              dataArea.innerHTML = html;
         }
 
