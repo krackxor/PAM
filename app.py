@@ -864,7 +864,13 @@ def analyze_mb_grouping_api():
         if not results:
              return jsonify([]), 200
              
-        return jsonify(results), 200
+        # FIX KRITIS: Pastikan nilai NaN (float) dikonversi menjadi null (None) untuk JSON valid
+        df = pd.DataFrame(results)
+        # Mengganti semua NaN (termasuk NaN yang muncul dari MongoDB atau konversi Pandas) dengan None
+        # None dikonversi Flask ke 'null' yang valid JSON
+        df_cleaned = df.where(pd.notnull(df), None) 
+        
+        return jsonify(df_cleaned.to_dict('records')), 200
         
     except Exception as e:
         print(f"Error fetching generic MB data: {e}")
