@@ -1,667 +1,1759 @@
-{% extends "base.html" %}
+import os
+import pandas as pd
+from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, make_response
+from pymongo import MongoClient
+from dotenv import load_dotenv
+from werkzeug.utils import secure_filename
+from werkzeug.security import check_password_hash, generate_password_hash
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from flask_wtf import FlaskForm 
+from wtforms import StringField, PasswordField, SubmitField 
+from wtforms.validators import DataRequired 
+from functools import wraps
+import re 
+from datetime import datetime, timedelta 
+import io 
+from pymongo import InsertOne 
+from pymongo.errors import BulkWriteError 
 
-{% block title %}Laporan Koleksi & Analisis Kustom{% endblock %}
+load_dotenv() 
 
-{% block custom_styles %}
-/* Custom CSS untuk Tampilan Report/Detail yang Responsif */
-.report-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
-    gap: 15px;
-    margin-bottom: 30px;
-}
-.summary-card {
-    background-color: var(--card-bg);
-    padding: 15px;
-    border-radius: var(--border-radius);
-    border-left: 5px solid; 
-    box-shadow: var(--shadow-light);
-}
-.summary-card h4 { margin: 0 0 5px 0; font-size: 0.9em; text-transform: uppercase; color: #6c757d; }
-.summary-card p { margin: 0; font-size: 1.3em; font-weight: bold; }
+# --- KONFIGURASI APLIKASI & DATABASE ---
+app = Flask(__name__)
+app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
 
-/* Wrapper scroll untuk responsivitas tabel lebar */
-.report-table-wrapper { 
-    overflow-x: auto; 
-    margin-top: 15px; 
-}
+# Konfigurasi MongoDB
+MONGO_URI = os.getenv("MONGO_URI")
+DB_NAME = os.getenv("MONGO_DB_NAME")
 
-/* Style Tabel Report */
-.report-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 14px;
-    min-width: 1000px; /* Minimal width untuk scroll horizontal yang jelas */
-}
-.report-table th, .report-table td {
-    border: 1px solid #ddd;
-    padding: 8px 6px; 
-    white-space: nowrap; 
-    text-align: right;
-}
-.report-table th {
-    background-color: #f2f2f2;
-    text-align: center;
-}
-.report-table th[rowspan="2"] {
-    min-width: 80px; /* Tambahkan min-width untuk header Rayon/PCEZ */
-}
-.report-table td:first-child, .report-table td:nth-child(2) {
-    text-align: left;
-}
-.grand-total-row td {
-    font-weight: bold;
-    background-color: #fff3cd;
-}
+NOME_COLUMN_NAME = 'NOMEN' 
+ALLOWED_EXTENSIONS = {'csv', 'xlsx', 'xls'} 
 
-/* Styling untuk kelompok tabel kustom (AB Sunter) */
-.breakdown-group {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* 3 kolom yang responsif */
-    gap: 20px;
-    margin-top: 15px;
-    margin-bottom: 30px;
-}
-.breakdown-table-container {
-    padding: 15px;
-    border: 1px solid #e0e0e0;
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow-light);
-}
-.breakdown-table-container table {
-    min-width: auto; /* Hilangkan min-width untuk breakdown tables */
-}
-.breakdown-table-container table th:nth-child(1), 
-.breakdown-table-container table td:nth-child(1) {
-    text-align: left !important;
-}
+# Koneksi ke MongoDB
+client = None
+collection_mc = None
+collection_mb = None
+collection_cid = None
+collection_sbrs = None
+collection_ardebt = None
 
-/* Filter Group Responsiveness */
-.filter-input-group {
-    display: flex;
-    gap: 10px;
-    margin-top: 30px;
-    margin-bottom: 20px;
-}
-#filterInput {
-    flex-grow: 1;
-    padding: 12px;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-}
+try:
+    # FIX: Menambahkan timeout pada koneksi MongoDB untuk stabilitas
+    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000) 
+    client.admin.command('ping') 
+    db = client[DB_NAME]
+    
+    # 🚨 KOLEKSI DIPISAH BERDASARKAN SUMBER DATA
+    collection_mc = db['MasterCetak']   # MC (Piutang/Tagihan Bulanan - REPLACE)
+    collection_mb = db['MasterBayar']   # MB (Koleksi Harian - APPEND)
+    collection_cid = db['CustomerData'] # CID (Data Pelanggan Statis - REPLACE)
+    collection_sbrs = db['MeterReading'] # SBRS (Baca Meter Harian/Parsial - APPEND)
+    collection_ardebt = db['AccountReceivable'] # ARDEBT (Tunggakan Detail - REPLACE)
+    
+    # ==========================================================
+    # === START OPTIMASI: INDEXING KRITIS (SOLUSI KECEPATAN PERMANEN) ===
+    # ==========================================================
+    
+    # CID (CustomerData): Paling KRITIS untuk JOIN
+    collection_cid.create_index([('NOMEN', 1)], name='idx_cid_nomen', unique=True)
+    collection_cid.create_index([('RAYON', 1), ('TIPEPLGGN', 1)], name='idx_cid_rayon_tipe')
 
-/* ========================================================== */
-/* MOBILE LAYOUT FIXES (< 600px) */
-/* ========================================================== */
-@media screen and (max-width: 600px) {
-    
-    /* General Grid */
-    .report-grid {
-        grid-template-columns: 1fr;
-    }
-    .breakdown-group {
-        grid-template-columns: 1fr;
-    }
-    
-    /* Filter Group: Tumpuk input dan tombol */
-    .filter-input-group {
-        flex-direction: column;
-        gap: 15px;
-    }
-    #filterInput, #searchBtn {
-        width: 100%;
-        box-sizing: border-box;
-    }
-    
-    /* Tables: Keep horizontal scroll but make it more compact/readable */
-    /* Berlaku untuk tabel utama report dan grouping MB */
-    .report-table, .collection-table {
-        min-width: 700px; /* Pertahankan min-width agar horizontal scroll berfungsi */
-        width: auto;
-    }
-    .report-table th, .report-table td, 
-    .collection-table th, .collection-table td {
-        padding: 6px 4px; /* Kompakkan padding */
-        font-size: 11px;
-    }
-    
-    /* Tabel Tarif Breakdown & Detail Listing MB: Implement Card View */
-    
-    /* Hapus bayangan/border wrapper agar tampilan card lebih bersih */
-    #tarifBreakdownArea .report-table-wrapper,
-    #customMBReportArea .report-table-wrapper {
-        border: none;
-        box-shadow: none;
-    }
-    
-    /* Card View Logic (Semua tabel di halaman ini) */
-    #tarifBreakdownArea .report-table,
-    #customMBReportArea .report-table[style*="min-width: 600px"],
-    #customMBReportArea .report-table[style*="min-width: 450px"],
-    #customReportArea .report-table[style*="min-width: 100%"] { 
-        min-width: 100% !important;
-    }
-    
-    #tarifBreakdownArea .report-table thead,
-    #customMBReportArea .report-table[style*="min-width: 600px"] thead,
-    #customMBReportArea .report-table[style*="min-width: 450px"] thead,
-    #customReportArea .report-table[style*="min-width: 100%"] thead {
-        display: none;
-    }
-    #tarifBreakdownArea .report-table tr,
-    #customMBReportArea .report-table[style*="min-width: 600px"] tr,
-    #customMBReportArea .report-table[style*="min-width: 450px"] tr,
-    #customReportArea .report-table[style*="min-width: 100%"] tr {
-        display: block;
-        margin-bottom: 10px;
-        border: 1px solid #ddd;
-        border-radius: var(--border-radius);
-    }
-    #tarifBreakdownArea .report-table td,
-    #customMBReportArea .report-table[style*="min-width: 600px"] td,
-    #customMBReportArea .report-table[style*="min-width: 450px"] td,
-    #customReportArea .report-table[style*="min-width: 100%"] td {
-        display: flex;
-        justify-content: space-between;
-        padding: 8px 12px;
-        border: none;
-        border-bottom: 1px solid #eee;
-        text-align: right;
-        font-size: 13px; /* Ukuran font standar untuk konten card */
-    }
-    #tarifBreakdownArea .report-table td:before,
-    #customMBReportArea .report-table[style*="min-width: 600px"] td:before,
-    #customMBReportArea .report-table[style*="min-width: 450px"] td:before,
-    #customReportArea .report-table[style*="min-width: 100%"] td:before {
-        content: attr(data-label);
-        font-weight: bold;
-        text-align: left;
-        width: 50%;
-        color: var(--text-color);
-        padding-right: 10px;
-        white-space: nowrap;
-    }
-    #tarifBreakdownArea .grand-total-row td,
-    #customMBReportArea .grand-total-row td,
-    #customReportArea .grand-total-row td {
-        background-color: #f8f8f8;
-    }
-    
-}
-{% endblock %}
+    # MC (MasterCetak): Untuk Report Koleksi dan Grouping
+    collection_mc.create_index([('NOMEN', 1)], name='idx_mc_nomen')
+    collection_mc.create_index([('RAYON', 1), ('PCEZ', 1)], name='idx_mc_rayon_pcez') 
+    collection_mc.create_index([('STATUS', 1)], name='idx_mc_status')
+    collection_mc.create_index([('TARIF', 1), ('KUBIK', 1), ('NOMINAL', 1)], name='idx_mc_tarif_volume')
 
-{% block content %}
-    <h2 style="text-align: left; border-bottom: none; margin-bottom: 20px; color: var(--primary-color);">
-        <i class="fas fa-chart-bar" style="margin-right: 10px;"></i> Laporan Koleksi & Analisis Kustom
-    </h2>
+    # MB (MasterBayar): Untuk Detail Transaksi dan Undue Check
+    collection_mb.create_index([('TGL_BAYAR', -1)], name='idx_mb_paydate_desc')
+    collection_mb.create_index([('NOMEN', 1)], name='idx_mb_nomen')
+    collection_mb.create_index([('RAYON', 1), ('PCEZ', 1), ('TGL_BAYAR', -1)], name='idx_mb_rayon_pcez_date')
     
-    <h3 style="margin-top: 40px; color: #dc3545; border-top: 1px solid #dc3545; padding-top: 20px;">
-        <i class="fas fa-layer-group"></i> Modul Analisis Grup MC: Piutang Pelanggan (AB Sunter)
-    </h3>
+    # Rekomendasi Index Unik untuk MB (Mencegah Duplikasi Cepat)
+    # collection_mb.create_index([('NOTAGIHAN', 1), ('TGL_BAYAR', 1), ('NOMINAL', 1)], name='idx_mb_unique_keys', unique=True)
+
+    # SBRS (MeterReading): Untuk Anomaly Check
+    collection_sbrs.create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', -1)], name='idx_sbrs_history')
     
-    <button id="fetchCustomReportBtn" class="btn-primary" style="background-color: #dc3545; color: white; margin-bottom: 20px;">
-        <i class="fas fa-sync"></i> Muat Data Grup MC & Breakdown Tarif
-    </button>
-
-    <div id="customReportArea">
-        <p class="no-results">Tekan tombol di atas untuk memuat laporan agregasi Piutang (MC) untuk area AB Sunter.</p>
-    </div>
+    # ARDEBT (AccountReceivable): Untuk Cek Tunggakan
+    collection_ardebt.create_index([('NOMEN', 1)], name='idx_ardebt_nomen')
     
-    <h3 style="margin-top: 40px; color: #17a2b8; border-top: 1px solid #17a2b8; padding-top: 20px;">
-        <i class="fas fa-money-check-alt"></i> Modul Analisis Grup MB: Koleksi Pembayaran (AB Sunter)
-    </h3>
+    # ==========================================================
+    # === END OPTIMASI: INDEXING KRITIS ===
+    # ==========================================================
     
-    <button id="fetchCustomMBReportBtn" class="btn-primary" style="background-color: #17a2b8; color: white; margin-bottom: 20px;">
-        <i class="fas fa-sync"></i> Muat Laporan Koleksi AB Sunter
-    </button>
+    collection_data = collection_mc
 
-    <div id="customMBReportArea">
-        <p class="no-results">Tekan tombol di atas untuk memuat laporan agregasi Koleksi (MB) untuk area AB Sunter.</p>
-    </div>
+    print("Koneksi MongoDB berhasil dan index dikonfigurasi!")
+except Exception as e:
+    print(f"Gagal terhubung ke MongoDB atau mengkonfigurasi index: {e}")
+    client = None
 
-    <h3 style="margin-top: 40px; color: #dc3545; border-top: 1px solid #dc3545; padding-top: 20px;">
-        <i class="fas fa-list-ol"></i> BREAKDOWN MC: Distribusi Pelanggan Berdasarkan TARIF
-    </h3>
-    <div id="tarifBreakdownArea">
-        <p class="no-results">Tekan "Muat Data Grup MC & Breakdown Tarif" di atas untuk melihat hasil agregasi Tarif.</p>
-    </div>
-
-    <script>
-        // Fungsi pembantu
-        function formatRupiah(number) {
-            return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
-        }
+# --- FUNGSI UTILITY INTERNAL: ANALISIS SBRS ---
+def _get_sbrs_anomalies(collection_sbrs, collection_cid):
+    """
+    Menjalankan pipeline agregasi untuk menemukan anomali pemakaian (Naik/Turun/Zero/Ekstrim) 
+    dengan membandingkan 2 riwayat SBRS terakhir dan melakukan JOIN ke CID.
+    """
+    if collection_sbrs is None or collection_cid is None:
+        return []
         
-        function formatNumber(number) {
-            return (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
-        }
-
-        function formatPercent(number) {
-            return (parseFloat(number) || 0).toFixed(2) + '%';
-        }
-        
-        // MC Constants
-        const fetchCustomBtn = document.getElementById('fetchCustomReportBtn'); 
-        const customReportArea = document.getElementById('customReportArea');
-        const tarifBreakdownArea = document.getElementById('tarifBreakdownArea');
-        
-        // MB Constants
-        const fetchCustomMBBtn = document.getElementById('fetchCustomMBReportBtn');
-        const customMBReportArea = document.getElementById('customMBReportArea');
-        
-        // --- FUNGSI MC: RENDER BREAKDOWN TARIF DINAMIS ---
-        function renderTarifBreakdownSection(tarifData) {
-            const area = document.getElementById('tarifBreakdownArea');
-            area.innerHTML = ''; // Clear existing content
-
-            function createTarifTable(title, dataArray) {
-                let totalPelanggan = dataArray.reduce((sum, item) => sum + item.CountOfNOMEN, 0);
-
-                let tableHTML = `
-                    <div class="breakdown-table-container">
-                        <h5 style="margin-top: 0; color: #17a2b8;">${title} (Total Nomen: ${formatNumber(totalPelanggan)})</h5>
-                        <div class="report-table-wrapper" style="margin-top: 10px;">
-                            <table class="report-table" style="min-width: 100%; font-size: 13px;">
-                                <thead>
-                                    <tr style="background-color: #f0f8ff;">
-                                        <th style="text-align: left;" data-label="TARIF">TARIF</th>
-                                        <th data-label="Nomen">Nomen Count</th>
-                                        <th data-label="Nominal">Nominal (Rp)</th>
-                                        <th data-label="Persentase">Persentase (%)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                `;
-                
-                dataArray.forEach(item => {
-                    const percentage = (item.CountOfNOMEN / totalPelanggan) * 100;
-                    tableHTML += `
-                        <tr>
-                            <td data-label="TARIF" style="text-align: left;">${item.TARIF || 'N/A'}</td>
-                            <td data-label="Nomen">${formatNumber(item.CountOfNOMEN)}</td>
-                            <td data-label="Nominal">${formatRupiah(item.SumOfNOMINAL)}</td>
-                            <td data-label="Persentase">${formatPercent(percentage)}</td>
-                        </tr>
-                    `;
-                });
-                
-                tableHTML += `
-                    <tr class="grand-total-row">
-                        <td data-label="TOTAL" style="text-align: left;">TOTAL</td>
-                        <td data-label="Total Nomen">${formatNumber(totalPelanggan)}</td>
-                        <td data-label="Total Nominal">${formatRupiah(dataArray.reduce((sum, item) => sum + item.SumOfNOMINAL, 0))}</td>
-                        <td data-label="Persentase">100.00%</td>
-                    </tr>
-                `;
-
-                tableHTML += `
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                `;
-                return tableHTML;
+    pipeline_sbrs_history = [
+        {'$sort': {'CMR_ACCOUNT': 1, 'CMR_RD_DATE': -1}},
+        {'$group': {
+            '_id': '$CMR_ACCOUNT',
+            'history': {
+                '$push': {
+                    'kubik': {'$toDouble': {'$ifNull': ['$CMR_KUBIK', 0]}}, 
+                    'tanggal': '$CMR_RD_DATE'
+                }
             }
+        }},
+        {'$project': {
+            'NOMEN': '$_id',
+            'latest': {'$arrayElemAt': ['$history', 0]},
+            'previous': {'$arrayElemAt': ['$history', 1]},
+            '_id': 0
+        }},
+        {'$match': {
+            'previous': {'$ne': None},
+            'latest': {'$ne': None},
+            'latest.kubik': {'$ne': None},
+            'previous.kubik': {'$ne': None}
+        }},
+        {'$project': {
+            'NOMEN': 1,
+            'KUBIK_TERBARU': '$latest.kubik',
+            'KUBIK_SEBELUMNYA': '$previous.kubik',
+            'SELISIH_KUBIK': {'$subtract': ['$latest.kubik', '$previous.kubik']},
+            'PERSEN_SELISIH': {
+                '$cond': {
+                    'if': {'$gt': ['$previous.kubik', 0]},
+                    'then': {'$multiply': [{'$divide': [{'$subtract': ['$latest.kubik', '$previous.kubik']}, '$previous.kubik']}, 100]},
+                    'else': 0 
+                }
+            }
+        }},
+        {'$addFields': {
+            'STATUS_PEMAKAIAN': {
+                '$switch': {
+                    'branches': [
+                        { 'case': {'$gte': ['$KUBIK_TERBARU', 150]}, 'then': 'KONSUMSI EKSTREM (>150 m³)' }, # Threshold Ekstrim Tinggi
+                        { 'case': {'$gte': ['$PERSEN_SELISIH', 50]}, 'then': 'KENAIKAN EKSTREM (>=50%)' }, 
+                        { 'case': {'$gte': ['$PERSEN_SELISIH', 10]}, 'then': 'KENAIKAN SIGNIFIKAN (>=10%)' }, 
+                        { 'case': {'$lte': ['$PERSEN_SELISIH', -50]}, 'then': 'PENURUNAN EKSTREM (<= -50%)' }, 
+                        { 'case': {'$lte': ['$PERSEN_SELISIH', -10]}, 'then': 'PENURUNAN SIGNIFIKAN (<= -10%)' }, 
+                        { 'case': {'$eq': ['$KUBIK_TERBARU', 0]}, 'then': 'KONSUMSI NOL (ZERO)' },
+                    ],
+                    'default': 'STABIL / NORMAL'
+                }
+            }
+        }},
+        {'$lookup': {
+           'from': 'CustomerData', 
+           'localField': 'NOMEN',
+           'foreignField': 'NOMEN',
+           'as': 'customer_info'
+        }},
+        {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+        {'$project': {
+            'NOMEN': 1,
+            'NAMA': {'$ifNull': ['$customer_info.NAMA', 'N/A']},
+            'RAYON': {'$ifNull': ['$customer_info.RAYON', 'N/A']},
+            'KUBIK_TERBARU': {'$round': ['$KUBIK_TERBARU', 0]},
+            'KUBIK_SEBELUMNYA': {'$round': ['$KUBIK_SEBELUMNYA', 0]},
+            'SELISIH_KUBIK': {'$round': ['$SELISIH_KUBIK', 0]},
+            'PERSEN_SELISIH': {'$round': ['$PERSEN_SELISIH', 2]},
+            'STATUS_PEMAKAIAN': 1
+        }},
+        {'$match': { 
+           '$or': [ # Filter hanya yang anomali
+               {'STATUS_PEMAKAIAN': {'$ne': 'STABIL / NORMAL'}},
+           ]
+        }},
+        {'$limit': 100} # Batasi output untuk performa
+    ]
 
-            let breakdownHTML = `
-                <div class="breakdown-group">
-                    ${createTarifTable('AB SUNTER (Total R34 + R35)', tarifData.TOTAL_34_35)}
-                    ${createTarifTable('Rayon 34', tarifData['34'])}
-                    ${createTarifTable('Rayon 35', tarifData['35'])}
-                </div>
-            `;
-            area.innerHTML = breakdownHTML;
-        }
+    anomalies = list(collection_sbrs.aggregate(pipeline_sbrs_history))
+    
+    # Clean up _id
+    for doc in anomalies:
+        doc.pop('_id', None)
+        
+    return anomalies
 
-        // --- FUNGSI MC: GROUPING KUSTOM ---
-        async function fetchCustomReport() {
-            customReportArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Menghubungkan ke MongoDB untuk Laporan Agregasi MC...</p>';
+
+# --- PEMROSESAN DAFTAR PENGGUNA DARI .ENV (STATIC LOGIN) ---
+STATIC_USERS = {}
+user_list_str = os.getenv("USER_LIST", "")
+if user_list_str:
+    for user_entry in user_list_str.split(','):
+        try:
+            username, plain_password, is_admin_str = user_entry.strip().split(':')
+            hashed_password = generate_password_hash(plain_password)
+            is_admin = is_admin_str.lower() == 'true'
+            STATIC_USERS[username] = {
+                'id': username, 'password_hash': hashed_password,
+                'is_admin': is_admin, 'username': username
+            }
+        except ValueError as e:
+            print(f"Peringatan: Format USER_LIST tidak valid pada entri '{user_entry}'. Error: {e}")
+
+
+# --- KONFIGURASI FLASK-LOGIN ---
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login' 
+login_manager.login_message_category = 'info'
+
+# --- KELAS DAN DEKORATOR TETAP SAMA ---
+class User(UserMixin):
+    def __init__(self, user_data):
+        self.id = user_data['id']
+        self.username = user_data['username']
+        self.password_hash = user_data['password_hash']
+        self.is_admin = user_data['is_admin']
+
+@login_manager.user_loader
+def load_user(user_id):
+    user_data = STATIC_USERS.get(user_id)
+    if user_data:
+        return User(user_data)
+    return None
+
+class LoginForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired()])
+    password = PasswordField('Password', validators=[DataRequired()])
+    submit = SubmitField('Masuk')
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.is_admin:
+            flash('Akses ditolak: Anda tidak memiliki wewenang Administrator untuk mengakses halaman ini.', 'danger')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# --- ENDPOINT AUTENTIKASI ---
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    form = LoginForm()
+    if form.validate_on_submit():
+        user_data_entry = STATIC_USERS.get(form.username.data)
+
+        if user_data_entry and check_password_hash(user_data_entry['password_hash'], form.password.data):
+            user = User(user_data_entry) 
+            login_user(user)
+            flash('Autentikasi berhasil. Selamat datang.', 'success')
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('index'))
+        else:
+            flash('Autentikasi Gagal. Periksa kembali nama pengguna dan sandi Anda.', 'danger')
             
-            try {
-                const response = await fetch('{{ url_for("analyze_mc_grouping_api") }}'); 
-                const data = await response.json();
-                
-                if (response.status === 401) {
-                    window.location.href = '{{ url_for("login") }}';
-                    return;
-                }
-                
-                if (data.status !== 'success') {
-                     customReportArea.innerHTML = `<p class="no-results" style="color: red;">❌ Gagal memuat laporan: ${data.message || 'Tidak ada data kustom ditemukan.'}</p>`;
-                     tarifBreakdownArea.innerHTML = `<p class="no-results" style="color: red;">Data Tarif Gagal dimuat.</p>`;
-                     return;
-                }
-                
-                // NEW: RENDER TARIF BREAKDOWN SECTION (Integrated with MC button)
-                renderTarifBreakdownSection(data.breakdowns.TARIF);
-                
-                renderCustomReportTable(data);
+    return render_template('login.html', form=form)
 
-            } catch (error) {
-                customReportArea.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data laporan kustom dari server.</p>';
-                tarifBreakdownArea.innerHTML = `<p class="no-results" style="color: red;">Data Tarif Gagal dimuat.</p>`;
-                console.error('Custom Report Error:', error);
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('Anda telah berhasil keluar dari sistem.', 'success')
+    return redirect(url_for('login'))
+
+# --- ENDPOINT UTAMA (MENU CARI) ---
+@app.route('/')
+@login_required 
+def index():
+    return render_template('index.html', is_admin=current_user.is_admin)
+
+@app.route('/api/search', methods=['GET'])
+@login_required 
+def search_nomen():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    query_nomen = request.args.get('nomen', '').strip()
+
+    if not query_nomen:
+        return jsonify({"status": "fail", "message": "Mohon masukkan NOMEN (Nomor Pelanggan) untuk memulai pencarian terintegrasi."}), 400
+
+    try:
+        # 1. DATA STATIS (CID) - Master Data Pelanggan
+        cleaned_nomen = query_nomen.strip().upper()
+        cid_result = collection_cid.find_one({'NOMEN': cleaned_nomen})
+        
+        if not cid_result:
+            return jsonify({
+                "status": "not_found",
+                "message": f"NOMEN {query_nomen} tidak ditemukan dalam Master Data Pelanggan (CID)."
+            }), 404
+
+        # 2. PIUTANG BERJALAN (MC) - Snapshot Bulan Ini
+        mc_results = list(collection_mc.find({'NOMEN': cleaned_nomen}))
+        piutang_nominal_total = sum(item.get('NOMINAL', 0) for item in mc_results)
+        
+        # 3. TUNGGAKAN DETAIL (ARDEBT)
+        ardebt_results = list(collection_ardebt.find({'NOMEN': cleaned_nomen}))
+        tunggakan_nominal_total = sum(item.get('JUMLAH', 0) for item in ardebt_results)
+        
+        # 4. RIWAYAT PEMBAYARAN TERAKHIR (MB)
+        mb_last_payment_cursor = collection_mb.find({'NOMEN': cleaned_nomen}).sort('TGL_BAYAR', -1).limit(1)
+        last_payment = list(mb_last_payment_cursor)[0] if list(mb_last_payment_cursor) else None
+        
+        # 5. RIWAYAT BACA METER (SBRS)
+        sbrs_last_read_cursor = collection_sbrs.find({'CMR_ACCOUNT': cleaned_nomen}).sort('CMR_RD_DATE', -1).limit(2)
+        sbrs_history = list(sbrs_last_read_cursor)
+        
+        # --- LOGIKA KECERDASAN (INTEGRASI & DIAGNOSTIK) ---
+        
+        # A. Status Tunggakan/Piutang
+        if tunggakan_nominal_total > 0:
+            status_financial = f"TUNGGAKAN AKTIF ({len(ardebt_results)} Bulan)"
+        elif piutang_nominal_total > 0:
+            status_financial = f"PIUTANG BULAN BERJALAN"
+        else:
+            status_financial = "LUNAS / TIDAK ADA KEWAJIBAN"
+            
+        # B. Status Pembayaran
+        last_payment_date = last_payment.get('TGL_BAYAR', 'N/A') if last_payment else 'BELUM ADA RIWAYAT PEMBAYARAN'
+
+        # C. Status Pemakaian (Anomaly Check)
+        status_pemakaian = "DATA SBRS TIDAK LENGKAP"
+        kubik_terakhir = 0
+        if len(sbrs_history) >= 1:
+            kubik_terakhir = sbrs_history[0].get('CMR_KUBIK', 0)
+            
+            if kubik_terakhir > 100: # Threshold Ekstrim
+                status_pemakaian = f"KONSUMSI EKSTREM ({kubik_terakhir} m³)"
+            elif kubik_terakhir <= 5 and kubik_terakhir > 0: # Threshold Rendah
+                status_pemakaian = f"KONSUMSI RENDAH/TURUN ({kubik_terakhir} m³)"
+            elif kubik_terakhir == 0:
+                status_pemakaian = "KONSUMSI NOL (ZERO)"
+            else:
+                status_pemakaian = f"KONSUMSI NORMAL ({kubik_terakhir} m³)"
+
+
+        health_summary = {
+            "NOMEN": query_nomen,
+            "NAMA": cid_result.get('NAMA', 'N/A'),
+            "ALAMAT": cid_result.get('ALAMAT', 'N/A'),
+            "RAYON": cid_result.get('RAYON', 'N/A'),
+            "TIPE_PLGGN": cid_result.get('TIPEPLGGN', 'N/A'),
+            "STATUS_FINANSIAL": status_financial,
+            "TOTAL_PIUTANG_NOMINAL": piutang_nominal_total + tunggakan_nominal_total,
+            "PEMBAYARAN_TERAKHIR": last_payment_date,
+            "STATUS_PEMAKAIAN": status_pemakaian
+        }
+        
+        # Hapus _id dari semua hasil
+        def clean_mongo_id(doc):
+            doc.pop('_id', None)
+            return doc
+
+        return jsonify({
+            "status": "success",
+            "summary": health_summary,
+            "cid_data": clean_mongo_id(cid_result),
+            "mc_data": [clean_mongo_id(doc) for doc in mc_results],
+            "ardebt_data": [clean_mongo_id(doc) for doc in ardebt_results],
+            "sbrs_data": [clean_mongo_id(doc) for doc in sbrs_history]
+        }), 200
+
+    except Exception as e:
+        print(f"Error saat mencari data terintegrasi: {e}")
+        return jsonify({"message": f"Gagal mengambil data terintegrasi. Detail Teknis: {e}"}), 500
+
+# --- ENDPOINT KOLEKSI DAN ANALISIS LAINNYA ---
+@app.route('/daily_collection', methods=['GET'])
+@login_required 
+def daily_collection_unified_page():
+    return render_template('collection_unified.html', is_admin=current_user.is_admin)
+
+# =========================================================================
+# === API GROUPING MC KUSTOM (HELPER FUNCTION) ===
+# =========================================================================
+
+def _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, rayon_filter=None):
+    # This helper will return a list of aggregated results grouped by the dimension.
+    # It filters to 'REG' type and applies rayon filter if provided ('34', '35', or 'TOTAL_34_35').
+    
+    dimension_map = {'TARIF': '$TARIF_CID', 'MERK': '$MERK_CID', 'READ_METHOD': '$READ_METHOD'}
+    
+    # Base pipeline structure (Projection and CID Join for all necessary fields)
+    pipeline = [
+        {'$project': {
+            'NOMEN': '$NOMEN',
+            'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
+            'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
+        }},
+        {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
+        {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
+        {'$addFields': {
+            'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
+            'TARIF_CID': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TARIF', 'N/A']}}}}}, 
+            'MERK_CID': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
+            'READ_METHOD': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}}}}},
+            'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},
+        }},
+        {'$match': {'CLEAN_TIPEPLGGN': 'REG'}} # Always filter to REG
+    ]
+    
+    # Apply Rayon filter
+    rayon_keys = ['34', '35']
+    if rayon_filter in rayon_keys:
+        pipeline.append({'$match': {'CLEAN_RAYON': rayon_filter}})
+    elif rayon_filter == 'TOTAL_34_35':
+        pipeline.append({'$match': {'CLEAN_RAYON': {'$in': rayon_keys}}})
+
+    # Grouping stage
+    if dimension is None:
+        # Total Aggregation
+        pipeline.extend([
+            {'$group': {
+                '_id': None,
+                'TotalNomen': {'$addToSet': '$NOMEN'},
+                'SumOfKUBIK': {'$sum': '$KUBIK'},
+                'SumOfNOMINAL': {'$sum': '$NOMINAL'},
+            }},
+            {'$project': {
+                '_id': 0,
+                'CountOfNOMEN': {'$size': '$TotalNomen'},
+                'SumOfKUBIK': {'$round': ['$SumOfKUBIK', 0]},
+                'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 0]},
+            }}
+        ])
+        result = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
+        return result[0] if result else {'CountOfNOMEN': 0, 'SumOfKUBIK': 0, 'SumOfNOMINAL': 0}
+        
+    else:
+        # Dimension Breakdown Aggregation
+        group_key = dimension_map[dimension]
+        pipeline.extend([
+            {'$group': {
+                '_id': group_key,
+                'CountOfNOMEN': {'$addToSet': '$NOMEN'},
+                'SumOfKUBIK': {'$sum': '$KUBIK'},
+                'SumOfNOMINAL': {'$sum': '$NOMINAL'},
+            }},
+            {'$project': {
+                '_id': 0,
+                'DIMENSION_KEY': '$_id',
+                'CountOfNOMEN': {'$size': '$CountOfNOMEN'},
+                'SumOfKUBIK': {'$round': ['$SumOfKUBIK', 0]},
+                'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 0]},
+            }},
+            {'$sort': {'DIMENSION_KEY': 1}}
+        ])
+        results = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
+        
+        # Rename DIMENSION_KEY field back to the dimension name for easy consumption in JS
+        for item in results:
+             item[dimension] = item.pop('DIMENSION_KEY')
+             
+        return results
+
+# =========================================================================
+# === API GROUPING MC KUSTOM (GENERATES COMPLEX JSON FOR CUSTOM REPORT) ===
+# =========================================================================
+
+@app.route('/api/analyze/mc_grouping', methods=['GET'])
+@login_required 
+def analyze_mc_grouping_api():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+
+    try:
+        # 1. Total Aggregations
+        totals = {
+            'TOTAL_34_35': _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, rayon_filter='TOTAL_34_35'),
+            '34': _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, rayon_filter='34'),
+            '35': _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, rayon_filter='35'),
+        }
+
+        # 2. Dimension Breakdowns (for R34, R35, and R34+R35 Total)
+        dimensions = ['TARIF', 'MERK', 'READ_METHOD']
+        breakdowns = {}
+
+        for dim in dimensions:
+            breakdowns[dim] = {
+                'TOTAL_34_35': _aggregate_custom_mc_report(collection_mc, collection_cid, dim, rayon_filter='TOTAL_34_35'),
+                '34': _aggregate_custom_mc_report(collection_mc, collection_cid, dim, rayon_filter='34'),
+                '35': _aggregate_custom_mc_report(collection_mc, collection_cid, dim, rayon_filter='35'),
+            }
+
+        response_data = {
+            'status': 'success',
+            'totals': totals,
+            'breakdowns': breakdowns
+        }
+        
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        print(f"Error saat menganalisis custom grouping MC: {e}")
+        return jsonify({"status": "error", "message": f"Gagal mengambil data grouping MC. Detail Teknis: {e}"}), 500
+
+# =========================================================================
+# === API GROUPING MB KUSTOM (HELPER FUNCTION) ===
+# =========================================================================
+
+def _aggregate_mb_grouping(collection_mb, collection_cid, rayon_filter=None):
+    """
+    Mengagregasi data Master Bayar (MB) untuk Rayon 34/35 berdasarkan status bayar
+    (UNDUE: BULAN_REK == TGL_BAYAR bulan/tahun) dan TUNGGAKAN (sisanya).
+    Termasuk ringkasan koleksi harian (daily summary).
+    """
+    
+    rayon_keys = ['34', '35']
+    
+    # 1. Base Pipeline: Project, Join to CID, Normalize, Filter Rayon/Type
+    pipeline = [
+        # Match payments where NOMINAL is > 0
+        {'$match': {'NOMINAL': {'$gt': 0}}}, 
+        {'$project': {
+            'NOMEN': 1,
+            'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
+            # TGL_BAYAR dipastikan format YYYY-MM-DD untuk ekstraksi
+            'TGL_BAYAR': 1, 
+            # BULAN_REK dipastikan format MMYYYY (misal: 112025)
+            'BULAN_REK': 1,
+        }},
+        # Join to CID to get definitive Rayon and TIPEPLGGN
+        {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
+        {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
+        {'$addFields': {
+            'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
+            'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},
+        }},
+        {'$match': {'CLEAN_TIPEPLGGN': 'REG'}} # Always filter to REG
+    ]
+    
+    # Apply Rayon filter
+    if rayon_filter in rayon_keys:
+        pipeline.append({'$match': {'CLEAN_RAYON': rayon_filter}})
+    elif rayon_filter == 'TOTAL_34_35':
+        pipeline.append({'$match': {'CLEAN_RAYON': {'$in': rayon_keys}}})
+    else:
+        return {} # Jika tidak ada filter Rayon yang valid, kembalikan kosong
+
+    # 2. Classification Stage: Undue vs Arrears (Tunggakan)
+    pipeline.append({
+        '$addFields': {
+            # Ekstraksi MMYYYY dari TGL_BAYAR (contoh: 2025-11-25 -> 112025)
+            'PAY_MONTH_YEAR': {
+                '$concat': [
+                    {'$substr': ['$TGL_BAYAR', 5, 2]},  # MM
+                    {'$substr': ['$TGL_BAYAR', 0, 4]}   # YYYY
+                ]
+            },
+        }
+    })
+    
+    pipeline.append({
+        '$addFields': {
+            'STATUS_BAYAR': {
+                '$cond': {
+                    # Jika MMYYYY pembayaran sama dengan BULAN_REK, itu UNDUE
+                    'if': { '$eq': ['$PAY_MONTH_YEAR', '$BULAN_REK'] },
+                    'then': 'UNDUE',
+                    'else': 'TUNGGAKAN' 
+                }
+            }
+        }
+    })
+
+    # --- 3. Hitung Total Collection ---
+    pipeline_total = pipeline + [
+        {'$group': {
+            '_id': None,
+            'CountOfNOMEN': {'$addToSet': '$NOMEN'},
+            'SumOfNOMINAL': {'$sum': '$NOMINAL'},
+        }},
+        {'$project': {
+            '_id': 0,
+            'CountOfNOMEN': {'$size': '$CountOfNOMEN'},
+            'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 0]},
+        }}
+    ]
+    total_result = list(collection_mb.aggregate(pipeline_total, allowDiskUse=True))
+    total_metrics = total_result[0] if total_result else {'CountOfNOMEN': 0, 'SumOfNOMINAL': 0}
+
+    # --- 4. Hitung Undue Collection ---
+    pipeline_undue = pipeline + [
+        {'$match': {'STATUS_BAYAR': 'UNDUE'}},
+        {'$group': {
+            '_id': None,
+            'CountOfNOMEN_UNDUE': {'$addToSet': '$NOMEN'},
+            'SumOfNOMINAL_UNDUE': {'$sum': '$NOMINAL'},
+        }},
+        {'$project': {
+            '_id': 0,
+            'CountOfNOMEN_UNDUE': {'$size': '$CountOfNOMEN_UNDUE'},
+            'SumOfNOMINAL_UNDUE': {'$round': ['$SumOfNOMINAL_UNDUE', 0]},
+        }}
+    ]
+    undue_result = list(collection_mb.aggregate(pipeline_undue, allowDiskUse=True))
+    undue_metrics = undue_result[0] if undue_result else {'CountOfNOMEN_UNDUE': 0, 'SumOfNOMINAL_UNDUE': 0}
+
+    # --- 5. Hitung Arrears Collection (Tunggakan) ---
+    pipeline_arrears = pipeline + [
+        {'$match': {'STATUS_BAYAR': 'TUNGGAKAN'}},
+        {'$group': {
+            '_id': None,
+            'CountOfNOMEN_TUNGGAKAN': {'$addToSet': '$NOMEN'},
+            'SumOfNOMINAL_TUNGGAKAN': {'$sum': '$NOMINAL'},
+        }},
+        {'$project': {
+            '_id': 0,
+            'CountOfNOMEN_TUNGGAKAN': {'$size': '$CountOfNOMEN_TUNGGAKAN'},
+            'SumOfNOMINAL_TUNGGAKAN': {'$round': ['$SumOfNOMINAL_TUNGGAKAN', 0]},
+        }}
+    ]
+    arrears_result = list(collection_mb.aggregate(pipeline_arrears, allowDiskUse=True))
+    arrears_metrics = arrears_result[0] if arrears_result else {'CountOfNOMEN_TUNGGAKAN': 0, 'SumOfNOMINAL_TUNGGAKAN': 0}
+
+    # --- 6. Daily Summary (TGL_BAYAR | Nomen Count | Nominal Total) ---
+    # Group by Payment Date to get daily summary: TGL_BAYAR | Nomen Count | Nominal Total
+    pipeline_details = pipeline + [
+        {'$group': {
+            '_id': '$TGL_BAYAR', # Group by Payment Date
+            'CountOfNOMEN_HARI': {'$addToSet': '$NOMEN'},
+            'SumOfNOMINAL_HARI': {'$sum': '$NOMINAL'},
+        }},
+        {'$project': {
+            '_id': 0,
+            'TGL_BAYAR': '$_id',
+            'CountOfNOMEN': {'$size': '$CountOfNOMEN_HARI'},
+            'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL_HARI', 0]},
+        }},
+        {'$sort': {'TGL_BAYAR': -1}}, # Sort Descending by Date (Terbaru dulu)
+        {'$limit': 500} # Keep limit for performance
+    ]
+    details = list(collection_mb.aggregate(pipeline_details, allowDiskUse=True))
+    
+    return {
+        'total': total_metrics,
+        'undue': undue_metrics,
+        'tunggakan': arrears_metrics,
+        'details': details
+    }
+
+
+@app.route('/api/analyze/mb_grouping', methods=['GET'])
+@login_required 
+def analyze_mb_grouping_api():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+
+    try:
+        # 1. Aggregasi untuk Rayon 34
+        r34_data = _aggregate_mb_grouping(collection_mb, collection_cid, rayon_filter='34')
+
+        # 2. Aggregasi untuk Rayon 35
+        r35_data = _aggregate_mb_grouping(collection_mb, collection_cid, rayon_filter='35')
+        
+        # 3. Aggregasi untuk Total AB Sunter (R34 + R35)
+        ab_sunter_data = _aggregate_mb_grouping(collection_mb, collection_cid, rayon_filter='TOTAL_34_35')
+
+        response_data = {
+            'status': 'success',
+            'rayon_34': r34_data,
+            'rayon_35': r35_data,
+            'ab_sunter': ab_sunter_data
+        }
+        
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        print(f"Error saat menganalisis custom grouping MB: {e}")
+        return jsonify({"status": "error", "message": f"Gagal mengambil data grouping MB. Detail Teknis: {e}"}), 500
+
+# =========================================================================
+# === END API GROUPING MB KUSTOM ===
+# =========================================================================
+
+
+# --- ENDPOINT ANALISIS LANDING PAGE ---
+@app.route('/analyze', methods=['GET'])
+@login_required
+def analyze_reports_landing():
+    return render_template('analyze_landing.html', is_admin=current_user.is_admin)
+
+# --- ENDPOINT ANALISIS DETAIL PAGE (DAN LAINNYA) ---
+@app.route('/analyze/full_mc_report', methods=['GET'])
+@login_required
+def analyze_full_mc_report():
+    return render_template('analyze_report_template.html', 
+                           title="Laporan Grup Master Data Tagihan (MC) Lengkap", 
+                           description="Menyajikan data agregasi Nomen, Kubikasi, dan Nominal berdasarkan Rayon, Metode Baca, Tarif, dan Jenis Meter.",
+                           is_admin=current_user.is_admin)
+
+@app.route('/analyze/extreme', methods=['GET'])
+@login_required
+def analyze_extreme_usage():
+    return render_template('analyze_report_template.html', 
+                           title="Analisis Konsumsi Air Ekstrem", 
+                           description="Menampilkan pelanggan dengan konsumsi air di atas ambang batas yang ditentukan.",
+                           is_admin=current_user.is_admin)
+# ... (lanjutan endpoint analyze)
+@app.route('/analyze/reduced', methods=['GET'])
+@login_required
+def analyze_reduced_usage():
+    return render_template('analyze_report_template.html', 
+                           title="Analisis Fluktuasi Volume (Kenaikan/Penurunan Signifikan)", 
+                           description="Menampilkan pelanggan dengan fluktuasi konsumsi air signifikan (naik atau turun) berdasarkan perbandingan riwayat SBRS.",
+                           is_admin=current_user.is_admin)
+
+@app.route('/analyze/zero', methods=['GET'])
+@login_required
+def analyze_zero_usage():
+    return render_template('analyze_report_template.html', 
+                           title="Analisis Konsumsi Nol (Zero Usage)", 
+                           description="Menampilkan pelanggan yang teridentifikasi memiliki konsumsi air nol (Zero) pada periode tagihan terakhir.",
+                           is_admin=current_user.is_admin)
+
+@app.route('/analyze/standby', methods=['GET'])
+@login_required
+def analyze_stand_tungggu():
+    return render_template('analyze_report_template.html', 
+                           title="Analisis Status Stand Tunggu", 
+                           description="Menampilkan pelanggan yang berstatus Stand Tunggu (Freeze/Blokir) di Master Data Pelanggan.",
+                           is_admin=current_user.is_admin)
+# ... (lanjutan endpoint analyze)
+
+
+@app.route('/api/analyze/volume_fluctuation', methods=['GET'])
+@login_required 
+def analyze_volume_fluctuation_api():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+
+    try:
+        fluctuation_data = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        return jsonify(fluctuation_data), 200
+
+    except Exception as e:
+        print(f"Error saat menganalisis fluktuasi volume: {e}")
+        return jsonify({"message": f"Gagal mengambil data fluktuasi volume. Detail teknis error: {e}"}), 500
+        
+# 2. API SUMMARY (Untuk KPI Cards di dashboard_analytics.html)
+@app.route('/api/analyze/mc_grouping/summary', methods=['GET'])
+@login_required 
+def analyze_mc_grouping_summary_api():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+
+    try:
+        pipeline_summary = [
+            {'$lookup': {
+               'from': 'CustomerData', 
+               'localField': 'NOMEN',
+               'foreignField': 'NOMEN',
+               'as': 'customer_info'
+            }},
+            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}},
+            
+            # --- NORMALISASI DATA UNTUK FILTER ---
+            {'$addFields': {
+                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}}, 
+                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
+            }},
+            # --- END NORMALISASI ---
+            
+            {'$match': {
+                'CLEAN_TIPEPLGGN': 'REG',
+                'CLEAN_RAYON': {'$in': ['34', '35']}
+            }},
+            {'$group': {
+                '_id': None,
+                'SumOfKUBIK': {'$sum': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}}},
+                'SumOfNOMINAL': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}},
+                'CountOfNOMEN': {'$addToSet': '$NOMEN'}
+            }},
+            {'$project': {
+                '_id': 0,
+                'TotalPiutangKustomNominal': {'$round': ['$SumOfNOMINAL', 0]},
+                'TotalPiutangKustomKubik': {'$round': ['$SumOfKUBIK', 0]},
+                'TotalNomenKustom': {'$size': '$CountOfNOMEN'}
+            }}
+        ]
+        summary_result = list(collection_mc.aggregate(pipeline_summary))
+        
+        if not summary_result:
+            return jsonify({
+                'TotalPiutangKustomNominal': 0,
+                'TotalPiutangKustomKubik': 0,
+                'TotalNomenKustom': 0
+            }), 200
+
+        return jsonify(summary_result[0]), 200
+
+    except Exception as e:
+        print(f"Error saat mengambil summary grouping MC: {e}")
+        return jsonify({"message": f"Gagal mengambil summary grouping MC. Detail teknis error: {e}"}), 500
+
+# 3. API BREAKDOWN TARIF (Digunakan oleh Grouping MC)
+@app.route('/api/analyze/mc_tarif_breakdown', methods=['GET'])
+@login_required 
+def analyze_mc_tarif_breakdown_api():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+
+    try:
+        pipeline_tarif_breakdown = [
+            # 1. Join MC ke CID
+            {'$lookup': {
+               'from': 'CustomerData', 
+               'localField': 'NOMEN',
+               'foreignField': 'NOMEN',
+               'as': 'customer_info'
+            }},
+            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}},
+            
+            # --- NORMALISASI DATA UNTUK FILTER ---
+            {'$addFields': {
+                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}}, 
+                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
+            }},
+            # --- END NORMALISASI ---
+            
+            {'$match': {
+                'CLEAN_TIPEPLGGN': 'REG',
+                'CLEAN_RAYON': {'$in': ['34', '35']}
+            }},
+            
+            # 3. Grouping berdasarkan RAYON dan TARIF
+            {'$group': {
+                '_id': {
+                    'RAYON': '$CLEAN_RAYON',
+                    'TARIF': '$TARIF',
+                },
+                'CountOfNOMEN': {'$addToSet': '$NOMEN'},
+            }},
+            
+            # 4. Proyeksi Akhir dan Penghitungan Size
+            {'$project': {
+                '_id': 0,
+                'RAYON': '$_id.RAYON',
+                'TARIF': '$_id.TARIF',
+                'JumlahPelanggan': {'$size': '$CountOfNOMEN'}
+            }},
+            {'$sort': {'RAYON': 1, 'TARIF': 1}}
+        ]
+        breakdown_data = list(collection_mc.aggregate(pipeline_tarif_breakdown))
+        
+        # Perbaiki penanganan error/empty result: jika kosong, kembalikan [] dan status 200
+        if not breakdown_data:
+            return jsonify([]), 200 
+
+        return jsonify(breakdown_data), 200
+
+    except Exception as e:
+        print(f"Error saat mengambil tarif breakdown MC: {e}")
+        return jsonify({"message": f"Gagal mengambil tarif breakdown MC. Detail teknis error: {e}"}), 500
+
+
+# Endpoint File Upload/Merge (Dinamis)
+@app.route('/analyze/upload', methods=['GET'])
+@login_required 
+def analyze_data_page():
+    return render_template('analyze_upload.html', is_admin=current_user.is_admin)
+
+@app.route('/api/analyze', methods=['POST'])
+@login_required 
+def analyze_data():
+    """Endpoint untuk mengunggah file jamak, menggabungkannya, dan menjalankan analisis data."""
+    if not request.files:
+        return jsonify({"message": "Tidak ada file yang diunggah."}), 400
+
+    uploaded_files = request.files.getlist('file')
+    all_dfs = []
+    
+    JOIN_KEY = 'NOMEN' 
+    
+    for file in uploaded_files:
+        filename = secure_filename(file.filename)
+        file_extension = filename.rsplit('.', 1)[1].lower()
+
+        if file_extension not in ALLOWED_EXTENSIONS:
+            continue
+
+        try:
+            if file_extension == 'csv':
+                df = pd.read_csv(file) 
+            elif file_extension in ['xlsx', 'xls']:
+                df = pd.read_excel(file, sheet_name=0) 
+            
+            df.columns = [col.strip().upper() for col in df.columns]
+            
+            if JOIN_KEY in df.columns:
+                 df[JOIN_KEY] = df[JOIN_KEY].astype(str).str.strip() 
+                 all_dfs.append(df)
+            else:
+                 return jsonify({"message": f"Gagal: File '{filename}' tidak memiliki kolom kunci '{JOIN_KEY}'."}), 400
+
+        except Exception as e:
+            print(f"Error membaca file {filename}: {e}")
+            return jsonify({"message": f"Gagal membaca file {filename}. Detail Teknis: {e}"}), 500
+
+    if not all_dfs:
+        return jsonify({"message": "Tidak ada file yang valid untuk digabungkan."}), 400
+
+    merged_df = all_dfs[0]
+    
+    for i in range(1, len(all_dfs)):
+        merged_df = pd.merge(merged_df, all_dfs[i], on=JOIN_KEY, how='outer', suffixes=(f'_f{i}', f'_f{i+1}'))
+
+    # Analisis Data Gabungan
+    data_summary = {
+        "file_name": f"Gabungan ({len(uploaded_files)} files)",
+        "join_key": JOIN_KEY,
+        "row_count": len(merged_df),
+        "column_count": len(merged_df.columns),
+        "columns": merged_df.columns.tolist() 
+    }
+
+    descriptive_stats = merged_df.describe(include='all').to_json(orient='index')
+    
+    return jsonify({
+        "status": "success",
+        "summary": data_summary,
+        "stats": descriptive_stats,
+        "head": merged_df.head().to_html(classes='table table-striped') 
+    }), 200
+
+# --- ENDPOINT KELOLA UPLOAD (ADMIN) ---
+@app.route('/admin/upload', methods=['GET'])
+@login_required 
+@admin_required 
+def admin_upload_unified_page():
+    return render_template('upload_admin_unified.html', is_admin=current_user.is_admin)
+
+@app.route('/upload/mc', methods=['POST'])
+@login_required 
+@admin_required 
+def upload_mc_data():
+    """Mode GANTI: Untuk Master Cetak (MC) / Piutang Bulanan. (DIPERBAIKI)"""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    if 'file' not in request.files:
+        return jsonify({"message": "Tidak ada file di permintaan"}), 400
+
+    file = request.files['file']
+    if file.filename == '' or not allowed_file(file.filename):
+        return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
+
+    filename = secure_filename(file.filename)
+    file_extension = filename.rsplit('.', 1)[1].lower()
+
+    try:
+        if file_extension == 'csv':
+            df = pd.read_csv(file)
+        elif file_extension in ['xlsx', 'xls']:
+            df = pd.read_excel(file, sheet_name=0) 
+        
+        df.columns = [col.strip().upper() for col in df.columns]
+        
+        # ===============================================================
+        # >>> PERBAIKAN KRITIS MC: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        # ===============================================================
+        
+        # Target kolom kunci MC untuk konsistensi
+        columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF'] 
+        
+        for col in df.columns:
+            if df[col].dtype == 'object' or col in columns_to_normalize_mc:
+                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
+                df[col] = df[col].astype(str).str.strip().str.upper()
+                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi
+                df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
+            
+            # Kolom finansial MC
+            if col in ['NOMINAL', 'NOMINAL_AKHIR', 'KUBIK', 'SUBNOMINAL', 'ANG_BP', 'DENDA', 'PPN']: 
+                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        # PETA ULANG KOLOM: MC.PC digunakan sebagai RAYON
+        if 'PC' in df.columns:
+             df = df.rename(columns={'PC': 'RAYON'})
+        
+        # Hapus kolom RAYON lama jika ada konflik, tapi karena MC sampel tidak ada RAYON, ini akan membuat data konsisten.
+
+        # ===============================================================
+        # >>> END PERBAIKAN KRITIS MC <<<
+        # ===============================================================
+
+        data_to_insert = df.to_dict('records')
+        
+        # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE)
+        collection_mc.delete_many({})
+        collection_mc.insert_many(data_to_insert)
+        count = len(data_to_insert)
+        
+        # --- RETURN REPORT ---
+        return jsonify({
+            "status": "success",
+            "message": f"Sukses! {count} baris Master Data Tagihan (MC) berhasil MENGGANTI data lama.",
+            "summary_report": {
+                "total_rows": count,
+                "type": "REPLACE",
+                "replaced_count": count
+            },
+            "anomaly_list": []
+        }), 200
+        # --- END RETURN REPORT ---
+
+    except Exception as e:
+        print(f"Error saat memproses file MC: {e}")
+        return jsonify({"message": f"Gagal memproses file MC. Detail Teknis: {e}. Pastikan format data benar."}), 500
+
+@app.route('/upload/mb', methods=['POST'])
+@login_required 
+@admin_required 
+def upload_mb_data():
+    """Mode APPEND: Untuk Master Bayar (MB) / Koleksi Harian. (DIPERBAIKI DENGAN BULK WRITE)"""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    if 'file' not in request.files:
+        return jsonify({"message": "Tidak ada file di permintaan"}), 400
+
+    file = request.files['file']
+    if file.filename == '' or not allowed_file(file.filename):
+        return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
+
+    filename = secure_filename(file.filename)
+    file_extension = filename.rsplit('.', 1)[1].lower()
+
+    try:
+        if file_extension == 'csv':
+            df = pd.read_csv(file)
+        elif file_extension in ['xlsx', 'xls']:
+            df = pd.read_excel(file, sheet_name=0) 
+        
+        df.columns = [col.strip().upper() for col in df.columns]
+        
+        # ===============================================================
+        # >>> PERBAIKAN KRITIS MB: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        # ===============================================================
+
+        # Target kolom kunci MB untuk konsistensi
+        columns_to_normalize_mb = ['NOMEN', 'RAYON', 'PCEZ', 'ZONA_NOREK', 'LKS_BAYAR', 'BULAN_REK', 'NOTAGIHAN'] 
+        
+        for col in df.columns:
+            if df[col].dtype == 'object' or col in columns_to_normalize_mb:
+                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
+                df[col] = df[col].astype(str).str.strip().str.upper()
+                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
+                df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
+
+            if col in ['NOMINAL', 'SUBNOMINAL', 'BEATETAP', 'BEA_SEWA']: # Kolom finansial MB
+                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        # Catatan: Kolom MB NOMEN dan ZONA_NOREK sama-sama menjadi kunci NOMEN/ID. 
+        # Kita andalkan NOMEN untuk join, yang sudah di-clean.
+
+        # ===============================================================
+        # >>> END PERBAIKAN KRITIS MB <<<
+        # ===============================================================
+
+        data_to_insert = df.to_dict('records')
+        
+        if not data_to_insert:
+            return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
+        
+        # OPERASI KRITIS: APPEND DATA BARU DENGAN PENCEGAHAN DUPLIKASI
+        inserted_count = 0
+        skipped_count = 0
+        total_rows = len(data_to_insert)
+        
+        # Kunci unik: NOTAGIHAN (dari MB) + TGL_BAYAR, NOMINAL
+        UNIQUE_KEYS = ['NOTAGIHAN', 'TGL_BAYAR', 'NOMINAL'] 
+        
+        if not all(key in df.columns for key in UNIQUE_KEYS):
+            return jsonify({"message": f"Gagal Append: File MB harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)}. Cek file Anda."}), 400
+
+        # ===============================================================
+        # >>> MODIFIKASI KRITIS: GANTI ITERASI FindOne/InsertOne dengan Bulk Write <<<
+        # SOLUSI UNTUK MENCEGAH TIMEOUT PADA FILE BESAR
+        # ===============================================================
+        
+        requests_to_write = [InsertOne(record) for record in data_to_insert]
+
+        try:
+            # collection_mb harus memiliki UNIQUE INDEX pada kombinasi UNIQUE_KEYS
+            # untuk memastikan duplikat tidak dimasukkan. ordered=False mencegah
+            # operasi berhenti pada duplikat pertama.
+            result = collection_mb.bulk_write(requests_to_write, ordered=False)
+            inserted_count = result.inserted_count
+            skipped_count = total_rows - inserted_count
+
+        except BulkWriteError as bwe:
+             # Menangani duplikasi/kesalahan lainnya saat bulk write
+             inserted_count = bwe.details.get('nInserted', 0)
+             skipped_count = total_rows - inserted_count
+             
+             # Jika terjadi error lain (bukan hanya duplikasi)
+             if inserted_count == 0 and total_rows > 0 and 'writeErrors' in bwe.details and bwe.details['writeErrors'][0]['code'] not in [11000, 11001]: # 11000/11001 = Duplicate Key Error
+                 # Mengembalikan error jika terjadi kegagalan total
+                 return jsonify({"message": f"Gagal memproses file Koleksi (MB): Terjadi error Bulk Write. Error: {bwe.details['writeErrors'][0]['errmsg']}"}), 500
+
+        except Exception as e:
+            print(f"Error saat memproses Bulk Write MB: {e}")
+            return jsonify({"message": f"Gagal memproses file Koleksi (MB): Terjadi error jaringan/DB. Detail Teknis: {e}"}), 500
+        
+        # ===============================================================
+        # >>> END MODIFIKASI KRITIS <<<
+        # ===============================================================
+        
+        # --- RETURN REPORT ---
+        return jsonify({
+            "status": "success",
+            "message": f"Pemrosesan Sukses! {inserted_count} entri Koleksi (MB) baru ditambahkan. ({skipped_count} entri duplikat diabaikan).",
+            "summary_report": {
+                "total_rows": total_rows,
+                "type": "APPEND",
+                "inserted_count": inserted_count,
+                "skipped_count": skipped_count
+            },
+            "anomaly_list": []
+        }), 200
+        # --- END RETURN REPORT ---
+
+    except Exception as e:
+        print(f"Error saat memproses file MB: {e}")
+        return jsonify({"message": f"Gagal memproses file Koleksi (MB). Detail Teknis: {e}. Pastikan format data benar."}), 500
+
+@app.route('/upload/cid', methods=['POST'])
+@login_required 
+@admin_required 
+def upload_cid_data():
+    """Mode GANTI: Untuk Customer Data (CID) / Data Pelanggan Statis. (DIPERBAIKI)"""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    if 'file' not in request.files:
+        return jsonify({"message": "Tidak ada file di permintaan"}), 400
+
+    file = request.files['file']
+    if file.filename == '' or not allowed_file(file.filename):
+        return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
+
+    filename = secure_filename(file.filename)
+    file_extension = filename.rsplit('.', 1)[1].lower()
+
+    try:
+        if file_extension == 'csv':
+            df = pd.read_csv(file)
+        elif file_extension in ['xlsx', 'xls']:
+            df = pd.read_excel(file, sheet_name=0) 
+        
+        df.columns = [col.strip().upper() for col in df.columns]
+
+        # PEMBERSIHAN DATA AMAN
+        for col in df.columns:
+            if df[col].dtype == 'object':
+                df[col] = df[col].astype(str).str.strip()
+        
+        # ===============================================================
+        # >>> PERBAIKAN KRITIS CID: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        # ===============================================================
+        
+        # Target kolom yang sering bermasalah pada Grouping Key
+        columns_to_normalize = ['MERK', 'READ_METHOD', 'TIPEPLGGN', 'RAYON', 'NOMEN', 'TARIFF']
+        
+        for col in columns_to_normalize:
+            if col in df.columns:
+                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
+                df[col] = df[col].astype(str).str.strip().str.upper()
+                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
+                df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
+        
+        # CID menggunakan TARIFF untuk Tarif, rename agar konsisten dengan MC (TARIF)
+        if 'TARIFF' in df.columns:
+             df = df.rename(columns={'TARIFF': 'TARIF'})
+
+
+        # ===============================================================
+        # >>> END PERBAIKAN KRITIS CID <<<
+        # ===============================================================
+
+        data_to_insert = df.to_dict('records')
+        
+        # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE)
+        collection_cid.delete_many({})
+        collection_cid.insert_many(data_to_insert)
+        count = len(data_to_insert)
+
+        # --- RETURN REPORT ---
+        return jsonify({
+            "status": "success",
+            "message": f"Sukses! {count} baris Data Pelanggan (CID) berhasil MENGGANTI data lama.",
+            "summary_report": {
+                "total_rows": count,
+                "type": "REPLACE",
+                "replaced_count": count
+            },
+            "anomaly_list": []
+        }), 200
+        # --- END RETURN REPORT ---
+
+    except Exception as e:
+        print(f"Error saat memproses file CID: {e}")
+        return jsonify({"message": f"Gagal memproses file CID. Detail Teknis: {e}. Pastikan format data benar."}), 500
+
+@app.route('/upload/sbrs', methods=['POST'])
+@login_required 
+@admin_required 
+def upload_sbrs_data():
+    """Mode APPEND: Untuk data Baca Meter (SBRS) / Riwayat Stand Meter. (DIPERBAIKI)"""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    if 'file' not in request.files:
+        return jsonify({"message": "Tidak ada file di permintaan"}), 400
+
+    file = request.files['file']
+    if file.filename == '' or not allowed_file(file.filename):
+        return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
+
+    filename = secure_filename(file.filename)
+    file_extension = filename.rsplit('.', 1)[1].lower()
+
+    try:
+        # Load data
+        if file_extension == 'csv':
+            df = pd.read_csv(file)
+        elif file_extension in ['xlsx', 'xls']:
+            df = pd.read_excel(file, sheet_name=0) 
+        
+        df.columns = [col.strip().upper() for col in df.columns]
+
+        # ===============================================================
+        # >>> PERBAIKAN KRITIS SBRS: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        # ===============================================================
+        
+        # Target kolom kunci SBRS untuk join konsisten dengan CID
+        columns_to_normalize_sbrs = ['CMR_ACCOUNT', 'CMR_RD_DATE', 'CMR_READER'] 
+
+        for col in df.columns:
+            if df[col].dtype == 'object' or col in columns_to_normalize_sbrs:
+                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
+                df[col] = df[col].astype(str).str.strip().str.upper()
+                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
+                df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
+
+            # Kolom numerik penting untuk SBRS
+            if col in ['CMR_PREV_READ', 'CMR_READING', 'CMR_KUBIK']: 
+                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        # ===============================================================
+        # >>> END PERBAIKAN KRITIS SBRS <<<
+        # ===============================================================
+
+
+        data_to_insert = df.to_dict('records')
+        
+        if not data_to_insert:
+            return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
+        
+        # OPERASI KRITIS: APPEND DATA BARU DENGAN PENCEGAHAN DUPLIKASI
+        inserted_count = 0
+        skipped_count = 0
+        total_rows = len(data_to_insert)
+        
+        # Kunci unik: cmr_account (NOMEN) + cmr_rd_date (Tanggal Baca)
+        UNIQUE_KEYS = ['CMR_ACCOUNT', 'CMR_RD_DATE'] 
+        
+        if not all(key in df.columns for key in UNIQUE_KEYS):
+            return jsonify({"message": f"Gagal Append: File Riwayat Baca Meter (SBRS) harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)}. Cek file Anda."}), 400
+
+        for record in data_to_insert:
+            filter_query = {key: record.get(key) for key in UNIQUE_KEYS}
+            
+            if collection_sbrs.find_one(filter_query):
+                skipped_count += 1
+            else:
+                collection_sbrs.insert_one(record)
+                inserted_count += 1
+        
+        # === ANALISIS ANOMALI INSTAN SETELAN INSERT ===
+        anomaly_list = []
+        try:
+            if inserted_count > 0:
+                # Dapatkan anomali dari SBRS yang baru diupdate
+                anomaly_list = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        except Exception as e:
+            # Jika analisis gagal, jangan hentikan respons sukses upload
+            print(f"Peringatan: Gagal menjalankan analisis anomali instan: {e}")
+        # ============================================
+
+        # --- RETURN REPORT ---
+        return jsonify({
+            "status": "success",
+            "message": f"Pemrosesan Sukses! {inserted_count} baris Riwayat Baca Meter (SBRS) baru ditambahkan. ({skipped_count} entri duplikat diabaikan).",
+            "summary_report": {
+                "total_rows": total_rows,
+                "type": "APPEND",
+                "inserted_count": inserted_count,
+                "skipped_count": skipped_count
+            },
+            "anomaly_list": []
+        }), 200
+        # --- END RETURN REPORT ---
+
+    except Exception as e:
+        print(f"Error saat memproses file SBRS: {e}")
+        return jsonify({"message": f"Gagal memproses file Riwayat Baca Meter (SBRS). Detail Teknis: {e}. Pastikan format data benar."}), 500
+
+@app.route('/upload/ardebt', methods=['POST'])
+@login_required 
+@admin_required 
+def upload_ardebt_data():
+    """Mode GANTI: Untuk data Detail Tunggakan (ARDEBT). (DIPERBAIKI)"""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    if 'file' not in request.files:
+        return jsonify({"message": "Tidak ada file di permintaan"}), 400
+
+    file = request.files['file']
+    if file.filename == '' or not allowed_file(file.filename):
+        return jsonify({"message": "Format file tidak valid. Harap unggah CSV, XLSX, atau XLS."}), 400
+
+    filename = secure_filename(file.filename)
+    file_extension = filename.rsplit('.', 1)[1].lower()
+
+    try:
+        if file_extension == 'csv':
+            df = pd.read_csv(file)
+        elif file_extension in ['xlsx', 'xls']:
+            df = pd.read_excel(file, sheet_name=0) 
+        
+        df.columns = [col.strip().upper() for col in df.columns]
+        
+        # ===============================================================
+        # >>> PERBAIKAN KRITIS ARDEBT: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        # ===============================================================
+
+        # Target kolom kunci ARDEBT untuk konsistensi
+        columns_to_normalize_ardebt = ['NOMEN', 'RAYON', 'TIPEPLGGN'] 
+        
+        for col in df.columns:
+            if df[col].dtype == 'object' or col in columns_to_normalize_ardebt:
+                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
+                df[col] = df[col].astype(str).str.strip().str.upper()
+                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi MongoDB
+                df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
+            
+            # Kolom numerik penting
+            if col in ['JUMLAH', 'VOLUME']: 
+                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
+        # ===============================================================
+        # >>> END PERBAIKAN KRITIS ARDEBT <<<
+        # ===============================================================
+
+        data_to_insert = df.to_dict('records')
+        
+        if not data_to_insert:
+            return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
+        
+        # OPERASI KRITIS: HAPUS DAN GANTI (REPLACE)
+        collection_ardebt.delete_many({})
+        collection_ardebt.insert_many(data_to_insert)
+        count = len(data_to_insert)
+        
+        # --- RETURN REPORT ---
+        return jsonify({
+            "status": "success",
+            "message": f"Sukses! {count} baris Detail Tunggakan (ARDEBT) berhasil MENGGANTI data lama.",
+            "summary_report": {
+                "total_rows": count,
+                "type": "REPLACE",
+                "replaced_count": count
+            },
+            "anomaly_list": []
+        }), 200
+        # --- END RETURN REPORT ---
+
+    except Exception as e:
+        print(f"Error saat memproses file ARDEBT: {e}")
+        return jsonify({"message": f"Gagal memproses file Detail Tunggakan (ARDEBT). Detail Teknis: {e}. Pastikan format data benar."}), 500
+
+
+# =========================================================================
+# === DASHBOARD ANALYTICS ENDPOINTS (INTEGRATED) ===
+# =========================================================================
+
+@app.route('/dashboard', methods=['GET'])
+@login_required
+def analytics_dashboard():
+    return render_template('dashboard_analytics.html', is_admin=current_user.is_admin)
+
+@app.route('/api/dashboard/summary', methods=['GET'])
+@login_required
+def dashboard_summary_api():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    try:
+        summary_data = {}
+        
+        # 1. TOTAL PELANGGAN (dari CID)
+        summary_data['total_pelanggan'] = collection_cid.count_documents({})
+        
+        # 2. TOTAL PIUTANG & TUNGGAKAN
+        pipeline_piutang = [
+            {'$group': {
+                '_id': None,
+                'total_piutang': {'$sum': '$NOMINAL'},
+                'jumlah_tagihan': {'$sum': 1}
+            }}
+        ]
+        piutang_result = list(collection_mc.aggregate(pipeline_piutang))
+        summary_data['total_piutang'] = piutang_result[0]['total_piutang'] if piutang_result else 0
+        summary_data['jumlah_tagihan'] = piutang_result[0]['jumlah_tagihan'] if piutang_result else 0
+        
+        pipeline_tunggakan = [
+            {'$group': {
+                '_id': None,
+                'total_tunggakan': {'$sum': '$JUMLAH'},
+                'jumlah_tunggakan': {'$sum': 1}
+            }}
+        ]
+        tunggakan_result = list(collection_ardebt.aggregate(pipeline_tunggakan))
+        summary_data['total_tunggakan'] = tunggakan_result[0]['total_tunggakan'] if tunggakan_result else 0
+        summary_data['jumlah_tunggakan'] = tunggakan_result[0]['jumlah_tunggakan'] if tunggakan_result else 0
+        
+        # 3. KOLEKSI HARI INI (dari MB)
+        today = pd.Timestamp.now().strftime('%Y-%m-%d')
+        pipeline_koleksi_today = [
+            {'$match': {'TGL_BAYAR': {'$regex': today}}},
+            {'$group': {
+                '_id': None,
+                'koleksi_hari_ini': {'$sum': '$NOMINAL'},
+                'transaksi_hari_ini': {'$sum': 1}
+            }}
+        ]
+        koleksi_result = list(collection_mb.aggregate(pipeline_koleksi_today))
+        summary_data['koleksi_hari_ini'] = koleksi_result[0]['koleksi_hari_ini'] if koleksi_result else 0
+        summary_data['transaksi_hari_ini'] = koleksi_result[0]['transaksi_hari_ini'] if koleksi_result else 0
+        
+        # 4. TOTAL KOLEKSI BULAN INI
+        this_month = pd.Timestamp.now().strftime('%Y-%m')
+        pipeline_koleksi_month = [
+            {'$match': {'TGL_BAYAR': {'$regex': this_month}}},
+            {'$group': {
+                '_id': None,
+                'koleksi_bulan_ini': {'$sum': '$NOMINAL'},
+                'transaksi_bulan_ini': {'$sum': 1}
+            }}
+        ]
+        koleksi_month_result = list(collection_mb.aggregate(pipeline_koleksi_month))
+        summary_data['koleksi_bulan_ini'] = koleksi_month_result[0]['koleksi_bulan_ini'] if koleksi_month_result else 0
+        summary_data['transaksi_bulan_ini'] = koleksi_month_result[0]['transaksi_bulan_ini'] if koleksi_month_result else 0
+        
+        # 5. ANOMALI PEMAKAIAN (dari fungsi existing)
+        anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        summary_data['total_anomali'] = len(anomalies)
+        
+        # Breakdown anomali per tipe
+        anomali_breakdown = {}
+        for item in anomalies:
+            status = item.get('STATUS_PEMAKAIAN', 'UNKNOWN')
+            # Gunakan logika pengelompokan yang lebih sederhana untuk dashboard summary
+            if 'EKSTREM' in status or 'KENAIKAN' in status:
+                key = 'KENAIKAN_SIGNIFIKAN'
+            elif 'PENURUNAN' in status:
+                key = 'PENURUNAN_SIGNIFIKAN'
+            elif 'NOL' in status:
+                key = 'KONSUMSI_NOL'
+            else:
+                key = 'LAINNYA'
+                
+            anomali_breakdown[key] = anomali_breakdown.get(key, 0) + 1
+            
+        summary_data['anomali_breakdown'] = anomali_breakdown
+        
+        # 6. PELANGGAN DENGAN TUNGGAKAN (Distinct NOMEN)
+        pelanggan_tunggakan = collection_ardebt.distinct('NOMEN')
+        summary_data['pelanggan_dengan_tunggakan'] = len(pelanggan_tunggakan)
+        
+        # 7. TOP 5 RAYON DENGAN PIUTANG TERTINGGI
+        pipeline_top_rayon = [
+            {'$group': {
+                '_id': '$RAYON',
+                'total_piutang': {'$sum': '$NOMINAL'},
+                'total_pelanggan': {'$addToSet': '$NOMEN'}
+            }},
+            {'$project': {
+                '_id': 0,
+                'RAYON': '$_id',
+                'total_piutang': 1,
+                'total_pelanggan': {'$size': '$total_pelanggan'}
+            }},
+            {'$sort': {'total_piutang': -1}},
+            {'$limit': 5}
+        ]
+        top_rayon = list(collection_mc.aggregate(pipeline_top_rayon))
+        summary_data['top_rayon_piutang'] = [
+            {'rayon': item['_id'], 'total': item['total_piutang']} 
+            for item in top_rayon
+        ]
+        
+        # 8. TREN KOLEKSI 7 HARI TERAKHIR
+        trend_data = []
+        for i in range(7):
+            date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+            
+            pipeline = [
+                {'$match': {'TGL_BAYAR': {'$regex': date}}}, 
+                {'$group': {
+                    '_id': None,
+                    'total': {'$sum': '$NOMINAL'},
+                    'count': {'$sum': 1}
+                }}
+            ]
+            result = list(collection_mb.aggregate(pipeline))
+            trend_data.append({
+                'tanggal': date,
+                'total': result[0]['total'] if result else 0,
+                'transaksi': result[0]['count'] if result else 0
+            })
+        summary_data['tren_koleksi_7_hari'] = sorted(trend_data, key=lambda x: x['tanggal'])
+        
+        # 9. PERSENTASE KOLEKSI
+        if summary_data['total_piutang'] > 0:
+            summary_data['persentase_koleksi'] = (summary_data['koleksi_bulan_ini'] / summary_data['total_piutang']) * 100
+        else:
+            summary_data['persentase_koleksi'] = 0
+        
+        return jsonify(summary_data), 200
+        
+    except Exception as e:
+        print(f"Error fetching dashboard summary: {e}")
+        return jsonify({"message": f"Gagal mengambil data ringkasan dashboard. Detail teknis error: {e}"}), 500
+
+
+@app.route('/api/dashboard/rayon_analysis', methods=['GET'])
+@login_required
+def rayon_analysis_api():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    try:
+        pipeline_piutang_rayon = [
+            {'$group': {
+                '_id': '$RAYON',
+                'total_piutang': {'$sum': '$NOMINAL'},
+                'total_pelanggan': {'$addToSet': '$NOMEN'}
+            }},
+            {'$project': {
+                '_id': 0,
+                'RAYON': '$_id',
+                'total_piutang': 1,
+                'total_pelanggan': {'$size': '$total_pelanggan'}
+            }},
+            {'$sort': {'total_piutang': -1}}
+        ]
+        rayon_piutang_data = list(collection_mc.aggregate(pipeline_piutang_rayon))
+        
+        rayon_map = {item['RAYON']: item for item in rayon_piutang_data}
+        
+        this_month = pd.Timestamp.now().strftime('%Y-%m')
+        pipeline_koleksi_rayon = [
+            {'$match': {'TGL_BAYAR': {'$regex': this_month}}},
+            {'$group': {
+                '_id': '$RAYON',
+                'total_koleksi': {'$sum': '$NOMINAL'},
+            }},
+        ]
+        koleksi_result = list(collection_mb.aggregate(pipeline_koleksi_rayon))
+        
+        for item in koleksi_result:
+            rayon_name = item['_id']
+            if rayon_name in rayon_map:
+                rayon_map[rayon_name]['koleksi'] = item['total_koleksi']
+                
+                if rayon_map[rayon_name]['total_piutang'] > 0:
+                    rayon_map[rayon_name]['persentase_koleksi'] = (item['total_koleksi'] / rayon_map[rayon_name]['total_piutang']) * 100
+                else:
+                    rayon_map[rayon_name]['persentase_koleksi'] = 0
+            
+        for rayon in rayon_map.values():
+            rayon.setdefault('koleksi', 0)
+            rayon.setdefault('persentase_koleksi', 0)
+
+
+        return jsonify(list(rayon_map.values())), 200
+        
+    except Exception as e:
+        print(f"Error in rayon analysis: {e}")
+        return jsonify({"message": f"Gagal menganalisis data Rayon. Detail teknis: {e}"}), 500
+
+
+@app.route('/api/dashboard/anomaly_summary', methods=['GET'])
+@login_required
+def anomaly_summary_api():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+    
+    try:
+        all_anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        
+        ekstrim = [a for a in all_anomalies if 'EKSTREM' in a['STATUS_PEMAKAIAN']]
+        naik = [a for a in all_anomalies if 'KENAIKAN' in a['STATUS_PEMAKAIAN'] and 'EKSTREM' not in a['STATUS_PEMAKAIAN']]
+        turun = [a for a in all_anomalies if 'PENURUNAN' in a['STATUS_PEMAKAIAN']]
+        zero = [a for a in all_anomalies if 'NOL' in a['STATUS_PEMAKAIAN']]
+        
+        summary = {
+            'total_anomali': len(all_anomalies),
+            'kategori': {
+                'ekstrim': {
+                    'jumlah': len(ekstrim),
+                    'data': ekstrim[:10]
+                },
+                'naik_signifikan': {
+                    'jumlah': len(naik),
+                    'data': naik[:10]
+                },
+                'turun_signifikan': {
+                    'jumlah': len(turun),
+                    'data': turun[:10]
+                },
+                'zero': {
+                    'jumlah': len(zero),
+                    'data': zero[:10]
+                }
             }
         }
         
-        function renderCustomReportTable(data) {
-            const customArea = document.getElementById('customReportArea');
-            if (data.status !== 'success') {
-                 customArea.innerHTML = `<p class="no-results" style="color: red;">❌ ${data.message || 'Gagal memuat laporan kustom.'}</p>`;
-                 return;
-            }
-
-            const totals = data.totals;
-            const breakdowns = data.breakdowns;
-
-            // 1. RENDER RINGKASAN TOTAL MC
-            let totalSummaryHTML = `
-                <h4 style="color: #dc3545; margin-bottom: 15px;">Ringkasan Nomen, Nominal, dan Kubikasi (Reguler - MC)</h4>
-                <div class="report-table-wrapper" style="max-width: 800px; margin-left: auto; margin-right: auto;">
-                    <table class="report-table" style="min-width: 100%;">
-                        <thead>
-                            <tr style="background-color: #f8d7da; color: #721c24;">
-                                <th style="text-align: left;">AREA</th>
-                                <th>Nomen Count</th>
-                                <th>Total Nominal</th>
-                                <th>Total Kubik (m³)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td data-label="AREA" style="text-align: left; font-weight: bold;">AB SUNTER (Total R34 + R35)</td>
-                                <td data-label="Nomen Count">${formatNumber(totals.TOTAL_34_35.CountOfNOMEN)}</td>
-                                <td data-label="Total Nominal">${formatRupiah(totals.TOTAL_34_35.SumOfNOMINAL)}</td>
-                                <td data-label="Total Kubik">${formatNumber(totals.TOTAL_34_35.SumOfKUBIK)}</td>
-                            </tr>
-                            <tr>
-                                <td data-label="AREA" style="text-align: left; font-weight: 600;">Rayon 34</td>
-                                <td data-label="Nomen Count">${formatNumber(totals[34].CountOfNOMEN)}</td>
-                                <td data-label="Total Nominal">${formatRupiah(totals[34].SumOfNOMINAL)}</td>
-                                <td data-label="Total Kubik">${formatNumber(totals[34].SumOfKUBIK)}</td>
-                            </tr>
-                            <tr>
-                                <td data-label="AREA" style="text-align: left; font-weight: 600;">Rayon 35</td>
-                                <td data-label="Nomen Count">${formatNumber(totals[35].CountOfNOMEN)}</td>
-                                <td data-label="Total Nominal">${formatRupiah(totals[35].SumOfNOMINAL)}</td>
-                                <td data-label="Total Kubik">${formatNumber(totals[35].SumOfKUBIK)}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                
-                <h4 style="color: var(--primary-color); margin-top: 30px;">Detail Breakdown Per Dimensi (MC)</h4>
-            `;
-
-            // 2. RENDER BREAKDOWN PER DIMENSI MC
-            function createSingleBreakdownTable(title, dataArray, dimensionKey) {
-                let totalNomenCount = 0;
-                let totalNominal = 0;
-                
-                dataArray.forEach(item => {
-                    totalNomenCount += item.CountOfNOMEN || 0;
-                    totalNominal += item.SumOfNOMINAL || 0;
-                });
-
-                let tableHTML = `
-                    <div class="breakdown-table-container">
-                        <h5 style="margin-top: 0; color: #007bff;">${title}</h5>
-                        <div class="report-table-wrapper" style="margin-top: 10px;">
-                            <table class="report-table" style="min-width: 100%;">
-                                <thead>
-                                    <tr style="background-color: #f0f8ff;">
-                                        <th style="text-align: left; width: 40%;" data-label="Dimensi">${dimensionKey.replace(/_/g, ' ').toUpperCase()}</th>
-                                        <th data-label="Nomen">Nomen Count</th>
-                                        <th data-label="Nominal">Nominal</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                `;
-                
-                dataArray.forEach(item => {
-                    const dimValue = item[dimensionKey] || 'N/A';
-                    const nomenCount = formatNumber(item.CountOfNOMEN);
-                    const nominal = formatRupiah(item.SumOfNOMINAL);
-                    
-                    tableHTML += `
-                        <tr>
-                            <td data-label="${dimensionKey.toUpperCase()}" style="text-align: left;">${dimValue}</td>
-                            <td data-label="Nomen Count">${nomenCount}</td>
-                            <td data-label="Nominal">${nominal}</td>
-                        </tr>
-                    `;
-                });
-                
-                tableHTML += `
-                    <tr class="grand-total-row">
-                        <td data-label="TOTAL" style="text-align: left;">GRAND TOTAL</td>
-                        <td data-label="Total Nomen">${formatNumber(totalNomenCount)}</td>
-                        <td data-label="Total Nominal">${formatRupiah(totalNominal)}</td>
-                    </tr>
-                `;
-
-                tableHTML += `
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                `;
-                return tableHTML;
-            }
-
-            function renderDimensionGroup(dimensionName, dimensionKey, breakdownData) {
-                let groupHTML = `
-                    <h5 style="color: #007bff; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">Breakdown Berdasarkan: ${dimensionName}</h5>
-                    <div class="breakdown-group">
-                        ${createSingleBreakdownTable(`AB SUNTER (Total)`, breakdownData.TOTAL_34_35, dimensionKey)}
-                        ${createSingleBreakdownTable(`Rayon 34`, breakdownData[34], dimensionKey)}
-                        ${createSingleBreakdownTable(`Rayon 35`, breakdownData[35], dimensionKey)}
-                    </div>
-                `;
-                return groupHTML;
-            }
-
-            let breakdownHTML = '';
-            // TARIF breakdown dihapus karena sudah dipindahkan ke section terpisah
-            breakdownHTML += renderDimensionGroup('Merek Meter', 'MERK', breakdowns.MERK);
-            breakdownHTML += renderDimensionGroup('Metode Baca', 'READ_METHOD', breakdowns.READ_METHOD);
-
-            customArea.innerHTML = totalSummaryHTML + breakdownHTML;
-        }
-
-        // --- FUNGSI MB: GROUPING KUSTOM (FINAL) ---
-        async function fetchCustomMBReport() {
-            customMBReportArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Menghubungkan ke MongoDB untuk Laporan Agregasi MB...</p>';
-            
-            try {
-                const response = await fetch('{{ url_for("analyze_mb_grouping_api") }}'); 
-                const data = await response.json();
-                
-                if (response.status === 401) {
-                    window.location.href = '{{ url_for("login") }}';
-                    return;
-                }
-                
-                if (data.status !== 'success') {
-                     customMBReportArea.innerHTML = `<p class="no-results" style="color: red;">❌ Gagal memuat laporan: ${data.message || 'Tidak ada data koleksi AB Sunter ditemukan.'}</p>`;
-                     return;
-                }
-                
-                renderCustomMBReport(data);
-
-            } catch (error) {
-                customMBReportArea.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data koleksi MB dari server.</p>';
-                console.error('Custom MB Report Error:', error);
-            }
-        }
+        return jsonify(summary), 200
         
-        function renderCustomMBReport(data) {
-            const area = document.getElementById('customMBReportArea');
-            const r34 = data.rayon_34;
-            const r35 = data.rayon_35;
-            const abSunter = data.ab_sunter;
-            
-            // --- Helper function to create one of the three summary tables ---
-            function createSummaryTable(title, metricKey) {
-                let nomenKey, nominalKey;
-                if (metricKey === 'total') {
-                    nomenKey = 'CountOfNOMEN';
-                    nominalKey = 'SumOfNOMINAL';
-                } else if (metricKey === 'undue') {
-                    nomenKey = 'CountOfNOMEN_UNDUE';
-                    nominalKey = 'SumOfNOMINAL_UNDUE';
-                } else { // tunggakan
-                    nomenKey = 'CountOfNOMEN_TUNGGAKAN';
-                    nominalKey = 'SumOfNOMINAL_TUNGGAKAN';
-                }
-
-                let tableHTML = `
-                    <div class="breakdown-table-container">
-                        <h5 style="margin-top: 0; color: ${metricKey === 'total' ? '#007bff' : metricKey === 'undue' ? '#28a745' : '#dc3545'};">
-                            ${title}
-                        </h5>
-                        <div class="report-table-wrapper">
-                            <table class="report-table" style="min-width: 100%; font-size: 13px;">
-                                <thead>
-                                    <tr style="background-color: #f0f8ff;">
-                                        <th style="text-align: left;" data-label="Area">AREA</th>
-                                        <th data-label="Nomen">NOMEN (Count)</th>
-                                        <th data-label="Nominal">NOMINAL (Rp)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td data-label="Area" style="text-align: left; font-weight: bold;">AB SUNTER (Total)</td>
-                                        <td data-label="Nomen">${formatNumber(abSunter[metricKey][nomenKey])}</td>
-                                        <td data-label="Nominal">${formatRupiah(abSunter[metricKey][nominalKey])}</td>
-                                    </tr>
-                                    <tr>
-                                        <td data-label="Area" style="text-align: left; font-weight: 600;">Rayon 34</td>
-                                        <td data-label="Nomen">${formatNumber(r34[metricKey][nomenKey])}</td>
-                                        <td data-label="Nominal">${formatRupiah(r34[metricKey][nominalKey])}</td>
-                                    </tr>
-                                    <tr>
-                                        <td data-label="Area" style="text-align: left; font-weight: 600;">Rayon 35</td>
-                                        <td data-label="Nomen">${formatNumber(r35[metricKey][nomenKey])}</td>
-                                        <td data-label="Nominal">${formatRupiah(r35[metricKey][nominalKey])}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                `;
-                return tableHTML;
-            }
-            
-            // --- Helper function to create the daily summary table (TABEL 4) ---
-            function createDailySummaryTable(title, detailsArray) {
-                
-                if (detailsArray.length === 0) {
-                    return `
-                        <h5 style="margin-top: 25px; color: #6c757d;">${title} (0 Hari)</h5>
-                        <p class="no-results" style="font-size: 0.9em;">Tidak ada ringkasan transaksi harian ditemukan untuk area ini.</p>
-                    `;
-                }
-                
-                let totalNominal = 0;
-                let totalNomen = 0;
-                detailsArray.forEach(item => {
-                    totalNominal += item.SumOfNOMINAL || 0;
-                    totalNomen += item.CountOfNOMEN || 0;
-                });
-
-                let tableHTML = `
-                    <div class="breakdown-table-container">
-                        <h5 style="margin-top: 0; color: #007bff;">${title} (${detailsArray.length} Hari Transaksi Terbaru)</h5>
-                        <div class="report-table-wrapper" style="margin-top: 10px;">
-                            <table class="report-table" style="min-width: 450px; font-size: 13px;">
-                                <thead>
-                                    <tr style="background-color: #f0f8ff;">
-                                        <th data-label="TGL BAYAR">TGL BAYAR</th>
-                                        <th data-label="Nomen">NOMEN (Count)</th>
-                                        <th data-label="Nominal">NOMINAL (Rp)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                `;
-                
-                detailsArray.forEach(item => {
-                    // Reformat date from YYYY-MM-DD to DD/MM/YYYY for display
-                    let displayDate = item.TGL_BAYAR;
-                    if (displayDate && displayDate.length >= 10 && displayDate.includes('-')) {
-                        const parts = displayDate.split('-');
-                        displayDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
-                    }
-
-                    tableHTML += `
-                        <tr>
-                            <td data-label="TGL BAYAR">${displayDate}</td>
-                            <td data-label="Nomen">${formatNumber(item.CountOfNOMEN)}</td>
-                            <td data-label="Nominal">${formatRupiah(item.SumOfNOMINAL)}</td>
-                        </tr>
-                    `;
-                });
-                
-                tableHTML += `
-                    <tr class="grand-total-row">
-                        <td data-label="TOTAL" style="text-align: left;">TOTAL PERIODE</td>
-                        <td data-label="Total Nomen">${formatNumber(totalNomen)}</td>
-                        <td data-label="Total Nominal">${formatRupiah(totalNominal)}</td>
-                    </tr>
-                `;
-
-                tableHTML += `
-                        </tbody>
-                    </table>
-                </div>
-                </div>
-                `;
-                return tableHTML;
-            }
+    except Exception as e:
+        print(f"Error in anomaly summary: {e}")
+        return jsonify({"message": f"Gagal mengambil ringkasan anomali. Detail teknis: {e}"}), 500
 
 
-            // 1. RINGKASAN KOLEKSI (3 Tabel Terpisah)
-            let summaryHTML = `
-                <h4 style="color: #17a2b8; margin-bottom: 15px;">Ringkasan Koleksi Berdasarkan Status Pembayaran</h4>
-                
-                <h5 style="color: #007bff; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">TABEL 1: TOTAL KOLEKSI (UNDUE + TUNGGAKAN)</h5>
-                <div class="breakdown-group">
-                    ${createSummaryTable('Total Koleksi (MB)', 'total')}
-                </div>
-                
-                <h5 style="color: #28a745; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">TABEL 2: KOLEKSI UNDUE (BULAN BERJALAN)</h5>
-                <div class="breakdown-group">
-                    ${createSummaryTable('Koleksi Undue', 'undue')}
-                </div>
-                
-                <h5 style="color: #dc3545; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">TABEL 3: KOLEKSI TUNGGAKAN (PIUTANG LAMA)</h5>
-                <div class="breakdown-group">
-                    ${createSummaryTable('Koleksi Tunggakan', 'tunggakan')}
-                </div>
-            `;
-            
-            // 2. DETAIL KOLEKSI HARIAN (3 Tabel Terpisah)
-            let detailsHTML = `
-                <h4 style="color: var(--primary-color); margin-top: 30px;">TABEL 4: RINGKASAN KOLEKSI HARIAN BERDASARKAN TANGGAL</h4>
-                
-                <div class="breakdown-group">
-                    ${createDailySummaryTable('AB SUNTER (Total R34 + R35)', abSunter.details)}
-                    ${createDailySummaryTable('Rayon 34', r34.details)}
-                    ${createDailySummaryTable('Rayon 35', r35.details)}
-                </div>
-            `;
-
-            area.innerHTML = summaryHTML + detailsHTML;
-        }
-
-        // Event Listeners
-        fetchCustomBtn.addEventListener('click', fetchCustomReport);
-        fetchCustomMBBtn.addEventListener('click', fetchCustomMBReport); 
+@app.route('/api/dashboard/critical_alerts', methods=['GET'])
+@login_required
+def critical_alerts_api():
+    if client is None:
+        return jsonify([]), 200
         
-        // Muat semua bagian saat halaman dimuat
-        document.addEventListener('DOMContentLoaded', () => {
-             // fetchCustomMBReport() dihapus dari sini agar tidak auto-load
-        });
+    try:
+        alerts = []
+        
+        anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        ekstrim_alerts = [
+            {'nomen': a['NOMEN'], 'status': a['STATUS_PEMAKAIAN'], 'ray': a['RAYON'], 'category': 'VOLUME_EKSTRIM'}
+            for a in anomalies if 'EKSTREM' in a['STATUS_PEMAKAIAN'] or 'NOL' in a['STATUS_PEMAKAIAN']
+        ]
+        alerts.extend(ekstrim_alerts[:20])
 
-    </script>
-{% endblock %}
+        pipeline_critical_debt = [
+            {'$match': {'CountOfPERIODE_BILL': {'$gte': 5}}},
+            {'$group': {
+                '_id': '$NOMEN',
+                'months': {'$first': '$CountOfPERIODE_BILL'},
+                'amount': {'$first': '$SumOfJUMLAH'}
+            }},
+            {'$limit': 20}
+        ]
+        
+        critical_debt_result = list(collection_ardebt.aggregate(pipeline_critical_debt))
+        
+        debt_alerts = [
+            {'nomen': d['_id'], 'status': f"TUNGGAKAN KRITIS {d['months']} BULAN", 'amount': d['amount'], 'category': 'DEBT_CRITICAL'}
+            for d in critical_debt_result
+        ]
+        
+        alerts.extend(debt_alerts)
+        
+        return jsonify(alerts), 200
+        
+    except Exception as e:
+        print(f"Error fetching critical alerts: {e}")
+        return jsonify([]), 500
+
+
+@app.route('/api/export/dashboard', methods=['GET'])
+@login_required
+def export_dashboard_data():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    try:
+        summary_response = dashboard_summary_api()
+        summary_data = summary_response.get_json()
+        
+        rayon_response = rayon_analysis_api()
+        rayon_data = rayon_response.get_json()
+        
+        df_rayon = pd.DataFrame(rayon_data)
+        
+        df_summary = pd.DataFrame({
+            'Metrik': ['Total Pelanggan', 'Total Piutang (MC)', 'Total Tunggakan (ARDEBT)', 'Koleksi Bulan Ini', 'Persentase Koleksi'],
+            'Nilai': [
+                summary_data['total_pelanggan'],
+                summary_data['total_piutang'],
+                summary_data['total_tunggakan'],
+                summary_data['koleksi_bulan_ini'],
+                f"{summary_data['persentase_koleksi']:.2f}%"
+            ]
+        })
+        
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_summary.to_excel(writer, sheet_name='Ringkasan KPI', index=False)
+            df_rayon.to_excel(writer, sheet_name='Analisis Rayon', index=False)
+            pd.DataFrame(summary_data['tren_koleksi_7_hari']).to_excel(writer, sheet_name='Tren Koleksi 7 Hari', index=False)
+            
+        output.seek(0)
+        
+        response = make_response(output.read())
+        response.headers['Content-Disposition'] = 'attachment; filename=Laporan_Dashboard_Analytics.xlsx'
+        response.headers['Content-type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        return response
+
+    except Exception as e:
+        print(f"Error during dashboard export: {e}")
+        return jsonify({"message": f"Gagal mengekspor data dashboard. Detail teknis: {e}"}), 500
+
+
+@app.route('/api/export/anomalies', methods=['GET'])
+@login_required
+def export_anomalies_data():
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+        
+    try:
+        all_anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        
+        if not all_anomalies:
+            return jsonify({"message": "Tidak ada data anomali untuk diekspor."}), 404
+            
+        df_anomalies = pd.DataFrame(all_anomalies)
+        
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_anomalies.to_excel(writer, sheet_name='Anomali Konsumsi Air', index=False)
+            
+        output.seek(0)
+        
+        response = make_response(output.read())
+        response.headers['Content-Disposition'] = 'attachment; filename=Laporan_Anomali_SBRS.xlsx'
+        response.headers['Content-type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        return response
+
+    except Exception as e:
+        print(f"Error during anomaly export: {e}")
+        return jsonify({"message": f"Gagal mengekspor data anomali. Detail teknis: {e}"}), 500
+
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)
