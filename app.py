@@ -714,7 +714,7 @@ def analyze_volume_fluctuation_api():
 # === API GROUPING MC KUSTOM (BARU DARI PERMINTAAN USER) ===
 # =========================================================================
 
-# 1. API DETAIL (Untuk Laporan Grouping Penuh - MODE GROUPING KOKOH -> SIMPLIFIKASI)
+# 1. API DETAIL (Mengembalikan Summary Total Kustom)
 @app.route('/api/analyze/mc_grouping', methods=['GET'])
 @login_required 
 def analyze_mc_grouping_api():
@@ -724,10 +724,10 @@ def analyze_mc_grouping_api():
     try:
         pipeline_grouping = [
             {'$project': {
-                'NOMEN': '$NOMEN', # Relying on clean string from upload
+                'NOMEN': '$NOMEN', 
                 'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
                 'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
-                'TARIF': '$TARIF', # Relying on clean string from upload
+                'TARIF': '$TARIF', 
             }},
             {'$lookup': {
                'from': 'CustomerData', 
@@ -735,26 +735,23 @@ def analyze_mc_grouping_api():
                'foreignField': 'NOMEN',
                'as': 'customer_info'
             }},
-            # Unwind dipertahankan, karena filter akan menyingkirkan hasil join yang gagal
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
             
-            // --- NORMALISASI DATA UNTUK FILTER ---
+            # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
-                // Normalisasi di sini menggunakan data yang sudah di-clean saat upload (UPPERCASE STRING)
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},
                 'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
                 'CLEAN_MERK': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
                 'CLEAN_READ_METHOD': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}}}}},
             }},
-            // --- END NORMALISASI ---
+            # --- END NORMALISASI ---
             
             {'$match': {
-                // Filter menggunakan STRING KAPITAL yang sudah di-clean
                 'CLEAN_TIPEPLGGN': 'REG',
-                'CLEAN_RAYON': {'$in': ['34', '35']} // Filter menggunakan string, konsisten dengan CID upload
+                'CLEAN_RAYON': {'$in': ['34', '35']}
             }},
             
-            // >>> START SIMPLIFIKASI: Mengubah ke Summary Total <<<
+            # >>> START SIMPLIFIKASI: Mengubah ke Summary Total <<<
             {'$group': {
                 '_id': None, # Group semua dokumen menjadi satu untuk mendapatkan grand totals
                 'TotalNomenKustom': {'$addToSet': '$NOMEN'}, 
@@ -782,11 +779,6 @@ def analyze_mc_grouping_api():
     except Exception as e:
         print(f"Error saat menganalisis grouping MC: {e}")
         return jsonify({"message": f"Gagal mengambil data grouping MC. Detail teknis error: {e}"}), 500
-
-// --------------------------------------------------------------------------------
-// NOTE: FUNGSI analyze_mc_tarif_breakdown_api (ITEM 3) TELAH DIPERBAIKI UNTUK MENGGUNAKAN CLEAN STRING
-// SEHINGGA SEMUA BREAKDOWN REPORT SEKARANG KONSISTEN DENGAN LOGIKA CLEANING TERBARU.
-// --------------------------------------------------------------------------------
 
 // 2. API SUMMARY (Untuk KPI Cards di collection_unified.html)
 @app.route('/api/analyze/mc_grouping/summary', methods=['GET'])
@@ -958,7 +950,7 @@ def analyze_data():
     for i in range(1, len(all_dfs)):
         merged_df = pd.merge(merged_df, all_dfs[i], on=JOIN_KEY, how='outer', suffixes=(f'_f{i}', f'_f{i+1}'))
 
-    // Analisis Data Gabungan
+    # Analisis Data Gabungan
     data_summary = {
         "file_name": f"Gabungan ({len(uploaded_files)} files)",
         "join_key": JOIN_KEY,
@@ -987,7 +979,7 @@ def admin_upload_unified_page():
 @login_required 
 @admin_required 
 def upload_mc_data():
-    """Mode GANTI: Untuk Master Cetak (MC) / Piutang Bulanan. (DIPERBAIKI)"""
+    """Mode GANTI: Untuk Master Cetak (MC) / Piutang Bulanan."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
     
@@ -1009,21 +1001,21 @@ def upload_mc_data():
         
         df.columns = [col.strip().upper() for col in df.columns]
         
-        // ===============================================================
-        // >>> PERBAIKAN KRITIS MC: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
-        // ===============================================================
+        # ===============================================================
+        # >>> PERBAIKAN KRITIS MC: NORMALISASI DATA PANDAS SEBELUM INSERT <<<
+        # ===============================================================
         
-        // Target kolom kunci MC untuk konsistensi
+        # Target kolom kunci MC untuk konsistensi
         columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF', 'RAYON', 'PCEZ'] 
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize_mc:
-                // Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
+                # Membersihkan spasi, mengkonversi ke string, dan mengubah ke huruf besar
                 df[col] = df[col].astype(str).str.strip().str.upper()
-                // Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi
+                # Mengganti nilai 'NAN', 'NONE', dll. menjadi 'N/A' untuk konsistensi
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
             
-            // Kolom finansial MC
+            # Kolom finansial MC
             if col in ['NOMINAL', 'NOMINAL_AKHIR', 'KUBIK', 'SUBNOMINAL', 'ANG_BP', 'DENDA', 'PPN']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
@@ -1063,7 +1055,7 @@ def upload_mc_data():
 @login_required 
 @admin_required 
 def upload_mb_data():
-    """Mode APPEND: Untuk Master Bayar (MB) / Koleksi Harian. (DIPERBAIKI)"""
+    """Mode APPEND: Untuk Master Bayar (MB) / Koleksi Harian."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -1153,7 +1145,7 @@ def upload_mb_data():
 @login_required 
 @admin_required 
 def upload_cid_data():
-    """Mode GANTI: Untuk Customer Data (CID) / Data Pelanggan Statis. (DIPERBAIKI)"""
+    """Mode GANTI: Untuk Customer Data (CID) / Data Pelanggan Statis."""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
