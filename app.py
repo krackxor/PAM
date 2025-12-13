@@ -287,6 +287,7 @@ def search_nomen():
             }), 404
 
         # 2. PIUTANG BERJALAN (MC) - Snapshot Bulan Ini
+        # MC Nomen adalah Induk (master)
         mc_results = list(collection_mc.find({'NOMEN': cleaned_nomen}))
         piutang_nominal_total = sum(item.get('NOMINAL', 0) for item in mc_results)
         
@@ -295,14 +296,14 @@ def search_nomen():
         tunggakan_nominal_total = sum(item.get('JUMLAH', 0) for item in ardebt_results)
         
         # 4. RIWAYAT PEMBAYARAN TERAKHIR (MB)
-        # FIX KRITIS: Menggunakan find_one dengan sort untuk menghindari list index out of range dan konsumsi kursor ganda
+        # FIX KRITIS: Menggunakan find_one dengan sort untuk menghindari list index out of range 
+        # dan memastikan kursor tidak digunakan dua kali.
         last_payment = collection_mb.find_one(
             {'NOMEN': cleaned_nomen},
             sort=[('TGL_BAYAR', -1)]
         )
         
         # 5. RIWAYAT BACA METER (SBRS)
-        # FIX KRITIS: Mengambil list secara eksplisit
         sbrs_history = list(collection_sbrs.find({'CMR_ACCOUNT': cleaned_nomen}).sort('CMR_RD_DATE', -1).limit(2))
         
         # --- LOGIKA KECERDASAN (INTEGRASI & DIAGNOSTIK) ---
@@ -321,8 +322,6 @@ def search_nomen():
         # C. Status Pemakaian (Anomaly Check)
         status_pemakaian = "DATA SBRS KURANG"
         kubik_terakhir = 0
-        
-        # Cek Aman: Memastikan list tidak kosong sebelum diakses
         if len(sbrs_history) >= 1:
             kubik_terakhir = sbrs_history[0].get('CMR_KUBIK', 0)
             
@@ -364,7 +363,7 @@ def search_nomen():
 
     except Exception as e:
         print(f"Error saat mencari data terintegrasi: {e}")
-        # Jika terjadi error Python internal, kembalikan JSON error yang valid
+        # Kembalikan JSON error yang valid agar frontend bisa menampilkannya dengan benar
         return jsonify({"message": f"Gagal mengambil data terintegrasi: {e}"}), 500
 
 # --- ENDPOINT KOLEKSI DAN ANALISIS LAINNYA ---
@@ -1441,7 +1440,7 @@ def upload_sbrs_data():
                 "inserted_count": inserted_count,
                 "skipped_count": skipped_count
             },
-            "anomaly_list": anomaly_list # FIX: Mengirimkan daftar anomali yang baru dibuat
+            "anomaly_list": []
         }), 200
         # --- END RETURN REPORT ---
 
@@ -1863,7 +1862,6 @@ def export_dashboard_data():
     except Exception as e:
         print(f"Error during dashboard export: {e}")
         return jsonify({"message": f"Gagal mengekspor data dashboard: {e}"}), 500
-
 
 @app.route('/api/export/anomalies', methods=['GET'])
 @login_required
