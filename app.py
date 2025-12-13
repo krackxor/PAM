@@ -642,12 +642,12 @@ def export_collection_report():
         output.seek(0)
         
         response = make_response(output.read())
-        response.headers['Content-Disposition'] = 'attachment; filename=Laporan_Koleksi_Piutang_Terpadu.xlsx'
+        response.headers['Content-Disposition'] = 'attachment; filename=Laporan_Dashboard_Analytics.xlsx'
         response.headers['Content-type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         return response
 
     except Exception as e:
-        print(f"Error during collection report export: {e}")
+        print(f"Error during dashboard export: {e}")
         return jsonify({"message": f"Gagal mengekspor data laporan koleksi: {e}"}), 500
 
 
@@ -738,7 +738,7 @@ def analyze_mc_grouping_api():
             {'$addFields': {
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '']}}}}},
                 'CLEAN_RAYON': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '']}}}},
-                # Perbaikan: TARIF juga diubah ke huruf besar
+                # Perubahan: Pastikan TARIF, MERK, dan READ_METHOD juga diubah ke huruf besar
                 'CLEAN_TARIF': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$TARIF', 'N/A']}}}}},
                 'CLEAN_MERK': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
                 'CLEAN_READ_METHOD': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}}}}},
@@ -767,8 +767,11 @@ def analyze_mc_grouping_api():
             }},
             {'$project': {
                 '_id': 0,
-                'TIPEPLGGN': '$_id.TIPEPLGGN', 'RAYON': '$_id.RAYON', 'TARIF': '$_id.TARIF',
-                'MERK': '$_id.MERK', 'READ_METHOD': '$_id.READ_METHOD',
+                'TIPEPLGGN': '$_id.TIPEPLGGN', 
+                'RAYON': '$_id.RAYON', 
+                'TARIF': '$_id.TARIF',
+                'MERK': '$_id.MERK', 
+                'READ_METHOD': '$_id.READ_METHOD',
                 'CountOfNOMEN': {'$size': '$CountOfNOMEN'},
                 'SumOfKUBIK': {'$round': ['$SumOfKUBIK', 2]},
                 'SumOfNOMINAL': {'$round': ['$SumOfNOMINAL', 2]},
@@ -874,7 +877,7 @@ def analyze_mc_tarif_breakdown_api():
             {'$group': {
                 '_id': {
                     'RAYON': '$CLEAN_RAYON',
-                    'TARIF': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$TARIF', 'N/A']}}}}}, # Diubah ke huruf besar
+                    'TARIF': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$TARIF', 'N/A']}}}}},
                 },
                 'CountOfNOMEN': {'$addToSet': '$NOMEN'},
             }},
