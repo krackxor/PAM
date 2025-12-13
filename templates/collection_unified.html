@@ -22,7 +22,7 @@
 
 /* FIX KRITIS: Wrapper untuk Horizontal Scrolling */
 .report-table-wrapper, .result-table-wrapper {
-    overflow-x: hidden; /* MENGHILANGKAN SCROLLING HORIZONTAL */
+    overflow-x: auto;
     width: 100%; 
     margin-top: 15px;
     margin-bottom: 20px; 
@@ -30,19 +30,18 @@
     overflow-y: hidden;
 }
 
-/* General Report Table Styling: Enforce consistency, allow wrapping */
+/* General Report Table Styling: Enforce consistency, scroll, and alignment */
 .report-table, .collection-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 14px;
-    /* min-width: Dihapus agar tabel bisa mengecil ke 100% */
+    min-width: 700px; /* Ensure horizontal scroll on main tables */
 }
 .report-table th, .report-table td, .collection-table th, .collection-table td {
     border: 1px solid #f0f0f0; 
     padding: 10px; 
     text-align: right;
-    white-space: normal; /* FIX: MEMUNGKINKAN TEKS WRAP/PATAH BARIS */
-    word-break: break-word; /* Memastikan kata panjang bisa dipatahkan */
+    white-space: nowrap;
 }
 .report-table th, .collection-table th {
     font-weight: 600;
@@ -83,21 +82,19 @@
 }
 
 /* -------------------------------------------------------------------------- */
-/* FIX UKURAN ZOOM HP: Mobile Optimization (Non-Card View, Reduced Size) */
+/* FIX UKURAN ZOOM HP: Mobile Layout (Mengecilkan ukuran font dan padding) */
 /* -------------------------------------------------------------------------- */
 @media screen and (max-width: 600px) {
     .report-table, .collection-table {
-        font-size: 10px; /* Mengecilkan ukuran font secara agresif */
-        min-width: 100%; /* Memastikan lebar minimum adalah 100% */
-        table-layout: fixed; /* Membantu memaksa kolom agar muat */
+        font-size: 11px; /* Mengecilkan ukuran font */
+        min-width: 500px; /* Sedikit mengurangi min-width untuk memungkinkan zoom out lebih jauh */
     }
     .report-table th, .report-table td, .collection-table th, .collection-table td {
-        padding: 5px 3px; /* Mengurangi padding secara agresif */
-        line-height: 1.2;
+        padding: 6px 4px; /* Mengurangi padding */
     }
 }
 /* -------------------------------------------------------------------------- */
-/* Perbaikan Selesai: Menggunakan Tampilan Tabel Biasa Tanpa Horizontal Scroll.
+/* Perbaikan Selesai: Menggunakan Horizontal Scroll (Tampilan Tabel Biasa) di HP.
 /* -------------------------------------------------------------------------- */
 {% endblock %}
 
@@ -498,7 +495,7 @@
                 
                 dataArray.forEach(item => {
                     totalNomenCount += item.CountOfNOMEN || 0;
-                    totalNominal += item.SumOfNOMINAL || 0;
+                    totalNominal += parseFloat(item.SumOfNOMINAL) || 0; // FIX: Ensure numeric parsing for accumulation
                 });
 
                 let tableHTML = `
@@ -519,13 +516,16 @@
                 dataArray.forEach(item => {
                     const dimValue = item[dimensionKey] || 'N/A';
                     const nomenCount = formatNumber(item.CountOfNOMEN);
-                    const nominal = formatRupiah(item.SumOfNOMINAL);
+                    
+                    // FIX: Pastikan SumOfNOMINAL diakses dan diparsing, lalu diformat
+                    const rawNominal = parseFloat(item.SumOfNOMINAL) || 0; 
+                    const nominalValue = formatRupiah(rawNominal); 
                     
                     tableHTML += `
                         <tr>
                             <td style="text-align: left;" data-label="${dimensionKey.toUpperCase()}">${dimValue}</td>
                             <td data-label="NOMEN COUNT">${nomenCount}</td>
-                            <td data-label="NOMINAL">${nominal}</td>
+                            <td data-label="NOMINAL">${nominalValue}</td>
                         </tr>
                     `;
                 });
