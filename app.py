@@ -691,23 +691,6 @@ def analyze_stand_tungggu():
                            is_admin=current_user.is_admin)
 
 # =========================================================================
-# === API UNTUK ANALISIS AKURAT (Fluktuasi Volume Naik/Turun) ===
-# =========================================================================
-@app.route('/api/analyze/volume_fluctuation', methods=['GET'])
-@login_required 
-def analyze_volume_fluctuation_api():
-    if client is None:
-        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
-
-    try:
-        fluctuation_data = _get_sbrs_anomalies(collection_sbrs, collection_cid)
-        return jsonify(fluctuation_data), 200
-
-    except Exception as e:
-        print(f"Error saat menganalisis fluktuasi volume: {e}")
-        return jsonify({"message": f"Gagal mengambil data fluktuasi volume. Detail teknis error: {e}"}), 500
-        
-# =========================================================================
 # === API GROUPING MC KUSTOM (BARU DARI PERMINTAAN USER) ===
 # =========================================================================
 
@@ -722,7 +705,12 @@ def analyze_mc_grouping_api():
         pipeline_grouping = [
             # Normalisasi NOMEN di MC sebelum lookup
             {'$project': {
-                'NOMEN': {'$trim': {'input': {'$toString': {'$ifNull': ['$NOMEN', 'UNKNOWN_NOMEN']}}}}, 
+                # Paling agresif: $toString, $trim, lalu $replace (menghilangkan semua spasi)
+                'NOMEN': {'$replaceOne': {
+                    'input': {'$trim': {'input': {'$toString': {'$ifNull': ['$NOMEN', 'UNKNOWN_NOMEN']}}}}, 
+                    'find': ' ', 
+                    'replacement': ''
+                }},
                 'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
                 'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
                 'TARIF': {'$toString': '$TARIF'},
@@ -748,7 +736,8 @@ def analyze_mc_grouping_api():
             # --- END NORMALISASI ---
             
             {'$match': {
-                'CLEAN_TIPEPLGGN': 'REG',
+                # Kriteria Filter Rayon dinonaktifkan untuk diagnosis
+                #'CLEAN_TIPEPLGGN': 'REG',
                 'CLEAN_RAYON': {'$in': ['34', '35']}
             }},
             
@@ -785,7 +774,6 @@ def analyze_mc_grouping_api():
         
         # --- LOGIKA DIAGNOSTIK ---
         if not grouping_data:
-            # Kueri diagnostik tanpa filter Rayon dan Tipe
             diagnostic_pipeline = [
                 {'$project': {
                     'NOMEN': {'$trim': {'input': {'$toString': {'$ifNull': ['$NOMEN', 'UNKNOWN_NOMEN']}}}}, 
@@ -846,7 +834,11 @@ def analyze_mc_grouping_summary_api():
         pipeline_summary = [
             # Normalisasi NOMEN di MC sebelum lookup
             {'$project': {
-                'NOMEN': {'$trim': {'input': {'$toString': {'$ifNull': ['$NOMEN', 'UNKNOWN_NOMEN']}}}},
+                'NOMEN': {'$replaceOne': {
+                    'input': {'$trim': {'input': {'$toString': {'$ifNull': ['$NOMEN', 'UNKNOWN_NOMEN']}}}}, 
+                    'find': ' ', 
+                    'replacement': ''
+                }},
                 'KUBIK': 1,
                 'NOMINAL': 1,
             }},
@@ -909,7 +901,11 @@ def analyze_mc_tarif_breakdown_api():
         pipeline_tarif_breakdown = [
             # Normalisasi NOMEN di MC sebelum lookup
             {'$project': {
-                'NOMEN': {'$trim': {'input': {'$toString': {'$ifNull': ['$NOMEN', 'UNKNOWN_NOMEN']}}}},
+                'NOMEN': {'$replaceOne': {
+                    'input': {'$trim': {'input': {'$toString': {'$ifNull': ['$NOMEN', 'UNKNOWN_NOMEN']}}}}, 
+                    'find': ' ', 
+                    'replacement': ''
+                }},
                 'TARIF': 1,
             }},
             {'$lookup': {
