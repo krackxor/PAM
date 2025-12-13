@@ -296,7 +296,9 @@ def search_nomen():
         
         # 4. RIWAYAT PEMBAYARAN TERAKHIR (MB)
         mb_last_payment_cursor = collection_mb.find({'NOMEN': cleaned_nomen}).sort('TGL_BAYAR', -1).limit(1)
-        last_payment = list(mb_last_payment_cursor)[0] if list(mb_last_payment_cursor) else None
+        # FIX: Mengubah logika pengambilan item pertama dari kursor untuk menghindari 'list index out of range'
+        last_payment_list = list(mb_last_payment_cursor)
+        last_payment = last_payment_list[0] if last_payment_list else None
         
         # 5. RIWAYAT BACA METER (SBRS)
         sbrs_last_read_cursor = collection_sbrs.find({'CMR_ACCOUNT': cleaned_nomen}).sort('CMR_RD_DATE', -1).limit(2)
@@ -669,12 +671,9 @@ def analyze_full_mc_report():
                            description="Menyajikan data agregasi NOMEN, Kubik, dan Nominal berdasarkan Rayon, Metode Baca, Tarif, dan Jenis Meter.",
                            is_admin=current_user.is_admin)
 
-# --- START NEW/MODIFIED ROUTES ---
-
 @app.route('/analyze/tarif_breakdown', methods=['GET'])
 @login_required
 def analyze_tarif_breakdown_page():
-    # Menggunakan template laporan umum untuk Tarif Breakdown
     return render_template('analyze_report_template.html', 
                            title="Distribusi Pelanggan Berdasarkan TARIF (Rayon 34/35 Reguler)", 
                            description="Menyajikan total jumlah pelanggan MC yang berstatus Reguler di Rayon 34 dan 35, dikelompokkan berdasarkan Jenis Tarif.",
@@ -687,8 +686,6 @@ def analyze_full_mb_report():
                            title="Laporan Grup Master Bayar (MB) Berdasarkan Kategori", 
                            description="Menyajikan data agregasi Koleksi MB (Undue, Current, Tunggakan), Tren Harian, dan Detail Transaksi per Rayon 34 dan 35.",
                            is_admin=current_user.is_admin)
-
-# --- END NEW/MODIFIED ROUTES ---
 
 @app.route('/analyze/extreme', methods=['GET'])
 @login_required
@@ -1404,7 +1401,7 @@ def upload_mb_data():
                 collection_mb.insert_one(record)
                 inserted_count += 1
         
-        # === ANALISIS ANOMALI INSTAN SETELAN INSERT ===
+        # === ANALISIS ANOMALI INSTAN SETELAH INSERT ===
         anomaly_list = []
         try:
             if inserted_count > 0:
@@ -1586,7 +1583,7 @@ def upload_sbrs_data():
                 collection_sbrs.insert_one(record)
                 inserted_count += 1
         
-        # === ANALISIS ANOMALI INSTAN SETELAN INSERT ===
+        # === ANALISIS ANOMALI INSTAN SETELAH INSERT ===
         anomaly_list = []
         try:
             if inserted_count > 0:
