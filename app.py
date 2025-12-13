@@ -1,12 +1,3 @@
-Ini adalah *BuildError* yang menunjukkan bahwa tautan di *template* Anda merujuk ke fungsi (endpoint) yang belum Anda definisikan di file `app.py`.
-
-Error terjadi di `PAM-main/templates/analyze_landing.html` pada baris 124, di mana Anda memanggil `{{ url_for('analyze_full_mb_report') }}`.
-
-###Solusi: Tambahkan Route Halaman Detail MBUntuk memperbaiki ini, saya akan menambahkan *view function* baru di `PAM-main/app.py` bernama `analyze_full_mb_report` yang akan merender halaman laporan menggunakan *template* yang sudah ada, sama seperti laporan analisis lainnya.
-
-Saya telah menambahkan fungsi ini di dalam blok *endpoint* analisis di `app.py`. Silakan ganti seluruh isi file `PAM-main/app.py` Anda dengan kode lengkap di bawah ini.
-
-###Kode `PAM-main/app.py` yang Diperbarui```python
 import os
 import pandas as pd
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, make_response
@@ -1866,5 +1857,3 @@ def export_anomalies_data():
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
-
-```
