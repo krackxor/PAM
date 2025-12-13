@@ -1,38 +1,43 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Akses Data</title>
+    <title>TERMINAL ACCESS - AUTH REQUIRED</title>
     <style>
         :root {
-            --primary-color: #007bff;
-            --bg-color: #f8f9fa;
-            --card-bg: #ffffff;
-            --shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            --border-radius: 8px;
+            --primary-color: #00ff00; /* Neon Green - Main Accent */
+            --bg-color: #000000; /* Pure Black Background */
+            --card-bg: #0a0a0a; /* Deep dark card background */
+            --shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+            --border-radius: 0px;
         }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Consolas', 'Courier New', monospace;
             background-color: var(--bg-color);
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             margin: 0;
+            color: var(--primary-color);
+            text-shadow: 0 0 3px var(--primary-color);
         }
         .login-container {
-            width: 100%;
-            max-width: 400px;
+            width: 90%;
+            max-width: 350px;
             background-color: var(--card-bg);
-            padding: 40px;
+            padding: 30px;
             border-radius: var(--border-radius);
+            border: 2px solid var(--primary-color);
             box-shadow: var(--shadow);
             text-align: center;
         }
         h2 {
             color: var(--primary-color);
             margin-bottom: 30px;
+            text-shadow: 0 0 5px var(--primary-color);
+            text-transform: uppercase;
         }
         .form-group {
             margin-bottom: 20px;
@@ -46,63 +51,76 @@
         .form-control {
             width: 100%;
             padding: 10px;
-            border: 1px solid #ced4da;
-            border-radius: 4px;
+            background-color: #222;
+            color: var(--primary-color);
+            border: 1px solid #333;
+            border-radius: 0px;
             box-sizing: border-box;
+            box-shadow: inset 0 0 5px rgba(0, 255, 0, 0.2);
+        }
+        .form-control:focus {
+             border-color: #00ffff;
+             box-shadow: 0 0 10px #00ffff;
+             outline: none;
         }
         .btn-primary {
             background-color: var(--primary-color);
-            color: white;
+            color: var(--bg-color);
             border: none;
             padding: 12px;
-            border-radius: 4px;
+            border-radius: 0px;
             cursor: pointer;
             width: 100%;
             font-size: 16px;
+            font-weight: 700;
             transition: background-color 0.3s;
+            box-shadow: 0 0 5px var(--primary-color);
         }
         .btn-primary:hover {
-            background-color: #0056b3;
+            background-color: #00ffff;
+            box-shadow: 0 0 10px #00ffff;
+            color: #000;
         }
         .alert {
             padding: 10px;
             margin-bottom: 15px;
-            border-radius: 4px;
+            border-radius: 0px;
             text-align: left;
+            text-shadow: none;
         }
         .alert-danger {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+            background-color: #330033;
+            color: #ff00ff;
+            border: 1px solid #ff00ff;
         }
     </style>
 </head>
 <body>
     <div class="login-container">
-        <h2>Akses Sistem Data</h2>
+        <h2><i class="fas fa-lock"></i> SYSTEM LOGIN</h2>
         
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                    <div class="alert alert-danger">** ACCESS DENIED: {{ message | upper }} **</div>
                 {% endfor %}
             {% endif %}
         {% endwith %}
 
         <form method="POST" action="{{ url_for('login') }}">
-            {{ form.hidden_tag() }} 
+            <input type="hidden" name="csrf_token" value="{{ form.csrf_token.data if form.csrf_token.data else '' }}">
 
             <div class="form-group">
-                {{ form.username.label(class="form-label") }}
-                {{ form.username(class="form-control", placeholder="Username") }}
+                <label for="username">USERNAME:</label>
+                <input type="text" id="username" name="username" class="form-control" placeholder="Target Identifier" required>
             </div>
 
             <div class="form-group">
-                {{ form.password.label(class="form-label") }}
-                {{ form.password(class="form-control", placeholder="Password") }}
+                <label for="password">PASSWORD:</label>
+                <input type="password" id="password" name="password" class="form-control" placeholder="Decryption Key" required>
             </div>
 
-            {{ form.submit(class="btn-primary") }}
+            <button type="submit" class="btn-primary">INITIATE CONNECTION</button>
         </form>
     </div>
 </body>
