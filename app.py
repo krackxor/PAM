@@ -1404,6 +1404,17 @@ def upload_mb_data():
                 collection_mb.insert_one(record)
                 inserted_count += 1
         
+        # === ANALISIS ANOMALI INSTAN SETELAN INSERT ===
+        anomaly_list = []
+        try:
+            if inserted_count > 0:
+                # Dapatkan anomali dari SBRS yang baru diupdate
+                anomaly_list = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        except Exception as e:
+            # Jika analisis gagal, jangan hentikan respons sukses upload
+            print(f"Peringatan: Gagal menjalankan analisis anomali instan: {e}")
+        # ============================================
+
         # --- RETURN REPORT ---
         return jsonify({
             "status": "success",
