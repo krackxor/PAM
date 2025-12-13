@@ -115,7 +115,6 @@
     border: 1px solid #ffeeba;
     padding: 8px;
     text-align: left;
-    white-space: nowrap; 
 }
 .anomaly-table th {
     background-color: #ffecb3;
@@ -165,13 +164,21 @@
 
     <div id="content-monthly" class="tab-content">
         <div class="upload-section">
-            <h3>Update Data Bulanan (Mode GANTI / REPLACE)</h3>
-            <p style="font-weight: bold; color: #dc3545; text-align: center;">Mengunggah salah satu file ini akan MENGHAPUS SEMUA data lama di koleksi terkait.</p>
+            <h3>Update Data Piutang & Profil</h3>
+            <p style="font-weight: bold; color: #dc3545; text-align: center;">Perhatian: CID & ARDEBT akan MENGHAPUS SEMUA data lama. MC, MB, dan SBRS disimpan sebagai arsip bulanan.</p>
 
             <div class="monthly-group" style="border-color: #007bff;">
-                <h4>MC: MASTER CETAK</h4>
-                <p>Data Piutang Bulanan. **REPLACE** koleksi `MasterCetak`.</p>
+                <h4>MC: MASTER CETAK (ARCHIVAL SNAPSHOT)</h4>
+                <p>Data Piutang Bulanan. **REPLACE** data hanya untuk periode yang ditentukan. (Mode Archival)</p>
                 <form id="uploadFormMC" action="{{ url_for('upload_mc_data') }}" method="POST" enctype="multipart/form-data">
+                    <input 
+                        type="text" 
+                        name="data_month_year" 
+                        placeholder="Periode Data (MMYYYY) cth: 122025" 
+                        required 
+                        pattern="\d{6}"
+                        style="padding: 8px; margin-bottom: 10px; width: 250px; text-align: center; border: 2px solid #007bff;"
+                    >
                     <input type="file" id="csvFileMC" name="file" accept=".csv, .xlsx, .xls" required>
                     <button type="submit" class="btn-upload-replace">HAPUS & GANTI DATA MC</button>
                 </form>
@@ -179,8 +186,8 @@
             </div>
 
             <div class="monthly-group" style="border-color: #dc3545;">
-                <h4>ARDEBT: DETAIL TUNGGAKAN</h4>
-                <p>Data Tunggakan Historis. **REPLACE** koleksi `AccountReceivable`.</p>
+                <h4>ARDEBT: DETAIL TUNGGAKAN (REPLACE TOTAL)</h4>
+                <p>Data Tunggakan Historis. **REPLACE** SELURUH koleksi `AccountReceivable`.</p>
                 <form id="uploadFormARDEBT" action="{{ url_for('upload_ardebt_data') }}" method="POST" enctype="multipart/form-data">
                     <input type="file" id="csvFileARDEBT" name="file" accept=".csv, .xlsx, .xls" required>
                     <button type="submit" class="btn-upload-replace">HAPUS & GANTI DATA ARDEBT</button>
@@ -189,8 +196,8 @@
             </div>
 
             <div class="monthly-group" style="border-color: #ffc107;">
-                <h4>CID: CUSTOMER DATA</h4>
-                <p>Data Profil Pelanggan Statis. **REPLACE** koleksi `CustomerData`.</p>
+                <h4>CID: CUSTOMER DATA (REPLACE TOTAL)</h4>
+                <p>Data Profil Pelanggan Statis. **REPLACE** SELURUH koleksi `CustomerData`.</p>
                 <form id="uploadFormCID" action="{{ url_for('upload_cid_data') }}" method="POST" enctype="multipart/form-data">
                     <input type="file" id="csvFileCID" name="file" accept=".csv, .xlsx, .xls" required>
                     <button type="submit" class="btn-upload-replace">HAPUS & GANTI DATA CID</button>
@@ -202,25 +209,39 @@
 
     <div id="content-daily" class="tab-content" style="display: none;">
         <div class="upload-section" style="border: 1px dashed var(--secondary-color); text-align: center;">
-            <h3>MB: MASTER BAYAR (UPDATE HARIAN)</h3>
-            <p style="font-weight: bold; color: var(--secondary-color);">MENAMBAHKAN data transaksi pembayaran baru (APPEND).</p>
-            <p style="font-size: 0.9em; color: #666;">Kunci unik: NOTAGIHAN, TGL_BAYAR, NOMINAL. Duplikasi diabaikan.</p>
+            <h3>MB: MASTER BAYAR (ARCHIVAL SNAPSHOT)</h3>
+            <p style="font-weight: bold; color: var(--secondary-color);">MENYIMPAN data transaksi pembayaran sebagai arsip bulanan.</p>
             <form id="uploadFormMB" action="{{ url_for('upload_mb_data') }}" method="POST" enctype="multipart/form-data">
+                 <input 
+                    type="text" 
+                    name="data_month_year" 
+                    placeholder="Periode Data (MMYYYY) cth: 122025" 
+                    required 
+                    pattern="\d{6}"
+                    style="padding: 8px; margin-bottom: 10px; width: 250px; text-align: center; border: 2px solid var(--secondary-color);"
+                >
                 <input type="file" id="csvFileMB" name="file" accept=".csv, .xlsx, .xls" required>
-                <button type="submit" class="btn-upload-append">TAMBAH DATA MB</button>
+                <button type="submit" class="btn-upload-append">HAPUS & GANTI DATA MB</button>
             </form>
             <div id="uploadStatusMB"></div>
         </div>
     </div>
     
     <div id="content-cycle" class="tab-content" style="display: none;">
-        <div class="upload-section" style="border: 1px dashed var(--secondary-color); text-align: center;">
-            <h3>SBRS: RIWAYAT BACA METER (UPDATE HARIAN)</h3>
-            <p style="font-weight: bold; color: var(--secondary-color);">MENAMBAHKAN riwayat baca meter baru (APPEND).</p>
-            <p style="font-size: 0.9em; color: #666;">Kunci unik: CMR_ACCOUNT, CMR_RD_DATE. Duplikasi diabaikan.</p>
+        <div class="upload-section" style="border: 1px dashed #17a2b8; text-align: center;">
+            <h3>SBRS: RIWAYAT BACA METER (ARCHIVAL SNAPSHOT)</h3>
+            <p style="font-weight: bold; color: #17a2b8;">MENYIMPAN riwayat baca meter sebagai arsip bulanan.</p>
             <form id="uploadFormSBRS" action="{{ url_for('upload_sbrs_data') }}" method="POST" enctype="multipart/form-data">
+                <input 
+                    type="text" 
+                    name="data_month_year" 
+                    placeholder="Periode Data (MMYYYY) cth: 122025" 
+                    required 
+                    pattern="\d{6}"
+                    style="padding: 8px; margin-bottom: 10px; width: 250px; text-align: center; border: 2px solid #17a2b8;"
+                >
                 <input type="file" id="csvFileSBRS" name="file" accept=".csv, .xlsx, .xls" required>
-                <button type="submit" class="btn-upload-append">TAMBAH DATA SBRS</button>
+                <button type="submit" class="btn-upload-append">HAPUS & GANTI DATA SBRS</button>
             </form>
             <div id="uploadStatusSBRS"></div>
         </div>
@@ -325,12 +346,19 @@
             // Formatting angka dengan pemisah ribuan
             const formatNumber = (num) => (num || 0).toLocaleString('id-ID');
 
-            if (summary.type === 'REPLACE') {
+            if (summary.type === 'REPLACE_MONTHLY' || summary.type === 'REPLACE') {
                 detailRows = `
                     <div class="summary-item"><strong>Total Baris File:</strong> ${formatNumber(summary.total_rows)}</div>
                     <div class="summary-item status-replace"><strong>Baris Diganti:</strong> ${formatNumber(summary.replaced_count)}</div>
                 `;
+                if (summary.type === 'REPLACE_MONTHLY') {
+                    detailRows += `<div class="summary-item status-info"><strong>Mode:</strong> Archival Snapshot (Ganti Periode)</div>`;
+                } else {
+                    detailRows += `<div class="summary-item status-replace"><strong>Mode:</strong> REPLACE TOTAL</div>`;
+                }
+                
             } else if (summary.type === 'APPEND') {
+                // Logika APPEND di app.py sudah dihapus/diganti, tapi jika dikembalikan:
                 detailRows = `
                     <div class="summary-item"><strong>Total Baris File:</strong> ${formatNumber(summary.total_rows)}</div>
                     <div class="summary-item status-success"><strong>Baris Baru Ditambahkan:</strong> ${formatNumber(summary.inserted_count)}</div>
@@ -400,8 +428,8 @@
 
         formMB.addEventListener('submit', (e) => handleUpload(e, formMB, statusMB, 'var(--secondary-color)'));
         
-        // SBRS (CYCLE) menggunakan logic warna yang sama dengan APPEND (green)
-        formSBRS.addEventListener('submit', (e) => handleUpload(e, formSBRS, statusSBRS, 'var(--secondary-color)'));
+        // SBRS (CYCLE)
+        formSBRS.addEventListener('submit', (e) => handleUpload(e, formSBRS, statusSBRS, '#17a2b8'));
 
         
         // Tampilkan tab Monthly saat pertama kali dimuat
