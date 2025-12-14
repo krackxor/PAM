@@ -93,15 +93,6 @@
     </div>
 
     <script>
-        // Fungsi pembantu untuk memformat angka Rupiah dan angka biasa
-        function formatRupiah(number) {
-            return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
-        }
-        
-        function formatNumber(number) {
-            return (parseFloat(number) || 0).toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-        }
-        
         // Fungsi pembantu untuk memformat angka persentase
         function formatPercent(number) {
             return (parseFloat(number) || 0).toFixed(2) + '%';
@@ -112,29 +103,20 @@
             dataArea.innerHTML = `<p style="text-align: center;"><i class="fas fa-spinner fa-spin"></i> Menghubungkan ke MongoDB untuk ${reportName}...</p>`;
             
             let endpoint = '';
-            let isCustomReport = false;
 
-            // Mapping Laporan ke Endpoint API
-            if (reportName.includes('Fluktuasi Volume')) {
+            // Mapping Laporan ke Endpoint API yang baru
+            if (reportName.includes('Naik/Turun')) {
                 endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}';
-            } else if (reportName.includes('Grup Master Cetak')) {
-                endpoint = '{{ url_for("analyze_mc_grouping_api") }}';
-                isCustomReport = true;
-            } else if (reportName.includes('Detail Master Bayar')) {
-                endpoint = '{{ url_for("analyze_mb_grouping_api") }}';
-            } else if (reportName.includes('Distribusi Pelanggan Tarif Kustom')) {
-                endpoint = '{{ url_for("analyze_mc_tarif_breakdown_api") }}';
-            } else if (reportName.includes('VIP')) {
-                endpoint = '{{ url_for("analyze_vip_payers") }}'; // NEW
-            } else if (reportName.includes('Berisiko Tinggi')) {
-                endpoint = '{{ url_for("analyze_high_risk") }}'; // NEW
-            } else if (reportName.includes('DQC: NOMEN di MC tanpa CID')) {
-                endpoint = '{{ url_for("dqc_mc_missing_cid") }}'; // NEW
+            } else if (reportName.includes('Perubahan Tarif')) {
+                endpoint = '{{ url_for("analyze_tariff_change_api") }}';
+            } else if (reportName.includes('Ekstrim')) {
+                endpoint = '/api/analyze/extreme_usage'; // Placeholder untuk Ekstrim
+            } else if (reportName.includes('Zero')) {
+                endpoint = '/api/analyze/zero_usage'; // Placeholder untuk Zero
             } else {
-                 dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini tidak valid atau belum dipetakan.</p>`;
+                 dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini belum diimplementasi.</p>`;
                  return;
             }
-
 
             try {
                 const response = await fetch(endpoint);
@@ -145,191 +127,30 @@
                     return;
                 }
                 
-                if (data.length === 0 && data.status !== 'success') {
+                if (data.length === 0) {
                     dataArea.innerHTML = `<p style="text-align: center;">Tidak ada data anomali ditemukan untuk laporan ${reportName}.</p>`;
                     return;
                 }
                 
-                // Cek jika response adalah objek status kustom (misal dari analyze_mc_grouping_api)
-                if (data.status === 'success' && data.breakdowns) {
-                    renderCustomReportTable(data, dataArea);
-                } else if (reportName.includes('Distribusi Pelanggan Tarif Kustom')) {
-                    renderTarifBreakdownTable(data, dataArea);
-                } else {
-                    renderDynamicTable(data, reportName, dataArea);
-                }
+                renderDynamicTable(data, reportName);
 
             } catch (error) {
                 dataArea.innerHTML = `<p style="text-align: center; color: red;">❌ Gagal mengambil data: ${error}</p>`;
                 console.error('Fetch Error:', error);
             }
         }
-        
-        // --- HELPER FUNCTION FOR MC GROUPING BREAKDOWN ---
-        function createSingleBreakdownTable(title, dataArray, dimensionKey) {
-            let tableHTML = `
-                <div style="padding: 15px; border: 1px solid #e0e0e0; border-radius: var(--border-radius); box-shadow: var(--shadow-light); margin-bottom: 20px;">
-                    <h5 style="margin-top: 0; color: #17a2b8;">${title}</h5>
-                    <div class="result-table-wrapper" style="margin-top: 10px;">
-                        <table class="data-table" style="min-width: 100%;">
-                            <thead>
-                                <tr style="background-color: #f0f8ff;">
-                                    <th style="text-align: left; width: 40%;">${dimensionKey.replace(/_/g, ' ').toUpperCase()}</th>
-                                    <th>Nomen Count</th>
-                                    <th>Nominal</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-            `;
-            
-            dataArray.forEach(item => {
-                const dimValue = item[dimensionKey] || 'N/A';
-                const nomenCount = formatNumber(item.CountOfNOMEN);
-                const nominal = formatRupiah(item.SumOfNOMINAL);
-                
-                tableHTML += `
-                    <tr>
-                        <td data-label="${dimensionKey.toUpperCase()}" style="text-align: left;">${dimValue}</td>
-                        <td data-label="Nomen Count">${nomenCount}</td>
-                        <td data-label="Nominal">${nominal}</td>
-                    </tr>
-                `;
-            });
-            
-            tableHTML += `
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            `;
-            return tableHTML;
-        }
 
-        // --- Fungsi Tambahan untuk Rendering Laporan Spesifik ---
-        
-        // Rendering Tarif Breakdown (Diadaptasi dari collection_unified.html)
-        function renderTarifBreakdownTable(data, dataArea) {
-            let totalPelanggan = data.reduce((sum, item) => sum + item.JumlahPelanggan, 0);
-
-            let tableHTML = `
-                <h3 style="margin-top: 20px;">Distribusi Pelanggan (Rayon 34/35 Reguler)</h3>
-                <div class="result-table-wrapper" style="max-width: 600px; margin-left: 0;"> 
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th style="text-align: left;">RAYON</th>
-                            <th style="text-align: left;">TARIF</th>
-                            <th>JML Pelanggan</th>
-                            <th>Persentase (%)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            data.forEach(item => {
-                const percentage = (item.JumlahPelanggan / totalPelanggan) * 100;
-                tableHTML += `
-                    <tr>
-                        <td data-label="RAYON" style="text-align: left;">${item.RAYON}</td>
-                        <td data-label="TARIF" style="text-align: left;">${item.TARIF}</td>
-                        <td data-label="JML Pelanggan">${formatNumber(item.JumlahPelanggan)}</td>
-                        <td data-label="Persentase">${formatPercent(percentage)}</td>
-                    </tr>
-                `;
-            });
-            
-            tableHTML += `
-                <tr style="font-weight: bold; background-color: #d0e7ff;">
-                    <td data-label="Total" style="text-align: left;">TOTAL</td>
-                    <td data-label="">-</td> 
-                    <td data-label="JML Pelanggan Total">${formatNumber(totalPelanggan)}</td>
-                    <td data-label="Persentase Total">100.00%</td>
-                </tr>
-            `;
-            
-            tableHTML += `
-                    </tbody>
-                </table>
-                </div>
-            `;
-            dataArea.innerHTML = tableHTML;
-        }
-        
-        // Rendering Custom Report (MC Grouping) - FULL IMPLEMENTATION
-        function renderCustomReportTable(data, dataArea) {
-             const totals = data.totals;
-             const breakdowns = data.breakdowns;
-             
-             let html = `
-                <h3 style="margin-top: 20px; color: var(--primary-color);">Ringkasan Total MC (Rayon 34 & 35 Reguler)</h3>
-                <div class="result-table-wrapper" style="max-width: 800px; margin-left: auto; margin-right: auto;">
-                    <table class="data-table">
-                        <thead>
-                            <tr style="background-color: #f8d7da;">
-                                <th style="text-align: left;">AREA</th>
-                                <th>Nomen Count</th>
-                                <th>Total Nominal</th>
-                                <th>Total Kubik (m³)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td data-label="AREA" style="text-align: left; font-weight: bold;">AB SUNTER (Total R34 + R35)</td>
-                                <td data-label="Nomen Count">${formatNumber(totals.TOTAL_34_35.CountOfNOMEN)}</td>
-                                <td data-label="Total Nominal">${formatRupiah(totals.TOTAL_34_35.SumOfNOMINAL)}</td>
-                                <td data-label="Total Kubik">${formatNumber(totals.TOTAL_34_35.SumOfKUBIK)}</td>
-                            </tr>
-                            <tr>
-                                <td data-label="AREA" style="text-align: left;">Rayon 34</td>
-                                <td data-label="Nomen Count">${formatNumber(totals[34].CountOfNOMEN)}</td>
-                                <td data-label="Total Nominal">${formatRupiah(totals[34].SumOfNOMINAL)}</td>
-                                <td data-label="Total Kubik">${formatNumber(totals[34].SumOfKUBIK)}</td>
-                            </tr>
-                            <tr>
-                                <td data-label="AREA" style="text-align: left;">Rayon 35</td>
-                                <td data-label="Nomen Count">${formatNumber(totals[35].CountOfNOMEN)}</td>
-                                <td data-label="Total Nominal">${formatRupiah(totals[35].SumOfNOMINAL)}</td>
-                                <td data-label="Total Kubik">${formatNumber(totals[35].SumOfKUBIK)}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                
-                <h3 style="margin-top: 40px; color: #2c3e50;">Detail Breakdown Per Dimensi</h3>
-             `;
-
-            // --- 1. Breakdown TARIF ---
-             html += `<h4 style="color: #007bff; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">Breakdown Berdasarkan: Jenis TARIF</h4>`;
-             html += createSingleBreakdownTable(`AB SUNTER (Total)`, breakdowns.TARIF.TOTAL_34_35, 'TARIF');
-             html += createSingleBreakdownTable(`Rayon 34`, breakdowns.TARIF[34], 'TARIF');
-             html += createSingleBreakdownTable(`Rayon 35`, breakdowns.TARIF[35], 'TARIF');
-             
-            // --- 2. Breakdown MERK ---
-             html += `<h4 style="color: #007bff; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">Breakdown Berdasarkan: Merek Meter</h4>`;
-             html += createSingleBreakdownTable(`AB SUNTER (Total)`, breakdowns.MERK.TOTAL_34_35, 'MERK');
-             html += createSingleBreakdownTable(`Rayon 34`, breakdowns.MERK[34], 'MERK');
-             html += createSingleBreakdownTable(`Rayon 35`, breakdowns.MERK[35], 'MERK');
-
-            // --- 3. Breakdown READ_METHOD ---
-             html += `<h4 style="color: #007bff; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">Breakdown Berdasarkan: Metode Baca</h4>`;
-             html += createSingleBreakdownTable(`AB SUNTER (Total)`, breakdowns.READ_METHOD.TOTAL_34_35, 'READ_METHOD');
-             html += createSingleBreakdownTable(`Rayon 34`, breakdowns.READ_METHOD[34], 'READ_METHOD');
-             html += createSingleBreakdownTable(`Rayon 35`, breakdowns.READ_METHOD[35], 'READ_METHOD');
-             
-             dataArea.innerHTML = html;
-        }
-
-        // Rendering Tabel Dinamis Umum (untuk MB, SBRS, VIP, RISK, DQC)
-        function renderDynamicTable(data, title, dataArea) {
+        function renderDynamicTable(data, title) {
+            const dataArea = document.getElementById('reportDataArea');
             if (data.length === 0) {
                 dataArea.innerHTML = `<p style="text-align: center;">Tidak ada data ditemukan untuk laporan ${title}.</p>`;
                 return;
             }
 
+            // Dapatkan headers dari kunci objek pertama
             const headers = Object.keys(data[0]);
             
-            let tableHTML = `<h3 style="margin-top: 20px;">Detail Data (${data.length} Baris)</h3>`;
-            tableHTML += `<div class="result-table-wrapper"><table class="data-table"><thead><tr>`;
+            let tableHTML = `<div class="result-table-wrapper"><table class="data-table"><thead><tr>`;
             headers.forEach(h => {
                 tableHTML += `<th>${h.replace(/_/g, ' ')}</th>`;
             });
@@ -342,14 +163,9 @@
                     
                     if (h === 'PERSEN_SELISIH') {
                         cellValue = formatPercent(cellValue);
-                    } else if (typeof cellValue === 'number' && (h.includes('NOMINAL') || h.includes('JUMLAH') || h.includes('AMOUNT'))) {
-                        cellValue = formatRupiah(cellValue);
-                    } else if (typeof cellValue === 'number' && h.includes('KUBIK')) {
-                        cellValue = formatNumber(cellValue);
-                    } else if (cellValue === null) {
-                        cellValue = 'N/A'; // Handle null/NaN values from Pandas conversion
                     }
                     
+                    // PENTING: Tambahkan data-label untuk mobile view
                     tableHTML += `<td data-label="${h.replace(/_/g, ' ')}">${cellValue}</td>`;
                 });
                 tableHTML += `</tr>`;
