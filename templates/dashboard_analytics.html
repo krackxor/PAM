@@ -6,50 +6,63 @@
 /* CSS Khusus untuk Dashboard */
 .dashboard-grid {
     display: grid;
+    /* Tetap responsif, biarkan browser yang memutuskan berapa banyak kolom yang pas */
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); 
     gap: 20px;
     margin-bottom: 30px;
+    animation: fadeIn 0.5s ease-out; /* Animasi saat grid muncul */
 }
+
+/* Summary Card (KPI) - Dinamis */
 .summary-card-dash {
     background-color: var(--card-bg);
     padding: 20px;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-light);
-    border-left: 5px solid var(--primary-color);
-    transition: transform 0.2s;
+    border-left: 5px solid; /* Border color akan diset oleh class .text-X */
+    transition: all 0.3s ease; /* Transisi untuk animasi hover */
+}
+.summary-card-dash:hover {
+    transform: translateY(-5px); /* Efek angkat/lift */
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
 }
 .summary-card-dash h4 { margin: 0 0 5px 0; font-size: 0.9em; text-transform: uppercase; color: #6c757d; }
 .summary-card-dash p { margin: 0; font-size: 1.8em; font-weight: bold; }
+
+/* Warna dan Border Accent */
 .text-danger { color: #dc3545; border-color: #dc3545 !important; }
 .text-success { color: var(--secondary-color); border-color: var(--secondary-color) !important; }
 .text-warning { color: var(--accent-color); border-color: var(--accent-color) !important; }
 
+/* Chart and Table Sections - Dinamis */
 .chart-section, .table-section {
     background-color: var(--card-bg);
     padding: 20px;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-medium);
     margin-bottom: 30px;
+    transition: box-shadow 0.3s;
 }
+.chart-section:hover, .table-section:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+}
+
+/* Grid Lebar Penuh (Chart dan Top Rayon) */
 .full-width-grid {
     display: grid;
     grid-template-columns: 2fr 1fr;
     gap: 20px;
 }
 
-@media (max-width: 900px) {
-    .full-width-grid {
-        grid-template-columns: 1fr;
-    }
+/* Simple Table Styling (Top Rayon Table) */
+.data-table-simple-wrapper {
+    overflow-x: auto; /* Memastikan scroll horizontal jika kolom terlalu banyak */
 }
-@media (max-width: 600px) {
-    .summary-card-dash p { font-size: 1.5em; }
-}
-
 .data-table-simple {
     width: 100%;
     border-collapse: collapse;
     font-size: 14px;
+    min-width: 300px; /* Minimal width untuk tabel kecil */
 }
 .data-table-simple th, .data-table-simple td {
     padding: 10px;
@@ -61,6 +74,31 @@
 }
 .data-table-simple tr:last-child td {
     border-bottom: none;
+}
+
+/* --- MEDIA QUERY UNTUK LAYAR HP --- */
+@media (max-width: 900px) {
+    /* Grid besar menumpuk (stack) di bawah 900px */
+    .full-width-grid {
+        grid-template-columns: 1fr;
+    }
+}
+@media (max-width: 600px) {
+    /* Summary Card (KPI) akan dipaksa menumpuk 1 kolom di HP */
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    .summary-card-dash { 
+        padding: 15px;
+        transform: none; /* Nonaktifkan efek angkat di HP */
+    }
+    .summary-card-dash p { 
+        font-size: 1.5em; 
+    }
+    .chart-section, .table-section {
+        padding: 15px; /* Kurangi padding di HP */
+    }
 }
 {% endblock %}
 
@@ -75,13 +113,15 @@
         </a>
     </div>
 
-    <div id="loadingStatus" style="text-align: center; padding: 30px;"><i class="fas fa-spinner fa-spin"></i> Memuat data dashboard...</div>
+    <div id="loadingStatus" style="text-align: center; padding: 30px; color: #6c757d;">
+        <i class="fas fa-spinner fa-spin"></i> Memuat data dashboard...
+    </div>
 
     <div id="dashboardContent" style="display: none;">
         
         <h3 style="color: var(--primary-color);">Ringkasan Utama</h3>
         <div class="dashboard-grid" id="summaryGrid">
-            </div>
+        </div>
 
         <div class="full-width-grid">
             
@@ -123,7 +163,7 @@
         }
 
         function determineCardColor(key, value) {
-            if (key.includes('tunggakan') || key.includes('anomali') && value > 0) return 'text-danger';
+            if (key.includes('tunggakan') || (key.includes('anomali') && value > 0)) return 'text-danger';
             if (key.includes('koleksi') || key.includes('pelanggan')) return 'text-success';
             if (key.includes('piutang')) return 'text-warning';
             return 'border-left: 5px solid var(--primary-color)';
@@ -155,7 +195,8 @@
         }
         
         function renderTopRayon(data) {
-            let tableHTML = '<table class="data-table-simple"><thead><tr><th>Rayon</th><th>Piutang (Rp)</th></tr></thead><tbody>';
+            // Membungkus tabel dengan div responsif
+            let tableHTML = '<div class="data-table-simple-wrapper"><table class="data-table-simple"><thead><tr><th>Rayon</th><th style="text-align: right;">Piutang (Rp)</th></tr></thead><tbody>';
             
             data.forEach(item => {
                 tableHTML += `
@@ -166,37 +207,43 @@
                 `;
             });
             
-            tableHTML += '</tbody></table>';
+            tableHTML += '</tbody></table></div>';
             topRayonTable.innerHTML = tableHTML;
         }
         
         function renderAnomalyBreakdown(data) {
-             let html = '';
-             
-             Object.keys(data.kategori).forEach(key => {
-                 const category = data.kategori[key];
-                 const title = key.replace(/_/g, ' ').toUpperCase();
-                 const color = key.includes('ekstrim') || key.includes('zero') ? '#dc3545' : '#ffc107';
-                 
-                 if (category.jumlah > 0) {
-                     html += `
-                        <h4 style="margin-top: 15px; color: ${color};">${title} (${category.jumlah} Pelanggan)</h4>
-                        <ul style="list-style-type: none; padding: 0;">
-                     `;
-                     category.data.forEach(item => {
-                        html += `<li style="margin-bottom: 5px; border-bottom: 1px dotted #eee;">
-                            <strong>${item.NOMEN}</strong> - ${item.NAMA} (${item.STATUS_PEMAKAIAN})
-                        </li>`;
-                     });
-                     html += `</ul>`;
-                 }
-             });
-             
-             if (!html) {
-                 html = '<p style="text-align: center; color: var(--secondary-color);">Tidak ada anomali pemakaian air signifikan yang terdeteksi.</p>';
-             }
-             
-             anomalySummary.innerHTML = html;
+            let html = '';
+            
+            Object.keys(data.kategori).forEach(key => {
+                const category = data.kategori[key];
+                const title = key.replace(/_/g, ' ').toUpperCase();
+                // Menggunakan variabel CSS untuk warna
+                const color = key.includes('ekstrim') || key.includes('zero') ? '#dc3545' : '#ffc107';
+                
+                if (category.jumlah > 0) {
+                    html += `
+                        <div class="card" style="margin-top: 15px; border-left: 5px solid ${color};">
+                             <h4 style="margin-top: 0; color: ${color};">${title} (${category.jumlah} Pelanggan)</h4>
+                             <ul style="list-style-type: none; padding: 0;">
+                        `;
+                    // Hanya menampilkan 5 data teratas untuk ringkasan
+                    category.data.slice(0, 5).forEach(item => {
+                        html += `<li style="margin-bottom: 5px; border-bottom: 1px dotted #eee; padding-bottom: 5px;">
+                                <strong>${item.NOMEN}</strong> - ${item.NAMA} (${item.STATUS_PEMAKAIAN})
+                            </li>`;
+                    });
+                    if (category.jumlah > 5) {
+                        html += `<li style="font-size: 0.9em; margin-top: 5px; color: #6c757d;">... dan ${category.jumlah - 5} lainnya.</li>`;
+                    }
+                    html += `</ul></div>`;
+                }
+            });
+            
+            if (!html) {
+                html = '<p style="text-align: center; color: var(--secondary-color);">Tidak ada anomali pemakaian air signifikan yang terdeteksi.</p>';
+            }
+            
+            anomalySummary.innerHTML = html;
         }
 
         function renderCollectionTrendChart(data) {
@@ -224,6 +271,7 @@
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: true,
                     scales: {
                         y: {
                             beginAtZero: true,
@@ -278,11 +326,10 @@
             }
         }
         
-        // ======================================================
-        // === NEW: Critical Alert and Notification Functions ===
-        // ======================================================
-        
+        // Fungsi Critical Alert (Diambil dari base.html)
         async function checkCriticalAlerts() {
+            // Memastikan alertBadge ada sebelum fetch
+            if (!alertBadge) return; 
             try {
                 const response = await fetch('{{ url_for("critical_alerts_api") }}');
                 const alerts = await response.json();
