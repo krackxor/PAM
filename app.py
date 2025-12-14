@@ -596,7 +596,7 @@ def collection_detail_api():
                 {'NOMEN': {'$regex': safe_query_str}},
                 {'ZONA_NOREK': {'$regex': safe_query_str}}, 
                 {'LKS_BAYAR': {'$regex': safe_query_str}},
-                {'BILL_REASON': {'$regex': safe_query_str}},
+                {'BILL_REASON': {'$regex': safe_query_str}}, # Tambahkan filter BILL_REASON
                 {'BULAN_REK': {'$regex': safe_query_str}} # Tambahkan BULAN_REK ke pencarian
             ]
         }
@@ -1282,7 +1282,7 @@ def doh_comparison_report_api():
         # 1. Tentukan tanggal perbandingan (DTD)
         date_prefixes = []
         for i in range(1, day_of_month + 1):
-            day_str = f'{i:02d}'
+            day_str = f'{i:02d}' # 1 menjadi 01, 14 tetap 14
             date_prefixes.append(f"{this_month_str}-{day_str}")
             try:
                 datetime.strptime(f"{last_month_str}-{day_str}", '%Y-%m-%d') 
@@ -1300,7 +1300,7 @@ def doh_comparison_report_api():
             }},
             {'$project': {
                 'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
-                'RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$RAYON', 'N/A']}}}}},
+                'RAYON': 1,
                 # Ekstrak Hari (DD) dan Periode (YYYY-MM)
                 'Day': {'$substr': ['$TGL_BAYAR', 8, 2]},
                 'Periode': {'$substr': ['$TGL_BAYAR', 0, 7]}
@@ -1980,7 +1980,7 @@ def upload_mb_data():
         
         # >>> START PERBAIKAN: INJECT MISSING KRITICAL COLUMNS <<<
         
-        # Pastikan BILL_REASON ada. Jika hilang, set ke 'UNKNOWN' (agar tidak termasuk 'BIAYA PEMAKAIAN AIR')
+        # Pastikan BILL_REASON ada. Jika hilang, set ke 'UNKNOWN' (agar tidak termasuk 'BIAYA PEMAKAIAN AIR' di laporan)
         if 'BILL_REASON' not in df.columns:
              df['BILL_REASON'] = 'UNKNOWN'
              print("Peringatan: Kolom BILL_REASON hilang, diisi dengan UNKNOWN.")
@@ -2003,6 +2003,7 @@ def upload_mb_data():
             )
             
             # 2. Coba parse dari format float/int (Excel serial date number)
+            # Origin '1899-12-30' adalah standar untuk konversi Excel date number
             numeric_dates = pd.to_numeric(df['TGL_BAYAR'].replace({'N/A': float('nan')}), errors='coerce')
             
             # 3. Mengisi nilai NaN dari parsing string dengan hasil konversi Excel serial date
@@ -2014,7 +2015,6 @@ def upload_mb_data():
             df['TGL_BAYAR'] = df['TGL_BAYAR_OBJ'].dt.strftime('%Y-%m-%d').fillna('N/A')
             df = df.drop(columns=['TGL_BAYAR_OBJ'], errors='ignore')
             
-            # Peringatan: Logika fallback dasar (Jika tanggal masih bermasalah, ini akan memicu error)
             if (df['TGL_BAYAR'] == 'N/A').any():
                 print("Peringatan: Beberapa nilai TGL_BAYAR gagal dikonversi ke format YYYY-MM-DD yang seragam.")
 
