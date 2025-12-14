@@ -13,6 +13,7 @@ from functools import wraps
 import re 
 from datetime import datetime, timedelta 
 import io 
+from pymongo.errors import DuplicateKeyError # BARU: Import untuk menangani error duplikasi
 
 load_dotenv() 
 
@@ -1613,14 +1614,9 @@ def upload_mc_data():
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
-        # Kunci Unik: NOMEN + BULAN_TAGIHAN
+        # Kunci Unik: NOMEN + BULAN_TAGIHAN (untuk cek duplikasi internal)
         UNIQUE_KEYS = ['NOMEN', 'BULAN_TAGIHAN'] 
         
-        # Check this again for safety, though it should pass now
-        if not all(key in df.columns for key in UNIQUE_KEYS):
-             # Jika ini dieksekusi, ada masalah serius di Pandas/Loading.
-             return jsonify({"message": "Kesalahan Internal: Kolom kunci 'NOMEN' atau 'BULAN_TAGIHAN' hilang setelah pemrosesan Pandas."}), 500
-
         inserted_count = 0
         skipped_count = 0
         total_rows = len(data_to_insert)
@@ -1631,8 +1627,19 @@ def upload_mc_data():
             if collection_mc.find_one(filter_query):
                 skipped_count += 1
             else:
-                collection_mc.insert_one(record)
-                inserted_count += 1
+                try:
+                    # Coba insert. Ini akan gagal jika ada index unik MongoDB yang berbeda (seperti NOMEN, MASA, TAHUN2)
+                    collection_mc.insert_one(record)
+                    inserted_count += 1
+                except DuplicateKeyError as e:
+                    # Jika insert gagal karena duplikasi kunci MongoDB (internal atau eksternal)
+                    # Kita anggap sebagai data yang diabaikan (skipped)
+                    skipped_count += 1
+                    # Opsional: print(f"Peringatan: Duplikasi MongoDB di NOMEN: {record.get('NOMEN')}")
+                except Exception as e:
+                    # Jika gagal karena alasan lain, lempar error untuk debugging
+                    print(f"Error saat menyisipkan dokumen: {e}")
+                    return jsonify({"message": f"Gagal menyimpan data: {e}"}), 500
         
         return jsonify({
             "status": "success",
@@ -1973,8 +1980,15 @@ def upload_ardebt_data():
             if collection_ardebt.find_one(filter_query):
                 skipped_count += 1
             else:
-                collection_ardebt.insert_one(record)
-                inserted_count += 1
+                try:
+                    collection_ardebt.insert_one(record)
+                    inserted_count += 1
+                except DuplicateKeyError as e:
+                    # Menangani duplikasi dari index MongoDB yang ada
+                    skipped_count += 1
+                except Exception as e:
+                    print(f"Error saat menyisipkan dokumen: {e}")
+                    return jsonify({"message": f"Gagal menyimpan data: {e}"}), 500
         
         return jsonify({
             "status": "success",
