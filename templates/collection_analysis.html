@@ -3,13 +3,15 @@
 {% block title %}Analisis Agregasi Piutang & Koleksi{% endblock %}
 
 {% block custom_styles %}
-/* Custom CSS yang relevan untuk hub menu */
+/* Custom CSS yang relevan untuk hub menu (Dinamis & Responsif) */
 .report-grid-menu {
     display: grid;
+    /* Grid akan memiliki minimal 250px per kolom, akan menumpuk di mobile */
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
     gap: 20px;
     margin-top: 20px;
     margin-bottom: 30px; 
+    animation: fadeIn 0.5s ease-out; /* Animasi saat grid muncul */
 }
 
 .report-card-link {
@@ -23,23 +25,34 @@
     border-radius: var(--border-radius);
     padding: 25px 20px; 
     box-shadow: var(--shadow-light);
-    transition: all 0.3s ease;
+    transition: all 0.3s ease; /* Transisi untuk semua properti */
     text-align: center;
     min-height: 150px; 
     cursor: pointer;
+    border-left: 5px solid; /* Aksen warna dari style inline */
 }
 
 .report-card-aggr:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 20px rgba(0, 123, 255, 0.2); 
-    border-color: var(--primary-color);
+    transform: translateY(-5px); /* Efek angkat/lift yang lebih kentara */
+    box-shadow: 0 10px 25px rgba(0, 123, 255, 0.25); 
+}
+.report-card-aggr:active {
+    transform: translateY(-2px); /* Efek tekan */
 }
 
 .report-card-aggr i {
     font-size: 3em; 
     color: var(--primary-color);
     margin-bottom: 10px;
+    transition: color 0.3s, transform 0.3s;
 }
+
+/* Menambahkan efek warna ikon saat hover */
+.report-card-link:hover .report-card-aggr i {
+    filter: brightness(1.2);
+    transform: scale(1.05);
+}
+
 
 .report-card-aggr h3 {
     margin: 10px 0 5px 0;
@@ -50,6 +63,18 @@
 .report-card-aggr p {
     font-size: 0.9em;
     color: #6c757d; 
+}
+
+/* --- MEDIA QUERY UNTUK LAYAR HP --- */
+@media screen and (max-width: 600px) {
+    .report-grid-menu {
+        grid-template-columns: 1fr; /* Menumpuk menjadi 1 kolom di HP */
+        gap: 15px; /* Kurangi jarak antar kartu */
+    }
+    .report-card-aggr {
+        transform: none; /* Nonaktifkan efek angkat di HP */
+        padding: 20px 15px;
+    }
 }
 {% endblock %}
 
@@ -146,4 +171,4 @@
         
     </div>
     
-    {% endblock %}
+{% endblock %}
