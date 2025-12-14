@@ -664,7 +664,8 @@ def export_collection_report():
 
 # --- ENDPOINT ANALISIS DATA LANJUTAN (SUB-MENU DASHBOARD) ---
 
-@app.route('/analyze', methods=['GET'])
+# FIX: Mengubah endpoint dashboard lama ke analyze_reports_landing
+@app.route('/dashboard', methods=['GET'])
 @login_required
 def analyze_reports_landing():
     return render_template('analyze_landing.html', is_admin=current_user.is_admin)
