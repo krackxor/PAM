@@ -1762,6 +1762,15 @@ def upload_mb_data():
         
         df.columns = [col.strip().upper() for col in df.columns]
         
+        # >>> START PERBAIKAN: MAPPING HEADER KRITIS UNTUK MB <<<
+        rename_map = {
+            'NOTAG': 'NOTAGIHAN',  # Mengubah header file 'NOTAG' menjadi kunci sistem 'NOTAGIHAN'
+            'PAY_DT': 'TGL_BAYAR',  # Mengubah header file 'PAY_DT' menjadi kunci sistem 'TGL_BAYAR'
+        }
+        # Menggunakan errors='ignore' memastikan hanya kolom yang ada di file yang diubah namanya
+        df = df.rename(columns=lambda x: rename_map.get(x, x), errors='ignore')
+        # >>> END PERBAIKAN: MAPPING HEADER KRITIS UNTUK MB <<<
+        
         # >>> PERBAIKAN KRITIS MB: NORMALISASI DATA PANDAS <<<
 
         columns_to_normalize_mb = ['NOMEN', 'RAYON', 'PCEZ', 'ZONA_NOREK', 'LKS_BAYAR', 'BULAN_REK', 'NOTAGIHAN'] 
@@ -1783,6 +1792,7 @@ def upload_mb_data():
         # Kunci unik untuk MB (harus ada di index MongoDB sebagai unique=True)
         UNIQUE_KEYS = ['NOTAGIHAN', 'TGL_BAYAR', 'NOMINAL'] 
         
+        # Check dilakukan setelah renaming, memastikan kunci sudah sesuai
         if not all(key in df.columns for key in UNIQUE_KEYS):
             return jsonify({"message": f"Gagal Append: File MB harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)}. Cek file Anda."}), 400
 
