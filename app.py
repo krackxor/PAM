@@ -1094,22 +1094,25 @@ def collection_monitoring_api():
         df_monitoring['Rp1_Kumulatif'] = df_monitoring.groupby('RAYON')['COLL_NOMINAL'].cumsum()
         df_monitoring['CUST_Kumulatif'] = df_monitoring.groupby('RAYON')['CUST_COUNT'].cumsum()
 
-        # Hitung Persentase Koleksi & Variance
-        df_monitoring['COLL_VAR'] = 0.0
-        
-        def calculate_percentages(group):
-            rayon = group['RAYON'].iloc[0]
-            total_piutang = total_mc_34 if rayon == '34' else total_mc_35
-            
-            if total_piutang > 0:
-                group['COLL_Kumulatif_Persen'] = (group['Rp1_Kumulatif'] / total_piutang) * 100
-                group['COLL_VAR'] = group['COLL_Kumulatif_Persen'].diff().fillna(0)
-            else:
-                group['COLL_Kumulatif_Persen'] = 0.0
-            return group
+        # --- PERBAIKAN PANDAS FutureWaning (VEKTORISASI) ---
 
-        # FIX: Tambahkan group_keys=False untuk mengatasi FutureWarning dari Pandas DataFrameGroupBy.apply
-        df_monitoring = df_monitoring.groupby('RAYON', group_keys=False).apply(calculate_percentages)
+        # 1. Map total piutang ke setiap baris
+        total_piutang_map = {'34': total_mc_34, '35': total_mc_35}
+        df_monitoring['TotalPiutang'] = df_monitoring['RAYON'].map(total_piutang_map)
+        df_monitoring['TotalPiutang'] = df_monitoring['TotalPiutang'].fillna(0)
+        
+        # 2. Hitung Persentase Kumulatif
+        df_monitoring['COLL_Kumulatif_Persen'] = (df_monitoring['Rp1_Kumulatif'] / df_monitoring['TotalPiutang']) * 100
+        df_monitoring['COLL_Kumulatif_Persen'] = df_monitoring['COLL_Kumulatif_Persen'].fillna(0)
+
+        # 3. Hitung COLL_VAR (Daily Change in Percentage)
+        # Menggunakan .diff() yang di-grouping dan mengisi nilai awal dengan nilai persen kumulatif itu sendiri
+        df_monitoring['COLL_VAR'] = df_monitoring.groupby('RAYON')['COLL_Kumulatif_Persen'].diff().fillna(df_monitoring['COLL_Kumulatif_Persen'])
+        
+        # Bersihkan kolom sementara
+        df_monitoring = df_monitoring.drop(columns=['TotalPiutang'], errors='ignore')
+        
+        # --- AKHIR PERBAIKAN VECTROISASI ---
         
         # Format Output
         df_monitoring['TGL'] = df_monitoring['TGL'].dt.strftime('%d/%m/%Y')
