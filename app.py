@@ -500,6 +500,222 @@ def _get_month_date_range(bulan_tagihan):
         return None, None
 # --- END HELPER BARU ---
 
+# =========================================================================
+# === START FUNGSI BARU UNTUK LAPORAN DISTRIBUSI (Permintaan User) ===
+# =========================================================================
+
+def _get_distribution_report(group_fields, collection_mc):
+    """
+    Menghitung distribusi Nomen (Count Distinct), Piutang (NOMINAL), dan Kubikasi (KUBIK) 
+    berdasarkan field yang diberikan untuk BULAN_TAGIHAN terbaru.
+    group_fields bisa berupa string (misalnya 'RAYON') atau list of strings (misalnya ['RAYON', 'TARIF']).
+    """
+    if collection_mc is None:
+        return [], "N/A (Koneksi DB Gagal)"
+        
+    if isinstance(group_fields, str):
+        group_fields = [group_fields]
+
+    # Mencari BULAN_TAGIHAN terbaru
+    latest_mc_month_doc = collection_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
+    latest_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
+    
+    if not latest_month:
+        return [], "N/A (Tidak Ada Data MC)"
+
+
+    # Pipeline MongoDB Aggregation
+    pipeline = [
+        # 1. Filter data untuk bulan tagihan terbaru saja
+        {"$match": {"BULAN_TAGIHAN": latest_month}},
+        # 2. Project dan konversi tipe data yang diperlukan
+        {"$project": {
+            **{field: f"${field}" for field in group_fields},
+            "NOMEN": 1,
+            "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
+            "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}
+        }},
+        # 3. Grouping berdasarkan field yang diminta
+        {"$group": {
+            "_id": {field: f"${field}" for field in group_fields},
+            "total_nomen_set": {"$addToSet": "$NOMEN"},
+            "total_piutang": {"$sum": "$NOMINAL"},
+            "total_kubikasi": {"$sum": "$KUBIK"}
+        }},
+        # 4. Proyeksi untuk hasil yang bersih dan hitung size set
+        {"$project": {
+            # Memisahkan field grouping dari _id
+            **{field: f"$_id.{field}" for field in group_fields},
+            "_id": 0,
+            "total_nomen": {"$size": "$total_nomen_set"},
+            "total_piutang": 1,
+            "total_kubikasi": 1
+        }},
+        # 5. Sorting berdasarkan total piutang terbesar
+        {"$sort": {"total_piutang": -1}}
+    ]
+
+    try:
+        results = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
+    except Exception as e:
+        print(f"Error during distribution aggregation: {e}")
+        return [], latest_month
+
+    return results, latest_month
+
+# --- 1. API Distribusi Rayon ---
+@app.route("/api/distribution/rayon_report")
+@login_required
+def rayon_distribution_report():
+    """Laporan Distribusi Nomen, Piutang, dan Kubikasi per Rayon."""
+    results, latest_month = _get_distribution_report(group_fields="RAYON", collection_mc=collection_mc)
+    
+    data_for_display = []
+    for item in results:
+        data_for_display.append({
+            "RAYON": item.get("RAYON", "N/A"),
+            "Jumlah Nomen": f"{item['total_nomen']:,.0f}",
+            "Total Piutang (Rp)": f"Rp {item['total_piutang']:,.0f}",
+            "Total Kubikasi (m³)" : f"{item['total_kubikasi']:,.0f}",
+            # Data Mentah untuk Chart (agar mudah diproses JS)
+            "chart_label": item.get("RAYON", "N/A"),
+            "chart_data_nomen": item['total_nomen'],
+            "chart_data_piutang": round(item['total_piutang'], 2),
+        })
+
+    return jsonify({
+        "data": data_for_display,
+        "title": f"Distribusi Pelanggan per Rayon",
+        "subtitle": f"Data Piutang & Kubikasi per Bulan Tagihan Terbaru: {latest_month}",
+    })
+
+# --- 2. API Distribusi PCEZ ---
+@app.route("/api/distribution/pcez_report")
+@login_required
+def pcez_distribution_report():
+    """Laporan Distribusi Nomen, Piutang, dan Kubikasi per PCEZ."""
+    results, latest_month = _get_distribution_report(group_fields="PCEZ", collection_mc=collection_mc)
+    
+    data_for_display = []
+    for item in results:
+        data_for_display.append({
+            "PCEZ": item.get("PCEZ", "N/A"),
+            "Jumlah Nomen": f"{item['total_nomen']:,.0f}",
+            "Total Piutang (Rp)": f"Rp {item['total_piutang']:,.0f}",
+            "Total Kubikasi (m³)" : f"{item['total_kubikasi']:,.0f}",
+            "chart_label": item.get("PCEZ", "N/A"),
+            "chart_data_nomen": item['total_nomen'],
+            "chart_data_piutang": round(item['total_piutang'], 2),
+        })
+
+    return jsonify({
+        "data": data_for_display,
+        "title": f"Distribusi Pelanggan per PCEZ",
+        "subtitle": f"Data Piutang & Kubikasi per Bulan Tagihan Terbaru: {latest_month}",
+    })
+
+# --- 3. API Distribusi Rayon/Tarif ---
+@app.route("/api/distribution/rayon_tarif_report")
+@login_required
+def rayon_tarif_distribution_report():
+    """Laporan Distribusi Nomen, Piutang, dan Kubikasi per Rayon dan Tarif."""
+    results, latest_month = _get_distribution_report(group_fields=["RAYON", "TARIF"], collection_mc=collection_mc)
+    
+    data_for_display = []
+    for item in results:
+        label = f"{item.get('RAYON', 'N/A')} - {item.get('TARIF', 'N/A')}"
+        data_for_display.append({
+            "RAYON": item.get("RAYON", "N/A"),
+            "TARIF": item.get("TARIF", "N/A"),
+            "Jumlah Nomen": f"{item['total_nomen']:,.0f}",
+            "Total Piutang (Rp)": f"Rp {item['total_piutang']:,.0f}",
+            "Total Kubikasi (m³)" : f"{item['total_kubikasi']:,.0f}",
+            "chart_label": label,
+            "chart_data_nomen": item['total_nomen'],
+            "chart_data_piutang": round(item['total_piutang'], 2),
+        })
+
+    return jsonify({
+        "data": data_for_display,
+        "title": f"Distribusi Pelanggan per Rayon / Tarif",
+        "subtitle": f"Data Piutang & Kubikasi per Bulan Tagihan Terbaru: {latest_month}",
+    })
+
+# --- 4. API Distribusi Rayon/Jenis Meter ---
+@app.route("/api/distribution/rayon_meter_report")
+@login_required
+def rayon_meter_distribution_report():
+    """Laporan Distribusi Nomen, Piutang, dan Kubikasi per Rayon dan Jenis Meter."""
+    # Asumsi field untuk Jenis Meter adalah 'JENIS_METER' di koleksi MC.
+    results, latest_month = _get_distribution_report(group_fields=["RAYON", "JENIS_METER"], collection_mc=collection_mc)
+    
+    data_for_display = []
+    for item in results:
+        label = f"{item.get('RAYON', 'N/A')} - {item.get('JENIS_METER', 'N/A')}"
+        data_for_display.append({
+            "RAYON": item.get("RAYON", "N/A"),
+            "JENIS_METER": item.get("JENIS_METER", "N/A"),
+            "Jumlah Nomen": f"{item['total_nomen']:,.0f}",
+            "Total Piutang (Rp)": f"Rp {item['total_piutang']:,.0f}",
+            "Total Kubikasi (m³)" : f"{item['total_kubikasi']:,.0f}",
+            "chart_label": label,
+            "chart_data_nomen": item['total_nomen'],
+            "chart_data_piutang": round(item['total_piutang'], 2),
+        })
+
+    return jsonify({
+        "data": data_for_display,
+        "title": f"Distribusi Pelanggan per Rayon / Jenis Meter",
+        "subtitle": f"Data Piutang & Kubikasi per Bulan Tagihan Terbaru: {latest_month}",
+    })
+
+
+# --- RUTE HTML VIEW BARU UNTUK LAPORAN DISTRIBUSI ---
+@app.route("/collection/report/rayon_distribution")
+@login_required
+def rayon_distribution_view():
+    return render_template(
+        "analysis_report_template.html", 
+        title="Distribusi Rayon Pelanggan",
+        description="Laporan detail Distribusi Nomen, Piutang, dan Kubikasi per Rayon.",
+        report_type="DIST_RAYON"
+    )
+
+@app.route("/collection/report/pcez_distribution")
+@login_required
+def pcez_distribution_view():
+    return render_template(
+        "analysis_report_template.html", 
+        title="Distribusi PCEZ Pelanggan",
+        description="Laporan detail Distribusi Nomen, Piutang, dan Kubikasi per PCEZ.",
+        report_type="DIST_PCEZ"
+    )
+
+@app.route("/collection/report/rayon_tarif_distribution")
+@login_required
+def rayon_tarif_distribution_view():
+    return render_template(
+        "analysis_report_template.html", 
+        title="Distribusi Rayon / Tarif Pelanggan",
+        description="Laporan detail Distribusi Nomen, Piutang, dan Kubikasi per Rayon dan Tarif.",
+        report_type="DIST_RAYON_TARIF"
+    )
+
+@app.route("/collection/report/rayon_meter_distribution")
+@login_required
+def rayon_meter_distribution_view():
+    return render_template(
+        "analysis_report_template.html", 
+        title="Distribusi Rayon / Jenis Meter Pelanggan",
+        description="Laporan detail Distribusi Nomen, Piutang, dan Kubikasi per Rayon dan Jenis Meter.",
+        report_type="DIST_RAYON_METER"
+    )
+
+# =========================================================================
+# === END FUNGSI BARU UNTUK LAPORAN DISTRIBUSI ===
+# =========================================================================
+
+
 # --- FUNGSI BARU UNTUK REPORT KOLEKSI & PIUTANG ---
 @app.route('/api/collection/report', methods=['GET'])
 @login_required 
