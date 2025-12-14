@@ -1774,6 +1774,23 @@ def upload_mb_data():
         df = df.rename(columns=lambda x: rename_map.get(x, x), errors='ignore')
         # >>> END PERBAIKAN: MAPPING HEADER KRITIS UNTUK MB <<<
         
+        # >>> START PERBAIKAN KRITIS: NORMALISASI FORMAT TANGGAL TGL_BAYAR <<<
+        if 'TGL_BAYAR' in df.columns:
+            # Mengkonversi ke string lalu mencoba parsing dari format DD-MM-YYYY (asumsi dari file)
+            # Dan mengkonversi kembali ke format YYYY-MM-DD yang diperlukan oleh query
+            try:
+                df['TGL_BAYAR'] = pd.to_datetime(
+                    df['TGL_BAYAR'].astype(str).str.strip(), 
+                    format='%d-%m-%Y', 
+                    errors='coerce'
+                ).dt.strftime('%Y-%m-%d').fillna('N/A')
+            except ValueError:
+                # Fallback untuk format tanggal yang tidak konsisten
+                df['TGL_BAYAR'] = df['TGL_BAYAR'].astype(str).str.strip().apply(lambda x: 
+                    pd.to_datetime(x, errors='coerce').strftime('%Y-%m-%d') if pd.notna(pd.to_datetime(x, errors='coerce')) else 'N/A'
+                )
+        # >>> END PERBAIKAN KRITIS: NORMALISASI FORMAT TANGGAL TGL_BAYAR <<<
+        
         # >>> PERBAIKAN KRITIS MB: NORMALISASI DATA PANDAS <<<
 
         columns_to_normalize_mb = ['NOMEN', 'RAYON', 'PCEZ', 'ZONA_NOREK', 'LKS_BAYAR', 'BULAN_REK', 'NOTAGIHAN'] 
@@ -2173,7 +2190,7 @@ def dashboard_summary_api():
         # 3. KOLEKSI HARI INI (dari MB)
         today_date = datetime.now().strftime('%Y-%m-%d')
         pipeline_koleksi_today = [
-            {'$match': {'TGL_BAYAR': today_date}}, # Match string tanggal hari ini
+            {'$match': {'TGL_BAYAR': today_date}}, # Match string tanggal hari ini (Format YYYY-MM-DD)
             {'$group': {
                 '_id': None,
                 'koleksi_hari_ini': {'$sum': '$NOMINAL'},
@@ -2187,7 +2204,7 @@ def dashboard_summary_api():
         # 4. TOTAL KOLEKSI BULAN INI
         this_month = datetime.now().strftime('%Y-%m')
         pipeline_koleksi_month = [
-            {'$match': {'TGL_BAYAR': {'$regex': this_month}}},
+            {'$match': {'TGL_BAYAR': {'$regex': this_month}}}, # Match string bulan ini (Format YYYY-MM)
             {'$group': {
                 '_id': None,
                 'koleksi_bulan_ini': {'$sum': '$NOMINAL'},
