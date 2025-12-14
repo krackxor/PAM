@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Pusat Laporan Koleksi & Analisis{% endblock %}
+
+{% block custom_styles %}
+/* Custom CSS untuk tampilan grid kartu navigasi */
+.report-header { text-align: center; margin-bottom: 20px; }
+.report-grid-menu {
+    display: grid;
+    /* Menyesuaikan dengan konten: 3 kolom dengan lebar minimal 280px */
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
+    gap: 25px;
+    margin-top: 30px;
+    margin-bottom: 30px; 
+}
+
+.report-card-link {
+    text-decoration: none;
+    color: inherit;
+}
+
+.report-card-aggr {
+    background-color: var(--card-bg);
+    border: 1px solid #e0e0e0; 
+    border-radius: var(--border-radius);
+    padding: 25px 20px; 
+    box-shadow: var(--shadow-light);
+    transition: all 0.3s ease;
+    text-align: center;
+    min-height: 150px; 
+    cursor: pointer;
+}
+
+.report-card-aggr:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0, 123, 255, 0.2); 
+    border-color: var(--primary-color);
+}
+
+.report-card-aggr i {
+    font-size: 3em; 
+    margin-bottom: 10px;
+}
+
+.report-card-aggr h3 {
+    margin: 10px 0 5px 0;
+    color: var(--text-color);
+    font-size: 1.2em;
+}
+
+.report-card-aggr p {
+    font-size: 0.9em;
+    color: #6c757d; 
+}
+
+@media screen and (max-width: 600px) {
+    .report-grid-menu {
+        grid-template-columns: 1fr;
+    }
+}
+{% endblock %}
+
+{% block content %}
+    <h2 style="text-align: left; border-bottom: none; margin-bottom: 20px; color: var(--primary-color);">
+        <i class="fas fa-chart-bar" style="margin-right: 10px;"></i> Pusat Laporan Koleksi & Analisis
+    </h2>
+    
+    <p style="margin-bottom: 30px; color: #6c757d;">
+        Silakan pilih kategori laporan yang ingin Anda lihat. Setiap laporan telah dipisah ke halaman khusus untuk kinerja yang lebih optimal.
+    </p>
+
+    <div class="report-grid-menu">
+        
+        <a href="{{ url_for('collection_summary') }}" class="report-card-link">
+            <div class="report-card-aggr" style="border-left-color: #007bff;">
+                <i class="fas fa-list-alt" style="color: #007bff;"></i>
+                <h3>Ringkasan & Piutang Utama</h3>
+                <p>Melihat ringkasan KPI, perbandingan Piutang MC vs Koleksi MB per Rayon/PCEZ, dan total ringkasan sistem.</p>
+            </div>
+        </a>
+        
+        <a href="{{ url_for('collection_monitoring') }}" class="report-card-link">
+            <div class="report-card-aggr" style="border-left-color: #28a745;">
+                <i class="fas fa-calendar-alt" style="color: #28a745;"></i>
+                <h3>Monitoring & Detail Koleksi</h3>
+                <p>Memantau perbandingan Month-over-Month (MoM), Day-to-Day (DtD), dan melihat detail transaksi pembayaran (MB).</p>
+            </div>
+        </a>
+        
+        <a href="{{ url_for('collection_analysis') }}" class="report-card-link">
+            <div class="report-card-aggr" style="border-left-color: #dc3545;">
+                <i class="fas fa-layer-group" style="color: #dc3545;"></i>
+                <h3>Analisis & Laporan Khusus</h3>
+                <p>Mengakses laporan agregasi (seperti Grouping AB Sunter), Analisis Umur Piutang (Aging), Daftar Konsumen Top, dan Breakdown Tarif.</p>
+            </div>
+        </a>
+        
+    </div>
+
+{% endblock %}
