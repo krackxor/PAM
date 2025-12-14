@@ -13,7 +13,7 @@ from functools import wraps
 import re 
 from datetime import datetime, timedelta 
 import io 
-from pymongo.errors import DuplicateKeyError # BARU: Import untuk menangani error duplikasi
+from pymongo.errors import BulkWriteError, DuplicateKeyError 
 
 load_dotenv() 
 
@@ -65,11 +65,15 @@ try:
     collection_mc.create_index([('TARIF', 1), ('KUBIK', 1), ('NOMINAL', 1)], name='idx_mc_tarif_volume')
 
     # MB (MasterBayar): Untuk Detail Transaksi dan Undue Check
+    # Index unik digantikan pengecekan di Python/BulkWrite Error Handling
+    collection_mb.create_index([('NOTAGIHAN', 1), ('TGL_BAYAR', 1), ('NOMINAL', 1)], name='idx_mb_unique_transaction', unique=True) # DIUBAH MENJADI UNIK untuk BulkWrite
     collection_mb.create_index([('TGL_BAYAR', -1)], name='idx_mb_paydate_desc')
     collection_mb.create_index([('NOMEN', 1)], name='idx_mb_nomen')
     collection_mb.create_index([('RAYON', 1), ('PCEZ', 1), ('TGL_BAYAR', -1)], name='idx_mb_rayon_pcez_date')
 
     # SBRS (MeterReading): Untuk Anomaly Check
+    # Index unik digantikan pengecekan di Python/BulkWrite Error Handling
+    collection_sbrs.create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', 1)], name='idx_sbrs_unique_read', unique=True) # DIUBAH MENJADI UNIK untuk BulkWrite
     collection_sbrs.create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', -1)], name='idx_sbrs_history')
     
     # ARDEBT (AccountReceivable): Untuk Cek Tunggakan
@@ -1550,7 +1554,7 @@ def admin_upload_unified_page():
 @login_required 
 @admin_required 
 def upload_mc_data():
-    """Mode HISTORIS: Untuk Master Cetak (MC) / Piutang Bulanan."""
+    """Mode HISTORIS: Untuk Master Cetak (MC) / Piutang Bulanan. (DIOPTIMASI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
     
@@ -1608,42 +1612,38 @@ def upload_mc_data():
         if 'PC' in df.columns:
              df = df.rename(columns={'PC': 'RAYON'})
 
-        # >>> START PERUBAHAN KRITIS KE APPEND <<<
+        # >>> START PERUBAHAN KRITIS KE APPEND (BULK WRITE) <<<
         data_to_insert = df.to_dict('records')
         
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
-        # Kunci Unik: NOMEN + BULAN_TAGIHAN (untuk cek duplikasi internal)
+        # Kunci Unik: NOMEN + BULAN_TAGIHAN 
         UNIQUE_KEYS = ['NOMEN', 'BULAN_TAGIHAN'] 
         
         inserted_count = 0
         skipped_count = 0
         total_rows = len(data_to_insert)
 
-        for record in data_to_insert:
-            filter_query = {key: record.get(key) for key in UNIQUE_KEYS}
+        try:
+            # Menggunakan insert_many(ordered=False) untuk kecepatan dan melewati duplikasi
+            result = collection_mc.insert_many(data_to_insert, ordered=False)
+            inserted_count = len(result.inserted_ids)
+            skipped_count = total_rows - inserted_count
             
-            if collection_mc.find_one(filter_query):
-                skipped_count += 1
-            else:
-                try:
-                    # Coba insert. Ini akan gagal jika ada index unik MongoDB yang berbeda (seperti NOMEN, MASA, TAHUN2)
-                    collection_mc.insert_one(record)
-                    inserted_count += 1
-                except DuplicateKeyError as e:
-                    # Jika insert gagal karena duplikasi kunci MongoDB (internal atau eksternal)
-                    # Kita anggap sebagai data yang diabaikan (skipped)
-                    skipped_count += 1
-                    # Opsional: print(f"Peringatan: Duplikasi MongoDB di NOMEN: {record.get('NOMEN')}")
-                except Exception as e:
-                    # Jika gagal karena alasan lain, lempar error untuk debugging
-                    print(f"Error saat menyisipkan dokumen: {e}")
-                    return jsonify({"message": f"Gagal menyimpan data: {e}"}), 500
-        
+        except BulkWriteError as bwe:
+            # Menangani error duplikasi dari index MongoDB (baik index Python maupun index internal)
+            inserted_count = bwe.details.get('nInserted', 0)
+            skipped_count = total_rows - inserted_count
+            
+        except Exception as e:
+            print(f"Error massal saat insert: {e}")
+            return jsonify({"message": f"Gagal menyimpan data secara massal: {e}"}), 500
+
+
         return jsonify({
             "status": "success",
-            "message": f"Sukses Historis! {inserted_count} baris Master Cetak (MC) baru ditambahkan. ({skipped_count} duplikat bulanan diabaikan).",
+            "message": f"Sukses Historis! {inserted_count} baris Master Cetak (MC) baru ditambahkan. ({skipped_count} duplikat diabaikan).",
             "summary_report": {
                 "total_rows": total_rows,
                 "type": "APPEND",
@@ -1652,7 +1652,7 @@ def upload_mc_data():
             },
             "anomaly_list": []
         }), 200
-        # >>> END PERUBAHAN KRITIS KE APPEND <<<
+        # >>> END PERUBAHAN KRITIS KE APPEND (BULK WRITE) <<<
 
     except Exception as e:
         print(f"Error saat memproses file MC: {e}")
@@ -1663,7 +1663,7 @@ def upload_mc_data():
 @login_required 
 @admin_required 
 def upload_mb_data():
-    """Mode APPEND: Untuk Master Bayar (MB) / Koleksi Harian. (TETAP APPEND)"""
+    """Mode APPEND: Untuk Master Bayar (MB) / Koleksi Harian. (DIOPTIMASI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -1702,26 +1702,32 @@ def upload_mb_data():
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
-        # OPERASI KRITIS: APPEND DATA BARU DENGAN PENCEGAHAN DUPLIKASI
-        inserted_count = 0
-        skipped_count = 0
-        total_rows = len(data_to_insert)
-        
-        # Kunci unik: NOTAGIHAN (dari MB) + TGL_BAYAR + NOMINAL
+        # --- START: OPERASI BULK WRITE TEROPTIMASI ---
+        # Kunci unik untuk MB (harus ada di index MongoDB sebagai unique=True)
         UNIQUE_KEYS = ['NOTAGIHAN', 'TGL_BAYAR', 'NOMINAL'] 
         
         if not all(key in df.columns for key in UNIQUE_KEYS):
             return jsonify({"message": f"Gagal Append: File MB harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)}. Cek file Anda."}), 400
 
-        for record in data_to_insert:
-            filter_query = {key: record.get(key) for key in UNIQUE_KEYS}
+        inserted_count = 0
+        skipped_count = 0
+        total_rows = len(data_to_insert)
+
+        try:
+            # Menggunakan insert_many(ordered=False) untuk kecepatan dan melewati duplikasi
+            result = collection_mb.insert_many(data_to_insert, ordered=False)
+            inserted_count = len(result.inserted_ids)
+            skipped_count = total_rows - inserted_count
             
-            if collection_mb.find_one(filter_query):
-                skipped_count += 1
-            else:
-                collection_mb.insert_one(record)
-                inserted_count += 1
-        
+        except BulkWriteError as bwe:
+            # Menangani error duplikasi
+            inserted_count = bwe.details.get('nInserted', 0)
+            skipped_count = total_rows - inserted_count
+            
+        except Exception as e:
+            print(f"Error massal saat insert: {e}")
+            return jsonify({"message": f"Gagal menyimpan data secara massal: {e}"}), 500
+
         # --- RETURN REPORT ---
         return jsonify({
             "status": "success",
@@ -1744,7 +1750,7 @@ def upload_mb_data():
 @login_required 
 @admin_required 
 def upload_cid_data():
-    """Mode HISTORIS: Untuk Customer Data (CID) / Data Pelanggan Statis."""
+    """Mode HISTORIS: Untuk Customer Data (CID) / Data Pelanggan Statis. (DIOPTIMASI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -1777,22 +1783,23 @@ def upload_cid_data():
         if 'TARIFF' in df.columns:
              df = df.rename(columns={'TARIFF': 'TARIF'})
         
-        # >>> START PERUBAHAN KRITIS KE APPEND <<<
+        # >>> START PERUBAHAN KRITIS KE APPEND (BULK WRITE) <<<
         data_to_insert = df.to_dict('records')
         
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
-        # Tambahkan field penanda waktu upload untuk membedakan riwayat profil
+        # Tambahkan field penanda waktu upload
         upload_date_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        inserted_count = 0
-        total_rows = len(data_to_insert)
-        
         for record in data_to_insert:
             record['TANGGAL_UPLOAD_CID'] = upload_date_str
-            # Tidak menggunakan pengecekan duplikasi yang ketat, mengandalkan TANGGAL_UPLOAD_CID
-            collection_cid.insert_one(record) 
-            inserted_count += 1
+
+        inserted_count = 0
+        total_rows = len(data_to_insert)
+
+        # CID menggunakan insert_many biasa, karena TANGGAL_UPLOAD_CID membuat data unik
+        collection_cid.insert_many(data_to_insert)
+        inserted_count = total_rows # Asumsi semua masuk
             
         return jsonify({
             "status": "success",
@@ -1805,7 +1812,7 @@ def upload_cid_data():
             },
             "anomaly_list": []
         }), 200
-        # >>> END PERUBAHAN KRITIS KE APPEND <<<
+        # >>> END PERUBAHAN KRITIS KE APPEND (BULK WRITE) <<<
 
     except Exception as e:
         print(f"Error saat memproses file CID: {e}")
@@ -1816,7 +1823,7 @@ def upload_cid_data():
 @login_required 
 @admin_required 
 def upload_sbrs_data():
-    """Mode APPEND: Untuk data Baca Meter (SBRS) / Riwayat Stand Meter. (TETAP APPEND)"""
+    """Mode APPEND: Untuk data Baca Meter (SBRS) / Riwayat Stand Meter. (DIOPTIMASI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -1855,25 +1862,31 @@ def upload_sbrs_data():
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
-        # OPERASI KRITIS: APPEND DATA BARU DENGAN PENCEGAHAN DUPLIKASI
-        inserted_count = 0
-        skipped_count = 0
-        total_rows = len(data_to_insert)
-        
+        # --- START: OPERASI BULK WRITE TEROPTIMASI ---
         # Kunci unik: CMR_ACCOUNT (NOMEN) + CMR_RD_DATE (Tanggal Baca)
         UNIQUE_KEYS = ['CMR_ACCOUNT', 'CMR_RD_DATE'] 
         
         if not all(key in df.columns for key in UNIQUE_KEYS):
             return jsonify({"message": f"Gagal Append: File SBRS harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)}. Cek file Anda."}), 400
 
-        for record in data_to_insert:
-            filter_query = {key: record.get(key) for key in UNIQUE_KEYS}
+        inserted_count = 0
+        skipped_count = 0
+        total_rows = len(data_to_insert)
+
+        try:
+            # Menggunakan insert_many(ordered=False) untuk kecepatan dan melewati duplikasi
+            result = collection_sbrs.insert_many(data_to_insert, ordered=False)
+            inserted_count = len(result.inserted_ids)
+            skipped_count = total_rows - inserted_count
             
-            if collection_sbrs.find_one(filter_query):
-                skipped_count += 1
-            else:
-                collection_sbrs.insert_one(record)
-                inserted_count += 1
+        except BulkWriteError as bwe:
+            # Menangani error duplikasi
+            inserted_count = bwe.details.get('nInserted', 0)
+            skipped_count = total_rows - inserted_count
+            
+        except Exception as e:
+            print(f"Error massal saat insert: {e}")
+            return jsonify({"message": f"Gagal menyimpan data secara massal: {e}"}), 500
         
         # === ANALISIS ANOMALI INSTAN SETELAH INSERT ===
         anomaly_list = []
@@ -1906,7 +1919,7 @@ def upload_sbrs_data():
 @login_required 
 @admin_required 
 def upload_ardebt_data():
-    """Mode HISTORIS: Untuk data Detail Tunggakan (ARDEBT)."""
+    """Mode HISTORIS: Untuk data Detail Tunggakan (ARDEBT). (DIOPTIMASI)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
     
@@ -1958,7 +1971,7 @@ def upload_ardebt_data():
             if col in ['JUMLAH', 'VOLUME']: 
                  df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-        # >>> START PERUBAHAN KRITIS KE APPEND <<<
+        # >>> START PERUBAHAN KRITIS KE APPEND (BULK WRITE) <<<
         data_to_insert = df.to_dict('records')
         
         if not data_to_insert:
@@ -1974,21 +1987,20 @@ def upload_ardebt_data():
         skipped_count = 0
         total_rows = len(data_to_insert)
 
-        for record in data_to_insert:
-            filter_query = {key: record.get(key) for key in UNIQUE_KEYS}
+        try:
+            # Menggunakan insert_many(ordered=False) untuk kecepatan dan melewati duplikasi
+            result = collection_ardebt.insert_many(data_to_insert, ordered=False)
+            inserted_count = len(result.inserted_ids)
+            skipped_count = total_rows - inserted_count
             
-            if collection_ardebt.find_one(filter_query):
-                skipped_count += 1
-            else:
-                try:
-                    collection_ardebt.insert_one(record)
-                    inserted_count += 1
-                except DuplicateKeyError as e:
-                    # Menangani duplikasi dari index MongoDB yang ada
-                    skipped_count += 1
-                except Exception as e:
-                    print(f"Error saat menyisipkan dokumen: {e}")
-                    return jsonify({"message": f"Gagal menyimpan data: {e}"}), 500
+        except BulkWriteError as bwe:
+            # Menangani error duplikasi
+            inserted_count = bwe.details.get('nInserted', 0)
+            skipped_count = total_rows - inserted_count
+            
+        except Exception as e:
+            print(f"Error massal saat insert: {e}")
+            return jsonify({"message": f"Gagal menyimpan data secara massal: {e}"}), 500
         
         return jsonify({
             "status": "success",
@@ -2001,7 +2013,7 @@ def upload_ardebt_data():
             },
             "anomaly_list": []
         }), 200
-        # >>> END PERUBAHAN KRITIS KE APPEND <<<
+        # >>> END PERUBAHAN KRITIS KE APPEND (BULK WRITE) <<<
 
     except Exception as e:
         print(f"Error saat memproses file ARDEBT: {e}")
