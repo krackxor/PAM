@@ -752,7 +752,14 @@ def _aggregate_mb_sunter_detail(collection_mb):
             {'$project': {
                 'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
                 'NOMEN': 1,
-                'RAYON': {'$toUpper': {'$trim': {'$ifNull': ['$RAYON', 'N/A']}}}
+                # FIX KRITIS: Menggunakan syntax yang benar untuk $trim (dengan 'input')
+                'RAYON': {
+                    '$toUpper': {
+                        '$trim': {
+                            'input': {'$ifNull': ['$RAYON', 'N/A']}
+                        }
+                    }
+                }
             }},
             {'$match': {'RAYON': {'$in': RAYON_KEYS}}}
         ]
@@ -793,7 +800,14 @@ def _aggregate_mb_sunter_detail(collection_mb):
             {'$match': {
                 'BILL_REASON': 'BIAYA PEMAKAIAN AIR',
                 'TGL_BAYAR': {'$gte': COLLECTION_MONTH_START, '$lt': COLLECTION_MONTH_END},
-                'RAYON': {'$toUpper': {'$trim': {'$ifNull': ['$RAYON', 'N/A']}}}
+                # FIX KRITIS: Menggunakan syntax yang benar untuk $trim (dengan 'input')
+                'RAYON': {
+                    '$toUpper': {
+                        '$trim': {
+                            'input': {'$ifNull': ['$RAYON', 'N/A']}
+                        }
+                    }
+                }
             }},
             {'$match': {'RAYON': rayon_key}},
             {'$project': {
@@ -3327,36 +3341,6 @@ def export_dashboard_data():
     except Exception as e:
         print(f"Error during dashboard export: {e}")
         return jsonify({"message": f"Gagal mengekspor data dashboard: {e}"}), 500
-
-
-@app.route('/api/export/anomalies', methods=['GET'])
-@login_required
-def export_anomalies_data():
-    if client is None:
-        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
-        
-    try:
-        all_anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
-        
-        if not all_anomalies:
-            return jsonify({"message": "Tidak ada data anomali untuk diekspor."}), 404
-            
-        df_anomalies = pd.DataFrame(all_anomalies)
-        
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_anomalies.to_excel(writer, sheet_name='Anomali Pemakaian Air', index=False)
-            
-        output.seek(0)
-        
-        response = make_response(output.read())
-        response.headers['Content-Disposition'] = 'attachment; filename=Laporan_Anomali_SBRS.xlsx'
-        response.headers['Content-type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        return response
-
-    except Exception as e:
-        print(f"Error during anomaly export: {e}")
-        return jsonify({"message": f"Gagal mengekspor data anomali: {e}"}), 500
 
 
 if __name__ == '__main__':
