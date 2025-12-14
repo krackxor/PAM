@@ -3,7 +3,7 @@
 {% block title %}Laporan: {{ title }}{% endblock %}
 
 {% block custom_styles %}
-/* CSS Khusus untuk Laporan Detail (Dinamis) */
+/* CSS Khusus untuk Laporan Detail (Dinamis & Responsif) */
 .report-info {
     padding: 15px;
     background-color: #fff3cd;
@@ -11,6 +11,7 @@
     border: 1px solid #ffeeba;
     border-radius: var(--border-radius);
     margin-bottom: 20px;
+    animation: fadeIn 0.5s ease-out; /* Animasi saat muncul */
 }
 
 .report-actions {
@@ -18,12 +19,17 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 10px; /* Jarak antar tombol */
 }
 
 /* Wrapper scroll untuk responsivitas tabel */
 .result-table-wrapper { 
     overflow-x: auto; 
     margin-top: 20px; 
+    box-shadow: var(--shadow-light);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    border: 1px solid #ddd;
 }
 
 /* Style Tabel */
@@ -31,18 +37,45 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 14px;
+    min-width: 600px; /* Minimal width untuk desktop */
 }
 .data-table th, .data-table td {
-    border: 1px solid #ddd;
+    border: 1px solid #f0f0f0; /* Border lebih halus */
     padding: 8px;
     white-space: nowrap; 
 }
 .data-table th {
-    background-color: #f2f2f2;
+    background-color: #e9ecef; /* Sinkronisasi dengan table header lainnya */
+    font-weight: 600;
 }
 
-/* Mobile Layout Fix */
+/* Tombol Aksi */
+.btn-primary {
+    transition: all 0.3s ease;
+}
+
+/* --- MEDIA QUERY UNTUK LAYAR HP (CARD VIEW) --- */
 @media screen and (max-width: 600px) {
+    .report-actions {
+        flex-direction: column; /* Tombol menumpuk di mobile */
+        align-items: stretch;
+    }
+    .report-actions .btn-primary {
+        width: 100%;
+        margin-bottom: 8px; /* Jarak antar tombol */
+    }
+    .report-actions .btn-primary:last-child {
+        margin-bottom: 0;
+    }
+
+    /* Table Card View Logic */
+    .result-table-wrapper {
+        box-shadow: none;
+        border: none;
+    }
+    .data-table {
+        min-width: 100%;
+    }
     .data-table thead {
         display: none;
     }
@@ -51,6 +84,7 @@
         margin-bottom: 10px;
         border: 1px solid #ddd;
         border-radius: var(--border-radius);
+        box-shadow: var(--shadow-light);
     }
     .data-table td {
         display: flex;
@@ -58,10 +92,12 @@
         padding: 8px 12px;
         border: none;
         border-bottom: 1px solid #eee;
+        white-space: normal;
+        font-size: 1em;
     }
     .data-table td:before {
         content: attr(data-label);
-        font-weight: bold;
+        font-weight: 600;
         text-align: left;
         width: 50%;
         color: var(--text-color);
@@ -80,10 +116,10 @@
     </div>
 
     <div class="report-actions">
-        <button onclick="window.history.back()" class="btn-primary" style="background-color: #6c757d; color: white; padding: 8px 15px; border-radius: 4px; border: none;">
+        <button onclick="window.history.back()" class="btn-primary" style="background-color: #6c757d; color: white; padding: 10px 15px; border-radius: 4px; border: none;">
             ← Kembali ke Analisis
         </button>
-        <button class="btn-primary" onclick="fetchReportData('{{ title }}')" style="background-color: var(--secondary-color); color: white; padding: 8px 15px; border-radius: 4px; border: none;">
+        <button class="btn-primary" onclick="fetchReportData('{{ title }}')" style="background-color: var(--primary-color); color: white; padding: 10px 15px; border-radius: 4px; border: none;">
             Muat Data Laporan
         </button>
     </div>
@@ -97,6 +133,13 @@
         function formatPercent(number) {
             return (parseFloat(number) || 0).toFixed(2) + '%';
         }
+        function formatNumber(number) {
+            return (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+        }
+        function formatRupiah(number) {
+            return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+        }
+
 
         async function fetchReportData(reportName) {
             const dataArea = document.getElementById('reportDataArea');
@@ -110,11 +153,11 @@
             } else if (reportName.includes('Perubahan Tarif')) {
                 endpoint = '{{ url_for("analyze_tariff_change_api") }}';
             } else if (reportName.includes('Ekstrim')) {
-                endpoint = '/api/analyze/extreme_usage'; // Placeholder untuk Ekstrim
+                endpoint = '{{ url_for("analyze_extreme_usage_api") }}'; 
             } else if (reportName.includes('Zero')) {
-                endpoint = '/api/analyze/zero_usage'; // Placeholder untuk Zero
+                endpoint = '{{ url_for("analyze_zero_usage_api") }}'; 
             } else {
-                 dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini belum diimplementasi.</p>`;
+                 dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini belum diimplementasi di frontend.</p>`;
                  return;
             }
 
@@ -135,7 +178,7 @@
                 renderDynamicTable(data, reportName);
 
             } catch (error) {
-                dataArea.innerHTML = `<p style="text-align: center; color: red;">❌ Gagal mengambil data: ${error}</p>`;
+                dataArea.innerHTML = `<p style="text-align: center; color: red;">❌ Gagal mengambil data: ${error.message || 'Error Jaringan'}</p>`;
                 console.error('Fetch Error:', error);
             }
         }
@@ -150,7 +193,8 @@
             // Dapatkan headers dari kunci objek pertama
             const headers = Object.keys(data[0]);
             
-            let tableHTML = `<div class="result-table-wrapper"><table class="data-table"><thead><tr>`;
+            let tableHTML = `<h4 style="margin-bottom: 10px; color: var(--secondary-color);">Ditemukan ${formatNumber(data.length)} Hasil</h4>`;
+            tableHTML += `<div class="result-table-wrapper"><table class="data-table"><thead><tr>`;
             headers.forEach(h => {
                 tableHTML += `<th>${h.replace(/_/g, ' ')}</th>`;
             });
@@ -160,13 +204,18 @@
                 tableHTML += `<tr>`;
                 headers.forEach(h => {
                     let cellValue = item[h];
+                    let cellClass = '';
                     
-                    if (h === 'PERSEN_SELISIH') {
+                    // Logic Formatting
+                    if (h.includes('PERSEN')) {
                         cellValue = formatPercent(cellValue);
+                        cellClass = (parseFloat(item[h]) > 0) ? 'text-danger' : 'text-success';
+                    } else if (h.includes('KUBIK') || h.includes('NOMINAL')) {
+                         cellValue = formatNumber(cellValue);
                     }
                     
-                    // PENTING: Tambahkan data-label untuk mobile view
-                    tableHTML += `<td data-label="${h.replace(/_/g, ' ')}">${cellValue}</td>`;
+                    // Tambahkan data-label untuk mobile view
+                    tableHTML += `<td data-label="${h.replace(/_/g, ' ')}" class="${cellClass}">${cellValue}</td>`;
                 });
                 tableHTML += `</tr>`;
             });
