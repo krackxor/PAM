@@ -1109,22 +1109,6 @@ def collection_monitoring_api():
             return group
 
         # FIX: Tambahkan group_keys=False untuk mengatasi FutureWarning dari Pandas DataFrameGroupBy.apply
-        df_monitoring = df_monitoring.groupby('RAYON', group_keys=False).apply(calculate_percentages) 
-        
-        # Hitung Persentase Koleksi & Variance
-        df_monitoring['COLL_VAR'] = 0.0
-        
-        def calculate_percentages(group):
-            rayon = group['RAYON'].iloc[0]
-            total_piutang = total_mc_34 if rayon == '34' else total_mc_35
-            
-            if total_piutang > 0:
-                group['COLL_Kumulatif_Persen'] = (group['Rp1_Kumulatif'] / total_piutang) * 100
-                group['COLL_VAR'] = group['COLL_Kumulatif_Persen'].diff().fillna(0)
-            else:
-                group['COLL_Kumulatif_Persen'] = 0.0
-            return group
-
         df_monitoring = df_monitoring.groupby('RAYON', group_keys=False).apply(calculate_percentages)
         
         # Format Output
@@ -1472,6 +1456,76 @@ def basic_volume_report_api():
     except Exception as e:
         print(f"Error basic volume report: {e}")
         return jsonify({"message": f"Gagal membuat laporan volume dasar: {e}"}), 500
+
+# =========================================================================
+# === API LAPORAN AGING PIUTANG (BARU) ===
+# =========================================================================
+
+@app.route('/api/report/aging_report', methods=['GET'])
+@login_required 
+def aging_report_api():
+    """Menghasilkan laporan aging piutang (MC) berdasarkan BULAN_TAGIHAN relatif terhadap bulan terbaru."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+
+    try:
+        # Tentukan bulan tagihan terbaru
+        latest_mc_month_doc = collection_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
+        latest_mc_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
+        
+        if not latest_mc_month:
+            return jsonify({'status': 'error', 'message': 'Tidak ada data MC historis ditemukan.'}), 404
+
+        # Pipeline untuk mencari semua tagihan yang BUKAN bulan terbaru, BERSTATUS belum BAYAR, dan NOMINAL > 0
+        pipeline = [
+            {'$match': {
+                'BULAN_TAGIHAN': {'$ne': latest_mc_month},
+                'STATUS': {'$ne': 'PAYMENT'}, # Filter status yang belum bayar
+                'NOMINAL': {'$gt': 0}
+            }},
+            {'$project': {
+                'NOMEN': 1,
+                'RAYON': 1,
+                'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
+                'BULAN_TAGIHAN': 1
+            }},
+            # Grouping berdasarkan NOMEN, menjumlahkan total nominal piutang lama
+            {'$group': {
+                '_id': '$NOMEN',
+                'TotalPiutangLama': {'$sum': '$NOMINAL'},
+                'Bulan_Tagihan_Terlama': {'$min': '$BULAN_TAGIHAN'},
+                'RayonMC': {'$first': '$RAYON'}
+            }},
+            {'$match': {'TotalPiutangLama': {'$gt': 0}}},
+            {'$lookup': { # Join ke CID untuk Nama dan proper Rayon cleanup
+               'from': 'CustomerData', 
+               'localField': '_id',
+               'foreignField': 'NOMEN',
+               'as': 'customer_info'
+            }},
+            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+            {'$project': {
+                '_id': 0,
+                'NOMEN': '$_id',
+                'NAMA': {'$ifNull': ['$customer_info.NAMA', 'N/A']},
+                'RAYON': {'$ifNull': ['$customer_info.RAYON', '$RayonMC']},
+                'PiutangLama': {'$round': ['$TotalPiutangLama', 0]},
+                'Bulan_Tagihan_Terlama': '$Bulan_Tagihan_Terlama',
+            }},
+            {'$sort': {'PiutangLama': -1}},
+            {'$limit': 500} # Batasi 500 pelanggan dengan piutang lama terbesar
+        ]
+
+        aging_data = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
+        
+        if not aging_data:
+            return jsonify({'status': 'success', 'message': 'Tidak ada piutang lama ditemukan (semua lunas atau bulan berjalan).', 'data': []}), 200
+
+        return jsonify({'status': 'success', 'data': aging_data}), 200
+
+    except Exception as e:
+        print(f"Error saat membuat laporan aging: {e}")
+        return jsonify({"status": 'error', "message": f"Gagal mengambil laporan aging: {e}"}), 500
 
 # =========================================================================
 # === END API REPORTS ===
@@ -1917,7 +1971,7 @@ def upload_sbrs_data():
             print(f"Error massal saat insert: {e}")
             return jsonify({"message": f"Gagal menyimpan data secara massal: {e}"}), 500
         
-        # === ANALISIS ANOMALI INSTAN SETELAH INSERT ===
+        # === ANALISIS ANOMALI INSTAN SETELAN INSERT ===
         anomaly_list = []
         try:
             if inserted_count > 0:
