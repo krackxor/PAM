@@ -260,12 +260,25 @@
                 </div>
         </div>
         
+        <h3 style="color: #007bff; margin-top: 30px;">
+            <i class="fas fa-chart-line"></i> Grafik Koleksi DtD (Hari ke Hari)
+        </h3>
+        
+        <div id="dohComparisonArea" class="content-section">
+            <div id="dohChartContainer" style="max-width: 900px; margin: 30px auto;">
+                <canvas id="dohLineChart"></canvas>
+            </div>
+            <div id="dohTableContainer" class="report-table-wrapper" style="margin-top: 30px;">
+                <p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat data DtD Comparison...</p>
+            </div>
+        </div>
+
         <h3 style="color: #dc3545;">
             <i class="fas fa-calendar-alt"></i> Monitoring Koleksi Harian (Rayon 34 & 35)
         </h3>
         
         <div id="monitoringSummaryArea" class="report-grid">
-            <p class="no-results" style="grid-column: 1 / -1;"><i class="fas fa-spinner fa-spin"></i> Memuat ringkasan monitoring...</p>
+            <p class="no-results" style="grid-column: 1 / 1;"><i class="fas fa-spinner fa-spin"></i> Memuat ringkasan monitoring...</p>
         </div>
 
         <div id="monitoringTableArea">
@@ -282,7 +295,7 @@
         </h3>
 
         <div class="filter-input-group">
-            <input type="text" id="filterInput" placeholder="Filter Detail (Rayon, PCEZ, NOMEN)...">
+            <input type="text" id="filterInput" placeholder="Filter Detail (Rayon, PCEZ, NOMEN, Bulan_Rek, Bill_Reason)...">
             <button id="searchBtn" class="btn-primary" style="background-color: var(--primary-color); color: white; padding: 12px 18px; border: none; border-radius: 4px;">
                 <i class="fas fa-filter"></i> Filter Detail
             </button>
@@ -408,7 +421,7 @@
         const momTableContainer = document.getElementById('momTableContainer');
         let momChartInstance = null;
         let tariffChartInstance = null;
-
+        let dohChartInstance = null; // DOH Chart Instance
 
         function formatRupiah(number) {
             return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
@@ -441,9 +454,10 @@
             if (tabName === 'summary') {
                 fetchCollectionReport(); 
             } else if (tabName === 'monitoring') {
-                fetchMoMReport(); // Memuat MoM Report
+                fetchMoMReport(); 
                 fetchCollectionMonitoring();
                 fetchCollectionDetails(''); 
+                fetchDOHComparisonReport(); // Memuat DtD Comparison
             } else if (tabName === 'analysis') {
                  fetchTarifBreakdown(); // Load tarif breakdown otomatis
             }
@@ -617,8 +631,169 @@
         }
         
         // =========================================================
-        // --- FUNGSI AGING REPORT, BREAKDOWN TARIF, DLL. ---
+        // --- FUNGSI BARU: MEMUAT DOH COMPARISON REPORT (DtD) ---
         // =========================================================
+        async function fetchDOHComparisonReport() {
+            const dohTableContainer = document.getElementById('dohTableContainer');
+            dohTableContainer.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat data DtD Comparison...</p>';
+            
+            try {
+                const response = await fetch('{{ url_for("doh_comparison_report_api") }}'); 
+                const result = await response.json();
+
+                if (result.status !== 'success' || result.data.days.length === 0) {
+                     dohTableContainer.innerHTML = `<p class="no-results" style="color: #dc3545;">❌ Gagal memuat report: ${result.message || 'Tidak ada data MB di kedua bulan untuk perbandingan Day-to-Date.'}</p>`;
+                     if (dohChartInstance) dohChartInstance.destroy();
+                     return;
+                }
+                
+                renderDOHComparisonReport(result.data, result.periods);
+
+            } catch (error) {
+                dohTableContainer.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data DtD comparison dari server.</p>';
+                console.error('DOH Report Error:', error);
+            }
+        }
+
+        function renderDOHComparisonReport(data, periods) {
+            
+            // Helper untuk menghitung Kumulatif
+            const calculateCumulative = (arr) => {
+                let cumulative = [];
+                let currentSum = 0;
+                for (const value of arr) {
+                    currentSum += value;
+                    cumulative.push(currentSum);
+                }
+                return cumulative;
+            }
+
+            // Ambil Data Kumulatif untuk Grafik (TOTAL AB)
+            const currentCumulative = calculateCumulative(data.TOTAL_AB[periods.current]);
+            const lastCumulative = calculateCumulative(data.TOTAL_AB[periods.last]);
+
+            // 1. Render Chart
+            if (dohChartInstance) {
+                dohChartInstance.destroy();
+            }
+            
+            const ctx = document.getElementById('dohLineChart').getContext('2d');
+            
+            dohChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.days.map(d => 'Hari ke-' + d),
+                    datasets: [
+                        {
+                            label: `Bulan Lalu (${periods.last}) - Kumulatif`,
+                            data: lastCumulative,
+                            borderColor: '#adb5bd', 
+                            backgroundColor: '#adb5bd50',
+                            fill: false,
+                            tension: 0.1,
+                            pointRadius: 3,
+                        },
+                        {
+                            label: `Bulan Ini (${periods.current}) - Kumulatif`,
+                            data: currentCumulative,
+                            borderColor: '#007bff', 
+                            backgroundColor: '#007bff50',
+                            fill: false,
+                            tension: 0.1,
+                            pointRadius: 4,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Nominal Kumulatif (Rp)'
+                            },
+                            ticks: {
+                                callback: function(value, index, values) {
+                                    return formatRupiah(value);
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Tren Koleksi Kumulatif DtD (Nominal AB Sunter)'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    label += formatRupiah(context.parsed.y);
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // 2. Render Tabel (Data Harian dan Kumulatif)
+            let tableHTML = `
+                <h4 style="margin-top: 20px;">Tabel Detail Koleksi Harian dan Kumulatif (Nominal)</h4>
+                <table class="report-table" style="min-width: 900px;">
+                    <thead>
+                        <tr>
+                            <th rowspan="2">Hari ke-</th>
+                            <th colspan="2" style="background-color: #f0f8ff;">Rayon 34</th>
+                            <th colspan="2" style="background-color: #f0f8ff;">Rayon 35</th>
+                            <th colspan="2" style="background-color: #e6e6e6;">TOTAL AB SUNTER</th>
+                        </tr>
+                        <tr>
+                            <th>Harian (Rp)</th>
+                            <th>Kumulatif (Rp)</th>
+                            <th>Harian (Rp)</th>
+                            <th>Kumulatif (Rp)</th>
+                            <th>Harian (Rp)</th>
+                            <th>Kumulatif (Rp)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            // Ambil data nominal harian (Bulan Ini)
+            const r34_daily = data.R34[periods.current];
+            const r35_daily = data.R35[periods.current];
+            const total_daily = data.TOTAL_AB[periods.current];
+
+            // Hitung kumulatif (Bulan Ini)
+            const r34_cum = calculateCumulative(r34_daily);
+            const r35_cum = calculateCumulative(r35_daily);
+            const total_cum = calculateCumulative(total_daily);
+            
+            data.days.forEach((day, index) => {
+                tableHTML += `
+                    <tr>
+                        <td style="text-align: center;">${day}</td>
+                        <td>${formatRupiah(r34_daily[index])}</td>
+                        <td>${formatRupiah(r34_cum[index])}</td>
+                        <td>${formatRupiah(r35_daily[index])}</td>
+                        <td>${formatRupiah(r35_cum[index])}</td>
+                        <td style="font-weight: bold;">${formatRupiah(total_daily[index])}</td>
+                        <td class="grand-total-row" style="background-color: #d0e7ff !important;">${formatRupiah(total_cum[index])}</td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += '</tbody></table></div>';
+            dohTableContainer.innerHTML = tableHTML;
+        }
+
+
+        // --- FUNGSI AGING REPORT, BREAKDOWN TARIF, DLL. ---
         
         // --- FUNGSI BARU: MEMUAT AGING REPORT ---
         async function fetchAgingReport() {
@@ -746,6 +921,11 @@
                 const response = await fetch('{{ url_for("analyze_mc_tarif_breakdown_api") }}'); 
                 const data = await response.json();
                 
+                if (response.status === 401) {
+                    window.location.href = '{{ url_for("login") }}';
+                    return;
+                }
+                
                 if (response.status !== 200 || data.length === 0) {
                      tarifBreakdownArea.innerHTML = `<p class="no-results" style="color: #6c757d;">Tidak ada data pelanggan yang cocok dengan kriteria kustom (Rayon 34/35 Reguler).</p>`;
                      const existingChart = Chart.getChart("tarifBreakdownChart");
@@ -768,6 +948,7 @@
             // Perbesar lebar untuk kolom Rayon
             let tableHTML = `
                 <div class="report-table-wrapper" style="max-width: 600px; margin-left: 0;"> 
+                <h4 style="margin-top: 10px;">Detail Distribusi Tarif per Rayon (Count)</h4>
                 <table class="report-table">
                     <thead>
                         <tr>
@@ -1012,11 +1193,11 @@
                         <tr>
                             <th>NOMEN</th>
                             <th>RAYON</th>
-                            <th>PCEZ</th>
+                            <th>BULAN TAGIHAN</th>
                             <th>TGL BAYAR</th>
                             <th>NOMINAL</th>
-                            <th>KUBIK BAYAR (m³)</th> 
-                            <th>STATUS</th>
+                            <th>JENIS TAGIHAN</th>
+                            <th>STATUS UNDUE</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1024,7 +1205,6 @@
             
             data.forEach(item => {
                 const nominal = parseFloat(item.NOMINAL || 0);
-                const kubik = parseFloat(item.KUBIKBAYAR || 0);
                 const statusText = item.IS_UNDUE ? 'Undue (Bulan Ini)' : 'Normal';
                 const statusClass = item.IS_UNDUE ? 'undue-cell' : '';
 
@@ -1032,11 +1212,11 @@
                     <tr>
                         <td data-label="NOMEN">${item.NOMEN}</td>
                         <td data-label="RAYON">${item.RAYON}</td>
-                        <td data-label="PCEZ">${item.PCEZ}</td>
+                        <td data-label="BULAN TAGIHAN">${item.BULAN_REK || 'N/A'}</td>
                         <td data-label="TGL BAYAR">${item.PAY_DT || '-'}</td>
                         <td data-label="NOMINAL">Rp ${nominal.toLocaleString('id-ID')}</td>
-                        <td data-label="KUBIK BAYAR">${kubik.toLocaleString('id-ID', { maximumFractionDigits: 0 })}</td> 
-                        <td data-label="STATUS" class="${statusClass}">${statusText}</td>
+                        <td data-label="JENIS TAGIHAN">${item.BILL_REASON || 'N/A'}</td>
+                        <td data-label="STATUS UNDUE" class="${statusClass}">${statusText}</td>
                     </tr>
                 `;
             });
@@ -1046,8 +1226,7 @@
                 <tr class="total-row">
                     <td colspan="4" style="text-align: left;">Total NOMINAL Terfilter</td>
                     <td>Rp ${totalNominal.toLocaleString('id-ID')}</td>
-                    <td>${totalKubik.toLocaleString('id-ID', { maximumFractionDigits: 0 })}</td>
-                    <td>-</td>
+                    <td colspan="2">-</td>
                 </tr>
                 <tr class="total-row">
                     <td colspan="4" style="text-align: left;">Total NOMEN Unik (Count)</td>
@@ -1244,6 +1423,7 @@
             
             let tableHTML = `
                 <div class="report-table-wrapper">
+                <h4 style="margin-top: 10px;">Riwayat Volume Kubik Bulanan per Rayon</h4>
                 <table class="report-table">
                     <thead><tr>
                         ${headers.map(h => `<th style="text-align: center;">${h.replace(/_/g, ' ').toUpperCase()}</th>`).join('')}
