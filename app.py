@@ -1108,7 +1108,24 @@ def collection_monitoring_api():
                 group['COLL_Kumulatif_Persen'] = 0.0
             return group
 
-        df_monitoring = df_monitoring.groupby('RAYON').apply(calculate_percentages)
+        # FIX: Tambahkan group_keys=False untuk mengatasi FutureWarning dari Pandas DataFrameGroupBy.apply
+        df_monitoring = df_monitoring.groupby('RAYON', group_keys=False).apply(calculate_percentages) 
+        
+        # Hitung Persentase Koleksi & Variance
+        df_monitoring['COLL_VAR'] = 0.0
+        
+        def calculate_percentages(group):
+            rayon = group['RAYON'].iloc[0]
+            total_piutang = total_mc_34 if rayon == '34' else total_mc_35
+            
+            if total_piutang > 0:
+                group['COLL_Kumulatif_Persen'] = (group['Rp1_Kumulatif'] / total_piutang) * 100
+                group['COLL_VAR'] = group['COLL_Kumulatif_Persen'].diff().fillna(0)
+            else:
+                group['COLL_Kumulatif_Persen'] = 0.0
+            return group
+
+        df_monitoring = df_monitoring.groupby('RAYON', group_keys=False).apply(calculate_percentages)
         
         # Format Output
         df_monitoring['TGL'] = df_monitoring['TGL'].dt.strftime('%d/%m/%Y')
