@@ -1076,6 +1076,7 @@ def collection_monitoring_api():
             {'$project': {
                  'TGL_BAYAR': 1,
                  'NOMINAL': 1,
+                 # Gunakan Rayon dari CID jika ada, jika tidak, gunakan Rayon dari MB
                  'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MB']}}}}},
                  'NOMEN': 1
             }},
@@ -1133,8 +1134,11 @@ def collection_monitoring_api():
         # Format Output
         df_monitoring['TGL'] = df_monitoring['TGL'].dt.strftime('%d/%m/%Y')
         
-        df_r34 = df_monitoring[df_monitoring['RAYON'] == '34'].drop(columns=['RAYON']).reset_index(drop=True)
-        df_r35 = df_monitoring[df_monitoring['RAYON'] == '35'].drop(columns=['RAYON']).reset_index(drop=True)
+        # Mapping Rayon 34 -> R34 dan 35 -> R35 untuk output JSON
+        df_monitoring['RAYON_OUTPUT'] = 'R' + df_monitoring['RAYON']
+
+        df_r34 = df_monitoring[df_monitoring['RAYON_OUTPUT'] == 'R34'].drop(columns=['RAYON', 'RAYON_OUTPUT']).reset_index(drop=True)
+        df_r35 = df_monitoring[df_monitoring['RAYON_OUTPUT'] == 'R35'].drop(columns=['RAYON', 'RAYON_OUTPUT']).reset_index(drop=True)
 
         summary_r34 = {
             'MC1125': total_mc_34,
@@ -1305,8 +1309,15 @@ def doh_comparison_report_api():
                 'Day': {'$substr': ['$TGL_BAYAR', 8, 2]},
                 'Periode': {'$substr': ['$TGL_BAYAR', 0, 7]}
             }},
+            # FIX: Normalisasi RAYON dari MB yang mungkin tidak seragam
+            {'$addFields': {
+                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$RAYON', 'N/A']}}}}},
+            }},
+            # Filter hanya Rayon 34 dan 35
+            {'$match': {'CLEAN_RAYON': {'$in': ['34', '35']}}},
+            
             {'$group': {
-                '_id': {'periode': '$Periode', 'day': '$Day', 'rayon': '$RAYON'},
+                '_id': {'periode': '$Periode', 'day': '$Day', 'rayon': '$CLEAN_RAYON'},
                 'DailyNominal': {'$sum': '$NOMINAL'},
             }},
         ]
@@ -1326,21 +1337,32 @@ def doh_comparison_report_api():
             'TOTAL_AB': {last_month_str: [0] * day_of_month, this_month_str: [0] * day_of_month},
         }
         
+        # PETA UNTUK NORMALISASI DARI API KE FRONTEND (34 -> R34, 35 -> R35)
+        RAYON_MAP = {'34': 'R34', '35': 'R35'}
+        
         # Isi data ke dalam struktur
         for item in raw_data:
             day_index = int(item['_id']['day']) - 1
-            rayon = item['_id']['rayon']
+            rayon_raw = item['_id']['rayon'] 
             periode = item['_id']['periode']
             nominal = item['DailyNominal']
             
-            if rayon in ['34', '35']:
-                if periode in report_structure[rayon]:
-                    report_structure[rayon][periode][day_index] = nominal
+            # 🚨 PERBAIKAN KRITIS: Mapping dari Rayon API ('34', '35') ke kunci Frontend ('R34', 'R35')
+            areaKey = RAYON_MAP.get(rayon_raw)
+
+            if areaKey:
+                # Isi data ke Rayon spesifik (R34 atau R35)
+                if periode in report_structure[areaKey]:
+                    report_structure[areaKey][periode][day_index] = nominal
                 
-                # Agregasi ke TOTAL_AB (gabungan 34 dan 35)
+                # Agregasi ke TOTAL_AB (gabungan R34 dan R35)
                 if periode in report_structure['TOTAL_AB']:
                     report_structure['TOTAL_AB'][periode][day_index] += nominal
         
+        # Catatan: Perhitungan ini dilakukan di backend dan dikirim ke frontend, 
+        # sehingga masalah mapping di JS yang sebelumnya terjadi tidak terulang.
+
+        # Mengembalikan struktur yang sudah terisi dengan kunci 'R34', 'R35', dan 'TOTAL_AB'
         return jsonify({
             'status': 'success',
             'data': report_structure,
@@ -1349,6 +1371,7 @@ def doh_comparison_report_api():
 
     except Exception as e:
         print(f"Error saat membuat laporan DOH comparison: {e}")
+        # Tambahkan error detail di pesan agar mudah di-debug
         return jsonify({"status": 'error', "message": f"Gagal mengambil laporan DOH comparison: {e}"}), 500
 
 # =========================================================================
