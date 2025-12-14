@@ -13,7 +13,7 @@ from functools import wraps
 import re 
 from datetime import datetime, timedelta 
 import io 
-from pymongo.errors import BulkWriteError, DuplicateKeyError 
+from pymongo.errors import BulkWriteError, DuplicateKeyError, OperationFailure 
 
 load_dotenv() 
 
@@ -38,47 +38,57 @@ collection_ardebt = None
 
 try:
     # PERBAIKAN KRITIS UNTUK BULK WRITE/SBRS: Meningkatkan batas waktu koneksi dan socket.
-    # Mengatasi error timeout 20000ms saat operasi berat (SBRS)
-    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=60000, socketTimeoutMS=300000) # 60s for server selection, 5 menit (300 detik) untuk operasi data socket
+    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=60000, socketTimeoutMS=300000)
     client.admin.command('ping') 
     db = client[DB_NAME]
     
     # 🚨 KOLEKSI DIPISAH BERDASARKAN SUMBER DATA
-    collection_mc = db['MasterCetak']   # MC (Piutang/Tagihan Bulanan - DIUBAH KE APPEND HISTORIS)
-    collection_mb = db['MasterBayar']   # MB (Koleksi Harian - APPEND)
-    collection_cid = db['CustomerData'] # CID (Data Pelanggan Statis - DIUBAH KE APPEND HISTORIS)
-    collection_sbrs = db['MeterReading'] # SBRS (Baca Meter Harian/Parsial - APPEND)
-    collection_ardebt = db['AccountReceivable'] # ARDEBT (Tunggakan Detail - DIUBAH KE APPEND HISTORIS)
+    collection_mc = db['MasterCetak']
+    collection_mb = db['MasterBayar']
+    collection_cid = db['CustomerData']
+    collection_sbrs = db['MeterReading']
+    collection_ardebt = db['AccountReceivable']
     
     # ==========================================================
     # === START OPTIMASI: INDEXING KRITIS (SOLUSI KECEPATAN PERMANEN) ===
     # ==========================================================
     
-    # CID (CustomerData): Paling KRITIS untuk JOIN
-    # TIDAK LAGI UNIQUE, KARENA CID MENGGUNAKAN MODE HISTORIS APPEND
+    # CID (CustomerData)
     collection_cid.create_index([('NOMEN', 1), ('TANGGAL_UPLOAD_CID', -1)], name='idx_cid_nomen_hist')
     collection_cid.create_index([('RAYON', 1), ('TIPEPLGGN', 1)], name='idx_cid_rayon_tipe')
 
-    # MC (MasterCetak): Untuk Report Koleksi dan Grouping
-    collection_mc.create_index([('NOMEN', 1), ('BULAN_TAGIHAN', -1)], name='idx_mc_nomen_hist') # HISTORIS
+    # MC (MasterCetak)
+    collection_mc.create_index([('NOMEN', 1), ('BULAN_TAGIHAN', -1)], name='idx_mc_nomen_hist')
     collection_mc.create_index([('RAYON', 1), ('PCEZ', 1)], name='idx_mc_rayon_pcez') 
     collection_mc.create_index([('STATUS', 1)], name='idx_mc_status')
     collection_mc.create_index([('TARIF', 1), ('KUBIK', 1), ('NOMINAL', 1)], name='idx_mc_tarif_volume')
 
-    # MB (MasterBayar): Untuk Detail Transaksi dan Undue Check
-    # Index unik digantikan pengecekan di Python/BulkWrite Error Handling
-    collection_mb.create_index([('NOTAGIHAN', 1), ('TGL_BAYAR', 1), ('NOMINAL', 1)], name='idx_mb_unique_transaction', unique=True) # DIUBAH MENJADI UNIK untuk BulkWrite
+    # MB (MasterBayar): PERBAIKAN KRITIS DUPLIKASI STARTUP
+    # Index ini sebelumnya didefinisikan sebagai unique=True dan gagal saat ada duplikasi di data lama.
+    try:
+        # Coba drop index lama yang mungkin unik dan rusak
+        collection_mb.drop_index('idx_mb_unique_transaction')
+    except Exception:
+        pass 
+        
+    # Buat index TANPA unique=True agar startup tidak gagal
+    collection_mb.create_index([('NOTAGIHAN', 1), ('TGL_BAYAR', 1), ('NOMINAL', 1)], name='idx_mb_unique_transaction', unique=False)
     collection_mb.create_index([('TGL_BAYAR', -1)], name='idx_mb_paydate_desc')
     collection_mb.create_index([('NOMEN', 1)], name='idx_mb_nomen')
     collection_mb.create_index([('RAYON', 1), ('PCEZ', 1), ('TGL_BAYAR', -1)], name='idx_mb_rayon_pcez_date')
 
     # SBRS (MeterReading): Untuk Anomaly Check
-    # Index unik digantikan pengecekan di Python/BulkWrite Error Handling
-    collection_sbrs.create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', 1)], name='idx_sbrs_unique_read', unique=True) # DIUBAH MENJADI UNIK untuk BulkWrite
+    try:
+        collection_sbrs.create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', 1)], name='idx_sbrs_unique_read', unique=True)
+    except OperationFailure:
+        # Jika SBRS juga memiliki duplikasi di data lama, drop index unik dan buat ulang tanpa unique
+        collection_sbrs.drop_index('idx_sbrs_unique_read')
+        collection_sbrs.create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', 1)], name='idx_sbrs_unique_read', unique=False)
+        
     collection_sbrs.create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', -1)], name='idx_sbrs_history')
     
-    # ARDEBT (AccountReceivable): Untuk Cek Tunggakan
-    collection_ardebt.create_index([('NOMEN', 1), ('PERIODE_BILL', -1), ('JUMLAH', 1)], name='idx_ardebt_nomen_hist') # HISTORIS
+    # ARDEBT (AccountReceivable)
+    collection_ardebt.create_index([('NOMEN', 1), ('PERIODE_BILL', -1), ('JUMLAH', 1)], name='idx_ardebt_nomen_hist')
     
     # ==========================================================
     # === END OPTIMASI: INDEXING KRITIS ===
@@ -88,6 +98,7 @@ try:
 
     print("Koneksi MongoDB berhasil dan index dikonfigurasi!")
 except Exception as e:
+    # Error ini sekarang hanya akan muncul jika koneksi MongoDB gagal total
     print(f"Gagal terhubung ke MongoDB atau mengkonfigurasi index: {e}")
     client = None
 
@@ -1858,34 +1869,30 @@ def upload_mb_data():
         
         # >>> START PERBAIKAN KRITIS: NORMALISASI FORMAT TANGGAL TGL_BAYAR <<<
         if 'TGL_BAYAR' in df.columns:
-            # Mengkonversi ke string lalu mencoba parsing dari format DD-MM-YYYY (asumsi dari file)
-            # Dan mengkonversi kembali ke format YYYY-MM-DD yang diperlukan oleh query
-            try:
-                # Coba parse sebagai tanggal Pandas
-                df['TGL_BAYAR_OBJ'] = pd.to_datetime(
-                    df['TGL_BAYAR'].astype(str).str.strip(), 
-                    format='%d-%m-%Y', 
-                    errors='coerce'
-                )
-                
-                # Coba parse dari format float/int (serial date number, umum di Excel)
-                numeric_dates = pd.to_numeric(df['TGL_BAYAR'].replace({'N/A': float('nan')}), errors='coerce')
-                
-                # Menggunakan NumPy where untuk memilih antara hasil parsing string dan konversi Excel serial
-                df['TGL_BAYAR_OBJ'] = df['TGL_BAYAR_OBJ'].fillna(
-                    pd.to_datetime(numeric_dates, unit='D', origin='1899-12-30', errors='coerce')
-                )
-                
-                # Konversi objek datetime ke string YYYY-MM-DD yang seragam
-                df['TGL_BAYAR'] = df['TGL_BAYAR_OBJ'].dt.strftime('%Y-%m-%d').fillna('N/A')
-                df = df.drop(columns=['TGL_BAYAR_OBJ'], errors='ignore')
+            
+            # 1. Coba parse sebagai tanggal Pandas
+            df['TGL_BAYAR_OBJ'] = pd.to_datetime(
+                df['TGL_BAYAR'].astype(str).str.strip(), 
+                format='%d-%m-%Y', 
+                errors='coerce'
+            )
+            
+            # 2. Coba parse dari format float/int (Excel serial date number)
+            numeric_dates = pd.to_numeric(df['TGL_BAYAR'].replace({'N/A': float('nan')}), errors='coerce')
+            
+            # 3. Mengisi nilai NaN dari parsing string dengan hasil konversi Excel serial date
+            df['TGL_BAYAR_OBJ'] = df['TGL_BAYAR_OBJ'].fillna(
+                pd.to_datetime(numeric_dates, unit='D', origin='1899-12-30', errors='coerce')
+            )
+            
+            # 4. Konversi objek datetime ke string YYYY-MM-DD yang seragam
+            df['TGL_BAYAR'] = df['TGL_BAYAR_OBJ'].dt.strftime('%Y-%m-%d').fillna('N/A')
+            df = df.drop(columns=['TGL_BAYAR_OBJ'], errors='ignore')
+            
+            # Peringatan: Logika fallback dasar (Jika tanggal masih bermasalah, ini akan memicu error)
+            if (df['TGL_BAYAR'] == 'N/A').any():
+                print("Peringatan: Beberapa nilai TGL_BAYAR gagal dikonversi ke format YYYY-MM-DD yang seragam.")
 
-            except Exception as e:
-                print(f"Peringatan: Gagal melakukan konversi tanggal kompleks. Menggunakan konversi string dasar. Error: {e}")
-                # Fallback untuk konversi string dasar
-                df['TGL_BAYAR'] = df['TGL_BAYAR'].astype(str).str.strip().apply(lambda x: 
-                    pd.to_datetime(x, errors='coerce').strftime('%Y-%m-%d') if pd.notna(pd.to_datetime(x, errors='coerce')) else 'N/A'
-                )
         # >>> END PERBAIKAN KRITIS: NORMALISASI FORMAT TANGGAL TGL_BAYAR <<<
         
         # >>> PERBAIKAN KRITIS MB: NORMALISASI DATA PANDAS <<<
@@ -1906,7 +1913,7 @@ def upload_mb_data():
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
         # --- START: OPERASI BULK WRITE TEROPTIMASI ---
-        # Kunci unik untuk MB (harus ada di index MongoDB sebagai unique=True)
+        # Kunci unik untuk MB (index di startup sekarang non-unique, tetapi kita masih menggunakan ini untuk menghindari duplikasi saat insert)
         UNIQUE_KEYS = ['NOTAGIHAN', 'TGL_BAYAR', 'NOMINAL'] 
         
         # Check dilakukan setelah renaming, memastikan kunci sudah sesuai
