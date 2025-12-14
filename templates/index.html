@@ -7,10 +7,13 @@
 .search-box {
     margin-bottom: 30px;
     padding: 20px;
-    border: 1px solid #ddd;
+    background-color: var(--bg-color); /* Ubah ke warna latar belakang utama */
+    border: 1px solid #e0e0e0;
     border-radius: var(--border-radius);
     text-align: center;
-    box-shadow: var(--shadow-light); 
+    box-shadow: var(--shadow-light);
+    /* Tambahkan animasi fade-in sederhana saat muncul */
+    animation: fadeIn 0.5s ease-out;
 }
 #nomenInput {
     padding: 12px; 
@@ -18,27 +21,35 @@
     border-radius: 4px;
     width: 100%;
     max-width: 350px; 
-    margin-bottom: 10px;
+    margin-bottom: 15px; /* Tambah margin di mobile */
     font-size: 16px;
     box-sizing: border-box;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+#nomenInput:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    outline: none;
 }
 .btn-search {
-    background-color: var(--primary-color);
-    color: white;
-    border: none;
+    /* Menggunakan gaya tombol dari base.html secara implisit, tapi kita tambahkan efek hover/active di sini */
     padding: 12px 25px; 
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: background-color 0.3s;
+    font-size: 16px;
+    transition: all 0.3s ease;
 }
 .btn-search:hover {
-    background-color: #0056b3;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+.btn-search:active {
+    transform: translateY(1px);
+    box-shadow: none;
 }
 
-/* Status Summary Grid */
+/* Status Summary Grid (Dinamis dan Responsif) */
 .summary-grid {
     display: grid;
+    /* Di desktop, minimal 200px per kolom */
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
     gap: 15px;
     margin-bottom: 30px;
@@ -47,36 +58,41 @@
     background-color: var(--card-bg);
     padding: 15px;
     border-radius: var(--border-radius);
-    border-left: 5px solid; /* Aksen visual */
+    border-left: 5px solid; 
     box-shadow: var(--shadow-light);
-    transition: transform 0.2s;
+    /* Sinkronisasi transisi dengan base.html */
+    transition: all 0.3s ease; 
 }
 .summary-card:hover {
-    transform: translateY(-2px);
+    transform: translateY(-3px); /* Efek angkat */
     box-shadow: var(--shadow-medium);
 }
 .summary-card h4 { margin: 0 0 5px 0; font-size: 0.9em; text-transform: uppercase; color: #6c757d; }
 .summary-card p { margin: 0; font-size: 1.3em; font-weight: bold; }
 
-/* Aksen Warna Status */
+/* Aksen Warna Status (Sesuai dengan base.html) */
 .status-ok { color: var(--secondary-color); border-color: var(--secondary-color); }
 .status-warning { color: var(--accent-color); border-color: var(--accent-color); }
 .status-danger { color: #dc3545; border-color: #dc3545; }
 
-/* Detail Data Table */
+/* Status Pesan (untuk status pencarian) */
+.search-status-ok { color: var(--secondary-color); font-weight: bold; }
+.search-status-danger { color: #dc3545; font-weight: bold; }
+
+/* Detail Data Table (Wrapper untuk Responsif) */
 .data-table-wrapper {
-    overflow-x: auto;
-    margin-top: 15px;
+    /* Hapus overflow-x: auto di sini, kita akan gunakan table-responsive di media query */
+    margin-top: 25px;
     border: 1px solid #e0e0e0; 
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-light);
-    overflow: hidden;
+    overflow: hidden; /* Pertahankan ini untuk radius sudut */
 }
 .data-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 14px; 
-    min-width: 700px; 
+    min-width: 700px; /* Pertahankan min-width untuk desktop */
 }
 .data-table th, .data-table td {
     border: 1px solid #f0f0f0; 
@@ -90,37 +106,66 @@
     font-weight: 600;
 }
 
-/* Mobile Layout for Tables/Details (Card View) */
+/* --- MEDIA QUERY UNTUK LAYAR HP (Table Card View & Grid Stacking) --- */
 @media screen and (max-width: 600px) {
+    
+    /* Search Input (Agar input dan tombol sejajar horizontal jika memungkinkan) */
+    .search-box {
+        padding: 15px;
+    }
+    #nomenInput {
+        max-width: 100%; /* Ambil lebar penuh */
+        margin-bottom: 10px;
+    }
+    
+    /* Summary Grid: Pastikan 1 kolom di HP */
+    .summary-grid {
+        grid-template-columns: 1fr;
+        gap: 10px; /* Kurangi jarak di mobile */
+    }
+    .summary-card {
+        padding: 12px;
+        transform: none !important; /* Nonaktifkan efek angkat di mobile */
+        box-shadow: var(--shadow-light);
+    }
+    .summary-card h4 { font-size: 0.8em; }
+    .summary-card p { font-size: 1.2em; }
+
+    /* Table Card View (Sudah bagus, hanya perbaikan minor) */
     .data-table-wrapper {
         border: none;
         box-shadow: none;
+        overflow-x: auto; /* Aktifkan scroll horizontal sebagai fallback, walau card view lebih diutamakan */
     }
     .data-table {
-        min-width: 100%;
+        min-width: 100%; /* Biarkan konten wrap jika Card View berhasil */
     }
     .data-table thead {
         display: none;
     }
     .data-table tr {
         display: block;
-        margin-bottom: 10px;
+        margin-bottom: 15px; /* Tambah margin agar card terlihat jelas */
         border: 1px solid #ddd;
         border-radius: var(--border-radius);
+        box-shadow: var(--shadow-light); /* Tambah shadow agar seperti card */
     }
     .data-table td {
         display: flex;
         justify-content: space-between;
-        padding: 8px 12px;
+        padding: 10px 12px;
         border: none;
         border-bottom: 1px solid #eee;
+        font-size: 14px;
+        white-space: normal; /* Biarkan konten sel wrap */
     }
     .data-table td:before {
         content: attr(data-label);
         font-weight: 600;
         text-align: left;
-        width: 50%;
+        width: 45%; /* Kurangi sedikit lebar label */
         padding-right: 10px;
+        color: #6c757d;
     }
 }
 {% endblock %}
@@ -132,17 +177,17 @@
     
     <div class="search-box">
         <input type="text" id="nomenInput" placeholder="Masukkan NOMEN Pelanggan">
-        <button id="searchBtn" class="btn-search">Cari Data Lengkap</button>
+        <button id="searchBtn" class="btn-primary btn-search">Cari Data Lengkap</button>
         <div id="searchStatus" style="margin-top: 10px;"></div>
     </div>
 
     <div id="resultsArea" style="display: none;">
         <h3>Status Kesehatan Pelanggan <span id="nomenTitle"></span></h3>
         <div class="summary-grid" id="healthSummary">
-            </div>
+        </div>
 
         <div id="detailsContainer">
-            </div>
+        </div>
     </div>
     
     <div id="initialMessage" style="text-align: center; color: #6c757d;">
@@ -150,6 +195,7 @@
     </div>
 
     <script>
+        // ... (Kode JavaScript tetap sama)
         const nomenInput = document.getElementById('nomenInput');
         const searchBtn = document.getElementById('searchBtn');
         const searchStatus = document.getElementById('searchStatus');
@@ -161,7 +207,7 @@
 
         function formatCurrency(amount) {
             if (typeof amount === 'number') {
-                 return `Rp ${amount.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+                return `Rp ${amount.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
             }
             return amount;
         }
@@ -180,7 +226,9 @@
             const listData = Array.isArray(data) ? data : [data];
             const headers = Object.keys(listData[0]);
             
-            let tableHtml = `<h4 style="margin-top: 20px; color: #2c3e50;">${title} (${listData.length} baris)</h4>`;
+            let tableHtml = `<h4 style="margin-top: 20px; color: var(--primary-color);">${title} (${listData.length} baris)</h4>`;
+            
+            // Perhatian: .data-table-wrapper di sini adalah elemen kunci untuk Card View di mobile
             tableHtml += '<div class="data-table-wrapper"><table class="data-table"><thead><tr>';
             
             // Header Row
@@ -194,9 +242,10 @@
                 tableHtml += '<tr>';
                 headers.forEach(h => {
                     let cellValue = item[h];
-                    if (h.includes('NOMINAL') || h.includes('JUMLAH')) {
+                    if (h.includes('NOMINAL') || h.includes('JUMLAH') || h.includes('SISA_TAGIHAN')) {
                         cellValue = formatCurrency(cellValue);
                     }
+                    // data-label sangat penting untuk Card View di mobile
                     tableHtml += `<td data-label="${h.replace(/_/g, ' ')}">${cellValue}</td>`;
                 });
                 tableHtml += '</tr>';
@@ -238,7 +287,7 @@
                 </div>
                 <div class="summary-card" style="border-left-color: #6c757d;">
                     <h4>PEMBAYARAN TERAKHIR</h4>
-                    <p>${data.summary.PEMBAYARAN_TERAKHIR}</p>
+                    <p>${data.summary.PEMBAYARAN_TERAKHIR || 'N/A'}</p>
                 </div>
             `;
             
@@ -248,16 +297,13 @@
             // CID Data (Master Statis)
             detailsContainer.innerHTML += renderTable("Master Data Pelanggan (CID - Data Terbaru)", data.cid_data);
 
-            // MC Data (Piutang Berjalan Bulan Ini)
-            // KARENA MC SUDAH HISTORIS, JUDUL DIUBAH MENJADI RIWAYAT PIUTANG
+            // MC Data (Riwayat Piutang)
             detailsContainer.innerHTML += renderTable("Riwayat Piutang Bulanan (MC)", data.mc_data);
             
-            // ARDEBT Data (Tunggakan Historis)
-            // KARENA ARDEBT SUDAH HISTORIS, JUDUL DIUBAH MENJADI RIWAYAT TUNGGAKAN
+            // ARDEBT Data (Riwayat Tunggakan)
             detailsContainer.innerHTML += renderTable("Riwayat Detail Tunggakan (ARDEBT)", data.ardebt_data);
 
             // SBRS Data (Riwayat Baca Meter)
-            // SBRS sudah historis sejak awal
             detailsContainer.innerHTML += renderTable("Riwayat Baca Meter (SBRS - Terakhir)", data.sbrs_data);
             
             resultsArea.style.display = 'block';
@@ -267,34 +313,38 @@
         async function performSearch() {
             const nomen = nomenInput.value.trim();
             if (!nomen) {
-                searchStatus.innerHTML = '<span class="status-danger">Masukkan NOMEN yang valid.</span>';
+                searchStatus.innerHTML = '<span class="search-status-danger">Masukkan NOMEN yang valid.</span>';
                 resultsArea.style.display = 'none';
                 return;
             }
 
-            searchStatus.innerHTML = '<span style="color: orange;"><i class="fas fa-spinner fa-spin"></i> Mencari data terintegrasi...</span>';
+            searchStatus.innerHTML = '<span style="color: var(--primary-color);"><i class="fas fa-spinner fa-spin"></i> Mencari data terintegrasi...</span>';
             nomenTitle.textContent = nomen;
             resultsArea.style.display = 'none';
             initialMessage.style.display = 'none';
             
             try {
-                // Endpoint search_nomen di app.py sudah diperbarui untuk mengambil data historis dari MC, CID, ARDEBT
                 const response = await fetch(`{{ url_for('search_nomen') }}?nomen=${nomen}`);
                 const result = await response.json();
 
                 if (response.status === 200 && result.status === 'success') {
-                    searchStatus.innerHTML = `<span class="status-ok">✅ Ditemukan. Klik tombol 'Cari' lagi untuk NOMEN lain.</span>`;
+                    searchStatus.innerHTML = `<span class="search-status-ok">✅ Data ${nomen} ditemukan.</span>`;
                     renderResults(result);
+                    // Scroll ke area hasil setelah render
+                    resultsArea.scrollIntoView({ behavior: 'smooth' });
                 } else if (response.status === 404 || result.status === 'not_found') {
-                    searchStatus.innerHTML = `<span class="status-danger">❌ NOMEN ${nomen} tidak ditemukan di Master Data.</span>`;
+                    searchStatus.innerHTML = `<span class="search-status-danger">❌ NOMEN ${nomen} tidak ditemukan di Master Data.</span>`;
                     detailsContainer.innerHTML = '';
                     resultsArea.style.display = 'none';
+                    initialMessage.style.display = 'block';
                 } else {
-                    searchStatus.innerHTML = `<span class="status-danger">❌ Error Server: ${result.message || 'Gagal memuat data.'}</span>`;
+                    searchStatus.innerHTML = `<span class="search-status-danger">❌ Error Server: ${result.message || 'Gagal memuat data.'}</span>`;
+                    initialMessage.style.display = 'block';
                 }
             } catch (error) {
-                searchStatus.innerHTML = `<span class="status-danger">❌ Error Jaringan.</span>`;
+                searchStatus.innerHTML = `<span class="search-status-danger">❌ Error Jaringan. Coba lagi.</span>`;
                 console.error('Fetch Error:', error);
+                initialMessage.style.display = 'block';
             }
         }
 
@@ -305,5 +355,9 @@
             }
         });
         
+        // Tambahkan fokus pada input saat halaman dimuat
+        document.addEventListener('DOMContentLoaded', () => {
+            nomenInput.focus();
+        });
     </script>
 {% endblock %}
