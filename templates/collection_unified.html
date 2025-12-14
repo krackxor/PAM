@@ -138,12 +138,68 @@
         <p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Laporan Ringkas...</p>
     </div>
 
+    <h3 style="margin-top: 40px; color: #dc3545; border-top: 1px solid #dc3545; padding-top: 20px;">
+        <i class="fas fa-calendar-alt"></i> Monitoring Koleksi Harian (Rayon 34 & 35)
+    </h3>
+    
+    <div id="monitoringSummaryArea" class="report-grid">
+        <p class="no-results" style="grid-column: 1 / -1;"><i class="fas fa-spinner fa-spin"></i> Memuat ringkasan monitoring...</p>
+    </div>
+
+    <div id="monitoringTableArea">
+        </div>
     <div style="text-align: right; margin-top: 10px; margin-bottom: 20px;">
         <a href="#" id="exportReportBtn" class="btn-primary" style="background-color: #6c757d; text-decoration: none;">
             <i class="fas fa-file-excel"></i> Export Summary
         </a>
     </div>
+
+    <h3 style="margin-top: 40px; color: #17a2b8; border-top: 1px solid #17a2b8; padding-top: 20px;">
+        <i class="fas fa-list-ol"></i> Distribusi Pelanggan Berdasarkan TARIF (Rayon 34/35 Reguler)
+    </h3>
     
+    <div id="tarifBreakdownArea">
+        <p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat data breakdown tarif...</p>
+    </div>
+
+    <h3 style="margin-top: 40px; color: #28a745; border-top: 1px solid #28a745; padding-top: 20px;">
+        <i class="fas fa-water"></i> Laporan Agregasi Volume Dasar (Historis MC)
+    </h3>
+    
+    <div style="margin-bottom: 20px; text-align: center;">
+        <button id="fetchBasicVolumeBtn" class="btn-primary" style="background-color: var(--secondary-color); color: white; padding: 12px 25px;">
+            <i class="fas fa-sync"></i> Muat Laporan Volume Dasar
+        </button>
+    </div>
+
+    <div id="basicVolumeReportArea">
+        <p class="no-results">Tekan "Muat Laporan Volume Dasar" untuk melihat riwayat volume KUBIK bulanan.</p>
+    </div>
+    <h3 style="margin-top: 40px; color: #dc3545; border-top: 1px solid #dc3545; padding-top: 20px;">
+        <i class="fas fa-layer-group"></i> Laporan Grouping MC: AB Sunter
+    </h3>
+    
+    <button id="fetchCustomReportBtn" class="btn-primary" style="background-color: #dc3545; color: white; margin-bottom: 20px;">
+        <i class="fas fa-sync"></i> Muat Laporan AB Sunter
+    </button>
+
+    <div id="customReportArea">
+        <p class="no-results">Tekan "Muat Laporan AB Sunter" untuk melihat hasil agregasi.</p>
+    </div>
+    
+    <h3 style="margin-top: 40px; color: #007bff; border-top: 1px solid #007bff; padding-top: 20px;">
+        <i class="fas fa-list-alt"></i> Daftar Konsumen Spesifik (Top & Status)
+    </h3>
+    
+    <div style="margin-bottom: 20px; text-align: center;">
+        <button id="fetchTopListsBtn" class="btn-primary" style="background-color: var(--primary-color); color: white; padding: 12px 25px;">
+            <i class="fas fa-sync"></i> Muat Daftar Konsumen (4 Kategori)
+        </button>
+    </div>
+
+    <div id="topListsArea">
+        <p class="no-results">Tekan "Muat Daftar Konsumen" untuk menampilkan laporan 4 kategori (Sudah Bayar, Belum Bayar, Top 500 Tunggakan, Top 500 Premium).</p>
+    </div>
     <div class="filter-input-group">
         <input type="text" id="filterInput" placeholder="Filter Detail (Rayon, PCEZ, NOMEN)...">
         <button id="searchBtn" class="btn-primary" style="background-color: var(--primary-color); color: white; padding: 12px 18px; border: none; border-radius: 4px;">
@@ -161,9 +217,22 @@
         const searchBtn = document.getElementById('searchBtn');
         const detailsArea = document.getElementById('detailsArea');
         const exportReportBtn = document.getElementById('exportReportBtn');
+        const fetchCustomBtn = document.getElementById('fetchCustomReportBtn'); 
+        const customReportArea = document.getElementById('customReportArea');
+        const tarifBreakdownArea = document.getElementById('tarifBreakdownArea');
         
+        const monitoringSummaryArea = document.getElementById('monitoringSummaryArea');
+        const monitoringTableArea = document.getElementById('monitoringTableArea');
+        
+        const fetchTopListsBtn = document.getElementById('fetchTopListsBtn');
+        const topListsArea = document.getElementById('topListsArea');
+        
+        const fetchBasicVolumeBtn = document.getElementById('fetchBasicVolumeBtn');
+        const basicVolumeReportArea = document.getElementById('basicVolumeReportArea');
+
+
         function formatRupiah(number) {
-            return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+            return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
         }
         
         function formatNumber(number) {
@@ -181,7 +250,7 @@
                 const response = await fetch('{{ url_for("collection_report_api") }}');
                 const result = await response.json();
                 
-                // 2. Fetch Custom MC Grouping Summary Data (tetap dipertahankan untuk KPI card summary)
+                // 2. NEW: Fetch Custom MC Grouping Summary Data
                 const customSummaryResponse = await fetch('{{ url_for("analyze_mc_grouping_summary_api") }}');
                 const customSummaryResult = await customSummaryResponse.json();
 
@@ -190,7 +259,7 @@
                      return;
                 }
                 
-                // Merge custom summary data ke dalam objek grandTotal utama
+                // NEW: Merge custom summary data ke dalam objek grandTotal utama
                 result.grand_total.TotalPiutangKustomNominal = customSummaryResult.TotalPiutangKustomNominal || 0;
                 result.grand_total.TotalPiutangKustomKubik = customSummaryResult.TotalPiutangKustomKubik || 0;
                 result.grand_total.TotalNomenKustom = customSummaryResult.TotalNomenKustom || 0;
@@ -285,8 +354,8 @@
             data.forEach(item => {
                 tableHTML += `
                     <tr>
-                        <td data-label="Rayon" style="text-align: left;">${item.RAYON}</td>
-                        <td data-label="PCEZ" style="text-align: left;">${item.PCEZ}</td>
+                        <td data-label="Rayon">${item.RAYON}</td>
+                        <td data-label="PCEZ">${item.PCEZ}</td>
                         <td data-label="MC Piutang Nom">${formatRupiah(item.MC_TotalNominal)}</td>
                         <td data-label="MC Piutang Kubik">${formatNumber(item.MC_TotalKubik)}</td>
                         <td data-label="MC Koleksi Nom">${formatRupiah(item.MC_CollectedNominal)}</td>
@@ -301,8 +370,8 @@
             
             tableHTML += `
                 <tr class="grand-total-row">
-                    <td style="text-align: left;">GRAND TOTAL</td>
-                    <td style="text-align: left;">-</td>
+                    <td>GRAND TOTAL</td>
+                    <td>-</td>
                     <td>${formatRupiah(grandTotal.MC_TotalNominal)}</td>
                     <td>${formatNumber(grandTotal.MC_TotalKubik)}</td>
                     <td>${formatRupiah(grandTotal.MC_CollectedNominal)}</td>
@@ -315,12 +384,81 @@
             `;
             
             tableHTML += `
-                        </tbody>
-                    </table>
-                    </div>
-                `;
+                    </tbody>
+                </table>
+                </div>
+            `;
             
             reportArea.innerHTML = summaryHTML + tableHTML;
+        }
+
+        // --- FUNGSI BARU: MEMUAT BREAKDOWN TARIF ---
+        async function fetchTarifBreakdown() {
+            tarifBreakdownArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Breakdown Tarif...</p>';
+            
+            try {
+                // Panggil API baru untuk breakdown tarif
+                const response = await fetch('{{ url_for("analyze_mc_tarif_breakdown_api") }}'); 
+                const data = await response.json();
+                
+                if (response.status !== 200 || data.length === 0) {
+                     tarifBreakdownArea.innerHTML = `<p class="no-results" style="color: #6c757d;">Tidak ada data pelanggan yang cocok dengan kriteria kustom (Rayon 34/35 Reguler).</p>`;
+                     return;
+                }
+                
+                renderTarifBreakdownTable(data);
+
+            } catch (error) {
+                tarifBreakdownArea.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data breakdown tarif dari server.</p>';
+                console.error('Tarif Breakdown Error:', error);
+            }
+        }
+        
+        function renderTarifBreakdownTable(data) {
+            let totalPelanggan = data.reduce((sum, item) => sum + item.JumlahPelanggan, 0);
+
+            // Perbesar lebar untuk kolom Rayon
+            let tableHTML = `
+                <div class="report-table-wrapper" style="max-width: 600px; margin-left: 0;"> 
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left;">RAYON</th>
+                            <th style="text-align: left;">TARIF</th>
+                            <th>JML Pelanggan</th>
+                            <th>Persentase (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            data.forEach(item => {
+                const percentage = (item.JumlahPelanggan / totalPelanggan) * 100;
+                tableHTML += `
+                    <tr>
+                        <td data-label="RAYON" style="text-align: left;">${item.RAYON}</td>
+                        <td data-label="TARIF" style="text-align: left;">${item.TARIF}</td>
+                        <td data-label="JML Pelanggan">${formatNumber(item.JumlahPelanggan)}</td>
+                        <td data-label="Persentase">${formatPercent(percentage)}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                <tr class="grand-total-row">
+                    <td style="text-align: left;">TOTAL</td>
+                    <td>-</td> 
+                    <td>${formatNumber(totalPelanggan)}</td>
+                    <td>100.00%</td>
+                </tr>
+            `;
+            
+            tableHTML += `
+                    </tbody>
+                </table>
+                </div>
+            `;
+            tarifBreakdownArea.innerHTML = tableHTML;
         }
 
         // --- FUNGSI 2: MEMUAT DETAIL TRANSAKSIONAL ---
@@ -391,13 +529,13 @@
 
                 tableHTML += `
                     <tr>
-                        <td data-label="NOMEN" style="text-align: left;">${item.NOMEN}</td>
-                        <td data-label="RAYON" style="text-align: left;">${item.RAYON}</td>
-                        <td data-label="PCEZ" style="text-align: left;">${item.PCEZ}</td>
-                        <td data-label="TGL BAYAR" style="text-align: left;">${item.PAY_DT || '-'}</td>
+                        <td data-label="NOMEN">${item.NOMEN}</td>
+                        <td data-label="RAYON">${item.RAYON}</td>
+                        <td data-label="PCEZ">${item.PCEZ}</td>
+                        <td data-label="TGL BAYAR">${item.PAY_DT || '-'}</td>
                         <td data-label="NOMINAL">Rp ${nominal.toLocaleString('id-ID')}</td>
                         <td data-label="KUBIK BAYAR">${kubik.toLocaleString('id-ID', { maximumFractionDigits: 0 })}</td> 
-                        <td data-label="STATUS" class="${statusClass}" style="text-align: left;">${statusText}</td>
+                        <td data-label="STATUS" class="${statusClass}">${statusText}</td>
                     </tr>
                 `;
             });
@@ -410,21 +548,424 @@
                     <td>${totalKubik.toLocaleString('id-ID', { maximumFractionDigits: 0 })}</td>
                     <td>-</td>
                 </tr>
-                    <tr class="total-row">
+                <tr class="total-row">
                     <td colspan="4" style="text-align: left;">Total NOMEN Unik (Count)</td>
                     <td colspan="3">${uniqueNomenCount.toLocaleString('id-ID')}</td>
                 </tr>
             `;
             
             tableHTML += `
-                        </tbody>
-                    </table>
-                    </div>
-                `;
+                    </tbody>
+                </table>
+                </div>
+            `;
             
             detailsArea.innerHTML = tableHTML;
         }
         
+        // --- FUNGSI 3: FUNGSI UNTUK RENDER LAPORAN AB SUNTER (Grouping MC Kustom) ---
+        async function fetchCustomReport() {
+            customReportArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Menghubungkan ke MongoDB untuk Laporan AB Sunter...</p>';
+            
+            try {
+                const response = await fetch('{{ url_for("analyze_mc_grouping_api") }}'); 
+                const data = await response.json();
+                
+                if (response.status === 401) {
+                    window.location.href = '{{ url_for("login") }}';
+                    return;
+                }
+                
+                if (data.status !== 'success') {
+                     customReportArea.innerHTML = `<p class="no-results" style="color: red;">❌ Gagal memuat report: ${data.message || 'Tidak ada data kustom ditemukan.'}</p>`;
+                     return;
+                }
+                
+                renderCustomReportTable(data);
+
+            } catch (error) {
+                customReportArea.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data report kustom dari server.</p>';
+                console.error('Custom Report Error:', error);
+            }
+        }
+        
+        // Fungsi rendering yang dirombak total menjadi format tabel yang dinamis dan bersih
+        function renderCustomReportTable(data) {
+            const customArea = document.getElementById('customReportArea');
+            if (data.status !== 'success') {
+                 customArea.innerHTML = `<p class="no-results" style="color: red;">❌ ${data.message || 'Gagal memuat laporan kustom.'}</p>`;
+                 return;
+            }
+
+            const totals = data.totals;
+            const breakdowns = data.breakdowns;
+            
+            
+            // -------------------------------------------------------------------------
+            // 1. RENDER RINGKASAN TOTAL
+            // -------------------------------------------------------------------------
+            
+            let totalSummaryHTML = `
+                <h4 style="color: #dc3545; margin-bottom: 15px;">Ringkasan Nomen, Nominal, dan Kubikasi (Reguler)</h4>
+                <div class="report-table-wrapper" style="max-width: 800px; margin-left: auto; margin-right: auto;">
+                    <table class="report-table" style="min-width: 100%;">
+                        <thead>
+                            <tr style="background-color: #f8d7da; color: #721c24;">
+                                <th style="text-align: left;">AREA</th>
+                                <th>Nomen Count</th>
+                                <th>Total Nominal</th>
+                                <th>Total Kubik (m³)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="text-align: left; font-weight: bold;">AB SUNTER (Total R34 + R35)</td>
+                                <td>${formatNumber(totals.TOTAL_34_35.CountOfNOMEN)}</td>
+                                <td>${formatRupiah(totals.TOTAL_34_35.SumOfNOMINAL)}</td>
+                                <td>${formatNumber(totals.TOTAL_34_35.SumOfKUBIK)}</td>
+                            </tr>
+                            <tr>
+                                <td style="text-align: left; font-weight: 600;">Rayon 34</td>
+                                <td>${formatNumber(totals[34].CountOfNOMEN)}</td>
+                                <td>${formatRupiah(totals[34].SumOfNOMINAL)}</td>
+                                <td>${formatNumber(totals[34].SumOfKUBIK)}</td>
+                            </tr>
+                            <tr>
+                                <td style="text-align: left; font-weight: 600;">Rayon 35</td>
+                                <td>${formatNumber(totals[35].CountOfNOMEN)}</td>
+                                <td>${formatRupiah(totals[35].SumOfNOMINAL)}</td>
+                                <td>${formatNumber(totals[35].SumOfKUBIK)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <h4 style="color: var(--primary-color); margin-top: 30px;">Detail Breakdown Per Dimensi</h4>
+            `;
+
+            // Helper function to create a single breakdown table (for one area: Total, R34, or R35)
+            function createSingleBreakdownTable(title, dataArray, dimensionKey) {
+                let tableHTML = `
+                    <div class="breakdown-table-container">
+                        <h5 style="margin-top: 0; color: #17a2b8;">${title}</h5>
+                        <div class="report-table-wrapper" style="margin-top: 10px;">
+                            <table class="report-table" style="min-width: 100%;">
+                                <thead>
+                                    <tr style="background-color: #f0f8ff;">
+                                        <th style="text-align: left; width: 40%;">${dimensionKey.replace(/_/g, ' ').toUpperCase()}</th>
+                                        <th>Nomen Count</th>
+                                        <th>Nominal</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                `;
+                
+                dataArray.forEach(item => {
+                    const dimValue = item[dimensionKey] || 'N/A';
+                    const nomenCount = formatNumber(item.CountOfNOMEN);
+                    const nominal = formatRupiah(item.SumOfNOMINAL);
+                    
+                    tableHTML += `
+                        <tr>
+                            <td style="text-align: left;" data-label="${dimensionKey.toUpperCase()}">${dimValue}</td>
+                            <td data-label="Nomen Count">${nomenCount}</td>
+                            <td data-label="Nominal">${nominal}</td>
+                        </tr>
+                    `;
+                });
+                
+                tableHTML += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+                return tableHTML;
+            }
+
+            // Function to render the entire group of 3 tables for a dimension
+            function renderDimensionGroup(dimensionName, dimensionKey, breakdownData) {
+                let groupHTML = `
+                    <h5 style="color: #007bff; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">Breakdown Berdasarkan: ${dimensionName}</h5>
+                    <div class="breakdown-group">
+                        ${createSingleBreakdownTable(`AB SUNTER (Total)`, breakdownData.TOTAL_34_35, dimensionKey)}
+                        ${createSingleBreakdownTable(`Rayon 34`, breakdownData[34], dimensionKey)}
+                        ${createSingleBreakdownTable(`Rayon 35`, breakdownData[35], dimensionKey)}
+                    </div>
+                `;
+                return groupHTML;
+            }
+
+            // Gabungkan semua output
+            let breakdownHTML = '';
+            breakdownHTML += renderDimensionGroup('Jenis TARIF', 'TARIF', breakdowns.TARIF);
+            breakdownHTML += renderDimensionGroup('Merek Meter', 'MERK', breakdowns.MERK);
+            breakdownHTML += renderDimensionGroup('Metode Baca', 'READ_METHOD', breakdowns.READ_METHOD);
+
+            customReportArea.innerHTML = totalSummaryHTML + breakdownHTML;
+        }
+
+        // --- FUNGSI 4: MEMUAT LAPORAN VOLUME DASAR (HISTORIS MC) ---
+        async function fetchBasicVolumeReport() {
+            basicVolumeReportArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Laporan Volume Dasar...</p>';
+            
+            try {
+                const response = await fetch('{{ url_for("basic_volume_report_api") }}'); 
+                const data = await response.json();
+                
+                if (response.status === 401) {
+                    window.location.href = '{{ url_for("login") }}';
+                    return;
+                }
+
+                if (response.status !== 200 || data.status !== 'success' || data.basic_volume_report.length === 0) {
+                     basicVolumeReportArea.innerHTML = `<p class="no-results" style="color: #dc3545;">❌ Gagal memuat laporan atau tidak ada data historis yang valid.</p>`;
+                     return;
+                }
+                
+                renderBasicVolumeReport(data.basic_volume_report);
+
+            } catch (error) {
+                basicVolumeReportArea.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data volume dasar dari server.</p>';
+                console.error('Basic Volume Error:', error);
+            }
+        }
+        
+        function renderBasicVolumeReport(data) {
+            const dataArea = document.getElementById('basicVolumeReportArea');
+            if (data.length === 0) {
+                dataArea.innerHTML = `<p class="no-results">Tidak ada data volume historis ditemukan.</p>`;
+                return;
+            }
+
+            // Gunakan kunci dari baris pertama (termasuk kolom bulan yang di-pivot)
+            const headers = Object.keys(data[0]);
+            
+            let tableHTML = `
+                <div class="report-table-wrapper">
+                <table class="report-table">
+                    <thead><tr>
+                        ${headers.map(h => `<th style="text-align: center;">${h.replace(/_/g, ' ').toUpperCase()}</th>`).join('')}
+                    </tr></thead><tbody>
+            `;
+            
+            data.forEach(item => {
+                const isTotalRow = item.RAYON === 'TOTAL';
+                const rowClass = isTotalRow ? 'grand-total-row' : '';
+                
+                tableHTML += `<tr class="${rowClass}">`;
+                headers.forEach(h => {
+                    let cellValue = item[h];
+                    let alignment = 'right';
+                    
+                    if (h === 'RAYON') {
+                        alignment = 'left';
+                    } else {
+                        // Format angka besar
+                        cellValue = formatNumber(cellValue); 
+                    }
+                    
+                    tableHTML += `<td data-label="${h.replace(/_/g, ' ')}" style="text-align: ${alignment};">${cellValue}</td>`;
+                });
+                tableHTML += '</tr>';
+            });
+            
+            tableHTML += '</tbody></table></div>';
+            dataArea.innerHTML = tableHTML;
+        }
+
+
+        // --- FUNGSI 5: MEMUAT MONITORING KOLEKSI HARIAN ---
+        async function fetchCollectionMonitoring() {
+            monitoringSummaryArea.innerHTML = '<p class="no-results" style="grid-column: 1 / -1;"><i class="fas fa-spinner fa-spin"></i> Memuat data monitoring...</p>';
+            monitoringTableArea.innerHTML = '';
+            
+            try {
+                const response = await fetch('{{ url_for("collection_monitoring_api") }}');
+                const result = await response.json();
+
+                if (response.status === 401) {
+                    window.location.href = '{{ url_for("login") }}';
+                    return;
+                }
+                
+                if (response.status !== 200) {
+                     monitoringSummaryArea.innerHTML = `<p class="no-results" style="color: red; grid-column: 1 / -1;">❌ Gagal memuat monitoring: ${result.message || 'Error Server'}</p>`;
+                     return;
+                }
+                
+                renderMonitoringTable(result.monitoring_data, result.summary_top);
+
+            } catch (error) {
+                monitoringSummaryArea.innerHTML = '<p class="no-results" style="color: red; grid-column: 1 / -1;">Gagal mengambil data monitoring dari server.</p>';
+                console.error('Monitoring Error:', error);
+            }
+        }
+        
+        function renderMonitoringTable(data, summary) {
+            
+            // Helper untuk merender tabel detail per Rayon
+            const renderDetailRayonTable = (title, list) => {
+                if (list.length === 0) return '';
+                
+                let tableHTML = `
+                    <h5 style="margin-top: 20px; color: #007bff;">${title}</h5>
+                    <div class="report-table-wrapper">
+                    <table class="report-table" style="min-width: 800px;">
+                        <thead>
+                            <tr>
+                                <th>TGL</th>
+                                <th>CUST</th>
+                                <th>Rp1</th>
+                                <th>Rp1 Kumulatif</th>
+                                <th>CUST Kumulatif</th>
+                                <th>COLL Kumulatif %</th>
+                                <th>COLL VAR</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                list.forEach(item => {
+                    const rp1 = item.COLL_NOMINAL;
+                    const rp1_kumulatif = item.Rp1_Kumulatif;
+                    const cust_kumulatif = item.CUST_Kumulatif;
+                    const persen = item.COLL_Kumulatif_Persen;
+                    const coll_var = item.COLL_VAR;
+                    
+                    tableHTML += `
+                        <tr>
+                            <td data-label="TGL" style="text-align: left;">${item.TGL}</td>
+                            <td data-label="CUST">${formatNumber(item.CUST_COUNT)}</td>
+                            <td data-label="Rp1">${formatRupiah(rp1)}</td>
+                            <td data-label="Rp1 Kumulatif">${formatRupiah(rp1_kumulatif)}</td>
+                            <td data-label="CUST Kumulatif">${formatNumber(cust_kumulatif)}</td>
+                            <td data-label="COLL %" class="percentage-cell">${formatPercent(persen)}</td>
+                            <td data-label="COLL VAR">${formatPercent(coll_var)}</td>
+                        </tr>
+                    `;
+                });
+                
+                tableHTML += '</tbody></table></div>';
+                return tableHTML;
+            }
+
+            // Render Summary Top
+            monitoringSummaryArea.innerHTML = `
+                <div class="summary-card" style="border-left-color: #007bff;">
+                    <h4>R34 Total Piutang (MC)</h4>
+                    <p>${formatRupiah(summary.R34.MC1125)}</p>
+                </div>
+                <div class="summary-card" style="border-left-color: #ffc107;">
+                    <h4>R34 Koleksi Hari Ini (%)</h4>
+                    <p>${data.R34.length > 0 ? formatPercent(data.R34[data.R34.length - 1].COLL_Kumulatif_Persen) : '0.00%'}</p>
+                </div>
+                <div class="summary-card" style="border-left-color: #007bff;">
+                    <h4>R35 Total Piutang (MC)</h4>
+                    <p>${formatRupiah(summary.R35.MC1125)}</p>
+                </div>
+                <div class="summary-card" style="border-left-color: #ffc107;">
+                    <h4>R35 Koleksi Hari Ini (%)</h4>
+                    <p>${data.R35.length > 0 ? formatPercent(data.R35[data.R35.length - 1].COLL_Kumulatif_Persen) : '0.00%'}</p>
+                </div>
+            `;
+            
+            // Render Detail Tables
+            let detailHTML = '';
+            detailHTML += renderDetailRayonTable("Detail Monitoring Koleksi - Rayon 34", data.R34);
+            detailHTML += renderDetailRayonTable("Detail Monitoring Koleksi - Rayon 35", data.R35);
+            
+            monitoringTableArea.innerHTML = detailHTML;
+        }
+
+        // --- FUNGSI 6: MEMUAT DAFTAR TOP 500 DAN STATUS BAYAR ---
+        async function fetchTopLists() {
+            topListsArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat daftar top 500 dan status konsumen...</p>';
+            
+            try {
+                const response = await fetch('{{ url_for("report_top_lists_api") }}'); 
+                const data = await response.json();
+
+                if (response.status === 401) {
+                    window.location.href = '{{ url_for("login") }}';
+                    return;
+                }
+                
+                if (response.status !== 200 || data.status !== 'success') {
+                     topListsArea.innerHTML = `<p class="no-results" style="color: red;">❌ Gagal memuat daftar: ${data.message || 'Error Server'}</p>`;
+                     return;
+                }
+                
+                renderTopLists(data);
+
+            } catch (error) {
+                topListsArea.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data top list dari server.</p>';
+                console.error('Top Lists Error:', error);
+            }
+        }
+        
+        // Fungsi untuk me-render tabel
+        function renderTopLists(data) {
+             let html = '';
+             
+             // Helper function to render a list table
+             const renderListTable = (title, list) => {
+                 if (!list || list.length === 0) {
+                     return `<h4 style="margin-top: 20px; color: #2c3e50;">${title}</h4><p class="no-results" style="color: #6c757d;">Tidak ada data ditemukan.</p>`;
+                 }
+                 
+                 const headers = Object.keys(list[0]);
+                 let tableHTML = `
+                     <h4 style="margin-top: 20px; color: #2c3e50; border-bottom: 1px dotted #ccc; padding-bottom: 5px;">${title} (${list.length} Data)</h4>
+                     <div class="report-table-wrapper">
+                     <table class="report-table">
+                         <thead><tr>
+                             ${headers.map(h => `<th style="text-align: center;">${h.replace(/_/g, ' ')}</th>`).join('')}
+                         </tr></thead><tbody>
+                 `;
+                 
+                 list.forEach(item => {
+                     tableHTML += '<tr>';
+                     headers.forEach(h => {
+                         let cellValue = item[h];
+                         
+                         let align = 'right';
+                         if (h.includes('NOMEN') || h.includes('NAMA') || h.includes('RAYON')) {
+                             align = 'left';
+                         }
+                         
+                         if (h.includes('NOMINAL') || h.includes('KEWAJIBAN') || h.includes('ARDEBT')) {
+                             cellValue = formatRupiah(cellValue);
+                         } else if (h.includes('KUBIK')) {
+                             cellValue = formatNumber(cellValue) + ' m³';
+                         } else if (h.includes('STATUS')) {
+                             align = 'center';
+                         }
+                         tableHTML += `<td data-label="${h.replace(/_/g, ' ')}" style="text-align: ${align};">${cellValue}</td>`;
+                     });
+                     tableHTML += '</tr>';
+                 });
+                 
+                 tableHTML += '</tbody></table></div>';
+                 return tableHTML;
+             }
+             
+             // 1. TOP 500 BELUM BAYAR (DEBT)
+             html += renderListTable("TOP 500 Konsumen Belum Bayar (Piutang & Tunggakan Total)", data.top_debt);
+
+             // 2. TOP 500 PREMIUM (HIGH VOLUME)
+             html += renderListTable("TOP 500 Konsumen Premium (Berdasarkan Volume MC Tertinggi)", data.top_premium);
+             
+             // 3. KONSUMEN BELUM BAYAR (MC STATUS UNPAID)
+             html += renderListTable("Daftar Konsumen Belum Bayar (Snapshot MC Terbaru)", data.unpaid_list);
+
+             // 4. KONSUMEN SUDAH BAYAR (MC STATUS PAID)
+             html += renderListTable("Daftar Konsumen Sudah Bayar (Snapshot MC Terbaru)", data.paid_list);
+
+             topListsArea.innerHTML = html;
+        }
+
+
         // Export button handler
         exportReportBtn.addEventListener('click', (e) => {
             e.preventDefault();
@@ -442,10 +983,17 @@
             }
         });
         
+        fetchCustomBtn.addEventListener('click', fetchCustomReport);
+        fetchTopListsBtn.addEventListener('click', fetchTopLists); // NEW EVENT LISTENER
+        fetchBasicVolumeBtn.addEventListener('click', fetchBasicVolumeReport); // NEW EVENT LISTENER
+        
+        
         // Muat semua bagian saat halaman dimuat
         document.addEventListener('DOMContentLoaded', () => {
              fetchCollectionReport(); 
              fetchCollectionDetails(''); 
+             fetchTarifBreakdown(); 
+             fetchCollectionMonitoring(); // PANGGIL FUNGSI BARU INI SAAT LOAD
         });
 
     </script>
