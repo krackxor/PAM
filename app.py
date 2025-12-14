@@ -384,11 +384,27 @@ def search_nomen():
         print(f"Error saat mencari data terintegrasi: {e}")
         return jsonify({"message": f"Gagal mengambil data terintegrasi: {e}"}), 500
 
-# --- ENDPOINT KOLEKSI DAN ANALISIS LAINNYA ---
-@app.route('/daily_collection', methods=['GET'])
+# --- ENDPOINT KOLEKSI DAN ANALISIS LAINNYA (NAVIGASI BARU) ---
+@app.route('/collection', methods=['GET'])
 @login_required 
-def daily_collection_unified_page():
-    return render_template('collection_unified.html', is_admin=current_user.is_admin)
+def collection_landing_page():
+    # Menggantikan daily_collection_unified_page dan me-render file hub baru
+    return render_template('collection_landing.html', is_admin=current_user.is_admin)
+
+@app.route('/collection/summary', methods=['GET'])
+@login_required 
+def collection_summary():
+    return render_template('collection_summary.html', is_admin=current_user.is_admin)
+
+@app.route('/collection/monitoring', methods=['GET'])
+@login_required 
+def collection_monitoring():
+    return render_template('collection_monitoring.html', is_admin=current_user.is_admin)
+
+@app.route('/collection/analysis', methods=['GET'])
+@login_required 
+def collection_analysis():
+    return render_template('collection_analysis.html', is_admin=current_user.is_admin)
 
 # --- HELPER BARU: HITUNG BULAN SEBELUMNYA ---
 def _get_previous_month_year(bulan_tagihan):
@@ -456,7 +472,7 @@ def collection_report_api():
     initial_project = {
         '$project': {
             'RAYON': { '$ifNull': [ '$RAYON', 'N/A' ] }, 
-            'PCEZ': { '$ifNull': [ '$PCEZ', 'N/A' ] },   
+            'PCEZ': { '$ifNull': [ '$PCEZ', 'N/A' ] }, 
             'NOMEN': 1,
             'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}, 
             'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}}, # NEW: Include KUBIK for billed volume
@@ -572,15 +588,15 @@ def collection_report_api():
         if key not in report_map:
              # Ciptakan entry baru jika Rayon/PCEZ hanya ada di MB Undue
              report_map[key] = {
-                'RAYON': item['_id']['rayon'],
-                'PCEZ': item['_id']['pcez'],
-                'MC_TotalNominal': 0.0, 
-                'MC_TotalKubik': 0.0,
-                'TotalNomen': 0,
-                'MC_CollectedNominal': 0.0, 
-                'MC_CollectedKubik': 0.0,
-                'MC_CollectedNomen': 0, 
-            }
+                 'RAYON': item['_id']['rayon'],
+                 'PCEZ': item['_id']['pcez'],
+                 'MC_TotalNominal': 0.0, 
+                 'MC_TotalKubik': 0.0,
+                 'TotalNomen': 0,
+                 'MC_CollectedNominal': 0.0, 
+                 'MC_CollectedKubik': 0.0,
+                 'MC_CollectedNomen': 0, 
+             }
             
         report_map[key]['MB_UndueNominal'] = float(item['mb_undue_nominal'])
         report_map[key]['MB_UndueKubik'] = float(item['mb_undue_kubik'])
@@ -597,8 +613,6 @@ def collection_report_api():
         'MC_TotalNomen': 0, 'MC_CollectedNomen': 0,
         'MB_UndueNominal': 0.0, 'MB_UndueKubik': 0.0,
         'MB_UndueNomen': 0,
-        'PercentNominal': 0.0, 'PercentNomenCount': 0.0,
-        'UnduePercentNominal': 0.0,
         # Nilai baru
         'TotalUnduePrevNominal': total_undue_prev_nominal
     }
@@ -773,49 +787,49 @@ def analyze_reports_landing():
 @login_required
 def analyze_tariff_change_report():
     return render_template('analyze_report_template.html', 
-                           title="Laporan Perubahan Tarif Pelanggan", 
-                           description="Menampilkan pelanggan yang memiliki perbedaan data Tarif antara riwayat data CID terbaru dan sebelumnya. (Memerlukan CID dalam mode historis).",
-                           is_admin=current_user.is_admin)
+                            title="Laporan Perubahan Tarif Pelanggan", 
+                            description="Menampilkan pelanggan yang memiliki perbedaan data Tarif antara riwayat data CID terbaru dan sebelumnya. (Memerlukan CID dalam mode historis).",
+                            is_admin=current_user.is_admin)
 
 @app.route('/analyze/full_mc_report', methods=['GET'])
 @login_required
 def analyze_full_mc_report():
     return render_template('analyze_report_template.html', 
-                           title="Laporan Grup Master Cetak (MC) Lengkap", 
-                           description="Menyajikan data agregasi NOMEN, Kubik, dan Nominal berdasarkan Rayon, Metode Baca, Tarif, dan Jenis Meter.",
-                           is_admin=current_user.is_admin)
+                            title="Laporan Grup Master Cetak (MC) Lengkap", 
+                            description="Menyajikan data agregasi NOMEN, Kubik, dan Nominal berdasarkan Rayon, Metode Baca, Tarif, dan Jenis Meter.",
+                            is_admin=current_user.is_admin)
 
 @app.route('/analyze/extreme', methods=['GET'])
 @login_required
 def analyze_extreme_usage():
     return render_template('analyze_report_template.html', 
-                           title="Pemakaian Air Ekstrim", 
-                           description="Menampilkan pelanggan dengan konsumsi air di atas ambang batas (memerlukan join MC, CID, dan SBRS).",
-                           is_admin=current_user.is_admin)
+                            title="Pemakaian Air Ekstrim", 
+                            description="Menampilkan pelanggan dengan konsumsi air di atas ambang batas (memerlukan join MC, CID, dan SBRS).",
+                            is_admin=current_user.is_admin)
 
 @app.route('/analyze/reduced', methods=['GET'])
 @login_required
 def analyze_reduced_usage():
     return render_template('analyze_report_template.html', 
-                           title="Pemakaian Air Naik/Turun (Fluktuasi Volume)", 
-                           description="Menampilkan pelanggan dengan fluktuasi konsumsi air signifikan (naik atau turun) dengan membandingkan 2 periode SBRS terakhir.",
-                           is_admin=current_user.is_admin)
+                            title="Pemakaian Air Naik/Turun (Fluktuasi Volume)", 
+                            description="Menampilkan pelanggan dengan fluktuasi konsumsi air signifikan (naik atau turun) dengan membandingkan 2 periode SBRS terakhir.",
+                            is_admin=current_user.is_admin)
 
 @app.route('/analyze/zero', methods=['GET'])
 @login_required
 def analyze_zero_usage():
     return render_template('analyze_report_template.html', 
-                           title="Tidak Ada Pemakaian (Zero)", 
-                           description="Menampilkan pelanggan dengan konsumsi air nol (Zero) di periode tagihan terakhir.",
-                           is_admin=current_user.is_admin)
+                            title="Tidak Ada Pemakaian (Zero)", 
+                            description="Menampilkan pelanggan dengan konsumsi air nol (Zero) di periode tagihan terakhir.",
+                            is_admin=current_user.is_admin)
 
 @app.route('/analyze/standby', methods=['GET'])
 @login_required
 def analyze_stand_tungggu():
     return render_template('analyze_report_template.html', 
-                           title="Stand Tunggu", 
-                           description="Menampilkan pelanggan yang berstatus Stand Tunggu (Freeze/Blokir).",
-                           is_admin=current_user.is_admin)
+                            title="Stand Tunggu", 
+                            description="Menampilkan pelanggan yang berstatus Stand Tunggu (Freeze/Blokir).",
+                            is_admin=current_user.is_admin)
 
 # =========================================================================
 # === API GROUPING MC KUSTOM (HELPER FUNCTION) ===
@@ -953,7 +967,7 @@ def analyze_mc_grouping_api():
         print(f"Error saat menganalisis custom grouping MC: {e}")
         return jsonify({"status": "error", "message": f"Gagal mengambil data grouping MC: {e}"}), 500
 
-# 2. API SUMMARY (Untuk KPI Cards di collection_unified.html)
+# 2. API SUMMARY (Untuk KPI Cards di collection_summary.html)
 @app.route('/api/analyze/mc_grouping/summary', methods=['GET'])
 @login_required 
 def analyze_mc_grouping_summary_api():
@@ -1017,7 +1031,7 @@ def analyze_mc_grouping_summary_api():
         print(f"Error saat mengambil summary grouping MC: {e}")
         return jsonify({"message": f"Gagal mengambil summary grouping MC. Detail teknis error: {e}"}), 500
 
-# 3. API BREAKDOWN TARIF (Untuk Tabel Distribusi di collection_unified.html)
+# 3. API BREAKDOWN TARIF (Untuk Tabel Distribusi di collection_analysis.html)
 @app.route('/api/analyze/mc_tarif_breakdown', methods=['GET'])
 @login_required 
 def analyze_mc_tarif_breakdown_api():
@@ -1456,7 +1470,7 @@ def doh_comparison_report_api():
         # 3. Strukturisasi Data untuk Frontend
         
         # Buat daftar hari (01 hingga day_of_month)
-        days = [f'{i:02d}' for i in range(1, day_of_month + 1)]
+        days = [i for i in range(1, day_of_month + 1)]
         
         # Inisialisasi struktur hasil
         report_structure = {
@@ -1933,10 +1947,10 @@ def analyze_data():
             df.columns = [col.strip().upper() for col in df.columns]
             
             if JOIN_KEY in df.columns:
-                 df[JOIN_KEY] = df[JOIN_KEY].astype(str).str.strip() 
-                 all_dfs.append(df)
+                df[JOIN_KEY] = df[JOIN_KEY].astype(str).str.strip() 
+                all_dfs.append(df)
             else:
-                 return jsonify({"message": f"Gagal: File '{filename}' tidak memiliki kolom kunci '{JOIN_KEY}'."}), 400
+                return jsonify({"message": f"Gagal: File '{filename}' tidak memiliki kolom kunci '{JOIN_KEY}'."}), 400
 
         except Exception as e:
             print(f"Error membaca file {filename}: {e}")
@@ -2032,10 +2046,10 @@ def upload_mc_data():
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
             
             if col in ['NOMINAL', 'NOMINAL_AKHIR', 'KUBIK', 'SUBNOMINAL', 'ANG_BP', 'DENDA', 'PPN']: 
-                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
         if 'PC' in df.columns:
-             df = df.rename(columns={'PC': 'RAYON'})
+            df = df.rename(columns={'PC': 'RAYON'})
 
         # >>> START PERUBAHAN KRITIS KE APPEND (BULK WRITE) <<<
         data_to_insert = df.to_dict('records')
@@ -2117,8 +2131,8 @@ def upload_mb_data():
         
         # >>> START PERBAIKAN: MAPPING HEADER KRITIS UNTUK MB <<<
         rename_map = {
-            'NOTAG': 'NOTAGIHAN',  # Map NOTAG
-            'PAY_DT': 'TGL_BAYAR',  # Map PAY_DT
+            'NOTAG': 'NOTAGIHAN', # Map NOTAG
+            'PAY_DT': 'TGL_BAYAR', # Map PAY_DT
             'BILL_PERIOD': 'BULAN_REK', # Map BILL_PERIOD dari Daily Collection ke BULAN_REK
             'MC VOL OKT 25_NOMEN': 'NOMEN' # Tambahan mapping jika Nomen tidak konsisten (dari snippet)
         }
@@ -2130,14 +2144,14 @@ def upload_mb_data():
         
         # Pastikan BILL_REASON ada. Jika hilang, set ke 'UNKNOWN' (agar tidak termasuk 'BIAYA PEMAKAIAN AIR' di laporan)
         if 'BILL_REASON' not in df.columns:
-             df['BILL_REASON'] = 'UNKNOWN'
-             print("Peringatan: Kolom BILL_REASON hilang, diisi dengan UNKNOWN.")
+            df['BILL_REASON'] = 'UNKNOWN'
+            print("Peringatan: Kolom BILL_REASON hilang, diisi dengan UNKNOWN.")
         
         # Jika BULAN_REK masih hilang setelah mapping BILL_PERIOD, set ke 'N/A'
         if 'BULAN_REK' not in df.columns:
-             df['BULAN_REK'] = 'N/A' 
-             print("Peringatan: Kolom BULAN_REK/BILL_PERIOD hilang, diisi dengan N/A.")
-             
+            df['BULAN_REK'] = 'N/A' 
+            print("Peringatan: Kolom BULAN_REK/BILL_PERIOD hilang, diisi dengan N/A.")
+            
         # >>> END PERBAIKAN: INJECT MISSING KRITICAL COLUMNS <<<
 
         # >>> START PERBAIKAN KRITIS: NORMALISASI FORMAT TANGGAL TGL_BAYAR <<<
@@ -2178,7 +2192,7 @@ def upload_mb_data():
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
 
             if col in ['NOMINAL', 'SUBNOMINAL', 'BEATETAP', 'BEA_SEWA']: 
-                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
         data_to_insert = df.to_dict('records')
         
@@ -2262,7 +2276,7 @@ def upload_cid_data():
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
         
         if 'TARIFF' in df.columns:
-             df = df.rename(columns={'TARIFF': 'TARIF'})
+            df = df.rename(columns={'TARIFF': 'TARIF'})
         
         # >>> START PERUBAHAN KRITIS KE APPEND (BULK WRITE) <<<
         data_to_insert = df.to_dict('records')
@@ -2342,7 +2356,7 @@ def upload_sbrs_data():
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
 
             if col in ['CMR_PREV_READ', 'CMR_READING', 'CMR_KUBIK']: 
-                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
         data_to_insert = df.to_dict('records')
         
@@ -2464,7 +2478,7 @@ def upload_ardebt_data():
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
             
             if col in ['JUMLAH', 'VOLUME']: 
-                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
         # >>> START PERUBAHAN KRITIS KE APPEND (BULK WRITE) <<<
         data_to_insert = df.to_dict('records')
@@ -2565,8 +2579,8 @@ def dashboard_summary_api():
         today_date = datetime.now().strftime('%Y-%m-%d')
         pipeline_koleksi_today = [
             {'$match': {'TGL_BAYAR': today_date,
-                        # Filter untuk Koleksi Rutin
-                        'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
+                         # Filter untuk Koleksi Rutin
+                         'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
             }}, 
             {'$group': {
                 '_id': None,
@@ -2582,8 +2596,8 @@ def dashboard_summary_api():
         this_month = datetime.now().strftime('%Y-%m')
         pipeline_koleksi_month = [
             {'$match': {'TGL_BAYAR': {'$regex': this_month},
-                        # Filter untuk Koleksi Rutin
-                        'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
+                         # Filter untuk Koleksi Rutin
+                         'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
             }},
             {'$group': {
                 '_id': None,
@@ -2656,8 +2670,8 @@ def dashboard_summary_api():
             
             pipeline = [
                 {'$match': {'TGL_BAYAR': date, 
-                           # Filter untuk Koleksi Rutin
-                           'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}}, 
+                             # Filter untuk Koleksi Rutin
+                             'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}}, 
                 {'$group': {
                     '_id': None,
                     'total': {'$sum': '$NOMINAL'},
@@ -2718,8 +2732,8 @@ def rayon_analysis_api():
         this_month = datetime.now().strftime('%Y-%m')
         pipeline_koleksi_rayon = [
             {'$match': {'TGL_BAYAR': {'$regex': this_month},
-                        # Filter untuk Koleksi Rutin
-                        'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
+                         # Filter untuk Koleksi Rutin
+                         'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
             }},
             {'$group': {
                 '_id': '$RAYON',
@@ -2878,6 +2892,7 @@ def export_dashboard_data():
     except Exception as e:
         print(f"Error during dashboard export: {e}")
         return jsonify({"message": f"Gagal mengekspor data dashboard: {e}"}), 500
+
 
 @app.route('/api/export/anomalies', methods=['GET'])
 @login_required
