@@ -501,14 +501,13 @@ def _get_month_date_range(bulan_tagihan):
 # --- END HELPER BARU ---
 
 # =========================================================================
-# === START FUNGSI BARU UNTUK LAPORAN DISTRIBUSI (Permintaan User) ===
+# === START FUNGSI BARU UNTUK LAPORAN DISTRIBUSI (Lanjutan) ===
 # =========================================================================
 
 def _get_distribution_report(group_fields, collection_mc):
     """
     Menghitung distribusi Nomen (Count Distinct), Piutang (NOMINAL), dan Kubikasi (KUBIK) 
     berdasarkan field yang diberikan untuk BULAN_TAGIHAN terbaru.
-    group_fields bisa berupa string (misalnya 'RAYON') atau list of strings (misalnya ['RAYON', 'TARIF']).
     """
     if collection_mc is None:
         return [], "N/A (Koneksi DB Gagal)"
@@ -715,6 +714,149 @@ def rayon_meter_distribution_view():
 # === END FUNGSI BARU UNTUK LAPORAN DISTRIBUSI ===
 # =========================================================================
 
+# --- HELPER BARU: AGGREGATE MB SUNTER DETAIL ---
+def _aggregate_mb_sunter_detail(collection_mb):
+    if collection_mb is None:
+        return {"status": "error", "message": "Database connection failed."}
+
+    # Define the specific months and date range based on user's request (Nov 2025)
+    CURRENT_MONTH_REK = "112025" 
+    LAST_MONTH_REK = "102025"
+    
+    # Collection Period (TGL_BAYAR) is November 2025
+    COLLECTION_MONTH_START = "2025-11-01"
+    COLLECTION_MONTH_END = "2025-12-01" # Exclusive
+
+    RAYON_KEYS = ['34', '35']
+
+    def _get_mb_collection_metrics(rayon_filter, bulan_rek_filter_type):
+        
+        # Base filter for TGL_BAYAR (Payment in November 2025)
+        base_match = {
+            'BILL_REASON': 'BIAYA PEMAKAIAN AIR',
+            'TGL_BAYAR': {'$gte': COLLECTION_MONTH_START, '$lt': COLLECTION_MONTH_END},
+        }
+
+        if bulan_rek_filter_type == 'UNDUE':
+            # Undue: BULAN_REK = 112025
+            base_match['BULAN_REK'] = CURRENT_MONTH_REK
+        elif bulan_rek_filter_type == 'CURRENT':
+            # Current: BULAN_REK = 102025
+            base_match['BULAN_REK'] = LAST_MONTH_REK
+        elif bulan_rek_filter_type == 'AGING':
+            # Tunggakan: BULAN_REK < 102025
+            base_match['BULAN_REK'] = {'$lt': LAST_MONTH_REK}
+            
+        pipeline = [
+            {'$match': base_match},
+            {'$project': {
+                'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
+                'NOMEN': 1,
+                'RAYON': {'$toUpper': {'$trim': {'$ifNull': ['$RAYON', 'N/A']}}}
+            }},
+            {'$match': {'RAYON': {'$in': RAYON_KEYS}}}
+        ]
+        
+        if rayon_filter == '34' or rayon_filter == '35':
+            pipeline.append({'$match': {'RAYON': rayon_filter}})
+        
+        pipeline.append({'$group': {
+            '_id': None,
+            'TotalNominal': {'$sum': '$NOMINAL'},
+            'TotalNomen': {'$addToSet': '$NOMEN'}
+        }})
+        
+        result = list(collection_mb.aggregate(pipeline))
+        return {
+            'nominal': result[0].get('TotalNominal', 0.0) if result else 0.0,
+            'nomen_count': len(result[0].get('TotalNomen', [])) if result else 0
+        }
+
+    # --- AGGREGATE SUMMARY ---
+    summary_data = {'undue': {}, 'current': {}, 'tunggakan': {}}
+    metrics = [('undue', 'UNDUE'), ('current', 'CURRENT'), ('tunggakan', 'AGING')]
+    
+    for key, type_str in metrics:
+        data34 = _get_mb_collection_metrics('34', type_str)
+        data35 = _get_mb_collection_metrics('35', type_str)
+        
+        summary_data[key]['34'] = data34
+        summary_data[key]['35'] = data35
+        summary_data[key]['AB_SUNTER'] = {
+            'nominal': data34['nominal'] + data35['nominal'],
+            'nomen_count': data34['nomen_count'] + data35['nomen_count']
+        }
+    
+    # --- DETAIL HARIAN R34 dan R35 (TANGGAL BAYAR NGURUT) ---
+    def _get_mb_daily_detail(rayon_key):
+        pipeline = [
+            {'$match': {
+                'BILL_REASON': 'BIAYA PEMAKAIAN AIR',
+                'TGL_BAYAR': {'$gte': COLLECTION_MONTH_START, '$lt': COLLECTION_MONTH_END},
+                'RAYON': {'$toUpper': {'$trim': {'$ifNull': ['$RAYON', 'N/A']}}}
+            }},
+            {'$match': {'RAYON': rayon_key}},
+            {'$project': {
+                'TGL_BAYAR': 1,
+                'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
+                'NOMEN': 1
+            }},
+            {'$group': {
+                '_id': '$TGL_BAYAR',
+                'DailyNominal': {'$sum': '$NOMINAL'},
+                'DailyNomenCount': {'$addToSet': '$NOMEN'}
+            }},
+            {'$project': {
+                '_id': 0,
+                'TANGGAL_BAYAR': '$_id',
+                'NOMEN_COUNT': {'$size': '$DailyNomenCount'},
+                'NOMINAL': '$DailyNominal'
+            }},
+            {'$sort': {'TANGGAL_BAYAR': 1}}
+        ]
+        return list(collection_mb.aggregate(pipeline))
+
+    daily_detail = {
+        '34': _get_mb_daily_detail('34'),
+        '35': _get_mb_daily_detail('35'),
+    }
+
+    return {
+        'status': 'success',
+        'periods': {
+            'undue_rek': CURRENT_MONTH_REK,
+            'current_rek': LAST_MONTH_REK,
+            'aging_rek_max': f"<{LAST_MONTH_REK}",
+            'bayar_bulan': "NOV 2025"
+        },
+        'summary': summary_data,
+        'daily_detail': daily_detail
+    }
+    
+@app.route('/api/analyze/mb_sunter_report', methods=['GET'])
+@login_required
+def analyze_mb_sunter_report_api():
+    """API endpoint untuk laporan detail koleksi AB Sunter (Undue, Current, Tunggakan, Harian)."""
+    if client is None:
+        return jsonify({"status": "error", "message": "Server tidak terhubung ke Database."}), 500
+
+    try:
+        report_data = _aggregate_mb_sunter_detail(collection_mb)
+        return jsonify(report_data), 200
+    except Exception as e:
+        print(f"Error fetching MB Sunter report: {e}")
+        return jsonify({"status": "error", "message": f"Gagal mengambil data laporan MB Sunter: {e}"}), 500
+
+
+@app.route('/analysis/grouping/mb_sunter', methods=['GET'])
+@login_required 
+def analysis_mb_sunter_detail():
+    """Rute view untuk laporan detail koleksi MB Sunter."""
+    return render_template('analysis_report_template.html', 
+                           title="Grouping MB: AB Sunter Detail (Koleksi & Aging)",
+                           description="Laporan agregasi detail koleksi (Undue, Current, Tunggakan) berdasarkan Rayon dan per hari.",
+                           report_type="MB_SUNTER_DETAIL", # <--- KUNCI PENTING BARU
+                           is_admin=current_user.is_admin)
 
 # --- FUNGSI BARU UNTUK REPORT KOLEKSI & PIUTANG ---
 @app.route('/api/collection/report', methods=['GET'])
@@ -1056,6 +1198,7 @@ def analyze_tariff_change_report():
     return render_template('analyze_report_template.html', 
                             title="Laporan Perubahan Tarif Pelanggan", 
                             description="Menampilkan pelanggan yang memiliki perbedaan data Tarif antara riwayat data CID terbaru dan sebelumnya. (Memerlukan CID dalam mode historis).",
+                            report_type="TARIFF_CHANGE",
                             is_admin=current_user.is_admin)
 
 @app.route('/analyze/full_mc_report', methods=['GET'])
@@ -1071,7 +1214,8 @@ def analyze_full_mc_report():
 def analyze_extreme_usage():
     return render_template('analyze_report_template.html', 
                             title="Pemakaian Air Ekstrim", 
-                            description="Menampilkan pelanggan dengan konsumsi air di atas ambang batas (memerlukan join MC, CID, dan SBRS).",
+                            description="Menampilkan pelanggan dengan konsumsi air di atas ambang batas (memerlukan join MC, CID, dan SBRS) dan fluktuasi signifikan.",
+                            report_type="EXTREME_USAGE",
                             is_admin=current_user.is_admin)
 
 @app.route('/analyze/reduced', methods=['GET'])
@@ -1080,6 +1224,7 @@ def analyze_reduced_usage():
     return render_template('analyze_report_template.html', 
                             title="Pemakaian Air Naik/Turun (Fluktuasi Volume)", 
                             description="Menampilkan pelanggan dengan fluktuasi konsumsi air signifikan (naik atau turun) dengan membandingkan 2 periode SBRS terakhir.",
+                            report_type="FLUX_REPORT",
                             is_admin=current_user.is_admin)
 
 @app.route('/analyze/zero', methods=['GET'])
@@ -1088,6 +1233,7 @@ def analyze_zero_usage():
     return render_template('analyze_report_template.html', 
                             title="Tidak Ada Pemakaian (Zero)", 
                             description="Menampilkan pelanggan dengan konsumsi air nol (Zero) di periode tagihan terakhir.",
+                            report_type="ZERO_USAGE",
                             is_admin=current_user.is_admin)
 
 @app.route('/analyze/standby', methods=['GET'])
@@ -1096,6 +1242,7 @@ def analyze_stand_tungggu():
     return render_template('analyze_report_template.html', 
                             title="Stand Tunggu", 
                             description="Menampilkan pelanggan yang berstatus Stand Tunggu (Freeze/Blokir).",
+                            report_type="STANDBY_STATUS",
                             is_admin=current_user.is_admin)
 
 # =========================================================================
