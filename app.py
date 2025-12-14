@@ -1618,9 +1618,14 @@ def upload_mc_data():
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
-        # Kunci Unik: NOMEN + BULAN_TAGIHAN 
+        # Kunci Unik: NOMEN + BULAN_TAGIHAN (untuk cek duplikasi internal)
         UNIQUE_KEYS = ['NOMEN', 'BULAN_TAGIHAN'] 
         
+        # Check this again for safety, though it should pass now
+        if not all(key in df.columns for key in UNIQUE_KEYS):
+             # Jika ini dieksekusi, ada masalah serius di Pandas/Loading.
+             return jsonify({"message": "Kesalahan Internal: Kolom kunci 'NOMEN' atau 'BULAN_TAGIHAN' hilang setelah pemrosesan Pandas."}), 500
+
         inserted_count = 0
         skipped_count = 0
         total_rows = len(data_to_insert)
@@ -1632,15 +1637,15 @@ def upload_mc_data():
             skipped_count = total_rows - inserted_count
             
         except BulkWriteError as bwe:
-            # Menangani error duplikasi dari index MongoDB (baik index Python maupun index internal)
+            # Menangani error duplikasi dari index MongoDB (internal atau eksternal)
             inserted_count = bwe.details.get('nInserted', 0)
             skipped_count = total_rows - inserted_count
             
         except Exception as e:
+            # Jika gagal karena alasan lain, lempar error untuk debugging
             print(f"Error massal saat insert: {e}")
             return jsonify({"message": f"Gagal menyimpan data secara massal: {e}"}), 500
-
-
+        
         return jsonify({
             "status": "success",
             "message": f"Sukses Historis! {inserted_count} baris Master Cetak (MC) baru ditambahkan. ({skipped_count} duplikat diabaikan).",
@@ -1727,7 +1732,7 @@ def upload_mb_data():
         except Exception as e:
             print(f"Error massal saat insert: {e}")
             return jsonify({"message": f"Gagal menyimpan data secara massal: {e}"}), 500
-
+        
         # --- RETURN REPORT ---
         return jsonify({
             "status": "success",
@@ -1798,8 +1803,14 @@ def upload_cid_data():
         total_rows = len(data_to_insert)
 
         # CID menggunakan insert_many biasa, karena TANGGAL_UPLOAD_CID membuat data unik
-        collection_cid.insert_many(data_to_insert)
-        inserted_count = total_rows # Asumsi semua masuk
+        # Kita bungkus dalam try/except untuk menangani potential BulkWriteError
+        try:
+            result = collection_cid.insert_many(data_to_insert, ordered=False)
+            inserted_count = len(result.inserted_ids)
+        except BulkWriteError as bwe:
+            inserted_count = bwe.details.get('nInserted', 0)
+        except Exception as e:
+            return jsonify({"message": f"Gagal menyimpan data secara massal: {e}"}), 500
             
         return jsonify({
             "status": "success",
@@ -1808,7 +1819,7 @@ def upload_cid_data():
                 "total_rows": total_rows,
                 "type": "APPEND", 
                 "inserted_count": inserted_count,
-                "skipped_count": 0
+                "skipped_count": total_rows - inserted_count
             },
             "anomaly_list": []
         }), 200
@@ -1919,7 +1930,7 @@ def upload_sbrs_data():
 @login_required 
 @admin_required 
 def upload_ardebt_data():
-    """Mode HISTORIS: Untuk data Detail Tunggakan (ARDEBT). (DIOPTIMASI)"""
+    """Mode HISTORIS: Untuk data Detail Tunggakan (ARDEBT). (DIOPTIMASI & ROBUST KEY CHECK)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
     
@@ -1934,6 +1945,26 @@ def upload_ardebt_data():
     file_extension = filename.rsplit('.', 1)[1].lower()
 
     try:
+        if file_extension == 'csv':
+            df = pd.read_csv(file)
+        elif file_extension in ['xlsx', 'xls']:
+            df = pd.read_excel(file, sheet_name=0) 
+        
+        df.columns = [col.strip().upper() for col in df.columns]
+
+        # 1. Check for the critical NOMEN key
+        if 'NOMEN' not in df.columns:
+            return jsonify({"message": "Gagal Append: File ARDEBT harus memiliki kolom kunci 'NOMEN' untuk penyimpanan historis."}), 400
+            
+        # 2. VALIDASI DAN PENYESUAIAN JUMLAH (Kunci Tunggakan)
+        monetary_keys = ['JUMLAH', 'AMOUNT', 'TOTAL', 'NOMINAL']
+        found_monetary_key = next((key for key in monetary_keys if key in df.columns), None)
+
+        if found_monetary_key and found_monetary_key != 'JUMLAH':
+             df = df.rename(columns={found_monetary_key: 'JUMLAH'})
+        elif 'JUMLAH' not in df.columns:
+             return jsonify({"message": "Gagal Append: Kolom kunci JUMLAH (atau AMOUNT/TOTAL/NOMINAL) untuk nominal tunggakan tidak ditemukan di file Anda."}), 400
+
         # Get Month and Year from the request form data (sent from JS)
         upload_month = request.form.get('month')
         upload_year = request.form.get('year')
@@ -1944,19 +1975,7 @@ def upload_ardebt_data():
         # Construct the PERIODE_BILL string (e.g., 012025)
         periode_bill_value = f"{upload_month}{upload_year}"
 
-        if file_extension == 'csv':
-            df = pd.read_csv(file)
-        elif file_extension in ['xlsx', 'xls']:
-            df = pd.read_excel(file, sheet_name=0) 
-        
-        df.columns = [col.strip().upper() for col in df.columns]
-        
-        # 2. Check for the critical NOMEN key (which should be present in the file)
-        if 'NOMEN' not in df.columns:
-            return jsonify({"message": "Gagal Append: File ARDEBT harus memiliki kolom kunci 'NOMEN' untuk penyimpanan historis."}), 400
-
         # >>> START: INJECT PERIODE_BILL COLUMN <<<
-        # Suntikkan kolom PERIODE_BILL yang dibuat dari form ke DataFrame
         df['PERIODE_BILL'] = periode_bill_value 
         # >>> END: INJECT PERIODE_BILL COLUMN <<<
 
@@ -1980,9 +1999,6 @@ def upload_ardebt_data():
         # Kunci Unik: NOMEN + PERIODE_BILL + JUMLAH 
         UNIQUE_KEYS = ['NOMEN', 'PERIODE_BILL', 'JUMLAH'] 
         
-        if not all(key in df.columns for key in UNIQUE_KEYS):
-             return jsonify({"message": "Kesalahan Internal: Kolom kunci ARDEBT hilang setelah pemrosesan Pandas."}), 500
-
         inserted_count = 0
         skipped_count = 0
         total_rows = len(data_to_insert)
