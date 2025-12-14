@@ -24,7 +24,7 @@
 .percentage-cell { font-weight: bold; color: var(--secondary-color); }
 .no-results { text-align: center; color: #555; padding: 20px; }
 
-/* Styling untuk breakdown grid (khusus AB Sunter) */
+/* Styling untuk breakdown grid (khusus AB Sunter dan Distribusi Harian) */
 .breakdown-group {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -199,7 +199,7 @@
                         }
                     },
                     plugins: {
-                        legend: { display: (type === 'pie'), position: 'right' },
+                        legend: { display: (type === 'pie' || type === 'doughnut'), position: 'right' },
                         title: { display: false }
                     }
                 }
@@ -246,7 +246,9 @@
                     // Jika kolom adalah Piutang/Nominal, gunakan format Rupiah
                     if (header.includes('Piutang') && !header.includes('Kubikasi')) {
                         align = 'right';
-                        cellValue = formatRupiah(row['chart_data_piutang'] || cellValue.replace('Rp ', '').replace(/,/g, ''));
+                        // Gunakan data mentah dari chart_data_piutang jika ada untuk akurasi, jika tidak gunakan cellValue
+                        const rawNominal = row['chart_data_piutang'] || cellValue.replace('Rp ', '').replace(/,/g, '');
+                        cellValue = formatRupiah(rawNominal);
                     }
 
 
@@ -279,6 +281,9 @@
             'DIST_PCEZ': '{{ url_for("pcez_distribution_report") }}',
             'DIST_RAYON_TARIF': '{{ url_for("rayon_tarif_distribution_report") }}',
             'DIST_RAYON_METER': '{{ url_for("rayon_meter_distribution_report") }}',
+
+            // API MB SUNTER BARU
+            'MB_SUNTER_DETAIL': '{{ url_for("analyze_mb_sunter_report_api") }}',
         };
 
         async function fetchReportData() {
@@ -309,8 +314,18 @@
                     renderGenericDistribution(data);
                     return;
                 }
+                
+                // --- KONDISI 2: LAPORAN MB SUNTER BARU ---
+                if (REPORT_TYPE === 'MB_SUNTER_DETAIL') {
+                    if (data.status === 'error') {
+                        reportContainer.innerHTML = `<p class="no-results" style="color: #dc3545;">❌ ${data.message}</p>`;
+                        return;
+                    }
+                    renderManualMBReport(data);
+                    return;
+                }
 
-                // --- KONDISI 2: LAPORAN LAMA (Memiliki status atau data array root) ---
+                // --- KONDISI 3: LAPORAN LAMA ---
                 
                 // Ambil data dari root atau dari data.data (untuk Aging/Top Lists)
                 const reportData = data.data || data; 
@@ -368,7 +383,6 @@
             const piutangData = reportData.map(item => item.chart_data_piutang);
             
             // 2. RENDER CHART JUMLAH NOMEN
-            // Gunakan tipe Doughnut/Pie jika data sedikit (misal < 10 item)
             const nomenChartType = (labels.length < 10 && (REPORT_TYPE === 'DIST_RAYON' || REPORT_TYPE === 'DIST_PCEZ')) ? 'doughnut' : 'bar';
 
             renderChart('nomenChart', labels, nomenData, 'Jumlah Nomen', nomenChartType, 'rgba(0, 123, 255, 0.7)');
@@ -380,11 +394,123 @@
             // 4. RENDER TABEL DETAIL
             renderTable(reportData, `Detail Agregasi (${reportData.length} Group)`);
         }
+        
+        // --- NEW: MANUAL MB SUNTER REPORT RENDERER ---
+        function renderManualMBReport(data) {
+            singleChartArea.style.display = 'none'; 
+            distributionChartArea.style.display = 'none';
+            tableContainer.style.display = 'none';
+            tableTitle.style.display = 'none';
+            reportContainer.innerHTML = ''; // Reset container
 
+            const summary = data.summary;
+            const periods = data.periods;
+            
+            document.getElementById('report-title').textContent = "Grouping MB: AB Sunter Detail (Koleksi & Aging)";
+            document.getElementById('report-subtitle').textContent = "Laporan agregasi detail koleksi (Undue, Current, Tunggakan) berdasarkan Rayon dan per hari.";
 
-        // =========================================================
-        // === RENDERING FUNCTIONS (Implementasi dari logic lama) ===
-        // =========================================================
+            // Helper untuk membuat baris summary
+            function createSummaryRow(title, key) {
+                const data34 = summary[key]['34'];
+                const data35 = summary[key]['35'];
+                const dataAB = summary[key]['AB_SUNTER'];
+                return `
+                    <tr class="grand-total-row" style="background-color: #f0f0f0;">
+                        <td data-label="Kategori" style="text-align: left; font-weight: 700; color: var(--primary-color);">${title}</td>
+                        <td data-label="R34 Nomen" style="text-align: center;">${formatNumber(data34.nomen_count)}</td>
+                        <td data-label="R34 Nominal">${formatRupiah(data34.nominal)}</td>
+                        <td data-label="R35 Nomen" style="text-align: center;">${formatNumber(data35.nomen_count)}</td>
+                        <td data-label="R35 Nominal">${formatRupiah(data35.nominal)}</td>
+                        <td data-label="AB Sunter Nomen" style="text-align: center;">${formatNumber(dataAB.nomen_count)}</td>
+                        <td data-label="AB Sunter Nominal">${formatRupiah(dataAB.nominal)}</td>
+                    </tr>
+                `;
+            }
+
+            // 1. RENDER RINGKASAN KOLEKSI
+            let summaryHTML = `
+                <h4 style="margin-top: 10px; color: #34495e;">Ringkasan Koleksi (MB) AB Sunter Berdasarkan Klasifikasi Piutang</h4>
+                <p style="color: #95a5a6; font-size: 0.9em; margin-bottom: 20px;">
+                    * Data koleksi dihitung dari transaksi MB dengan Tanggal Bayar di bulan ${periods.bayar_bulan}. <br>
+                    * Undue: BULAN_REK ${periods.undue_rek} | Current: BULAN_REK ${periods.current_rek} | Tunggakan: BULAN_REK ${periods.aging_rek_max}
+                </p>
+                <div class="report-table-wrapper mb-5">
+                    <table class="report-table" style="min-width: 100%; max-width: 900px; margin: auto;">
+                        <thead>
+                            <tr style="background-color: #d0e7ff;">
+                                <th rowspan="2" style="text-align: left; vertical-align: middle; width: 20%;">KATEGORI</th>
+                                <th colspan="2">RAYON 34</th>
+                                <th colspan="2">RAYON 35</th>
+                                <th colspan="2">TOTAL AB SUNTER</th>
+                            </tr>
+                            <tr style="background-color: #e9ecef;">
+                                <th>Nomen</th>
+                                <th>Nominal</th>
+                                <th>Nomen</th>
+                                <th>Nominal</th>
+                                <th>Nomen</th>
+                                <th>Nominal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${createSummaryRow(`UNDUE (REK ${periods.undue_rek})`, 'undue')}
+                            ${createSummaryRow(`CURRENT (REK ${periods.current_rek})`, 'current')}
+                            ${createSummaryRow(`TUNGGAKAN (REK ${periods.aging_rek_max})`, 'tunggakan')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            reportContainer.innerHTML += summaryHTML;
+
+            // 2. RENDER DETAIL HARIAN
+            
+            function createDailyDetailTable(title, dailyData) {
+                let tableHTML = `
+                    <div class="breakdown-table-container">
+                        <h5 style="margin-top: 0; color: #17a2b8;">Detail Koleksi Harian ${title} (Bayar di Bulan ${periods.bayar_bulan})</h5>
+                        <div class="report-table-wrapper" style="margin-top: 10px;">
+                            <table class="report-table" style="min-width: 400px; font-size: 0.95em;">
+                                <thead>
+                                    <tr style="background-color: #f0f8ff;">
+                                        <th>TANGGAL BAYAR</th>
+                                        <th>NOMEN COUNT</th>
+                                        <th>NOMINAL</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                `;
+                
+                dailyData.forEach(item => {
+                    // Format tanggal agar terlihat seperti 01/11/2025
+                    const formattedDate = new Date(item.TANGGAL_BAYAR).toLocaleDateString('id-ID', {day: '2-digit', month: '2-digit', year: 'numeric'});
+                    tableHTML += `
+                        <tr>
+                            <td data-label="Tanggal Bayar" style="text-align: center;">${formattedDate}</td>
+                            <td data-label="Nomen Count" style="text-align: center;">${formatNumber(item.NOMEN_COUNT)}</td>
+                            <td data-label="Nominal">${formatRupiah(item.NOMINAL)}</td>
+                        </tr>
+                    `;
+                });
+
+                if (dailyData.length === 0) {
+                     tableHTML += `<tr><td colspan="3" data-label="Status" style="text-align: center;">Tidak ada transaksi di bulan ini.</td></tr>`;
+                }
+
+                tableHTML += `</tbody></table></div></div>`;
+                return tableHTML;
+            }
+
+            let dailyDetailHTML = `
+                <h4 style="margin-top: 30px; color: #34495e;">Koleksi Harian per Rayon</h4>
+                <div class="breakdown-group">
+                    ${createDailyDetailTable('RAYON 34', data.daily_detail['34'])}
+                    ${createDailyDetailTable('RAYON 35', data.daily_detail['35'])}
+                </div>
+            `;
+            reportContainer.innerHTML += dailyDetailHTML;
+
+        }
+
 
         // --- 1. TARIF BREAKDOWN (LOGIKA LAMA) ---
         function renderTarifBreakdown(data) {
