@@ -385,12 +385,14 @@ def search_nomen():
         return jsonify({"message": f"Gagal mengambil data terintegrasi: {e}"}), 500
 
 # --- ENDPOINT KOLEKSI DAN ANALISIS LAINNYA (NAVIGASI BARU) ---
+
+# Rute Hub Koleksi (Menggantikan collection_unified.html)
 @app.route('/collection', methods=['GET'])
 @login_required 
 def collection_landing_page():
-    # Menggantikan daily_collection_unified_page dan me-render file hub baru
     return render_template('collection_landing.html', is_admin=current_user.is_admin)
 
+# Sub-Rute Koleksi (Untuk Halaman Ringkasan/Monitoring/Analisis)
 @app.route('/collection/summary', methods=['GET'])
 @login_required 
 def collection_summary():
@@ -401,10 +403,59 @@ def collection_summary():
 def collection_monitoring():
     return render_template('collection_monitoring.html', is_admin=current_user.is_admin)
 
+# Rute Hub Analisis (Menggantikan analyze_reports_landing)
 @app.route('/collection/analysis', methods=['GET'])
 @login_required 
 def collection_analysis():
+    # collection_analysis.html kini adalah hub untuk sub-laporan di bawah ini
     return render_template('collection_analysis.html', is_admin=current_user.is_admin)
+
+# Rute-Rute Baru untuk Halaman Laporan Analisis Spesifik (Dipanggil dari collection_analysis.html)
+@app.route('/analysis/tarif', methods=['GET'])
+@login_required 
+def analysis_tarif_breakdown():
+    # Menggunakan template umum dengan parameter untuk mengarahkan JS mana yang harus dimuat
+    return render_template('analysis_report_template.html', 
+                           title="Distribusi Tarif Pelanggan (R34/R35)",
+                           description="Laporan detail Distribusi Tarif Nomen, Piutang, dan Kubikasi per Rayon/Tarif. (Memuat chart dan tabel)",
+                           report_type="TARIF_BREAKDOWN", # Digunakan di JS untuk fetch data
+                           is_admin=current_user.is_admin)
+
+@app.route('/analysis/grouping', methods=['GET'])
+@login_required 
+def analysis_grouping_sunter():
+    return render_template('analysis_report_template.html', 
+                           title="Grouping MC: AB Sunter Detail",
+                           description="Laporan agregasi Nomen, Nominal, dan Kubikasi berdasarkan Tarif, Merek, dan Metode Baca untuk R34/R35.",
+                           report_type="MC_GROUPING_AB_SUNTER",
+                           is_admin=current_user.is_admin)
+
+@app.route('/analysis/aging', methods=['GET'])
+@login_required 
+def analysis_aging_report():
+    return render_template('analysis_report_template.html', 
+                           title="Analisis Umur Piutang (Aging Report)",
+                           description="Daftar pelanggan dengan Piutang Lama (> 1 Bulan Tagihan) yang statusnya belum lunas.",
+                           report_type="AGING_REPORT",
+                           is_admin=current_user.is_admin)
+
+@app.route('/analysis/top', methods=['GET'])
+@login_required 
+def analysis_top_lists():
+    return render_template('analysis_report_template.html', 
+                           title="Daftar Konsumen Top & Status Pembayaran",
+                           description="Menampilkan Top 500 Tunggakan, Top 500 Premium, serta Daftar Lunas dan Belum Bayar (Snapshot Terbaru).",
+                           report_type="TOP_LISTS",
+                           is_admin=current_user.is_admin)
+
+@app.route('/analysis/volume', methods=['GET'])
+@login_required 
+def analysis_volume_dasar():
+    return render_template('analysis_report_template.html', 
+                           title="Laporan Volume Dasar Historis",
+                           description="Riwayat volume KUBIK bulanan agregat berdasarkan Rayon dari seluruh data Master Cetak (MC).",
+                           report_type="BASIC_VOLUME",
+                           is_admin=current_user.is_admin)
 
 # --- HELPER BARU: HITUNG BULAN SEBELUMNYA ---
 def _get_previous_month_year(bulan_tagihan):
@@ -775,14 +826,14 @@ def export_collection_report():
         return jsonify({"message": f"Gagal mengekspor data laporan koleksi: {e}"}), 500
 
 
-# --- ENDPOINT ANALISIS DATA LANJUTAN (SUB-MENU DASHBOARD) ---
+# --- ENDPOINT ANALISIS DATA LANJUTAN (MENU NAVIGASI ANALISIS LAMA) ---
 
+# Rute Peringatan Anomali (LAMA) - Mengarah ke template umum
 @app.route('/analyze', methods=['GET'])
 @login_required
 def analyze_reports_landing():
     return render_template('analyze_landing.html', is_admin=current_user.is_admin)
 
-# ENDPOINT BARU: PERUBAHAN TARIF
 @app.route('/analyze/tariff_change_report', methods=['GET'])
 @login_required
 def analyze_tariff_change_report():
@@ -1431,6 +1482,7 @@ def doh_comparison_report_api():
         for i in range(1, day_of_month + 1):
             day_str = f'{i:02d}' # 1 menjadi 01, 14 tetap 14
             date_prefixes.append(f"{this_month_str}-{day_str}")
+            # Pastikan bulan lalu juga memiliki tanggal tersebut (misal: Feb tidak punya tgl 30)
             try:
                 datetime.strptime(f"{last_month_str}-{day_str}", '%Y-%m-%d') 
                 date_prefixes.append(f"{last_month_str}-{day_str}")
