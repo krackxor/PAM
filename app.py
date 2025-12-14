@@ -37,8 +37,9 @@ collection_sbrs = None
 collection_ardebt = None
 
 try:
-    # FIX: Menambahkan timeout pada koneksi MongoDB untuk stabilitas
-    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000) 
+    # PERBAIKAN KRITIS UNTUK BULK WRITE/SBRS: Meningkatkan batas waktu koneksi dan socket.
+    # Mengatasi error timeout 20000ms saat operasi berat (SBRS)
+    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=60000, socketTimeoutMS=300000) # 60s for server selection, 5 menit (300 detik) untuk operasi data socket
     client.admin.command('ping') 
     db = client[DB_NAME]
     
