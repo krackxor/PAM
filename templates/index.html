@@ -63,29 +63,6 @@
 .status-warning { color: var(--accent-color); border-color: var(--accent-color); }
 .status-danger { color: #dc3545; border-color: #dc3545; }
 
-/* Navigation Styles */
-.details-nav button {
-    padding: 10px 15px;
-    margin: 5px;
-    border: 1px solid var(--primary-color);
-    border-radius: 4px;
-    background-color: transparent;
-    color: var(--primary-color);
-    cursor: pointer;
-    transition: all 0.2s;
-}
-.details-nav button.active {
-    background-color: var(--primary-color);
-    color: white;
-}
-.details-nav button:hover:not(.active) {
-    background-color: #f0f0f0;
-}
-/* Menyembunyikan tabel secara default */
-.detail-table-section {
-    display: none;
-}
-
 /* Detail Data Table */
 .data-table-wrapper {
     overflow-x: auto;
@@ -164,14 +141,6 @@
         <div class="summary-grid" id="healthSummary">
             </div>
 
-        <div class="details-nav" id="detailsNav" style="margin-top: 20px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
-            <button onclick="showDetail('CID')">Data Profil</button>
-            <button onclick="showDetail('MC')">Riwayat Piutang (MC)</button>
-            <button onclick="showDetail('MB')">Riwayat Pembayaran</button>
-            <button onclick="showDetail('ARDEBT')">Detail Tunggakan</button>
-            <button onclick="showDetail('SBRS')">Riwayat Kubikasi</button>
-        </div>
-
         <div id="detailsContainer">
             </div>
     </div>
@@ -189,9 +158,6 @@
         const detailsContainer = document.getElementById('detailsContainer');
         const nomenTitle = document.getElementById('nomenTitle');
         const initialMessage = document.getElementById('initialMessage');
-        const detailsNav = document.getElementById('detailsNav');
-        
-        let fetchedData = null; 
 
         function formatCurrency(amount) {
             if (typeof amount === 'number') {
@@ -199,11 +165,6 @@
             }
             return amount;
         }
-        
-        function formatNumber(number) {
-             return (parseFloat(number) || 0).toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-        }
-
 
         function determineStatusClass(statusText) {
             if (statusText.includes('TUNGGAKAN') || statusText.includes('EKSTRIM')) return 'status-danger';
@@ -211,16 +172,15 @@
             return 'status-ok';
         }
         
-        function renderTable(title, data, id) {
+        function renderTable(title, data, singleRow = false) {
             if (!data || (Array.isArray(data) && data.length === 0)) {
-                // Pastikan div container tetap ada meskipun kosong
-                return `<div id="table-${id}" class="detail-table-section"><h4 style="margin-top: 20px; color: #2c3e50;">${title}</h4><p>Tidak ada data ditemukan.</p></div>`;
+                return `<h4 style="margin-top: 20px; color: #2c3e50;">${title}</h4><p>Tidak ada data ditemukan.</p>`;
             }
             
             const listData = Array.isArray(data) ? data : [data];
             const headers = Object.keys(listData[0]);
             
-            let tableHtml = `<div id="table-${id}" class="detail-table-section"><h4 style="margin-top: 20px; color: #2c3e50;">${title} (${listData.length} baris)</h4>`;
+            let tableHtml = `<h4 style="margin-top: 20px; color: #2c3e50;">${title} (${listData.length} baris)</h4>`;
             tableHtml += '<div class="data-table-wrapper"><table class="data-table"><thead><tr>';
             
             // Header Row
@@ -234,28 +194,19 @@
                 tableHtml += '<tr>';
                 headers.forEach(h => {
                     let cellValue = item[h];
-                    
-                    // Formatting Data
-                    if (typeof cellValue === 'number' && (h.includes('NOMINAL') || h.includes('JUMLAH') || h.includes('AMOUNT'))) {
+                    if (h.includes('NOMINAL') || h.includes('JUMLAH')) {
                         cellValue = formatCurrency(cellValue);
-                    } else if (typeof cellValue === 'number' && h.includes('KUBIK')) {
-                         cellValue = formatNumber(cellValue);
-                    } else if (cellValue === null) {
-                        cellValue = 'N/A';
                     }
-                    
                     tableHtml += `<td data-label="${h.replace(/_/g, ' ')}">${cellValue}</td>`;
                 });
                 tableHtml += '</tr>';
             });
 
-            tableHtml += '</tbody></table></div></div>';
+            tableHtml += '</tbody></table></div>';
             return tableHtml;
         }
 
         function renderResults(data) {
-            fetchedData = data;
-            
             // 1. Render Health Summary
             const totalPiutang = formatCurrency(data.summary.TOTAL_PIUTANG_NOMINAL);
             const statusFinansial = data.summary.STATUS_FINANSIAL;
@@ -291,46 +242,27 @@
                 </div>
             `;
             
-            // 2. Render ALL Detail Tables to the Container (semua disembunyikan secara default oleh CSS)
+            // 2. Render Detail Tables
             detailsContainer.innerHTML = '';
-            detailsContainer.innerHTML += renderTable("Master Data Pelanggan (CID)", data.cid_data, 'CID');
-            detailsContainer.innerHTML += renderTable("Riwayat Piutang (MC - Semua Periode)", data.mc_data, 'MC');
-            detailsContainer.innerHTML += renderTable("Riwayat Pembayaran (MB - Semua Transaksi)", data.mb_data, 'MB');
-            detailsContainer.innerHTML += renderTable("Detail Tunggakan (ARDEBT - Semua Periode)", data.ardebt_data, 'ARDEBT');
-            detailsContainer.innerHTML += renderTable("Riwayat Baca Meter (SBRS)", data.sbrs_data, 'SBRS');
+            
+            // CID Data (Master Statis)
+            detailsContainer.innerHTML += renderTable("Master Data Pelanggan (CID - Data Terbaru)", data.cid_data);
+
+            // MC Data (Piutang Berjalan Bulan Ini)
+            // KARENA MC SUDAH HISTORIS, JUDUL DIUBAH MENJADI RIWAYAT PIUTANG
+            detailsContainer.innerHTML += renderTable("Riwayat Piutang Bulanan (MC)", data.mc_data);
+            
+            // ARDEBT Data (Tunggakan Historis)
+            // KARENA ARDEBT SUDAH HISTORIS, JUDUL DIUBAH MENJADI RIWAYAT TUNGGAKAN
+            detailsContainer.innerHTML += renderTable("Riwayat Detail Tunggakan (ARDEBT)", data.ardebt_data);
+
+            // SBRS Data (Riwayat Baca Meter)
+            // SBRS sudah historis sejak awal
+            detailsContainer.innerHTML += renderTable("Riwayat Baca Meter (SBRS - Terakhir)", data.sbrs_data);
             
             resultsArea.style.display = 'block';
             initialMessage.style.display = 'none';
-
-            // Otomatis tampilkan tabel pertama saat hasil dimuat
-            showDetail('CID');
         }
-        
-        window.showDetail = function(sectionId) {
-            // Sembunyikan semua section detail
-            const allSections = detailsContainer.querySelectorAll('.detail-table-section');
-            allSections.forEach(section => {
-                section.style.display = 'none';
-            });
-            
-            // Atur tombol aktif
-            const allButtons = detailsNav.querySelectorAll('button');
-            allButtons.forEach(button => {
-                button.classList.remove('active');
-            });
-
-            // Tampilkan section yang dipilih
-            const targetSection = document.getElementById(`table-${sectionId}`);
-            const activeButton = detailsNav.querySelector(`button[onclick*="'${sectionId}'"]`);
-            
-            if (targetSection) {
-                targetSection.style.display = 'block';
-            }
-            if (activeButton) {
-                activeButton.classList.add('active');
-            }
-        }
-
 
         async function performSearch() {
             const nomen = nomenInput.value.trim();
@@ -346,20 +278,9 @@
             initialMessage.style.display = 'none';
             
             try {
+                // Endpoint search_nomen di app.py sudah diperbarui untuk mengambil data historis dari MC, CID, ARDEBT
                 const response = await fetch(`{{ url_for('search_nomen') }}?nomen=${nomen}`);
-                
-                // Ambil respons sebagai teks untuk membedakan JSON vs HTML Error
-                const responseText = await response.text(); 
-                let result = {};
-
-                try {
-                    result = JSON.parse(responseText);
-                } catch (e) {
-                    // JSON parsing error (server returned non-JSON/HTML)
-                    searchStatus.innerHTML = `<span class="status-danger">❌ Error Server: Gagal mengurai respons. Server mungkin mengalami kegagalan internal.</span>`;
-                    console.error('JSON Parse Error:', e, 'Response Text:', responseText.substring(0, 200));
-                    return;
-                }
+                const result = await response.json();
 
                 if (response.status === 200 && result.status === 'success') {
                     searchStatus.innerHTML = `<span class="status-ok">✅ Ditemukan. Klik tombol 'Cari' lagi untuk NOMEN lain.</span>`;
@@ -369,12 +290,10 @@
                     detailsContainer.innerHTML = '';
                     resultsArea.style.display = 'none';
                 } else {
-                    // Menangani error JSON dari backend (misal status 500 dari try-except Python)
                     searchStatus.innerHTML = `<span class="status-danger">❌ Error Server: ${result.message || 'Gagal memuat data.'}</span>`;
                 }
             } catch (error) {
-                // True network error (fetch failed, e.g., connection lost, CORS issues)
-                searchStatus.innerHTML = `<span class="status-danger">❌ Error Jaringan. Cek koneksi Anda atau hubungi admin.</span>`;
+                searchStatus.innerHTML = `<span class="status-danger">❌ Error Jaringan.</span>`;
                 console.error('Fetch Error:', error);
             }
         }
