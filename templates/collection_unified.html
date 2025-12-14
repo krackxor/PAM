@@ -246,6 +246,20 @@
 
     <div id="content-monitoring" class="tab-content-tab" style="display: none;">
         
+        <h3 style="color: #28a745;">
+            <i class="fas fa-arrows-alt-h"></i> Perbandingan Koleksi Bulanan (MoM)
+        </h3>
+        
+        <div id="momReportArea" class="content-section">
+            <div id="momSummaryGrid" class="report-grid">
+                </div>
+            <div id="momChartContainer" style="max-width: 900px; margin: 30px auto;">
+                <canvas id="momBarChart"></canvas>
+            </div>
+            <div id="momTableContainer" class="report-table-wrapper" style="margin-top: 30px;">
+                </div>
+        </div>
+        
         <h3 style="color: #dc3545;">
             <i class="fas fa-calendar-alt"></i> Monitoring Koleksi Harian (Rayon 34 & 35)
         </h3>
@@ -365,10 +379,11 @@
     </div>
 
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script>
-        // Memastikan Chart.js dimuat dari base.html (diasumsikan)
+        // Memastikan Chart.js dimuat dari CDN (tambahan untuk memastikan ketersediaan)
         if (typeof Chart === 'undefined') {
-            console.error("Chart.js belum dimuat. Pastikan Anda telah memasukkan script Chart.js di base.html.");
+             console.error("Chart.js belum dimuat.");
         }
 
         const reportArea = document.getElementById('reportArea');
@@ -387,6 +402,12 @@
         
         const agingReportArea = document.getElementById('agingReportArea');
         const tariffChartArea = document.getElementById('tariffChartArea');
+
+        // MoM Variables
+        const momSummaryGrid = document.getElementById('momSummaryGrid');
+        const momTableContainer = document.getElementById('momTableContainer');
+        let momChartInstance = null;
+        let tariffChartInstance = null;
 
 
         function formatRupiah(number) {
@@ -420,6 +441,7 @@
             if (tabName === 'summary') {
                 fetchCollectionReport(); 
             } else if (tabName === 'monitoring') {
+                fetchMoMReport(); // Memuat MoM Report
                 fetchCollectionMonitoring();
                 fetchCollectionDetails(''); 
             } else if (tabName === 'analysis') {
@@ -429,13 +451,180 @@
         // --- END FUNGSI UTILITY UNTUK TAB ---
         
         // =========================================================
-        // --- FUNGSI BARU: MEMUAT AGING REPORT ---
+        // --- FUNGSI BARU: MEMUAT MOM REPORT ---
         // =========================================================
+        async function fetchMoMReport() {
+            momSummaryGrid.innerHTML = '<p class="no-results" style="grid-column: 1 / -1;"><i class="fas fa-spinner fa-spin"></i> Memuat Laporan Perbandingan Bulanan...</p>';
+            momTableContainer.innerHTML = '';
+            
+            try {
+                const response = await fetch('{{ url_for("mom_report_api") }}'); 
+                const result = await response.json();
+
+                if (result.status !== 'success') {
+                     momSummaryGrid.innerHTML = `<p class="no-results" style="color: red; grid-column: 1 / -1;">❌ Gagal memuat report: ${result.message || 'Error Server'}</p>`;
+                     return;
+                }
+                
+                renderMoMReport(result.data);
+
+            } catch (error) {
+                momSummaryGrid.innerHTML = '<p class="no-results" style="color: red; grid-column: 1 / -1;">Gagal mengambil data MoM report dari server.</p>';
+                console.error('MoM Report Error:', error);
+            }
+        }
+
+        function renderMoMReport(data) {
+            
+            // Helper untuk menentukan warna dan ikon (Naik/Turun/Netral)
+            const getChangeColor = (value) => value > 0 ? '#28a745' : (value < 0 ? '#dc3545' : '#6c757d');
+            const getChangeIcon = (value) => value > 0 ? 'up' : (value < 0 ? 'down' : 'minus');
+            
+            // --- 1. RENDER SUMMARY GRID ---
+            
+            momSummaryGrid.innerHTML = `
+                <div class="summary-card" style="border-left-color: #28a745;">
+                    <h4>Nominal Koleksi Bulan Ini (${data.period_current})</h4>
+                    <p>${formatRupiah(data.current_nominal)}</p>
+                </div>
+                <div class="summary-card" style="border-left-color: ${getChangeColor(data.change_nominal)};">
+                    <h4>Perubahan Nominal (MoM)</h4>
+                    <p style="color: ${getChangeColor(data.change_nominal)};">
+                        <i class="fas fa-caret-${getChangeIcon(data.change_nominal)}"></i> 
+                        ${formatPercent(data.change_nominal)}
+                    </p>
+                </div>
+                <div class="summary-card" style="border-left-color: #007bff;">
+                    <h4>Jml Pelanggan Bulan Ini (${data.period_current})</h4>
+                    <p>${formatNumber(data.current_nomen)}</p>
+                </div>
+                <div class="summary-card" style="border-left-color: ${getChangeColor(data.change_nomen)};">
+                    <h4>Perubahan Pelanggan (MoM)</h4>
+                    <p style="color: ${getChangeColor(data.change_nomen)};">
+                        <i class="fas fa-caret-${getChangeIcon(data.change_nomen)}"></i> 
+                        ${formatPercent(data.change_nomen)}
+                    </p>
+                </div>
+            `;
+
+            // --- 2. RENDER TABLE ---
+            momTableContainer.innerHTML = `
+                <h4 style="margin-top: 20px;">Tabel Perbandingan Koleksi Nominal dan Pelanggan</h4>
+                <table class="report-table" style="min-width: 600px;">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left;">Metrik</th>
+                            <th>Bulan Lalu (${data.period_last})</th>
+                            <th>Bulan Ini (${data.period_current})</th>
+                            <th>Perubahan (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="text-align: left;">Total Nominal Koleksi</td>
+                            <td>${formatRupiah(data.last_nominal)}</td>
+                            <td>${formatRupiah(data.current_nominal)}</td>
+                            <td style="color: ${getChangeColor(data.change_nominal)}; font-weight: bold;">
+                                 ${formatPercent(data.change_nominal)}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="text-align: left;">Jumlah Pelanggan</td>
+                            <td>${formatNumber(data.last_nomen)}</td>
+                            <td>${formatNumber(data.current_nomen)}</td>
+                            <td style="color: ${getChangeColor(data.change_nomen)}; font-weight: bold;">
+                                 ${formatPercent(data.change_nomen)}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            `;
+            
+            // --- 3. RENDER BAR CHART ---
+            renderMoMChart(data);
+        }
+
+        function renderMoMChart(data) {
+            if (momChartInstance) {
+                momChartInstance.destroy();
+            }
+
+            const ctx = document.getElementById('momBarChart').getContext('2d');
+            
+            // Data untuk Chart.js
+            const chartLabels = ['Nominal Koleksi', 'Jumlah Pelanggan'];
+            const chartData = {
+                labels: chartLabels,
+                datasets: [
+                    {
+                        label: data.period_last,
+                        data: [data.last_nominal, data.last_nomen],
+                        backgroundColor: '#adb5bd', // Abu-abu terang
+                        borderColor: '#adb5bd',
+                        borderWidth: 1
+                    },
+                    {
+                        label: data.period_current,
+                        data: [data.current_nominal, data.current_nomen],
+                        backgroundColor: '#28a745', // Hijau
+                        borderColor: '#28a745',
+                        borderWidth: 1
+                    }
+                ]
+            };
+
+            momChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Nilai (Rupiah/Count)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: true,
+                            text: 'Perbandingan Koleksi Nominal & Pelanggan'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.dataIndex === 0) {
+                                        label += formatRupiah(context.parsed.y);
+                                    } else {
+                                        label += formatNumber(context.parsed.y);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // =========================================================
+        // --- FUNGSI AGING REPORT, BREAKDOWN TARIF, DLL. ---
+        // =========================================================
+        
+        // --- FUNGSI BARU: MEMUAT AGING REPORT ---
         async function fetchAgingReport() {
             agingReportArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Laporan Umur Piutang...</p>';
             
             try {
-                // Panggil API baru yang sudah dibuat di app.py
                 const response = await fetch('{{ url_for("aging_report_api") }}'); 
                 const result = await response.json();
 
@@ -497,6 +686,10 @@
         function renderTariffBreakdownChart(data) {
             const chartData = {};
             
+            if (tariffChartInstance) {
+                tariffChartInstance.destroy();
+            }
+
             // Agregat berdasarkan TARIF di semua Rayon 34/35
             data.forEach(item => {
                 const tarif = item.TARIF || 'N/A';
@@ -517,13 +710,7 @@
                 return colors[index % colors.length];
             });
 
-            // Hancurkan instance chart yang ada (jika ada)
-            const existingChart = Chart.getChart("tarifBreakdownChart");
-            if (existingChart) {
-                existingChart.destroy();
-            }
-
-            new Chart(document.getElementById('tarifBreakdownChart'), {
+            tariffChartInstance = new Chart(document.getElementById('tarifBreakdownChart'), {
                 type: 'pie',
                 data: {
                     labels: labels,
@@ -561,7 +748,6 @@
                 
                 if (response.status !== 200 || data.length === 0) {
                      tarifBreakdownArea.innerHTML = `<p class="no-results" style="color: #6c757d;">Tidak ada data pelanggan yang cocok dengan kriteria kustom (Rayon 34/35 Reguler).</p>`;
-                     // Clear chart area on failure
                      const existingChart = Chart.getChart("tarifBreakdownChart");
                      if (existingChart) { existingChart.destroy(); }
                      return;
@@ -622,9 +808,6 @@
             `;
             tarifBreakdownArea.innerHTML = tableHTML;
         }
-
-        // --- FUNGSI 1, 2, 3, 4, 5, 6 lainnya tetap sama ---
-        // FUNGSI INI DIHAPUS UNTUK MENJAGA KODE TETAP RINGKAS, ASUMSI ANDA MEMILIKI VERSI LENGKAPNYA.
 
         // --- FUNGSI 1: MEMUAT REPORT RINGKAS ---
         async function fetchCollectionReport() {
