@@ -64,7 +64,6 @@ try:
     collection_mc.create_index([('TARIF', 1), ('KUBIK', 1), ('NOMINAL', 1)], name='idx_mc_tarif_volume')
 
     # MB (MasterBayar): PERBAIKAN KRITIS DUPLIKASI STARTUP
-    # Index ini sebelumnya didefinisikan sebagai unique=True dan gagal saat ada duplikasi di data lama.
     try:
         # Coba drop index lama yang mungkin unik dan rusak
         collection_mb.drop_index('idx_mb_unique_transaction')
@@ -81,7 +80,6 @@ try:
     try:
         collection_sbrs.create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', 1)], name='idx_sbrs_unique_read', unique=True)
     except OperationFailure:
-        # Jika SBRS juga memiliki duplikasi di data lama, drop index unik dan buat ulang tanpa unique
         collection_sbrs.drop_index('idx_sbrs_unique_read')
         collection_sbrs.create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', 1)], name='idx_sbrs_unique_read', unique=False)
         
@@ -98,7 +96,6 @@ try:
 
     print("Koneksi MongoDB berhasil dan index dikonfigurasi!")
 except Exception as e:
-    # Error ini sekarang hanya akan muncul jika koneksi MongoDB gagal total
     print(f"Gagal terhubung ke MongoDB atau mengkonfigurasi index: {e}")
     client = None
 
@@ -478,7 +475,9 @@ def collection_report_api():
     pipeline_mb_undue = [
         # Match payments for the current month's bill (approximation)
         { '$match': { 
-            'BULAN_REK': latest_mc_month # Match bulan MB dengan bulan tagihan MC terbaru
+            'BULAN_REK': latest_mc_month, # Filter bulan tagihan (BILL_PERIOD)
+            # Filter hanya untuk Biaya Pemakaian Air
+            'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
         }},
         { '$project': {
             'NOMEN': 1,
@@ -596,7 +595,9 @@ def collection_detail_api():
                 {'PCEZ': {'$regex': safe_query_str}},
                 {'NOMEN': {'$regex': safe_query_str}},
                 {'ZONA_NOREK': {'$regex': safe_query_str}}, 
-                {'LKS_BAYAR': {'$regex': safe_query_str}} 
+                {'LKS_BAYAR': {'$regex': safe_query_str}},
+                {'BILL_REASON': {'$regex': safe_query_str}},
+                {'BULAN_REK': {'$regex': safe_query_str}} # Tambahkan BULAN_REK ke pencarian
             ]
         }
         mongo_query.update(search_filter)
@@ -615,7 +616,7 @@ def collection_detail_api():
             nominal_val = float(doc.get('NOMINAL', 0)) 
             kubik_val = float(doc.get('KUBIKBAYAR', 0)) # NEW: Include KUBIKBAYAR
             pay_dt = doc.get('TGL_BAYAR', '')
-            bulan_rek = doc.get('BULAN_REK', '')
+            bulan_rek = doc.get('BULAN_REK', 'N/A')
             
             # Perbandingan IS_UNDUE menggunakan BULAN_REK MB dan BULAN_TAGIHAN MC terbaru
             is_undue = bulan_rek == latest_mc_month
@@ -627,6 +628,8 @@ def collection_detail_api():
                 'NOMINAL': nominal_val,
                 'KUBIKBAYAR': kubik_val, # NEW
                 'PAY_DT': pay_dt,
+                'BULAN_REK': bulan_rek, # Tambahkan BULAN_REK untuk debugging
+                'BILL_REASON': doc.get('BILL_REASON', 'N/A'), # Tambahkan BILL_REASON
                 'IS_UNDUE': is_undue # NEW
             })
             
@@ -1060,7 +1063,8 @@ def collection_monitoring_api():
 
         pipeline_mb_daily = [
             # Filter berdasarkan BULAN_REK MB yang sama dengan BULAN_TAGIHAN MC terbaru
-            {'$match': {'BULAN_REK': latest_mc_month}}, 
+            {'$match': {'BULAN_REK': latest_mc_month,
+                        'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}}, 
             {'$project': {
                 'TGL_BAYAR': 1,
                 'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}, 
@@ -1163,29 +1167,48 @@ def collection_monitoring_api():
 @app.route('/api/collection/mom_report', methods=['GET'])
 @login_required
 def mom_report_api():
-    """Menghitung perbandingan koleksi (Nominal dan Pelanggan) bulan ini vs bulan lalu."""
+    """
+    Menghitung perbandingan koleksi (Nominal dan Pelanggan) bulan ini vs bulan lalu.
+    (Menggunakan perbandingan DAY-TO-DATE (D-T-D) untuk akurasi di tengah bulan).
+    """
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
 
     try:
         now = datetime.now()
         
-        # Tentukan bulan ini dan bulan lalu (sebagai string YYYY-MM)
-        this_month_str = now.strftime('%Y-%m')
+        # Tentukan hari dan tanggal hari ini
+        day_of_month = now.day # Misal, 14
+        this_month_str = now.strftime('%Y-%m') # Misal, 2025-12
+        
         # Hitung bulan lalu
         last_month = now.replace(day=1) - timedelta(days=1)
-        last_month_str = last_month.strftime('%Y-%m')
+        last_month_str = last_month.strftime('%Y-%m') # Misal, 2025-11
+
+        # Buat daftar tanggal yang akan dicocokkan (1 sampai hari ini) untuk filtering yang adil (DTD)
+        date_pattern = []
+        for i in range(1, day_of_month + 1):
+            day_str = f'{i:02d}' # 1 menjadi 01, 14 tetap 14
+            date_pattern.append(f"{this_month_str}-{day_str}")
+            # Pastikan bulan lalu juga memiliki tanggal tersebut (misal: Feb tidak punya tgl 30)
+            try:
+                datetime.strptime(f"{last_month_str}-{day_str}", '%Y-%m-%d') 
+                date_pattern.append(f"{last_month_str}-{day_str}")
+            except ValueError:
+                pass 
         
-        # Pipeline untuk mengambil koleksi dari dua bulan terakhir
+        regex_pattern = "|".join(date_pattern)
+
+
+        # Pipeline untuk mengambil koleksi dari dua bulan terakhir HANYA sampai hari ke-N
         pipeline = [
             {'$match': {
-                # Mencocokkan TGL_BAYAR berdasarkan prefix YYYY-MM
-                'TGL_BAYAR': {'$regex': f"({this_month_str}|{last_month_str})"}
+                'TGL_BAYAR': {'$regex': f"^({regex_pattern})$"},
+                'BILL_REASON': 'BIAYA PEMAKAIAN AIR' 
             }},
             {'$project': {
                 'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
                 'NOMEN': 1,
-                # Ekstrak periode (YYYY-MM) dari TGL_BAYAR (index 0, panjang 7)
                 'Periode': {'$substr': ['$TGL_BAYAR', 0, 7]} 
             }},
             {'$group': {
@@ -1238,6 +1261,97 @@ def mom_report_api():
         return jsonify({"status": 'error', "message": f"Gagal mengambil laporan MoM: {e}"}), 500
 
 # =========================================================================
+# === API PERBANDINGAN KOLEKSI DOH (Day-of-the-Month) ===
+# =========================================================================
+
+@app.route('/api/collection/doh_comparison_report', methods=['GET'])
+@login_required
+def doh_comparison_report_api():
+    """Menghitung perbandingan koleksi harian (Nominal) Bulan Ini vs Bulan Lalu, per Rayon."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+
+    try:
+        now = datetime.now()
+        day_of_month = now.day # Misal: 14
+        
+        this_month_str = now.strftime('%Y-%m') # Misal: 2025-12
+        last_month = now.replace(day=1) - timedelta(days=1)
+        last_month_str = last_month.strftime('%Y-%m') # Misal: 2025-11
+        
+        # 1. Tentukan tanggal perbandingan (DTD)
+        date_prefixes = []
+        for i in range(1, day_of_month + 1):
+            day_str = f'{i:02d}'
+            date_prefixes.append(f"{this_month_str}-{day_str}")
+            try:
+                datetime.strptime(f"{last_month_str}-{day_str}", '%Y-%m-%d') 
+                date_prefixes.append(f"{last_month_str}-{day_str}")
+            except ValueError:
+                pass 
+        
+        regex_pattern = "|".join(date_prefixes)
+
+        # 2. Pipeline Agregasi MoM DtD per Hari dan per Rayon
+        pipeline = [
+            {'$match': {
+                'TGL_BAYAR': {'$regex': f"^({regex_pattern})$"},
+                'BILL_REASON': 'BIAYA PEMAKAIAN AIR' 
+            }},
+            {'$project': {
+                'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
+                'RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$RAYON', 'N/A']}}}}},
+                # Ekstrak Hari (DD) dan Periode (YYYY-MM)
+                'Day': {'$substr': ['$TGL_BAYAR', 8, 2]},
+                'Periode': {'$substr': ['$TGL_BAYAR', 0, 7]}
+            }},
+            {'$group': {
+                '_id': {'periode': '$Periode', 'day': '$Day', 'rayon': '$RAYON'},
+                'DailyNominal': {'$sum': '$NOMINAL'},
+            }},
+        ]
+        
+        raw_data = list(collection_mb.aggregate(pipeline))
+        
+        # 3. Strukturisasi Data untuk Frontend
+        
+        # Buat daftar hari (01 hingga day_of_month)
+        days = [f'{i:02d}' for i in range(1, day_of_month + 1)]
+        
+        # Inisialisasi struktur hasil
+        report_structure = {
+            'days': days,
+            'R34': {last_month_str: [0] * day_of_month, this_month_str: [0] * day_of_month},
+            'R35': {last_month_str: [0] * day_of_month, this_month_str: [0] * day_of_month},
+            'TOTAL_AB': {last_month_str: [0] * day_of_month, this_month_str: [0] * day_of_month},
+        }
+        
+        # Isi data ke dalam struktur
+        for item in raw_data:
+            day_index = int(item['_id']['day']) - 1
+            rayon = item['_id']['rayon']
+            periode = item['_id']['periode']
+            nominal = item['DailyNominal']
+            
+            if rayon in ['34', '35']:
+                if periode in report_structure[rayon]:
+                    report_structure[rayon][periode][day_index] = nominal
+                
+                # Agregasi ke TOTAL_AB (gabungan 34 dan 35)
+                if periode in report_structure['TOTAL_AB']:
+                    report_structure['TOTAL_AB'][periode][day_index] += nominal
+        
+        return jsonify({
+            'status': 'success',
+            'data': report_structure,
+            'periods': {'current': this_month_str, 'last': last_month_str}
+        }), 200
+
+    except Exception as e:
+        print(f"Error saat membuat laporan DOH comparison: {e}")
+        return jsonify({"status": 'error', "message": f"Gagal mengambil laporan DOH comparison: {e}"}), 500
+
+# =========================================================================
 # === API PERUBAHAN TARIF PELANGGAN (LANJUTAN) ===
 # =========================================================================
 
@@ -1250,7 +1364,6 @@ def _aggregate_tariff_changes(collection_cid):
         return []
 
     pipeline_tariff_history = [
-        # 1. Group berdasarkan NOMEN untuk mengumpulkan riwayat tarif
         {'$group': {
             '_id': '$NOMEN',
             'history': {
@@ -1260,7 +1373,6 @@ def _aggregate_tariff_changes(collection_cid):
                 }
             }
         }},
-        # 2. Sort the history array by date/timestamp
         {'$project': {
             'NOMEN': '$_id',
             'sorted_history': {
@@ -1271,7 +1383,6 @@ def _aggregate_tariff_changes(collection_cid):
             },
             '_id': 0
         }},
-        # 3. Dapatkan tarif terbaru dan tarif sebelumnya
         {'$addFields': {
             'latest_tarif': {'$arrayElemAt': ['$sorted_history.tarif', -1]}, 
             'previous_tarif': {
@@ -1281,12 +1392,10 @@ def _aggregate_tariff_changes(collection_cid):
                 ]
             }
         }},
-        # 4. Cocokkan jika tarif terbaru TIDAK SAMA dengan tarif sebelumnya
         {'$match': {
             '$expr': {'$ne': ['$latest_tarif', '$previous_tarif']},
             'previous_tarif': {'$ne': None} 
         }},
-        # 5. Proyeksi Akhir
         {'$project': {
             'NOMEN': 1,
             'TARIF_SEBELUMNYA': '$previous_tarif',
@@ -1312,7 +1421,7 @@ def analyze_tariff_change_api():
 
     except Exception as e:
         print(f"Error saat menganalisis perubahan tarif: {e}")
-        return jsonify({"message": f"Gagal mengambil data perubahan tarif. Detail teknis error: {e}"}), 500
+        return jsonify({"message": f"Gagal mengambil data perubahan tarif: {e}"}), 500
 
 # =========================================================================
 # === API LAPORAN TOP LISTS (LANJUTAN) ===
@@ -1860,13 +1969,29 @@ def upload_mb_data():
         
         # >>> START PERBAIKAN: MAPPING HEADER KRITIS UNTUK MB <<<
         rename_map = {
-            'NOTAG': 'NOTAGIHAN',  # Mengubah header file 'NOTAG' menjadi kunci sistem 'NOTAGIHAN'
-            'PAY_DT': 'TGL_BAYAR',  # Mengubah header file 'PAY_DT' menjadi kunci sistem 'TGL_BAYAR'
+            'NOTAG': 'NOTAGIHAN',  # Map NOTAG
+            'PAY_DT': 'TGL_BAYAR',  # Map PAY_DT
+            'BILL_PERIOD': 'BULAN_REK', # Map BILL_PERIOD dari Daily Collection ke BULAN_REK
+            'MC VOL OKT 25_NOMEN': 'NOMEN' # Tambahan mapping jika Nomen tidak konsisten (dari snippet)
         }
         # Menggunakan errors='ignore' memastikan hanya kolom yang ada di file yang diubah namanya
         df = df.rename(columns=lambda x: rename_map.get(x, x), errors='ignore')
         # >>> END PERBAIKAN: MAPPING HEADER KRITIS UNTUK MB <<<
         
+        # >>> START PERBAIKAN: INJECT MISSING KRITICAL COLUMNS <<<
+        
+        # Pastikan BILL_REASON ada. Jika hilang, set ke 'UNKNOWN' (agar tidak termasuk 'BIAYA PEMAKAIAN AIR')
+        if 'BILL_REASON' not in df.columns:
+             df['BILL_REASON'] = 'UNKNOWN'
+             print("Peringatan: Kolom BILL_REASON hilang, diisi dengan UNKNOWN.")
+        
+        # Jika BULAN_REK masih hilang setelah mapping BILL_PERIOD, set ke 'N/A'
+        if 'BULAN_REK' not in df.columns:
+             df['BULAN_REK'] = 'N/A' 
+             print("Peringatan: Kolom BULAN_REK/BILL_PERIOD hilang, diisi dengan N/A.")
+             
+        # >>> END PERBAIKAN: INJECT MISSING KRITICAL COLUMNS <<<
+
         # >>> START PERBAIKAN KRITIS: NORMALISASI FORMAT TANGGAL TGL_BAYAR <<<
         if 'TGL_BAYAR' in df.columns:
             
@@ -1897,7 +2022,7 @@ def upload_mb_data():
         
         # >>> PERBAIKAN KRITIS MB: NORMALISASI DATA PANDAS <<<
 
-        columns_to_normalize_mb = ['NOMEN', 'RAYON', 'PCEZ', 'ZONA_NOREK', 'LKS_BAYAR', 'BULAN_REK', 'NOTAGIHAN'] 
+        columns_to_normalize_mb = ['NOMEN', 'RAYON', 'PCEZ', 'ZONA_NOREK', 'LKS_BAYAR', 'BULAN_REK', 'NOTAGIHAN', 'BILL_REASON'] 
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize_mb:
@@ -1913,10 +2038,8 @@ def upload_mb_data():
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
         # --- START: OPERASI BULK WRITE TEROPTIMASI ---
-        # Kunci unik untuk MB (index di startup sekarang non-unique, tetapi kita masih menggunakan ini untuk menghindari duplikasi saat insert)
         UNIQUE_KEYS = ['NOTAGIHAN', 'TGL_BAYAR', 'NOMINAL'] 
         
-        # Check dilakukan setelah renaming, memastikan kunci sudah sesuai
         if not all(key in df.columns for key in UNIQUE_KEYS):
             return jsonify({"message": f"Gagal Append: File MB harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)}. Cek file Anda."}), 400
 
@@ -1925,7 +2048,6 @@ def upload_mb_data():
         total_rows = len(data_to_insert)
 
         try:
-            # Menggunakan insert_many(ordered=False) untuk kecepatan dan melewati duplikasi
             result = collection_mb.insert_many(data_to_insert, ordered=False)
             inserted_count = len(result.inserted_ids)
             skipped_count = total_rows - inserted_count
@@ -2269,7 +2391,7 @@ def dashboard_summary_api():
         
         # 2. TOTAL PIUTANG & TUNGGAKAN
         pipeline_piutang = [
-            {'$match': {'BULAN_TAGIHAN': latest_mc_month}} if latest_mc_month else {'$match': {'NOMEN': {'$exists': True}}}, 
+            {'$match': {'BULAN_TAGIHAN': latest_mc_month}},
             {'$group': {
                 '_id': None,
                 'total_piutang': {'$sum': '$NOMINAL'},
@@ -2294,7 +2416,10 @@ def dashboard_summary_api():
         # 3. KOLEKSI HARI INI (dari MB)
         today_date = datetime.now().strftime('%Y-%m-%d')
         pipeline_koleksi_today = [
-            {'$match': {'TGL_BAYAR': today_date}}, # Match string tanggal hari ini (Format YYYY-MM-DD)
+            {'$match': {'TGL_BAYAR': today_date,
+                        # Filter untuk Koleksi Rutin
+                        'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
+            }}, 
             {'$group': {
                 '_id': None,
                 'koleksi_hari_ini': {'$sum': '$NOMINAL'},
@@ -2308,7 +2433,10 @@ def dashboard_summary_api():
         # 4. TOTAL KOLEKSI BULAN INI
         this_month = datetime.now().strftime('%Y-%m')
         pipeline_koleksi_month = [
-            {'$match': {'TGL_BAYAR': {'$regex': this_month}}}, # Match string bulan ini (Format YYYY-MM)
+            {'$match': {'TGL_BAYAR': {'$regex': this_month},
+                        # Filter untuk Koleksi Rutin
+                        'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
+            }},
             {'$group': {
                 '_id': None,
                 'koleksi_bulan_ini': {'$sum': '$NOMINAL'},
@@ -2351,7 +2479,7 @@ def dashboard_summary_api():
         
         # 7. TOP 5 RAYON DENGAN PIUTANG TERTINGGI (Bulan Tagihan Terbaru)
         pipeline_top_rayon = [
-            {'$match': {'BULAN_TAGIHAN': latest_mc_month}} if latest_mc_month else {'$match': {'NOMEN': {'$exists': True}}}, 
+            {'$match': {'BULAN_TAGIHAN': latest_mc_month}},
             {'$group': {
                 '_id': '$RAYON',
                 'total_piutang': {'$sum': '$NOMINAL'},
@@ -2379,7 +2507,9 @@ def dashboard_summary_api():
             date = date_obj.strftime('%Y-%m-%d')
             
             pipeline = [
-                {'$match': {'TGL_BAYAR': date}}, 
+                {'$match': {'TGL_BAYAR': date, 
+                           # Filter untuk Koleksi Rutin
+                           'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}}, 
                 {'$group': {
                     '_id': None,
                     'total': {'$sum': '$NOMINAL'},
@@ -2419,7 +2549,7 @@ def rayon_analysis_api():
     
     try:
         pipeline_piutang_rayon = [
-            {'$match': {'BULAN_TAGIHAN': latest_mc_month}} if latest_mc_month else {'$match': {'NOMEN': {'$exists': True}}}, 
+            {'$match': {'BULAN_TAGIHAN': latest_mc_month}}, 
             {'$group': {
                 '_id': '$RAYON',
                 'total_piutang': {'$sum': '$NOMINAL'},
@@ -2439,7 +2569,10 @@ def rayon_analysis_api():
         
         this_month = datetime.now().strftime('%Y-%m')
         pipeline_koleksi_rayon = [
-            {'$match': {'TGL_BAYAR': {'$regex': this_month}}},
+            {'$match': {'TGL_BAYAR': {'$regex': this_month},
+                        # Filter untuk Koleksi Rutin
+                        'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
+            }},
             {'$group': {
                 '_id': '$RAYON',
                 'total_koleksi': {'$sum': '$NOMINAL'},
