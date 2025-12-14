@@ -91,23 +91,20 @@
         <i class="fas fa-layer-group" style="margin-right: 10px;"></i> Analisis Agregasi & Daftar Khusus
     </h2>
 
-    <h3 style="color: #17a2b8;">
-        <i class="fas fa-list-ol"></i> Distribusi Pelanggan Berdasarkan TARIF (Rayon 34 & 35 Reguler)
-    </h3>
-    
-    <div id="tariffChartArea" style="max-width: 450px; margin: 20px auto;">
-        <canvas id="tarifBreakdownChart"></canvas>
-    </div>
-    <div id="tarifBreakdownArea">
-        <p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat data breakdown tarif...</p>
-    </div>
-
     <h3 style="color: var(--primary-color);">
         <i class="fas fa-chart-pie"></i> Laporan Agregasi Khusus (Pilih salah satu kartu untuk memuat)
     </h3>
     
     <div class="report-grid-menu">
         
+        <a href="javascript:void(0);" onclick="fetchTarifBreakdown();" class="report-card-link">
+            <div class="report-card-aggr" style="border-left-color: #17a2b8;">
+                <i class="fas fa-list-ol" style="color: #17a2b8;"></i>
+                <h3>Distribusi Tarif Pelanggan</h3>
+                <p>Melihat Pie Chart dan detail tabel jumlah nomen berdasarkan jenis tarif (R34/R35 Reguler).</p>
+            </div>
+        </a>
+
         <a href="javascript:void(0);" onclick="fetchCustomReport();" class="report-card-link">
             <div class="report-card-aggr" style="border-left-color: #dc3545;">
                 <i class="fas fa-layer-group" style="color: #dc3545;"></i>
@@ -144,7 +141,18 @@
     
     <hr style="margin: 40px 0; border-style: dotted;">
 
-    <h3 style="color: #dc3545;">
+    <h3 style="color: #17a2b8;">
+        <i class="fas fa-list-ol"></i> Hasil Distribusi Tarif Pelanggan
+    </h3>
+    <div id="tarifReportArea">
+        <p class="no-results">Tekan kartu "Distribusi Tarif Pelanggan" di atas untuk memuat hasilnya.</p>
+        <div id="tariffChartContainer" style="max-width: 450px; margin: 20px auto;">
+            <canvas id="tarifBreakdownChart"></canvas>
+        </div>
+        <div id="tarifBreakdownTableArea">
+        </div>
+    </div>
+    <h3 style="color: #dc3545; margin-top: 30px;">
         <i class="fas fa-layer-group"></i> Hasil Laporan AB Sunter
     </h3>
     <div id="customReportArea">
@@ -169,7 +177,7 @@
         <i class="fas fa-list-alt"></i> Hasil Daftar Konsumen Spesifik
     </h3>
     <div id="topListsArea">
-        <p class="no-results">Tekan kartu "Daftar Konsumen Top" di atas untuk memuat hasilnya.</p>
+        <p class="no-results">Tekan kartu "Daftar Konsumen Top & Status Bayar" di atas untuk memuat hasilnya.</p>
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -179,12 +187,14 @@
 
         // Element Selectors
         const customReportArea = document.getElementById('customReportArea');
-        const tarifBreakdownArea = document.getElementById('tarifBreakdownArea');
+        // UPDATE SELECTOR TARGETS
+        const tarifReportArea = document.getElementById('tarifReportArea');
+        const tarifBreakdownTableArea = document.getElementById('tarifBreakdownTableArea');
+        // END UPDATE
         const topListsArea = document.getElementById('topListsArea');
         const basicVolumeReportArea = document.getElementById('basicVolumeReportArea');
         const agingReportArea = document.getElementById('agingReportArea');
-        const tariffChartArea = document.getElementById('tariffChartArea');
-
+        // const tariffChartArea = document.getElementById('tariffChartArea'); // Ganti dengan container Chart yang baru
 
         // ========================
         // === UTILITY FUNCTIONS ===
@@ -202,32 +212,38 @@
         }
         
         const getChangeColor = (value) => value > 0 ? '#28a745' : (value < 0 ? '#dc3545' : '#6c757d');
-        const getChangeIcon = (value) => value > 0 ? 'up' : (value < 0 ? 'down' : 'minus');
-
+        // Hilangkan getChangeIcon karena tidak dipakai di halaman ini (dipakai di monitoring)
 
         // =========================================================
-        // --- FUNGSI 1: BREAKDOWN TARIF (Chart & Table) ---
+        // --- FUNGSI 1: BREAKDOWN TARIF (Chart & Table) - MODIFIED FOR ON-DEMAND LOADING ---
         // =========================================================
         async function fetchTarifBreakdown() {
-            tarifBreakdownArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Breakdown Tarif...</p>';
+            // Tampilkan spinner di area utama hasil
+            tarifReportArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Distribusi Tarif...</p>' + 
+                                        '<div id="tariffChartContainer" style="max-width: 450px; margin: 20px auto;"><canvas id="tarifBreakdownChart"></canvas></div>' + 
+                                        '<div id="tarifBreakdownTableArea"></div>';
             
             try {
-                // Asumsi endpoint Flask: analyze_mc_tarif_breakdown_api
+                // Panggil API baru untuk breakdown tarif
                 const response = await fetch('{{ url_for("analyze_mc_tarif_breakdown_api") }}'); 
                 const data = await response.json();
                 
                 if (response.status !== 200 || data.length === 0) {
-                    tarifBreakdownArea.innerHTML = `<p style="text-align: center; color: #6c757d;">Tidak ada data pelanggan yang cocok dengan kriteria kustom (Rayon 34/35 Reguler).</p>`;
+                    tarifReportArea.innerHTML = `<p style="text-align: center; color: #6c757d;">Tidak ada data pelanggan yang cocok dengan kriteria kustom (Rayon 34/35 Reguler).</p>`;
                     const existingChart = Chart.getChart("tarifBreakdownChart");
                     if (existingChart) { existingChart.destroy(); }
                     return;
                 }
                 
+                // Hapus placeholder setelah data dimuat
+                tarifReportArea.querySelector('.no-results')?.remove();
+                
+                // Render Chart dan Table ke area hasil yang sudah dibuat ulang
                 renderTarifBreakdownTable(data);
                 renderTariffBreakdownChart(data); 
 
             } catch (error) {
-                tarifBreakdownArea.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data breakdown tarif dari server.</p>';
+                tarifReportArea.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data breakdown tarif dari server.</p>';
                 console.error('Tarif Breakdown Error:', error);
             }
         }
@@ -257,6 +273,7 @@
                 return colors[index % colors.length];
             });
 
+            // Targetkan canvas di dalam container yang baru dibuat ulang di fetchTarifBreakdown
             tariffChartInstance = new Chart(document.getElementById('tarifBreakdownChart'), {
                 type: 'pie',
                 data: {
@@ -326,7 +343,8 @@
                 </table>
                 </div>
             `;
-            tarifBreakdownArea.innerHTML = tableHTML;
+            // Targetkan area tabel di dalam tarifReportArea
+            tarifReportArea.querySelector('#tarifBreakdownTableArea').innerHTML = tableHTML;
         }
 
         // =========================================================
@@ -661,7 +679,7 @@
             topListsArea.innerHTML = html;
         }
 
-        // Initial Load: Hanya load Breakdown Tarif
-        document.addEventListener('DOMContentLoaded', fetchTarifBreakdown);
+        // --- HAPUS: PANGGILAN OTOMATIS fetchTarifBreakdown() DARI SINI ---
+        // document.addEventListener('DOMContentLoaded', fetchTarifBreakdown);
     </script>
 {% endblock %}
