@@ -1027,8 +1027,9 @@ def collection_monitoring_api():
             {'$match': {'BULAN_TAGIHAN': latest_mc_month}},
             {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}},
-            {'$addFields': {'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}}}},
-            {'$match': {'CLEAN_RAYON': {'$in': ['34', '35']}}},
+            {'$addFields': {'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
+             'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},}},
+            {'$match': {'CLEAN_RAYON': {'$in': ['34', '35']}, 'CLEAN_TIPEPLGGN': 'REG'}},
             {'$group': {'_id': '$CLEAN_RAYON', 'TotalPiutang': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}}}}
         ], allowDiskUse=True)
         
@@ -1563,14 +1564,36 @@ def upload_mc_data():
     file_extension = filename.rsplit('.', 1)[1].lower()
 
     try:
+        # Get Month and Year from the request form data (sent from JS)
+        upload_month = request.form.get('month')
+        upload_year = request.form.get('year')
+        
+        # 1. Validation for required fields from HTML form
+        if not upload_month or not upload_year:
+            return jsonify({"message": "Gagal: Bulan dan Tahun Tagihan harus diisi."}), 400
+        
+        # Construct the BULAN_TAGIHAN string (e.g., 012025)
+        bulan_tagihan_value = f"{upload_month}{upload_year}"
+
         if file_extension == 'csv':
             df = pd.read_csv(file)
         elif file_extension in ['xlsx', 'xls']:
             df = pd.read_excel(file, sheet_name=0) 
         
+        # Normalize original column names (Uppercase)
         df.columns = [col.strip().upper() for col in df.columns]
         
+        # 2. Check for the critical NOMEN key (which should be present in the file)
+        if 'NOMEN' not in df.columns:
+            return jsonify({"message": "Gagal Append: File MC harus memiliki kolom kunci 'NOMEN' untuk penyimpanan historis."}), 400
+            
+        # >>> START: INJECT BULAN_TAGIHAN COLUMN <<<
+        # Suntikkan kolom BULAN_TAGIHAN yang dibuat dari form ke DataFrame
+        df['BULAN_TAGIHAN'] = bulan_tagihan_value
+        # >>> END: INJECT BULAN_TAGIHAN COLUMN <<<
+
         # >>> PERBAIKAN KRITIS MC: NORMALISASI DATA PANDAS <<<
+        # Pastikan BULAN_TAGIHAN ada di daftar normalisasi string
         columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF', 'BULAN_TAGIHAN'] 
         
         for col in df.columns:
@@ -1590,11 +1613,13 @@ def upload_mc_data():
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
-        # Kunci Unik: NOMEN + BULAN_TAGIHAN (HARUS ADA DI FILE MC)
+        # Kunci Unik: NOMEN + BULAN_TAGIHAN
         UNIQUE_KEYS = ['NOMEN', 'BULAN_TAGIHAN'] 
         
+        # Check this again for safety, though it should pass now
         if not all(key in df.columns for key in UNIQUE_KEYS):
-             return jsonify({"message": f"Gagal Append: File MC harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)} untuk penyimpanan historis. Mohon tambahkan kolom BULAN_TAGIHAN."}), 400
+             # Jika ini dieksekusi, ada masalah serius di Pandas/Loading.
+             return jsonify({"message": "Kesalahan Internal: Kolom kunci 'NOMEN' atau 'BULAN_TAGIHAN' hilang setelah pemrosesan Pandas."}), 500
 
         inserted_count = 0
         skipped_count = 0
@@ -1624,7 +1649,7 @@ def upload_mc_data():
 
     except Exception as e:
         print(f"Error saat memproses file MC: {e}")
-        return jsonify({"message": f"Gagal memproses file MC: {e}. Pastikan format data benar dan kolom BULAN_TAGIHAN ada."}), 500
+        return jsonify({"message": f"Gagal memproses file MC: {e}. Pastikan format data benar."}), 500
 
 
 @app.route('/upload/mb', methods=['POST'])
@@ -1889,6 +1914,16 @@ def upload_ardebt_data():
     file_extension = filename.rsplit('.', 1)[1].lower()
 
     try:
+        # Get Month and Year from the request form data (sent from JS)
+        upload_month = request.form.get('month')
+        upload_year = request.form.get('year')
+        
+        if not upload_month or not upload_year:
+            return jsonify({"message": "Gagal: Bulan dan Tahun Tunggakan harus diisi."}), 400
+        
+        # Construct the PERIODE_BILL string (e.g., 012025)
+        periode_bill_value = f"{upload_month}{upload_year}"
+
         if file_extension == 'csv':
             df = pd.read_csv(file)
         elif file_extension in ['xlsx', 'xls']:
@@ -1896,6 +1931,15 @@ def upload_ardebt_data():
         
         df.columns = [col.strip().upper() for col in df.columns]
         
+        # 2. Check for the critical NOMEN key (which should be present in the file)
+        if 'NOMEN' not in df.columns:
+            return jsonify({"message": "Gagal Append: File ARDEBT harus memiliki kolom kunci 'NOMEN' untuk penyimpanan historis."}), 400
+
+        # >>> START: INJECT PERIODE_BILL COLUMN <<<
+        # Suntikkan kolom PERIODE_BILL yang dibuat dari form ke DataFrame
+        df['PERIODE_BILL'] = periode_bill_value 
+        # >>> END: INJECT PERIODE_BILL COLUMN <<<
+
         # >>> PERBAIKAN KRITIS ARDEBT: NORMALISASI DATA PANDAS <<<
         columns_to_normalize_ardebt = ['NOMEN', 'RAYON', 'TIPEPLGGN', 'PERIODE_BILL'] 
         
@@ -1913,11 +1957,11 @@ def upload_ardebt_data():
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
-        # Kunci Unik: NOMEN + PERIODE_BILL + JUMLAH (PERIODE_BILL HARUS ADA DI FILE ARDEBT)
+        # Kunci Unik: NOMEN + PERIODE_BILL + JUMLAH 
         UNIQUE_KEYS = ['NOMEN', 'PERIODE_BILL', 'JUMLAH'] 
         
         if not all(key in df.columns for key in UNIQUE_KEYS):
-             return jsonify({"message": f"Gagal Append: File ARDEBT harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)} untuk penyimpanan historis. Mohon cek file Anda."}), 400
+             return jsonify({"message": "Kesalahan Internal: Kolom kunci ARDEBT hilang setelah pemrosesan Pandas."}), 500
 
         inserted_count = 0
         skipped_count = 0
@@ -1947,7 +1991,7 @@ def upload_ardebt_data():
 
     except Exception as e:
         print(f"Error saat memproses file ARDEBT: {e}")
-        return jsonify({"message": f"Gagal memproses file ARDEBT: {e}. Pastikan format data benar dan kolom PERIODE_BILL ada."}), 500
+        return jsonify({"message": f"Gagal memproses file ARDEBT: {e}. Pastikan format data benar."}), 500
 
 
 # =========================================================================
