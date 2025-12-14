@@ -23,8 +23,19 @@
             --border-radius: 8px;
         }
 
+        /* --- ANIMASI KEYFRAMES --- */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulseAlert {
+            0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.6); }
+            70% { box-shadow: 0 0 0 8px rgba(220, 53, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+        }
+
         body {
-            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; /* Font yang lebih modern */
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
@@ -46,6 +57,7 @@
             font-weight: 700;
         }
         
+        /* Fixed Footer Nav (Mobile-First) */
         .footer-nav {
             position: fixed; 
             bottom: 0;
@@ -54,7 +66,7 @@
             height: var(--footer-height);
             background-color: var(--card-bg); 
             border-top: 1px solid #e0e0e0;
-            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.08); /* Shadow yang lebih halus */
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.08);
             z-index: 1000;
             display: flex;
             justify-content: space-around; 
@@ -70,7 +82,7 @@
             font-size: 0.75em;
             padding: 5px 0;
             flex-grow: 1; 
-            transition: color 0.2s, transform 0.1s;
+            transition: color 0.2s, transform 0.2s; /* Transisi diperpanjang */
         }
 
         .nav-item i {
@@ -82,13 +94,19 @@
         .nav-item.active { 
             color: var(--primary-color);
             font-weight: 600;
-            transform: translateY(-2px); 
+            transform: translateY(-2px); /* Efek angkat halus */
         }
         
         .nav-item:hover {
             color: var(--primary-color);
+            transform: translateY(-1px);
+        }
+        
+        .nav-item:active {
+            transform: translateY(1px); /* Efek tekan */
         }
 
+        /* --- MAIN CONTENT & CONTAINER --- */
         .main-content {
             flex-grow: 1;
             padding: 20px 10px; 
@@ -107,34 +125,39 @@
             width: 100%; 
             max-width: 900px; 
             margin: 0 auto;
+            /* Animasi Fade In pada Container (Isi Konten) */
+            animation: fadeIn 0.6s ease-out forwards;
         }
 
-        /* Gaya Card Umum */
+        /* Gaya Card Umum (Dinamis) */
         .card {
             background-color: var(--card-bg);
             border: 1px solid #e0e0e0;
             border-radius: var(--border-radius);
             padding: 20px;
             box-shadow: var(--shadow-light);
-            transition: transform 0.3s, box-shadow 0.3s;
+            transition: all 0.3s ease; /* Transisi untuk semua properti */
         }
         .card:hover {
-            box-shadow: var(--shadow-medium);
+            transform: translateY(-3px); /* Efek angkat/lift */
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.15); /* Shadow lebih kuat */
         }
 
-        /* Flash Messages */
+        /* Flash Messages (Dinamis) */
         .flash-message {
             padding: 10px;
             margin-bottom: 20px;
             border-radius: 4px;
             text-align: center;
             font-weight: 600;
+            opacity: 0; /* Mulai tersembunyi */
+            animation: fadeIn 0.5s ease-out 0.2s forwards; /* Animasi fade-in */
         }
         .flash-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .flash-danger { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
         .flash-info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
 
-        /* Gaya Tombol Umum */
+        /* Gaya Tombol Umum (Dinamis) */
         .btn-primary {
             background-color: var(--primary-color);
             color: white;
@@ -143,15 +166,21 @@
             border-radius: 4px;
             cursor: pointer;
             font-weight: 600;
-            transition: background-color 0.3s;
+            transition: all 0.3s ease; 
             text-decoration: none; 
             display: inline-block;
         }
         .btn-primary:hover {
             background-color: #0056b3;
+            transform: translateY(-1px); /* Angkat sedikit */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .btn-primary:active {
+            transform: translateY(1px); /* Efek tekan */
+            box-shadow: none;
         }
 
-        /* Badge Notifikasi */
+        /* Badge Notifikasi (Dinamis) */
         .badge {
             position: absolute; 
             top: 0px; 
@@ -163,11 +192,27 @@
             font-size: 0.7em; 
             font-weight: bold; 
             display: none;
+            /* Animasi Pulse untuk menarik perhatian */
+            animation: pulseAlert 2s infinite; 
         }
 
+        /* --- MEDIA QUERY UNTUK LAYAR HP (Responsif) --- */
         @media (max-width: 600px) {
-            .main-content { padding: 10px; }
-            .container { padding: 15px; }
+            /* Hapus padding horizontal di main-content di HP */
+            .main-content { padding: 10px 0; } 
+            
+            /* Container mengambil lebar penuh, cocok untuk HP */
+            .container { 
+                padding: 15px; 
+                box-shadow: none; /* Hapus shadow di HP */
+                border-radius: 0; /* Hapus border-radius di HP */
+                max-width: 100%; 
+            }
+            
+            /* Wrapper Flash Message agar responsif */
+            .flash-message-wrapper {
+                 padding: 0 10px 0 10px;
+            }
         }
 
         {% block custom_styles %}{% endblock %}
@@ -184,7 +229,7 @@
     
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-            <div style="width: 100%; display: flex; justify-content: center; padding: 20px 0 0 0;">
+            <div style="width: 100%; display: flex; justify-content: center; padding: 20px 0 0 0;" class="flash-message-wrapper">
                 <div style="max-width: 900px; width: 95%;">
                     {% for category, message in messages %}
                         <div class="flash-message flash-{{ category }}">{{ message }}</div>
