@@ -165,12 +165,33 @@
     <div id="content-monthly" class="tab-content">
         <div class="upload-section">
             <h3>Update Data Bulanan (Mode Historis / APPEND)</h3>
-            <p style="font-weight: bold; color: var(--secondary-color); text-align: center;">Semua data akan disimpan sebagai riwayat (APPEND). Pastikan Anda memiliki kolom penentu waktu di file Anda.</p>
+            <p style="font-weight: bold; color: var(--secondary-color); text-align: center;">Semua data akan disimpan sebagai riwayat (APPEND). Bulan dan Tahun harus diisi untuk MC dan ARDEBT.</p>
 
             <div class="monthly-group" style="border-color: var(--secondary-color);">
                 <h4>MC: MASTER CETAK (MODE HISTORI)</h4>
                 <p>Data Piutang Bulanan. **MENAMBAHKAN** riwayat ke koleksi `MasterCetak`.</p>
                 <p style="font-size: 0.9em; color: #666;">Kunci unik: NOMEN dan BULAN_TAGIHAN.</p>
+
+                <div style="margin-bottom: 15px; display: flex; gap: 10px; justify-content: center;">
+                    <select id="mcMonth" name="month" required style="padding: 8px; border-radius: 4px; border: 1px solid #ced4da;">
+                        <option value="">-- Pilih Bulan Tagihan --</option>
+                        <option value="01">01 - Januari</option>
+                        <option value="02">02 - Februari</option>
+                        <option value="03">03 - Maret</option>
+                        <option value="04">04 - April</option>
+                        <option value="05">05 - Mei</option>
+                        <option value="06">06 - Juni</option>
+                        <option value="07">07 - Juli</option>
+                        <option value="08">08 - Agustus</option>
+                        <option value="09">09 - September</option>
+                        <option value="10">10 - Oktober</option>
+                        <option value="11">11 - November</option>
+                        <option value="12">12 - Desember</option>
+                    </select>
+                    <input type="number" id="mcYear" name="year" placeholder="Tahun (YYYY)" required 
+                           min="2000" max="2100" 
+                           style="padding: 8px; border-radius: 4px; width: 100px; border: 1px solid #ced4da;">
+                </div>
                 <form id="uploadFormMC" action="{{ url_for('upload_mc_data') }}" method="POST" enctype="multipart/form-data">
                     <input type="file" id="csvFileMC" name="file" accept=".csv, .xlsx, .xls" required>
                     <button type="submit" class="btn-upload-append">TAMBAH DATA MC (HISTORI)</button>
@@ -182,6 +203,27 @@
                 <h4>ARDEBT: DETAIL TUNGGAKAN (MODE HISTORI)</h4>
                 <p>Data Tunggakan Historis. **MENAMBAHKAN** riwayat ke koleksi `AccountReceivable`.</p>
                 <p style="font-size: 0.9em; color: #666;">Kunci unik: NOMEN, PERIODE_BILL, dan JUMLAH.</p>
+
+                <div style="margin-bottom: 15px; display: flex; gap: 10px; justify-content: center;">
+                    <select id="ardebtMonth" name="month" required style="padding: 8px; border-radius: 4px; border: 1px solid #ced4da;">
+                        <option value="">-- Pilih Bulan Tunggakan --</option>
+                        <option value="01">01 - Januari</option>
+                        <option value="02">02 - Februari</option>
+                        <option value="03">03 - Maret</option>
+                        <option value="04">04 - April</option>
+                        <option value="05">05 - Mei</option>
+                        <option value="06">06 - Juni</option>
+                        <option value="07">07 - Juli</option>
+                        <option value="08">08 - Agustus</option>
+                        <option value="09">09 - September</option>
+                        <option value="10">10 - Oktober</option>
+                        <option value="11">11 - November</option>
+                        <option value="12">12 - Desember</option>
+                    </select>
+                    <input type="number" id="ardebtYear" name="year" placeholder="Tahun (YYYY)" required 
+                           min="2000" max="2100" 
+                           style="padding: 8px; border-radius: 4px; width: 100px; border: 1px solid #ced4da;">
+                </div>
                 <form id="uploadFormARDEBT" action="{{ url_for('upload_ardebt_data') }}" method="POST" enctype="multipart/form-data">
                     <input type="file" id="csvFileARDEBT" name="file" accept=".csv, .xlsx, .xls" required>
                     <button type="submit" class="btn-upload-append">TAMBAH DATA ARDEBT (HISTORI)</button>
@@ -370,6 +412,32 @@
             
             const formData = new FormData(form);
             statusElement.innerHTML = '<span style="color: orange; font-weight: 500;"><i class="fas fa-spinner fa-spin"></i> Memproses... Harap tunggu.</span>';
+            
+            // --- START NEW LOGIC FOR MC AND ARDEBT ---
+            let month, year;
+            if (form.id === 'uploadFormMC') {
+                month = document.getElementById('mcMonth').value;
+                year = document.getElementById('mcYear').value;
+                
+                if (!month || !year) {
+                    statusElement.innerHTML = '<span style="color: #dc3545;">❌ Harap pilih Bulan dan masukkan Tahun Tagihan MC.</span>';
+                    return;
+                }
+                formData.append('month', month);
+                formData.append('year', year);
+                
+            } else if (form.id === 'uploadFormARDEBT') {
+                month = document.getElementById('ardebtMonth').value;
+                year = document.getElementById('ardebtYear').value;
+                
+                if (!month || !year) {
+                    statusElement.innerHTML = '<span style="color: #dc3545;">❌ Harap pilih Bulan dan masukkan Tahun Tunggakan ARDEBT.</span>';
+                    return;
+                }
+                formData.append('month', month);
+                formData.append('year', year);
+            }
+            // --- END NEW LOGIC FOR MC AND ARDEBT ---
             
             try {
                 const response = await fetch(form.action, { 
