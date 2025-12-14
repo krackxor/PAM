@@ -38,6 +38,7 @@ collection_ardebt = None
 
 try:
     # PERBAIKAN KRITIS UNTUK BULK WRITE/SBRS: Meningkatkan batas waktu koneksi dan socket.
+    # Peningkatan timeout membantu mencegah hang pada query besar
     client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=60000, socketTimeoutMS=300000)
     client.admin.command('ping') 
     db = client[DB_NAME]
@@ -414,11 +415,10 @@ def collection_analysis():
 @app.route('/analysis/tarif', methods=['GET'])
 @login_required 
 def analysis_tarif_breakdown():
-    # Menggunakan template umum dengan parameter untuk mengarahkan JS mana yang harus dimuat
     return render_template('analysis_report_template.html', 
                            title="Distribusi Tarif Pelanggan (R34/R35)",
                            description="Laporan detail Distribusi Tarif Nomen, Piutang, dan Kubikasi per Rayon/Tarif. (Memuat chart dan tabel)",
-                           report_type="TARIF_BREAKDOWN", # Digunakan di JS untuk fetch data
+                           report_type="TARIF_BREAKDOWN", # <--- KUNCI PENTING
                            is_admin=current_user.is_admin)
 
 @app.route('/analysis/grouping', methods=['GET'])
@@ -427,7 +427,7 @@ def analysis_grouping_sunter():
     return render_template('analysis_report_template.html', 
                            title="Grouping MC: AB Sunter Detail",
                            description="Laporan agregasi Nomen, Nominal, dan Kubikasi berdasarkan Tarif, Merek, dan Metode Baca untuk R34/R35.",
-                           report_type="MC_GROUPING_AB_SUNTER",
+                           report_type="MC_GROUPING_AB_SUNTER", # <--- KUNCI PENTING
                            is_admin=current_user.is_admin)
 
 @app.route('/analysis/aging', methods=['GET'])
@@ -445,7 +445,7 @@ def analysis_top_lists():
     return render_template('analysis_report_template.html', 
                            title="Daftar Konsumen Top & Status Pembayaran",
                            description="Menampilkan Top 500 Tunggakan, Top 500 Premium, serta Daftar Lunas dan Belum Bayar (Snapshot Terbaru).",
-                           report_type="TOP_LISTS",
+                           report_type="TOP_LISTS", # <--- KUNCI PENTING
                            is_admin=current_user.is_admin)
 
 @app.route('/analysis/volume', methods=['GET'])
@@ -1012,6 +1012,7 @@ def analyze_mc_grouping_api():
             'breakdowns': breakdowns
         }
         
+        # NOTE: Agregasi ini SANGAT berat. Waktu respons mungkin lambat (bisa >30 detik) tergantung ukuran data.
         return jsonify(response_data), 200
 
     except Exception as e:
@@ -1482,7 +1483,6 @@ def doh_comparison_report_api():
         for i in range(1, day_of_month + 1):
             day_str = f'{i:02d}' # 1 menjadi 01, 14 tetap 14
             date_prefixes.append(f"{this_month_str}-{day_str}")
-            # Pastikan bulan lalu juga memiliki tanggal tersebut (misal: Feb tidak punya tgl 30)
             try:
                 datetime.strptime(f"{last_month_str}-{day_str}", '%Y-%m-%d') 
                 date_prefixes.append(f"{last_month_str}-{day_str}")
@@ -1641,13 +1641,30 @@ def analyze_tariff_change_api():
 # === API LAPORAN TOP LISTS (LANJUTAN) ===
 # =========================================================================
 
+# 🚨 PERBAIKAN KRITIS UNTUK MENGHINDARI STUCK LOADING
 def _aggregate_top_debt(collection_mc, collection_ardebt, collection_cid):
-    """Menghitung total kewajiban (Piutang MC + Tunggakan ARDEBT) dan mengembalikan 500 teratas."""
+    """
+    Menghitung total kewajiban (Piutang MC + Tunggakan ARDEBT) dan mengembalikan 500 teratas.
+    OPTIMASI: Pre-fetch semua data CID untuk menghindari query di dalam loop.
+    """
     # 1. Ambil BULAN_TAGIHAN terbaru dari MC Historis
     latest_mc_month_doc = collection_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
     latest_mc_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
     
-    # 1. Agregasi Tunggakan (ARDEBT)
+    # Pre-fetch semua data CID terbaru (untuk JOIN cepat)
+    cid_data_map = {doc['NOMEN']: doc for doc in collection_cid.aggregate([
+        {'$sort': {'NOMEN': 1, 'TANGGAL_UPLOAD_CID': -1}},
+        {'$group': {
+            '_id': '$NOMEN',
+            'NAMA': {'$first': '$NAMA'},
+            'RAYON': {'$first': '$RAYON'},
+            'TARIF': {'$first': '$TARIF'},
+        }},
+        {'$project': {'_id': 0, 'NOMEN': '$_id', 'NAMA': 1, 'RAYON': 1, 'TARIF': 1}}
+    ], allowDiskUse=True)}
+
+
+    # 2. Agregasi Tunggakan (ARDEBT)
     pipeline_ardebt_total = [
         {'$group': {
             '_id': '$NOMEN',
@@ -1657,7 +1674,7 @@ def _aggregate_top_debt(collection_mc, collection_ardebt, collection_cid):
     ]
     ardebt_totals = {doc['_id']: doc for doc in collection_ardebt.aggregate(pipeline_ardebt_total, allowDiskUse=True)}
 
-    # 2. Agregasi Piutang Bulan Ini (MC) - Filter ke bulan tagihan terbaru
+    # 3. Agregasi Piutang Bulan Ini (MC) - Filter ke bulan tagihan terbaru
     pipeline_mc_piutang = [
         {'$match': {'BULAN_TAGIHAN': latest_mc_month}} if latest_mc_month else {'$match': {'NOMEN': {'$exists': True}}}, 
         {'$group': {
@@ -1667,7 +1684,7 @@ def _aggregate_top_debt(collection_mc, collection_ardebt, collection_cid):
     ]
     mc_piutang = {doc['_id']: doc['MC_Piutang'] for doc in collection_mc.aggregate(pipeline_mc_piutang, allowDiskUse=True)}
 
-    # 3. Gabungkan, Hitung Total Debt, dan Join ke CID (Client-side join untuk kemudahan)
+    # 4. Gabungkan, Hitung Total Debt, dan Gunakan CID yang sudah di-fetch
     debt_list = []
     all_nomens = set(mc_piutang.keys()) | set(ardebt_totals.keys())
 
@@ -1679,7 +1696,8 @@ def _aggregate_top_debt(collection_mc, collection_ardebt, collection_cid):
         total_debt = mc_val + total_ardebt
 
         if total_debt > 0:
-            cid_info = collection_cid.find_one({'NOMEN': nomen}, {'_id': 0, 'NAMA': 1, 'RAYON': 1, 'TARIF': 1}, sort=[('TANGGAL_UPLOAD_CID', -1)]) or {}
+            # Menggunakan CID data yang sudah di-fetch (O(1) lookup)
+            cid_info = cid_data_map.get(nomen, {}) 
             
             debt_list.append({
                 'NOMEN': nomen,
@@ -1694,6 +1712,7 @@ def _aggregate_top_debt(collection_mc, collection_ardebt, collection_cid):
 
     debt_list.sort(key=lambda x: x['TOTAL_KEWAJIBAN'], reverse=True)
     return debt_list[:500]
+
 
 def _aggregate_top_premium(collection_mc, collection_cid):
     """Menentukan 'Premium' berdasarkan Konsumsi (KUBIK) tertinggi di periode MC saat ini."""
@@ -1738,6 +1757,7 @@ def report_top_lists_api():
         latest_mc_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
 
         # 1. Top 500 Belum Bayar (Total Debt)
+        # 🚨 Memanggil fungsi yang sudah di-optimize
         top_debt = _aggregate_top_debt(collection_mc, collection_ardebt, collection_cid)
         
         # 2. Top 500 Premium (High Volume)
@@ -1757,7 +1777,7 @@ def report_top_lists_api():
                 'STATUS': 1
             }}
         ]
-        paid_list = list(collection_mc.aggregate(paid_pipeline))
+        paid_list = list(collection_mc.aggregate(paid_pipeline, allowDiskUse=True)) # Tambah allowDiskUse
         
         # 4. Konsumen Belum Bayar (MC Status Unpaid - Limit 500)
         unpaid_pipeline = [
@@ -1773,7 +1793,7 @@ def report_top_lists_api():
                 'STATUS': 1
             }}
         ]
-        unpaid_list = list(collection_mc.aggregate(unpaid_pipeline))
+        unpaid_list = list(collection_mc.aggregate(unpaid_pipeline, allowDiskUse=True)) # Tambah allowDiskUse
 
         return jsonify({
             'status': 'success',
