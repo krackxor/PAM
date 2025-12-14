@@ -409,6 +409,28 @@ def _get_previous_month_year(bulan_tagihan):
         return f"{prev_month:02d}{prev_year}"
     except ValueError:
         return None
+        
+def _get_month_date_range(bulan_tagihan):
+    """Converts MMYYYY to YYYY-MM-DD start and YYYY-MM-DD end (exclusive)."""
+    if not bulan_tagihan or len(bulan_tagihan) != 6:
+        return None, None
+    try:
+        month = int(bulan_tagihan[:2])
+        year = int(bulan_tagihan[2:])
+        start_date = datetime(year, month, 1)
+        
+        # Calculate next month to get the end date (exclusive)
+        if month == 12:
+            next_month = 1
+            next_year = year + 1
+        else:
+            next_month = month + 1
+            next_year = year
+        end_date = datetime(next_year, next_month, 1)
+        
+        return start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')
+    except ValueError:
+        return None, None
 # --- END HELPER BARU ---
 
 # --- FUNGSI BARU UNTUK REPORT KOLEKSI & PIUTANG ---
@@ -581,7 +603,7 @@ def collection_report_api():
         'TotalUnduePrevNominal': total_undue_prev_nominal
     }
     
-    # Simpan total MC (denominator untuk Persen Koleksi di Monitoring)
+    # Simpan total MC (denominator untuk Monitoring)
     total_mc_nominal_all = grand_total['MC_TotalNominal']
 
     for key, data in report_map.items():
@@ -615,7 +637,6 @@ def collection_report_api():
     return jsonify({
         'report_data': final_report,
         'grand_total': grand_total,
-        # Tambahkan total MC untuk Monitoring jika diperlukan
         'total_mc_nominal_all': total_mc_nominal_all 
     }), 200
 
@@ -1086,24 +1107,27 @@ def collection_monitoring_api():
         
         if not latest_mc_month:
              # Default fallback jika tidak ada data MC sama sekali
-            return jsonify({'monitoring_data': {'R34': [], 'R35': []}, 'summary_top': {'R34': {'MC1125': 0}, 'R35': {'MC1125': 0}}}), 200
+            return jsonify({'monitoring_data': {'R34': [], 'R35': []}, 'summary_top': {'R34': {'MC1125': 0, 'CURRENT': 0}, 'R35': {'MC1125': 0, 'CURRENT': 0}, 'GLOBAL': {'TotalPiutangMC': 0, 'TotalUnduePrev': 0, 'CurrentKoleksiTotal': 0, 'TotalKoleksiPersen': 0}}}), 200
 
-        # Tentukan Bulan Tagihan MC Sebelumnya (Untuk Koleksi CURRENT)
+        # Tentukan Bulan Tagihan MC Sebelumnya (Untuk Koleksi CURRENT dan Total UNDUE Bulan Lalu)
         previous_mc_month = _get_previous_month_year(latest_mc_month)
         
         if not previous_mc_month:
-            # Tidak bisa menghitung bulan lalu, gunakan bulan ini sebagai fallback atau return 0
-             previous_mc_month = latest_mc_month
-
+            # Jika tidak bisa menghitung bulan lalu, kembali menggunakan bulan ini
+            previous_mc_month = latest_mc_month
 
         # 1. Hitung Total Piutang MC (Denominator) dari bulan tagihan terbaru
+        # PERBAIKAN: Memastikan filter 'REG' dan Rayon '34'/'35' diterapkan pada denominator Piutang MC
         mc_total_response = collection_mc.aggregate([
             {'$match': {'BULAN_TAGIHAN': latest_mc_month}},
             {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}},
             {'$addFields': {'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
              'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},}},
+            
+            # FILTER KRITIS: Hanya Piutang AB Sunter (R34/R35) dan tipe REG
             {'$match': {'CLEAN_RAYON': {'$in': ['34', '35']}, 'CLEAN_TIPEPLGGN': 'REG'}},
+            
             {'$group': {'_id': '$CLEAN_RAYON', 'TotalPiutang': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}}}}
         ], allowDiskUse=True)
         
@@ -1114,11 +1138,16 @@ def collection_monitoring_api():
         # Total Piutang MC Keseluruhan (Denominator Persentase Koleksi)
         total_mc_nominal_all = total_mc_34 + total_mc_35
         
-        # 2. Hitung Total UNDUE Bulan Sebelumnya (Numerator untuk Persentase Koleksi)
+        # 2. Hitung Total UNDUE Bulan Sebelumnya (Baseline Collection)
+        # Definition: MB collected IN month M-1 (TGL_BAYAR) where BILL_REK is month M-1 (UNDUE)
+        prev_month_start_date, prev_month_end_date = _get_month_date_range(previous_mc_month)
+
         pipeline_undue_prev = [
             { '$match': { 
                 'BULAN_REK': previous_mc_month, 
-                'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
+                'BILL_REASON': 'BIAYA PEMAKAIAN AIR',
+                # 🚨 PERBAIKAN KRITIS: Filter TGL_BAYAR harus dalam rentang bulan M-1
+                'TGL_BAYAR': {'$gte': prev_month_start_date, '$lt': prev_month_end_date} 
             }},
             { '$group': {
                 '_id': None,
@@ -1132,14 +1161,15 @@ def collection_monitoring_api():
         
         # Koleksi Rp1 (CURRENT) Dihitung dari transaksi MB yang TGL_BAYAR nya bulan ini, 
         # TAPI BULAN_REK-nya adalah bulan lalu (Piutang Lama)
-        this_month_start = datetime.now().strftime('%Y-%m-01')
-        next_month_start = (datetime.now().replace(day=1) + timedelta(days=32)).replace(day=1).strftime('%Y-%m-%d')
+        now = datetime.now()
+        this_month_start = now.strftime('%Y-%m-01')
+        # Hitung tanggal satu hari setelah bulan ini
+        next_month_start = (now.replace(day=1) + timedelta(days=32)).replace(day=1).strftime('%Y-%m-%d')
         
         pipeline_mb_daily = [
-            # Filter A: TGL_BAYAR ada di bulan ini (misal: Desember 2025)
             {'$match': {
-                'TGL_BAYAR': {'$gte': this_month_start, '$lt': next_month_start}, 
-                'BULAN_REK': previous_mc_month, # Filter B: BULAN_REK adalah bulan lalu (misal: Nov 2025)
+                'TGL_BAYAR': {'$gte': this_month_start, '$lt': next_month_start}, # Filter A: TGL_BAYAR di bulan ini
+                'BULAN_REK': previous_mc_month, # Filter B: BULAN_REK bulan lalu
                 'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
             }}, 
             {'$project': {
@@ -1177,7 +1207,9 @@ def collection_monitoring_api():
         ])
 
         if df_monitoring.empty:
-            return jsonify({'monitoring_data': {'R34': [], 'R35': []}, 'summary_top': {'R34': {'MC1125': total_mc_34}, 'R35': {'MC1125': total_mc_35}}}), 200
+            # Pastikan output konsisten bahkan saat kosong
+            empty_summary = {'R34': {'MC1125': total_mc_34, 'CURRENT': 0}, 'R35': {'MC1125': total_mc_35, 'CURRENT': 0}, 'GLOBAL': {'TotalPiutangMC': total_mc_nominal_all, 'TotalUnduePrev': total_undue_prev_nominal, 'CurrentKoleksiTotal': 0, 'TotalKoleksiPersen': 0}}
+            return jsonify({'monitoring_data': {'R34': [], 'R35': []}, 'summary_top': empty_summary}), 200
 
         # Pastikan kolom TGL adalah datetime
         df_monitoring['TGL'] = pd.to_datetime(df_monitoring['TGL'])
@@ -1187,37 +1219,33 @@ def collection_monitoring_api():
         df_monitoring['Rp1_Kumulatif'] = df_monitoring.groupby('RAYON')['COLL_NOMINAL'].cumsum()
         df_monitoring['CUST_Kumulatif'] = df_monitoring.groupby('RAYON')['CUST_COUNT'].cumsum()
 
-        # 5. Hitung Persentase Koleksi BARU: (Rp1 Kumulatif + Total Undue Bulan Sebelumnya) / Total Piutang MC
+        # 5. Hitung Persentase Koleksi BARU: (Rp1 Kumulatif Global + Total Undue Bulan Sebelumnya) / Total Piutang MC
         
-        # NOTE: Karena persentase ini adalah KPI Global, kita tidak perlu mengelompokkan per Rayon.
-        # Kita hanya perlu total kumulatif harian global (R34 + R35)
-        
+        # Hitung Kumulatif Harian GLOBAL untuk Rp1
         df_monitoring_global = df_monitoring.groupby('TGL').agg({
             'COLL_NOMINAL': 'sum', 
-            'Rp1_Kumulatif': 'sum' # Ini sudah terakumulasi dari R34 + R35
         }).reset_index()
+        df_monitoring_global['Rp1_Kumulatif_Global'] = df_monitoring_global['COLL_NOMINAL'].cumsum()
         
-        # Persentase Kumulatif Harian Global
-        df_monitoring_global['COLL_Kumulatif_Persen'] = (
-            (df_monitoring_global['Rp1_Kumulatif'] + total_undue_prev_nominal) / total_mc_nominal_all
-        ) * 100
-        df_monitoring_global['COLL_Kumulatif_Persen'] = df_monitoring_global['COLL_Kumulatif_Persen'].fillna(0)
-
-        # Map kembali persentase global ke setiap baris Rayon
+        # Gabungkan Kumulatif Global ke dataframe monitoring utama
         df_monitoring = pd.merge(df_monitoring, 
-                                 df_monitoring_global[['TGL', 'COLL_Kumulatif_Persen']], 
+                                 df_monitoring_global[['TGL', 'Rp1_Kumulatif_Global']], 
                                  on='TGL', 
-                                 how='left',
-                                 suffixes=('', '_GLOBAL'))
-                                 
-        df_monitoring['COLL_Kumulatif_Persen'] = df_monitoring['COLL_Kumulatif_Persen_GLOBAL'].fillna(0)
+                                 how='left')
+
+        # Persentase Kumulatif Harian Global (Sesuai Rumus Bisnis)
+        # Denominator: TotalPiutangMC (total_mc_nominal_all)
+        # Numerator: Rp1 Kumulatif Global + Total Undue Bulan Lalu
+        df_monitoring['COLL_Kumulatif_Persen'] = (
+            (df_monitoring['Rp1_Kumulatif_Global'] + total_undue_prev_nominal) / total_mc_nominal_all
+        ) * 100
+        df_monitoring['COLL_Kumulatif_Persen'] = df_monitoring['COLL_Kumulatif_Persen'].fillna(0)
 
         # Hitung COLL_VAR (Daily Change in Percentage)
-        # COLL_VAR menggunakan Persentase Koleksi GLOBAL
         df_monitoring['COLL_VAR'] = df_monitoring.groupby('RAYON')['COLL_Kumulatif_Persen'].diff().fillna(df_monitoring['COLL_Kumulatif_Persen'])
         
         # Bersihkan kolom sementara
-        df_monitoring = df_monitoring.drop(columns=['COLL_Kumulatif_Persen_GLOBAL'], errors='ignore')
+        df_monitoring = df_monitoring.drop(columns=['Rp1_Kumulatif_Global'], errors='ignore')
         
         # Format Output
         df_monitoring['TGL'] = df_monitoring['TGL'].dt.strftime('%d/%m/%Y')
@@ -1237,12 +1265,15 @@ def collection_monitoring_api():
             'CURRENT': df_r35['Rp1_Kumulatif'].iloc[-1] if not df_r35.empty else 0
         }
         
-        # Return total_undue_prev_nominal untuk ditampilkan di summary grid
+        # Ringkasan Global
+        current_koleksi_total = df_monitoring_global['COLL_NOMINAL'].sum()
+        total_koleksi_persen = df_monitoring['COLL_Kumulatif_Persen'].iloc[-1] if not df_monitoring.empty else 0
+        
         grand_total_summary = {
             'TotalPiutangMC': total_mc_nominal_all,
             'TotalUnduePrev': total_undue_prev_nominal,
-            'CurrentKoleksiTotal': sum(df_monitoring_global['COLL_NOMINAL']),
-            'TotalKoleksiPersen': df_monitoring_global['COLL_Kumulatif_Persen'].iloc[-1] if not df_monitoring_global.empty else 0
+            'CurrentKoleksiTotal': current_koleksi_total,
+            'TotalKoleksiPersen': total_koleksi_persen
         }
 
         return jsonify({
