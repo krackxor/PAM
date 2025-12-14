@@ -78,10 +78,11 @@
             margin-bottom: 3px;
         }
         
-        .nav-item.active {
+        /* Menggunakan pemeriksaan substring 'collection' untuk mencakup semua halaman Koleksi */
+        .nav-item.active { 
             color: var(--primary-color);
             font-weight: 600;
-            transform: translateY(-2px); /* Efek minor saat aktif */
+            transform: translateY(-2px); 
         }
         
         .nav-item:hover {
@@ -215,10 +216,10 @@
            <span>Cari</span>
         </a>
         
-        <a href="{{ url_for('daily_collection_unified_page') }}" 
-           class="nav-item {% if request.endpoint == 'daily_collection_unified_page' %}active{% endif %}">
+        <a href="{{ url_for('collection_landing_page') }}" 
+           class="nav-item {% if 'collection' in request.endpoint %}active{% endif %}">
            <i class="fas fa-chart-bar"></i>
-           <span>Report</span>
+           <span>Koleksi</span>
         </a>
 
         <a href="{{ url_for('analyze_reports_landing') }}" 
@@ -246,6 +247,7 @@
         async function checkCriticalAlertsGlobal() {
             const alertBadge = document.getElementById('criticalAlertBadge');
             try {
+                // Rute API ini tidak berubah
                 const response = await fetch('{{ url_for("critical_alerts_api") }}');
                 const alerts = await response.json();
                 
