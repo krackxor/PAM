@@ -285,6 +285,9 @@
             <i class="fas fa-list-ol"></i> Distribusi Pelanggan Berdasarkan TARIF (Rayon 34/35 Reguler)
         </h3>
         
+        <div id="tariffChartArea" style="max-width: 450px; margin: 20px auto;">
+            <canvas id="tarifBreakdownChart"></canvas>
+        </div>
         <div id="tarifBreakdownArea">
             <p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat data breakdown tarif...</p>
         </div>
@@ -319,6 +322,14 @@
                 </div>
             </a>
             
+            <a href="javascript:void(0);" onclick="fetchAgingReport();" class="report-card-link">
+                <div class="report-card-aggr" style="border-left-color: var(--accent-color);">
+                    <i class="fas fa-clock" style="color: var(--accent-color);"></i>
+                    <h3>Analisis Umur Piutang (Aging)</h3>
+                    <p>Melihat daftar piutang lama (> 1 bulan) yang masih aktif berdasarkan data Master Cetak.</p>
+                </div>
+            </a>
+            
         </div>
         
         <hr style="margin: 40px 0; border-style: dotted;">
@@ -330,6 +341,13 @@
             <p class="no-results">Tekan kartu "Grouping MC: AB Sunter" di atas untuk memuat hasilnya.</p>
         </div>
         
+        <h3 style="color: #ffc107;">
+            <i class="fas fa-clock"></i> Hasil Laporan Umur Piutang (Aging)
+        </h3>
+        <div id="agingReportArea">
+            <p class="no-results">Tekan kartu "Analisis Umur Piutang (Aging)" di atas untuk memuat hasilnya.</p>
+        </div>
+
         <h3 style="color: #28a745;">
             <i class="fas fa-water"></i> Hasil Laporan Volume Dasar
         </h3>
@@ -348,23 +366,27 @@
 
 
     <script>
+        // Memastikan Chart.js dimuat dari base.html (diasumsikan)
+        if (typeof Chart === 'undefined') {
+            console.error("Chart.js belum dimuat. Pastikan Anda telah memasukkan script Chart.js di base.html.");
+        }
+
         const reportArea = document.getElementById('reportArea');
         const filterInput = document.getElementById('filterInput');
         const searchBtn = document.getElementById('searchBtn');
         const detailsArea = document.getElementById('detailsArea');
         const exportReportBtn = document.getElementById('exportReportBtn');
-        // const fetchCustomBtn = document.getElementById('fetchCustomReportBtn'); // Dihapus/Diganti Card Click
         const customReportArea = document.getElementById('customReportArea');
         const tarifBreakdownArea = document.getElementById('tarifBreakdownArea');
         
         const monitoringSummaryArea = document.getElementById('monitoringSummaryArea');
         const monitoringTableArea = document.getElementById('monitoringTableArea');
         
-        // const fetchTopListsBtn = document.getElementById('fetchTopListsBtn'); // Dihapus/Diganti Card Click
         const topListsArea = document.getElementById('topListsArea');
-        
-        // const fetchBasicVolumeBtn = document.getElementById('fetchBasicVolumeBtn'); // Dihapus/Diganti Card Click
         const basicVolumeReportArea = document.getElementById('basicVolumeReportArea');
+        
+        const agingReportArea = document.getElementById('agingReportArea');
+        const tariffChartArea = document.getElementById('tariffChartArea');
 
 
         function formatRupiah(number) {
@@ -402,14 +424,210 @@
                 fetchCollectionDetails(''); 
             } else if (tabName === 'analysis') {
                  fetchTarifBreakdown(); // Load tarif breakdown otomatis
-                 // Konten lainnya di Tab Analysis dimuat melalui klik kartu
             }
         }
         // --- END FUNGSI UTILITY UNTUK TAB ---
+        
+        // =========================================================
+        // --- FUNGSI BARU: MEMUAT AGING REPORT ---
+        // =========================================================
+        async function fetchAgingReport() {
+            agingReportArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Laporan Umur Piutang...</p>';
+            
+            try {
+                // Panggil API baru yang sudah dibuat di app.py
+                const response = await fetch('{{ url_for("aging_report_api") }}'); 
+                const result = await response.json();
+
+                if (response.status === 401) {
+                    window.location.href = '{{ url_for("login") }}';
+                    return;
+                }
+                
+                if (result.status !== 'success' || result.data.length === 0) {
+                     agingReportArea.innerHTML = `<p class="no-results" style="color: #dc3545;">❌ ${result.message || 'Tidak ada data piutang lama ditemukan.'}</p>`;
+                     return;
+                }
+                
+                renderAgingReport(result.data);
+
+            } catch (error) {
+                agingReportArea.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data aging report dari server.</p>';
+                console.error('Aging Report Error:', error);
+            }
+        }
+        
+        function renderAgingReport(data) {
+             const headers = Object.keys(data[0]);
+             let tableHTML = `
+                 <h4 style="margin-top: 20px;">Daftar Pelanggan dengan Piutang > 1 Bulan (${data.length} Data)</h4>
+                 <div class="report-table-wrapper">
+                 <table class="report-table">
+                     <thead><tr>
+                         ${headers.map(h => `<th style="text-align: center;">${h.replace(/_/g, ' ')}</th>`).join('')}
+                     </tr></thead><tbody>
+             `;
+             
+             data.forEach(item => {
+                 tableHTML += '<tr>';
+                 headers.forEach(h => {
+                     let cellValue = item[h];
+                     let align = 'right';
+                     
+                     if (h.includes('NOMEN') || h.includes('NAMA') || h.includes('RAYON')) {
+                         align = 'left';
+                     }
+                     
+                     if (h.includes('PiutangLama')) {
+                         cellValue = formatRupiah(cellValue);
+                     } else if (h.includes('Bulan_Tagihan')) {
+                         align = 'center';
+                     }
+                     tableHTML += `<td data-label="${h.replace(/_/g, ' ')}" style="text-align: ${align};">${cellValue}</td>`;
+                 });
+                 tableHTML += '</tr>';
+             });
+             
+             tableHTML += '</tbody></table></div>';
+             agingReportArea.innerHTML = tableHTML;
+        }
+
+
+        // --- FUNGSI BARU: RENDER PIE CHART TARIF ---
+        function renderTariffBreakdownChart(data) {
+            const chartData = {};
+            
+            // Agregat berdasarkan TARIF di semua Rayon 34/35
+            data.forEach(item => {
+                const tarif = item.TARIF || 'N/A';
+                const count = item.JumlahPelanggan;
+                chartData[tarif] = (chartData[tarif] || 0) + count;
+            });
+
+            const labels = Object.keys(chartData);
+            const counts = Object.values(chartData);
+            
+            // Hasilkan warna berbeda secara dinamis
+            const backgroundColors = labels.map((_, index) => {
+                // Skema warna yang lebih menarik
+                const colors = [
+                    '#007bff', '#28a745', '#ffc107', '#dc3545', '#17a2b8', 
+                    '#6c757d', '#343a40', '#6f42c1', '#fd7e14'
+                ];
+                return colors[index % colors.length];
+            });
+
+            // Hancurkan instance chart yang ada (jika ada)
+            const existingChart = Chart.getChart("tarifBreakdownChart");
+            if (existingChart) {
+                existingChart.destroy();
+            }
+
+            new Chart(document.getElementById('tarifBreakdownChart'), {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: counts,
+                        backgroundColor: backgroundColors,
+                        hoverOffset: 10,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                        },
+                        title: {
+                            display: true,
+                            text: 'Distribusi Pelanggan Berdasarkan Tarif (Count Nomen)'
+                        }
+                    }
+                }
+            });
+        }
+        // --- END FUNGSI BARU: RENDER PIE CHART TARIF ---
+
+
+        // --- FUNGSI BARU: MEMUAT BREAKDOWN TARIF (MEMANGGIL CHART) ---
+        async function fetchTarifBreakdown() {
+            tarifBreakdownArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Breakdown Tarif...</p>';
+            
+            try {
+                // Panggil API baru untuk breakdown tarif
+                const response = await fetch('{{ url_for("analyze_mc_tarif_breakdown_api") }}'); 
+                const data = await response.json();
+                
+                if (response.status !== 200 || data.length === 0) {
+                     tarifBreakdownArea.innerHTML = `<p class="no-results" style="color: #6c757d;">Tidak ada data pelanggan yang cocok dengan kriteria kustom (Rayon 34/35 Reguler).</p>`;
+                     // Clear chart area on failure
+                     const existingChart = Chart.getChart("tarifBreakdownChart");
+                     if (existingChart) { existingChart.destroy(); }
+                     return;
+                }
+                
+                renderTarifBreakdownTable(data);
+                renderTariffBreakdownChart(data); // <-- Panggil fungsi render chart
+
+            } catch (error) {
+                tarifBreakdownArea.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data breakdown tarif dari server.</p>';
+                console.error('Tarif Breakdown Error:', error);
+            }
+        }
+        
+        function renderTarifBreakdownTable(data) {
+            let totalPelanggan = data.reduce((sum, item) => sum + item.JumlahPelanggan, 0);
+
+            // Perbesar lebar untuk kolom Rayon
+            let tableHTML = `
+                <div class="report-table-wrapper" style="max-width: 600px; margin-left: 0;"> 
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left;">RAYON</th>
+                            <th style="text-align: left;">TARIF</th>
+                            <th>JML Pelanggan</th>
+                            <th>Persentase (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            data.forEach(item => {
+                const percentage = (item.JumlahPelanggan / totalPelanggan) * 100;
+                tableHTML += `
+                    <tr>
+                        <td data-label="RAYON" style="text-align: left;">${item.RAYON}</td>
+                        <td data-label="TARIF" style="text-align: left;">${item.TARIF}</td>
+                        <td data-label="JML Pelanggan">${formatNumber(item.JumlahPelanggan)}</td>
+                        <td data-label="Persentase">${formatPercent(percentage)}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                <tr class="grand-total-row">
+                    <td style="text-align: left;">TOTAL</td>
+                    <td>-</td> 
+                    <td>${formatNumber(totalPelanggan)}</td>
+                    <td>100.00%</td>
+                </tr>
+            `;
+            
+            tableHTML += `
+                    </tbody>
+                </table>
+                </div>
+            `;
+            tarifBreakdownArea.innerHTML = tableHTML;
+        }
+
+        // --- FUNGSI 1, 2, 3, 4, 5, 6 lainnya tetap sama ---
+        // FUNGSI INI DIHAPUS UNTUK MENJAGA KODE TETAP RINGKAS, ASUMSI ANDA MEMILIKI VERSI LENGKAPNYA.
 
         // --- FUNGSI 1: MEMUAT REPORT RINGKAS ---
         async function fetchCollectionReport() {
-            // Cek apakah sudah ada data, jika sudah, lewati pemuatan untuk performa
             if (reportArea.querySelector('.report-grid') && 
                 reportArea.querySelector('.report-grid').children.length > 0 && 
                 !reportArea.querySelector('.report-grid').querySelector('.no-results')) {
@@ -418,11 +636,9 @@
             reportArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Laporan Ringkas...</p>';
 
             try {
-                // 1. Fetch Main Report Data (MC vs MB)
                 const response = await fetch('{{ url_for("collection_report_api") }}');
                 const result = await response.json();
                 
-                // 2. NEW: Fetch Custom MC Grouping Summary Data
                 const customSummaryResponse = await fetch('{{ url_for("analyze_mc_grouping_summary_api") }}');
                 const customSummaryResult = await customSummaryResponse.json();
 
@@ -431,7 +647,6 @@
                      return;
                 }
                 
-                // NEW: Merge custom summary data ke dalam objek grandTotal utama
                 result.grand_total.TotalPiutangKustomNominal = customSummaryResult.TotalPiutangKustomNominal || 0;
                 result.grand_total.TotalPiutangKustomKubik = customSummaryResult.TotalPiutangKustomKubik || 0;
                 result.grand_total.TotalNomenKustom = customSummaryResult.TotalNomenKustom || 0;
@@ -564,75 +779,6 @@
             reportArea.innerHTML = summaryHTML + tableHTML;
         }
 
-        // --- FUNGSI BARU: MEMUAT BREAKDOWN TARIF ---
-        async function fetchTarifBreakdown() {
-            tarifBreakdownArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Breakdown Tarif...</p>';
-            
-            try {
-                // Panggil API baru untuk breakdown tarif
-                const response = await fetch('{{ url_for("analyze_mc_tarif_breakdown_api") }}'); 
-                const data = await response.json();
-                
-                if (response.status !== 200 || data.length === 0) {
-                     tarifBreakdownArea.innerHTML = `<p class="no-results" style="color: #6c757d;">Tidak ada data pelanggan yang cocok dengan kriteria kustom (Rayon 34/35 Reguler).</p>`;
-                     return;
-                }
-                
-                renderTarifBreakdownTable(data);
-
-            } catch (error) {
-                tarifBreakdownArea.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data breakdown tarif dari server.</p>';
-                console.error('Tarif Breakdown Error:', error);
-            }
-        }
-        
-        function renderTarifBreakdownTable(data) {
-            let totalPelanggan = data.reduce((sum, item) => sum + item.JumlahPelanggan, 0);
-
-            // Perbesar lebar untuk kolom Rayon
-            let tableHTML = `
-                <div class="report-table-wrapper" style="max-width: 600px; margin-left: 0;"> 
-                <table class="report-table">
-                    <thead>
-                        <tr>
-                            <th style="text-align: left;">RAYON</th>
-                            <th style="text-align: left;">TARIF</th>
-                            <th>JML Pelanggan</th>
-                            <th>Persentase (%)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            data.forEach(item => {
-                const percentage = (item.JumlahPelanggan / totalPelanggan) * 100;
-                tableHTML += `
-                    <tr>
-                        <td data-label="RAYON" style="text-align: left;">${item.RAYON}</td>
-                        <td data-label="TARIF" style="text-align: left;">${item.TARIF}</td>
-                        <td data-label="JML Pelanggan">${formatNumber(item.JumlahPelanggan)}</td>
-                        <td data-label="Persentase">${formatPercent(percentage)}</td>
-                    </tr>
-                `;
-            });
-            
-            tableHTML += `
-                <tr class="grand-total-row">
-                    <td style="text-align: left;">TOTAL</td>
-                    <td>-</td> 
-                    <td>${formatNumber(totalPelanggan)}</td>
-                    <td>100.00%</td>
-                </tr>
-            `;
-            
-            tableHTML += `
-                    </tbody>
-                </table>
-                </div>
-            `;
-            tarifBreakdownArea.innerHTML = tableHTML;
-        }
-
         // --- FUNGSI 2: MEMUAT DETAIL TRANSAKSIONAL ---
         async function fetchCollectionDetails(query = '') {
             detailsArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Detail Transaksi...</p>';
@@ -734,7 +880,7 @@
             
             detailsArea.innerHTML = tableHTML;
         }
-        
+
         // --- FUNGSI 3: FUNGSI UNTUK RENDER LAPORAN AB SUNTER (Grouping MC Kustom) ---
         async function fetchCustomReport() {
             customReportArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Menghubungkan ke MongoDB untuk Laporan AB Sunter...</p>';
@@ -1076,7 +1222,7 @@
             }
         }
         
-        // Fungsi untuk me-render tabel
+        // Fungsi untuk me-render tabel (Sama seperti yang di Aging Report)
         function renderTopLists(data) {
              let html = '';
              
@@ -1154,11 +1300,6 @@
                 searchBtn.click();
             }
         });
-        
-        // fetchCustomBtn.addEventListener('click', fetchCustomReport); // Dihapus
-        // fetchTopListsBtn.addEventListener('click', fetchTopLists); // Dihapus
-        // fetchBasicVolumeBtn.addEventListener('click', fetchBasicVolumeReport); // Dihapus
-        
         
         // Muat semua bagian saat halaman dimuat
         document.addEventListener('DOMContentLoaded', () => {
