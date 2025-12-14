@@ -4,11 +4,17 @@
 
 {% block custom_styles %}
 /* Custom CSS dari file lama, relevan untuk monitoring & detail */
-.report-header { text-align: center; margin-bottom: 20px; }
+.report-header { 
+    text-align: center; 
+    margin-bottom: 20px; 
+    animation: fadeIn 0.5s ease-out; /* Animasi saat header muncul */
+}
+
+/* Summary Grid (Responsif & Dinamis) */
 .report-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 20px;
+    gap: 15px; /* Kurangi gap sedikit */
     margin-bottom: 30px;
 }
 .summary-card { 
@@ -19,15 +25,16 @@
     text-align: center; 
     border: 1px solid #e0e0e0;
     border-left: 5px solid;
-    transition: transform 0.2s;
+    transition: all 0.3s ease; /* Transisi untuk dinamika */
 }
 .summary-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-medium);
+    transform: translateY(-3px); /* Efek angkat/lift */
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
 }
 .summary-card h4 { margin: 0 0 5px 0; font-size: 0.9em; color: #6c757d; }
 .summary-card p { margin: 0; font-size: 1.6em; font-weight: bold; }
 
+/* Filter Input Group (Responsif) */
 .filter-input-group { 
     margin-top: 20px; padding-top: 10px; border-top: 1px dashed #ddd; 
     display: flex; align-items: stretch; gap: 10px; 
@@ -38,47 +45,85 @@
     border-radius: var(--border-radius); 
     font-size: 16px; 
     flex-grow: 1; 
+    transition: all 0.3s;
 }
-.report-table-wrapper { overflow-x: auto; margin-top: 20px; }
+#filterInput:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    outline: none;
+}
+.report-table-wrapper { 
+    overflow-x: auto; 
+    margin-top: 20px; 
+    box-shadow: var(--shadow-light);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    border: 1px solid #e0e0e0;
+}
 
-/* --- TABLE LAYOUT --- */
+/* --- TABLE LAYOUT (Umum) --- */
 .report-table, .collection-table { 
     width: 100%; border-collapse: collapse; font-size: 14px; 
-    box-shadow: var(--shadow-light); 
-    border-radius: var(--border-radius);
-    overflow: hidden; 
 }
 .report-table th, .report-table td, .collection-table th, .collection-table td { 
     border: 1px solid #f0f0f0; padding: 10px; text-align: right; white-space: nowrap; 
 }
 .report-table th, .collection-table th { background-color: #e9ecef; text-align: center; font-weight: 600; }
-.report-table { min-width: 1000px; }
+.report-table { min-width: 1000px; } /* Lebar di desktop */
+.collection-table { min-width: 800px; } /* Lebar di desktop */
+
 .undue-cell { font-weight: bold; color: #17a2b8 !important; }
 
 .grand-total-row { font-weight: bold; background-color: #d0e7ff; color: var(--text-color); } 
 .percentage-cell { font-weight: bold; color: var(--secondary-color); }
 
-.no-results { text-align: center; color: #555; padding: 20px; }
+.no-results { text-align: center; color: #6c757d; padding: 20px; }
 
-/* Mobile Table Styling for collection-table */
+/* --- MEDIA QUERY UNTUK LAYAR HP (CARD VIEW & STACKING) --- */
 @media screen and (max-width: 600px) {
-    .collection-table thead { display: none; }
-    .collection-table tr:not(.total-row) {
+    /* Summary Grid: Menumpuk ke 1 kolom */
+    .report-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    .summary-card {
+        transform: none;
+    }
+    
+    /* Filter Group: Menumpuk Vertikal */
+    .filter-input-group {
+        flex-direction: column; 
+        gap: 15px;
+    }
+
+    /* Table Card View Logic (Report Table & Collection Table) */
+    .report-table-wrapper {
+        border: none;
+        box-shadow: none;
+    }
+    .report-table, .collection-table {
+        min-width: 100%; /* Memastikan tidak ada scroll horizontal di dalam tabel */
+    }
+    .report-table thead, .collection-table thead { 
+        display: none; 
+    }
+    .report-table tr, .collection-table tr:not(.total-row) {
         display: block;
         margin-bottom: 10px;
         border: 1px solid #ddd;
         border-radius: var(--border-radius);
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
-    .collection-table td {
+    .report-table td, .collection-table td {
         display: flex;
         justify-content: space-between;
         padding: 8px 12px;
         border: none;
         border-bottom: 1px solid #eee;
         text-align: right; 
+        white-space: normal; /* Biarkan konten wrap */
     }
-    .collection-table td:before {
+    .report-table td:before, .collection-table td:before {
         content: attr(data-label); 
         font-weight: 600;
         text-align: left;
@@ -86,18 +131,20 @@
         color: var(--text-color);
         padding-right: 10px;
     }
+
+    /* Total Row Styling (Perlu di override agar tidak menjadi card) */
+    .collection-table .total-row {
+        margin-top: 15px;
+        display: table-row-group; 
+        border: 1px solid #d0e7ff;
+    }
     .collection-table .total-row td {
         display: table-cell;
-        border: 1px solid #ddd;
         text-align: center;
-        font-weight: bold;
+        border: 1px solid #d0e7ff;
     }
-    .collection-table .total-row {
-        margin-top: 20px;
-        display: table-row-group;
-    }
-    .report-table {
-        min-width: 100%;
+    .collection-table .total-row td:before {
+        content: ""; 
     }
 }
 {% endblock %}
@@ -132,7 +179,7 @@
             <div id="dohChartContainer" style="max-width: 900px; margin: 30px auto;">
                 <canvas id="dohLineChart"></canvas>
             </div>
-            <div id="dohTableContainer" class="report-table-wrapper" style="margin-top: 30px;">
+            <div id="dohTableContainer" style="margin-top: 30px;">
                 <p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat data DtD Comparison...</p>
             </div>
         </div>
@@ -261,34 +308,36 @@
             // 2. RENDER TABLE
             momTableContainer.innerHTML = `
                 <h4 style="margin-top: 20px;">Tabel Perbandingan Koleksi Nominal dan Pelanggan</h4>
-                <table class="report-table" style="min-width: 600px;">
-                    <thead>
-                        <tr>
-                            <th style="text-align: left;">Metrik</th>
-                            <th>Bulan Lalu (${data.period_last})</th>
-                            <th>Bulan Ini (${data.period_current})</th>
-                            <th>Perubahan (%)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td style="text-align: left;">Total Nominal Koleksi</td>
-                            <td>${formatRupiah(data.last_nominal)}</td>
-                            <td>${formatRupiah(data.current_nominal)}</td>
-                            <td style="color: ${getChangeColor(data.change_nominal)}; font-weight: bold;">
-                                ${formatPercent(data.change_nominal)}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style="text-align: left;">Jumlah Pelanggan</td>
-                            <td>${formatNumber(data.last_nomen)}</td>
-                            <td>${formatNumber(data.current_nomen)}</td>
-                            <td style="color: ${getChangeColor(data.change_nomen)}; font-weight: bold;">
-                                ${formatPercent(data.change_nomen)}
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div class="report-table-wrapper">
+                    <table class="report-table" style="min-width: 600px;">
+                        <thead>
+                            <tr>
+                                <th style="text-align: left;">Metrik</th>
+                                <th>Bulan Lalu (${data.period_last})</th>
+                                <th>Bulan Ini (${data.period_current})</th>
+                                <th>Perubahan (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td data-label="Metrik" style="text-align: left;">Total Nominal Koleksi</td>
+                                <td data-label="Bulan Lalu">${formatRupiah(data.last_nominal)}</td>
+                                <td data-label="Bulan Ini">${formatRupiah(data.current_nominal)}</td>
+                                <td data-label="Perubahan (%)" style="color: ${getChangeColor(data.change_nominal)}; font-weight: bold;">
+                                    ${formatPercent(data.change_nominal)}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td data-label="Metrik" style="text-align: left;">Jumlah Pelanggan</td>
+                                <td data-label="Bulan Lalu">${formatNumber(data.last_nomen)}</td>
+                                <td data-label="Bulan Ini">${formatNumber(data.current_nomen)}</td>
+                                <td data-label="Perubahan (%)" style="color: ${getChangeColor(data.change_nomen)}; font-weight: bold;">
+                                    ${formatPercent(data.change_nomen)}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             `;
             
             // 3. RENDER BAR CHART
@@ -335,7 +384,12 @@
                                 display: true,
                                 text: 'Nilai (Rupiah/Count)'
                             },
-                            // Custom ticks for formatting (simplified as one axis for two metrics)
+                        },
+                        x: {
+                            // Ensure the x-axis is responsive (needed for chart.js v4)
+                            grid: {
+                                display: false
+                            }
                         }
                     },
                     plugins: {
@@ -353,7 +407,6 @@
                                     if (label) {
                                         label += ': ';
                                     }
-                                    // Custom formatter based on data index (assuming index 0 is nominal)
                                     if (context.dataIndex === 0) {
                                         label += formatRupiah(context.parsed.y);
                                     } else {
@@ -509,29 +562,29 @@
                                 <th rowspan="2">Perubahan Harian (%)</th>
                             </tr>
                             <tr>
-                                <th>Harian (Rp)</th>
-                                <th>Kumulatif (Rp)</th>
-                                <th>Harian (Rp)</th>
-                                <th>Kumulatif (Rp)</th>
+                                <th data-label="Bulan Ini Harian">Harian (Rp)</th>
+                                <th data-label="Bulan Ini Kumulatif">Kumulatif (Rp)</th>
+                                <th data-label="Bulan Lalu Harian">Harian (Rp)</th>
+                                <th data-label="Bulan Lalu Kumulatif">Kumulatif (Rp)</th>
                             </tr>
                         </thead>
                         <tbody>
                 `;
                 
                 data.days.forEach((day, index) => {
-                    const currentDaily = areaDailyCurrent[index];
-                    const lastDaily = areaDailyLast[index];
+                    const currentDaily = areaDailyCurrent[index] || 0;
+                    const lastDaily = areaDailyLast[index] || 0;
                     const percentageChange = calculateDtDPercentage(currentDaily, lastDaily);
                     const changeColor = getChangeColor(percentageChange);
 
                     subTableHTML += `
                         <tr>
-                            <td style="text-align: center;">${day}</td>
-                            <td>${formatRupiah(currentDaily)}</td>
-                            <td style="background-color: #f0f8ff;">${formatRupiah(areaCumulativeCurrent[index])}</td>
-                            <td>${formatRupiah(lastDaily)}</td>
-                            <td style="background-color: #f0f8ff;">${formatRupiah(areaCumulativeLast[index])}</td>
-                            <td style="color: ${changeColor}; font-weight: bold;">
+                            <td data-label="Hari ke-" style="text-align: center;">${day}</td>
+                            <td data-label="Bulan Ini Harian">${formatRupiah(currentDaily)}</td>
+                            <td data-label="Bulan Ini Kumulatif" style="background-color: #f0f8ff;">${formatRupiah(areaCumulativeCurrent[index] || currentDaily)}</td>
+                            <td data-label="Bulan Lalu Harian">${formatRupiah(lastDaily)}</td>
+                            <td data-label="Bulan Lalu Kumulatif" style="background-color: #f0f8ff;">${formatRupiah(areaCumulativeLast[index] || lastDaily)}</td>
+                            <td data-label="Perubahan Harian (%)" style="color: ${changeColor}; font-weight: bold;">
                                 <i class="fas fa-caret-${getChangeIcon(percentageChange)}"></i> ${formatPercent(percentageChange)}
                             </td>
                         </tr>
@@ -640,10 +693,10 @@
                         <tr>
                             <td data-label="TGL" style="text-align: left;">${item.TGL}</td>
                             <td data-label="CUST">${formatNumber(item.CUST_COUNT)}</td>
-                            <td data-label="Rp1">${formatRupiah(rp1)}</td>
+                            <td data-label="Rp1 (Nominal Harian)">${formatRupiah(rp1)}</td>
                             <td data-label="Rp1 Kumulatif">${formatRupiah(rp1_kumulatif)}</td>
                             <td data-label="CUST Kumulatif">${formatNumber(cust_kumulatif)}</td>
-                            <td data-label="COLL %" class="percentage-cell">${formatPercent(persen)}</td>
+                            <td data-label="COLL Kumulatif %" class="percentage-cell">${formatPercent(persen)}</td>
                             <td data-label="COLL VAR">${formatPercent(coll_var)}</td>
                         </tr>
                     `;
@@ -736,12 +789,12 @@
             
             // Baris Ringkasan Total
             tableHTML += `
-                <tr class="total-row">
+                <tr class="total-row grand-total-row">
                     <td colspan="4" style="text-align: left;">Total NOMINAL Terfilter</td>
                     <td style="background-color: #d0e7ff; font-weight: bold;">Rp ${totalNominal.toLocaleString('id-ID')}</td>
                     <td colspan="2" style="background-color: #d0e7ff; font-weight: bold;">-</td>
                 </tr>
-                <tr class="total-row">
+                <tr class="total-row grand-total-row">
                     <td colspan="4" style="text-align: left;">Total NOMEN Unik (Count)</td>
                     <td colspan="3" style="text-align: center; background-color: #d0e7ff; font-weight: bold;">${uniqueNomenCount.toLocaleString('id-ID')}</td>
                 </tr>
