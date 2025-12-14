@@ -3,17 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Akses Data PAM Analytics</title>
+    <title>Login - Akses Data Area Service AB Sunter Analytics</title>
     <style>
-        /* --- VARIABLE & FONT --- */
+        /* --- VARIABLE & FONT (Sinkronisasi dengan base.html) --- */
         :root {
             --primary-color: #007bff;
             --secondary-color: #2c3e50; /* Biru tua untuk header/footer */
             --bg-color: #f4f7f9;
             --card-bg: #ffffff;
+            --shadow-light: 0 1px 3px rgba(0, 0, 0, 0.08);
+            --shadow-medium: 0 4px 12px rgba(0, 0, 0, 0.15);
             --shadow: 0 10px 30px rgba(0, 0, 0, 0.15); /* Shadow lebih kuat */
-            --border-radius: 12px; /* Border radius lebih besar */
+            --border-radius: 8px; /* Menggunakan radius yang sama dengan base.html */
         }
+        
+        /* --- ANIMASI KEYFRAMES --- */
+        @keyframes backgroundShift {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 100% 50%; }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         body {
             font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             background-color: var(--bg-color);
@@ -25,17 +38,11 @@
             min-height: 100vh;
             margin: 0;
             overflow-x: hidden;
-            position: relative; /* Diperlukan untuk animasi BG */
+            position: relative; 
             background: linear-gradient(135deg, var(--bg-color) 0%, #e9ecef 100%);
-            animation: backgroundShift 30s infinite alternate; /* Animasi Latar Belakang */
+            animation: backgroundShift 30s infinite alternate; 
         }
         
-        /* Animasi Latar Belakang */
-        @keyframes backgroundShift {
-            0% { background-position: 0% 50%; }
-            100% { background-position: 100% 50%; }
-        }
-
         /* --- HEADER & FOOTER FIXED --- */
         header, footer {
             width: 100%;
@@ -44,6 +51,7 @@
             padding: 10px 0;
             color: white;
             text-align: center;
+            transition: all 0.3s ease;
         }
 
         header {
@@ -58,31 +66,34 @@
             bottom: 0;
             background-color: var(--secondary-color);
             font-size: 0.85em;
-            opacity: 0.7;
+            opacity: 0.8;
         }
 
-        /* --- LOGIN CARD --- */
+        /* --- LOGIN CARD (Dinamis dan Responsif) --- */
         .login-container {
-            width: 100%;
+            width: 90%; /* Lebih responsif di mobile */
             max-width: 400px;
             background-color: var(--card-bg);
-            padding: 40px;
+            padding: 40px 30px; /* Kurangi padding horizontal */
             border-radius: var(--border-radius);
             box-shadow: var(--shadow);
             text-align: center;
-            z-index: 10; /* Pastikan di atas animasi BG */
+            z-index: 10;
+            /* Tambah Animasi Fade-In untuk card */
+            animation: fadeIn 0.8s ease-out;
             transition: all 0.3s ease;
         }
         
         .login-container:hover {
-            transform: scale(1.01);
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+            transform: scale(1.005); /* Sedikit efek angkat saat hover */
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.2);
         }
 
         h2 {
             color: var(--secondary-color);
             margin-bottom: 30px;
             font-weight: 700;
+            font-size: 1.8em;
         }
         
         .logo-text {
@@ -109,15 +120,16 @@
             border: 1px solid #ced4da;
             border-radius: 6px;
             box-sizing: border-box;
-            transition: border-color 0.3s, box-shadow 0.3s;
+            transition: all 0.3s;
         }
         .form-control:focus {
             border-color: var(--primary-color);
             box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
             outline: none;
+            background-color: #f8f9fa; /* Efek highlight saat fokus */
         }
 
-        /* --- BUTTON & ANIMATION --- */
+        /* --- BUTTON (Sinkronisasi dengan base.html) --- */
         .btn-primary {
             background-color: var(--primary-color);
             color: white;
@@ -128,28 +140,52 @@
             width: 100%;
             font-size: 1.1em;
             font-weight: 700;
-            transition: background-color 0.3s, transform 0.1s, box-shadow 0.3s;
+            transition: all 0.3s ease; /* Transisi lebih halus */
             box-shadow: 0 4px 10px rgba(0, 123, 255, 0.3);
             position: relative;
         }
         .btn-primary:hover {
             background-color: #0056b3;
-            transform: translateY(-1px);
-            box-shadow: 0 6px 15px rgba(0, 123, 255, 0.4);
+            transform: translateY(-2px); /* Efek angkat lebih jelas */
+            box-shadow: 0 8px 20px rgba(0, 123, 255, 0.4);
+        }
+        .btn-primary:active {
+            transform: translateY(1px); /* Efek tekan */
+            box-shadow: 0 2px 5px rgba(0, 123, 255, 0.2);
         }
         
-        /* Flash Messages */
+        /* Flash Messages (Dinamis) */
         .alert {
             padding: 10px;
             margin-bottom: 15px;
             border-radius: 4px;
             text-align: left;
             font-weight: 600;
+            opacity: 0; /* Mulai tersembunyi */
+            animation: fadeIn 0.5s ease-out 0.2s forwards;
         }
         .alert-danger {
             background-color: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
+        }
+
+        /* --- MEDIA QUERY UNTUK LAYAR HP --- */
+        @media (max-width: 480px) {
+            .login-container {
+                width: 95%; /* Ambil lebih banyak lebar layar */
+                padding: 30px 20px; /* Kurangi padding di HP */
+                box-shadow: none; /* Hapus shadow di HP agar lebih 'native app' */
+            }
+            header {
+                font-size: 1.0em;
+            }
+            footer {
+                font-size: 0.8em;
+            }
+            h2 {
+                font-size: 1.6em;
+            }
         }
     </style>
 </head>
@@ -161,7 +197,7 @@
 
     <div class="login-container">
         <h2>Selamat Datang</h2>
-        <span class="logo-text">PAM Internal Analytics - Silakan Masuk</span>
+        <span class="logo-text">Area Service AB Sunter Analytics - Silakan Masuk</span>
         
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -184,7 +220,7 @@
                 {{ form.password(class="form-control", placeholder="Masukkan Kata Sandi Anda") }}
             </div>
 
-            {{ form.submit(class="btn-primary") }}
+            {{ form.submit(class="btn-primary") }} 
         </form>
     </div>
 
@@ -193,16 +229,20 @@
     </footer>
     
     <script>
-        // Fungsi sederhana untuk mendapatkan tahun saat ini
+        // Fungsi sederhana untuk mendapatkan tahun saat ini (tetap dipertahankan)
         function updateFooterYear() {
             const footer = document.querySelector('footer');
             if (footer) {
                 const currentYear = new Date().getFullYear();
                 // Mengganti placeholder tahun (2024) di footer dengan tahun aktual
-                footer.innerHTML = `&copy; ${currentYear} Khirul Anwar. All rights reserved.`; 
+                footer.innerHTML = `&copy; ${currentYear} Khoirul Anwar. All rights reserved.`; 
             }
         }
-        updateFooterYear();
+        document.addEventListener('DOMContentLoaded', () => {
+             updateFooterYear();
+             // Fokuskan input pertama saat halaman dimuat
+             document.getElementById('username').focus(); 
+        });
     </script>
 </body>
 </html>
