@@ -64,10 +64,42 @@
     
     <div class="report-grid-menu">
         
+        <a href="{{ url_for('rayon_distribution_view') }}" class="report-card-link">
+            <div class="report-card-aggr" style="border-left-color: #007bff;">
+                <i class="fas fa-city" style="color: #007bff;"></i>
+                <h3>Distribusi Rayon Pelanggan</h3>
+                <p>Nomen, Piutang, dan Kubikasi per Rayon.</p>
+            </div>
+        </a>
+
+        <a href="{{ url_for('pcez_distribution_view') }}" class="report-card-link">
+            <div class="report-card-aggr" style="border-left-color: #6f42c1;">
+                <i class="fas fa-map-marked-alt" style="color: #6f42c1;"></i>
+                <h3>Distribusi PCEZ Pelanggan</h3>
+                <p>Nomen, Piutang, dan Kubikasi per PCEZ.</p>
+            </div>
+        </a>
+
+        <a href="{{ url_for('rayon_tarif_distribution_view') }}" class="report-card-link">
+            <div class="report-card-aggr" style="border-left-color: #ffc107;">
+                <i class="fas fa-tag" style="color: #ffc107;"></i>
+                <h3>Distribusi Rayon/Tarif</h3>
+                <p>Nomen, Piutang, dan Kubikasi per Rayon dan Tarif.</p>
+            </div>
+        </a>
+
+        <a href="{{ url_for('rayon_meter_distribution_view') }}" class="report-card-link">
+            <div class="report-card-aggr" style="border-left-color: #17a2b8;">
+                <i class="fas fa-tachometer-alt" style="color: #17a2b8;"></i>
+                <h3>Distribusi Rayon/Jenis Meter</h3>
+                <p>Nomen, Piutang, dan Kubikasi per Rayon dan Jenis Meter.</p>
+            </div>
+        </a>
+        
         <a href="{{ url_for('analysis_tarif_breakdown') }}" class="report-card-link">
             <div class="report-card-aggr" style="border-left-color: #17a2b8;">
                 <i class="fas fa-list-ol" style="color: #17a2b8;"></i>
-                <h3>Distribusi Tarif Pelanggan</h3>
+                <h3>Distribusi Tarif Pelanggan (LAMA)</h3>
                 <p>Melihat Pie Chart dan detail tabel jumlah nomen berdasarkan jenis tarif (R34/R35 Reguler).</p>
             </div>
         </a>
