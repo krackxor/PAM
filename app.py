@@ -1008,7 +1008,7 @@ def analyze_mc_tarif_breakdown_api():
         return jsonify({"message": f"Gagal mengambil tarif breakdown MC. Detail teknis error: {e}"}), 500
 
 # =========================================================================
-# === API MONITORING KOLEKSI HARIAN (BARU) ===
+# === API MONITORING KOLEKSI HARIAN (PERBAIKAN PANDAS) ===
 # =========================================================================
 
 @app.route('/api/collection/monitoring', methods=['GET'])
@@ -1087,6 +1087,7 @@ def collection_monitoring_api():
         if df_monitoring.empty:
             return jsonify({'monitoring_data': {'R34': [], 'R35': []}, 'summary_top': {'R34': {'MC1125': total_mc_34}, 'R35': {'MC1125': total_mc_35}}}), 200
 
+        # Pastikan kolom TGL adalah datetime
         df_monitoring['TGL'] = pd.to_datetime(df_monitoring['TGL'])
         df_monitoring = df_monitoring.sort_values(by='TGL')
         
@@ -1145,7 +1146,88 @@ def collection_monitoring_api():
         return jsonify({"message": f"Gagal membuat data monitoring koleksi: {e}"}), 500
 
 # =========================================================================
-# === API PERUBAHAN TARIF PELANGGAN (BARU) ===
+# === API PERBANDINGAN KOLEKSI MoM (Month-over-Month) ===
+# =========================================================================
+
+@app.route('/api/collection/mom_report', methods=['GET'])
+@login_required
+def mom_report_api():
+    """Menghitung perbandingan koleksi (Nominal dan Pelanggan) bulan ini vs bulan lalu."""
+    if client is None:
+        return jsonify({"message": "Server tidak terhubung ke Database."}), 500
+
+    try:
+        now = datetime.now()
+        
+        # Tentukan bulan ini dan bulan lalu (sebagai string YYYY-MM)
+        this_month_str = now.strftime('%Y-%m')
+        # Hitung bulan lalu
+        last_month = now.replace(day=1) - timedelta(days=1)
+        last_month_str = last_month.strftime('%Y-%m')
+        
+        # Pipeline untuk mengambil koleksi dari dua bulan terakhir
+        pipeline = [
+            {'$match': {
+                # Mencocokkan TGL_BAYAR berdasarkan prefix YYYY-MM
+                'TGL_BAYAR': {'$regex': f"({this_month_str}|{last_month_str})"}
+            }},
+            {'$project': {
+                'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
+                'NOMEN': 1,
+                # Ekstrak periode (YYYY-MM) dari TGL_BAYAR (index 0, panjang 7)
+                'Periode': {'$substr': ['$TGL_BAYAR', 0, 7]} 
+            }},
+            {'$group': {
+                '_id': '$Periode',
+                'TotalNominal': {'$sum': '$NOMINAL'},
+                'TotalNomen': {'$addToSet': '$NOMEN'}
+            }},
+        ]
+        
+        raw_data = list(collection_mb.aggregate(pipeline))
+
+        report_map = {
+            this_month_str: {'nominal': 0, 'nomen': 0},
+            last_month_str: {'nominal': 0, 'nomen': 0},
+        }
+        
+        for item in raw_data:
+            period = item['_id']
+            if period in report_map:
+                report_map[period]['nominal'] = item['TotalNominal']
+                report_map[period]['nomen'] = len(item['TotalNomen'])
+
+        # Hitung Persentase Perubahan (MoM)
+        def calculate_change(current, previous):
+            if previous == 0:
+                # Jika bulan lalu 0, perubahan 100% jika bulan ini ada data, atau 0% jika nol
+                return 100.0 if current > 0 else 0.0
+            return ((current - previous) / previous) * 100
+
+        current_nom = report_map.get(this_month_str, {}).get('nominal', 0)
+        last_nom = report_map.get(last_month_str, {}).get('nominal', 0)
+        current_nomen = report_map.get(this_month_str, {}).get('nomen', 0)
+        last_nomen = report_map.get(last_month_str, {}).get('nomen', 0)
+
+        final_report = {
+            'period_current': this_month_str,
+            'period_last': last_month_str,
+            'current_nominal': current_nom,
+            'last_nominal': last_nom,
+            'current_nomen': current_nomen,
+            'last_nomen': last_nomen,
+            'change_nominal': calculate_change(current_nom, last_nom),
+            'change_nomen': calculate_change(current_nomen, last_nomen)
+        }
+
+        return jsonify({'status': 'success', 'data': final_report}), 200
+
+    except Exception as e:
+        print(f"Error saat membuat laporan MoM: {e}")
+        return jsonify({"status": 'error', "message": f"Gagal mengambil laporan MoM: {e}"}), 500
+
+# =========================================================================
+# === API PERUBAHAN TARIF PELANGGAN (LANJUTAN) ===
 # =========================================================================
 
 def _aggregate_tariff_changes(collection_cid):
@@ -1222,7 +1304,7 @@ def analyze_tariff_change_api():
         return jsonify({"message": f"Gagal mengambil data perubahan tarif. Detail teknis error: {e}"}), 500
 
 # =========================================================================
-# === API LAPORAN TOP LISTS (BARU) ===
+# === API LAPORAN TOP LISTS (LANJUTAN) ===
 # =========================================================================
 
 def _aggregate_top_debt(collection_mc, collection_ardebt, collection_cid):
@@ -1373,7 +1455,7 @@ def report_top_lists_api():
 
 
 # =========================================================================
-# === API LAPORAN VOLUME DASAR BULANAN (BARU) ===
+# === API LAPORAN VOLUME DASAR BULANAN (LANJUTAN) ===
 # =========================================================================
 
 @app.route('/api/report/basic_volume', methods=['GET'])
@@ -1779,13 +1861,28 @@ def upload_mb_data():
             # Mengkonversi ke string lalu mencoba parsing dari format DD-MM-YYYY (asumsi dari file)
             # Dan mengkonversi kembali ke format YYYY-MM-DD yang diperlukan oleh query
             try:
-                df['TGL_BAYAR'] = pd.to_datetime(
+                # Coba parse sebagai tanggal Pandas
+                df['TGL_BAYAR_OBJ'] = pd.to_datetime(
                     df['TGL_BAYAR'].astype(str).str.strip(), 
                     format='%d-%m-%Y', 
                     errors='coerce'
-                ).dt.strftime('%Y-%m-%d').fillna('N/A')
-            except ValueError:
-                # Fallback untuk format tanggal yang tidak konsisten
+                )
+                
+                # Coba parse dari format float/int (serial date number, umum di Excel)
+                numeric_dates = pd.to_numeric(df['TGL_BAYAR'].replace({'N/A': float('nan')}), errors='coerce')
+                
+                # Menggunakan NumPy where untuk memilih antara hasil parsing string dan konversi Excel serial
+                df['TGL_BAYAR_OBJ'] = df['TGL_BAYAR_OBJ'].fillna(
+                    pd.to_datetime(numeric_dates, unit='D', origin='1899-12-30', errors='coerce')
+                )
+                
+                # Konversi objek datetime ke string YYYY-MM-DD yang seragam
+                df['TGL_BAYAR'] = df['TGL_BAYAR_OBJ'].dt.strftime('%Y-%m-%d').fillna('N/A')
+                df = df.drop(columns=['TGL_BAYAR_OBJ'], errors='ignore')
+
+            except Exception as e:
+                print(f"Peringatan: Gagal melakukan konversi tanggal kompleks. Menggunakan konversi string dasar. Error: {e}")
+                # Fallback untuk konversi string dasar
                 df['TGL_BAYAR'] = df['TGL_BAYAR'].astype(str).str.strip().apply(lambda x: 
                     pd.to_datetime(x, errors='coerce').strftime('%Y-%m-%d') if pd.notna(pd.to_datetime(x, errors='coerce')) else 'N/A'
                 )
@@ -2020,7 +2117,7 @@ def upload_sbrs_data():
                 "inserted_count": inserted_count,
                 "skipped_count": skipped_count
             },
-            "anomaly_list": anomaly_list # Mengembalikan hasil analisis anomali
+            "anomaly_list": []
         }), 200
         # --- END RETURN REPORT ---
 
