@@ -3,13 +3,15 @@
 {% block title %}Kelola Data Piutang & Koleksi{% endblock %}
 
 {% block custom_styles %}
-/* Custom CSS untuk Tampilan Tab/Sub-Menu */
+/* Custom CSS untuk Tampilan Tab/Sub-Menu (Dinamis dan Responsif) */
 .tab-menu {
     border-bottom: 2px solid #ddd;
     margin-bottom: 20px;
     display: flex;
-    overflow-x: auto; 
+    overflow-x: auto; /* Memungkinkan scroll horizontal di mobile */
     white-space: nowrap;
+    padding-bottom: 5px; 
+    -webkit-overflow-scrolling: touch; /* iOS smooth scrolling */
 }
 .tab-button {
     padding: 10px 20px;
@@ -20,58 +22,75 @@
     border-radius: 5px 5px 0 0;
     font-weight: 600;
     color: #555;
-    transition: all 0.3s;
+    transition: all 0.3s ease;
     flex-shrink: 0; 
+}
+.tab-button:hover:not(.active) {
+    background-color: #e9ecef;
+    color: var(--primary-color);
 }
 .tab-button.active {
     background-color: white;
     border-color: var(--primary-color);
     border-bottom: 2px solid white; 
     color: var(--primary-color);
+    box-shadow: var(--shadow-light);
 }
+
 .tab-content {
     padding: 10px;
-    border: 1px solid #ddd;
+    border: none; /* Hilangkan border ganda */
     border-top: none;
+    animation: fadeIn 0.5s ease-out; /* Animasi saat tab diganti */
 }
 .upload-section { 
     padding: 20px; 
     border-radius: var(--border-radius); 
     margin-bottom: 30px; 
     text-align: left; 
+    background-color: var(--card-bg);
+    box-shadow: var(--shadow-light);
 }
-.upload-section h3 {
-    text-align: center;
+
+/* --- BUTTON STYLING (Sinkronisasi dengan base.html) --- */
+.btn-upload-replace, .btn-upload-append { 
+    color: white;
+    border: none;
+    padding: 12px 25px; 
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    display: inline-block;
+    margin-top: 10px;
 }
 .btn-upload-replace { 
     background-color: #dc3545; 
-    color: white; 
-    border: none; 
-    padding: 10px 20px; 
-    border-radius: 8px; 
-    transition: all 0.3s;
 }
-.btn-upload-replace:hover { background-color: #c82333; }
-
+.btn-upload-replace:hover { 
+    background-color: #c82333; 
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(220, 53, 69, 0.2);
+}
 .btn-upload-append { 
-    background-color: var(--secondary-color); 
-    color: white; 
-    border: none; 
-    padding: 10px 20px; 
-    border-radius: 8px; 
-    transition: all 0.3s;
+    background-color: var(--primary-color); 
 }
-.btn-upload-append:hover { background-color: #1e7e34; }
+.btn-upload-append:hover { 
+    background-color: #0056b3;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.2);
+}
 
 /* Status Summary Card Styling */
 .upload-summary-card {
     margin-top: 15px;
     padding: 15px;
     border: 1px solid #e0e0e0;
-    border-left: 5px solid; /* Placeholder for color accent */
+    border-left: 5px solid; 
     border-radius: var(--border-radius);
     background-color: #f8f8f8;
     box-shadow: var(--shadow-light);
+    animation: fadeIn 0.5s ease-out;
 }
 .summary-header {
     display: flex;
@@ -90,9 +109,6 @@
     font-size: 0.9em;
     margin-bottom: 10px;
 }
-.summary-item {
-    padding: 3px 0;
-}
 .status-success { color: var(--secondary-color); }
 .status-replace { color: #dc3545; }
 .status-info { color: #17a2b8; }
@@ -104,17 +120,20 @@
     border: 1px solid #ffc107;
     border-radius: var(--border-radius);
     background-color: #fff8e1;
+    box-shadow: var(--shadow-light);
 }
 .anomaly-table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 10px;
     font-size: 0.9em;
+    min-width: 600px; /* Minimal width untuk desktop */
 }
 .anomaly-table th, .anomaly-table td {
     border: 1px solid #ffeeba;
     padding: 8px;
     text-align: left;
+    white-space: nowrap;
 }
 .anomaly-table th {
     background-color: #ffecb3;
@@ -131,16 +150,91 @@
     margin-bottom: 20px;
     border-radius: var(--border-radius);
     text-align: center;
+    transition: box-shadow 0.3s;
+}
+.monthly-group:hover {
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
 }
 .monthly-group p {
     font-size: 0.9em;
 }
 
+/* Flex group for Month/Year inputs */
+.date-input-group {
+    margin-bottom: 15px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
 
-@media (max-width: 480px) {
+/* Common style for file inputs/selects/number inputs */
+.file-input, .date-input-group select, .date-input-group input[type="number"] {
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid #ced4da;
+    transition: border-color 0.3s;
+    box-sizing: border-box;
+}
+.date-input-group select {
+    flex-grow: 1;
+}
+
+/* --- MEDIA QUERY UNTUK LAYAR HP (MAX 600px) --- */
+@media (max-width: 600px) {
     .tab-button {
-        padding: 8px 12px;
+        padding: 10px 15px;
         font-size: 0.9em;
+    }
+    
+    /* Monthly Group: Stack Select/Input Vertically */
+    .date-input-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .date-input-group input[type="number"] {
+        width: 100% !important;
+        text-align: center;
+    }
+
+    /* Anomaly Table: Implement Card View */
+    .anomaly-table-wrapper {
+        border: none;
+        box-shadow: none;
+    }
+    .anomaly-table {
+        min-width: 100%;
+    }
+    .anomaly-table thead {
+        display: none;
+    }
+    .anomaly-table tr {
+        display: block;
+        margin-bottom: 15px;
+        border: 1px solid #ddd;
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow-light);
+    }
+    .anomaly-table td {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 12px;
+        border: none;
+        border-bottom: 1px solid #eee;
+        font-size: 1em;
+        white-space: normal;
+    }
+    .anomaly-table td:before {
+        content: attr(data-label);
+        font-weight: 600;
+        text-align: left;
+        width: 45%; 
+        padding-right: 10px;
+        color: #6c757d;
+    }
+    
+    .btn-upload-replace, .btn-upload-append {
+        width: 100%;
+        display: block;
     }
 }
 {% endblock %}
@@ -172,8 +266,8 @@
                 <p>Data Piutang Bulanan. **MENAMBAHKAN** riwayat ke koleksi `MasterCetak`.</p>
                 <p style="font-size: 0.9em; color: #666;">Kunci unik: NOMEN dan BULAN_TAGIHAN.</p>
 
-                <div style="margin-bottom: 15px; display: flex; gap: 10px; justify-content: center;">
-                    <select id="mcMonth" name="month" required style="padding: 8px; border-radius: 4px; border: 1px solid #ced4da;">
+                <div class="date-input-group">
+                    <select id="mcMonth" name="month" required class="file-input">
                         <option value="">-- Pilih Bulan Tagihan --</option>
                         <option value="01">01 - Januari</option>
                         <option value="02">02 - Februari</option>
@@ -189,11 +283,12 @@
                         <option value="12">12 - Desember</option>
                     </select>
                     <input type="number" id="mcYear" name="year" placeholder="Tahun (YYYY)" required 
-                           min="2000" max="2100" 
-                           style="padding: 8px; border-radius: 4px; width: 100px; border: 1px solid #ced4da;">
+                            min="2000" max="2100" class="file-input"
+                            style="width: 100px;">
                 </div>
+                
                 <form id="uploadFormMC" action="{{ url_for('upload_mc_data') }}" method="POST" enctype="multipart/form-data">
-                    <input type="file" id="csvFileMC" name="file" accept=".csv, .xlsx, .xls" required>
+                    <input type="file" id="csvFileMC" name="file" accept=".csv, .xlsx, .xls" required class="file-input" style="margin-bottom: 10px; width: 100%; max-width: 300px;">
                     <button type="submit" class="btn-upload-append">TAMBAH DATA MC (HISTORI)</button>
                 </form>
                 <div id="uploadStatusMC"></div>
@@ -204,8 +299,8 @@
                 <p>Data Tunggakan Historis. **MENAMBAHKAN** riwayat ke koleksi `AccountReceivable`.</p>
                 <p style="font-size: 0.9em; color: #666;">Kunci unik: NOMEN, PERIODE_BILL, dan JUMLAH.</p>
 
-                <div style="margin-bottom: 15px; display: flex; gap: 10px; justify-content: center;">
-                    <select id="ardebtMonth" name="month" required style="padding: 8px; border-radius: 4px; border: 1px solid #ced4da;">
+                <div class="date-input-group">
+                    <select id="ardebtMonth" name="month" required class="file-input">
                         <option value="">-- Pilih Bulan Tunggakan --</option>
                         <option value="01">01 - Januari</option>
                         <option value="02">02 - Februari</option>
@@ -221,11 +316,12 @@
                         <option value="12">12 - Desember</option>
                     </select>
                     <input type="number" id="ardebtYear" name="year" placeholder="Tahun (YYYY)" required 
-                           min="2000" max="2100" 
-                           style="padding: 8px; border-radius: 4px; width: 100px; border: 1px solid #ced4da;">
+                            min="2000" max="2100" class="file-input"
+                            style="width: 100px;">
                 </div>
+
                 <form id="uploadFormARDEBT" action="{{ url_for('upload_ardebt_data') }}" method="POST" enctype="multipart/form-data">
-                    <input type="file" id="csvFileARDEBT" name="file" accept=".csv, .xlsx, .xls" required>
+                    <input type="file" id="csvFileARDEBT" name="file" accept=".csv, .xlsx, .xls" required class="file-input" style="margin-bottom: 10px; width: 100%; max-width: 300px;">
                     <button type="submit" class="btn-upload-append">TAMBAH DATA ARDEBT (HISTORI)</button>
                 </form>
                 <div id="uploadStatusARDEBT"></div>
@@ -236,7 +332,7 @@
                 <p>Data Profil Pelanggan Statis. **MENAMBAHKAN** riwayat profil ke koleksi `CustomerData`.</p>
                 <p style="font-size: 0.9em; color: #666;">Kunci unik: NOMEN dan TANGGAL_UPLOAD_CID.</p>
                 <form id="uploadFormCID" action="{{ url_for('upload_cid_data') }}" method="POST" enctype="multipart/form-data">
-                    <input type="file" id="csvFileCID" name="file" accept=".csv, .xlsx, .xls" required>
+                    <input type="file" id="csvFileCID" name="file" accept=".csv, .xlsx, .xls" required class="file-input" style="margin-bottom: 10px; width: 100%; max-width: 300px;">
                     <button type="submit" class="btn-upload-append">TAMBAH DATA CID (HISTORI)</button>
                 </form>
                 <div id="uploadStatusCID"></div>
@@ -250,7 +346,7 @@
             <p style="font-weight: bold; color: var(--secondary-color);">MENAMBAHKAN data transaksi pembayaran baru (APPEND).</p>
             <p style="font-size: 0.9em; color: #666;">Kunci unik: NOTAGIHAN, TGL_BAYAR, NOMINAL. Duplikasi diabaikan.</p>
             <form id="uploadFormMB" action="{{ url_for('upload_mb_data') }}" method="POST" enctype="multipart/form-data">
-                <input type="file" id="csvFileMB" name="file" accept=".csv, .xlsx, .xls" required>
+                <input type="file" id="csvFileMB" name="file" accept=".csv, .xlsx, .xls" required class="file-input" style="margin-bottom: 10px; width: 100%; max-width: 300px;">
                 <button type="submit" class="btn-upload-append">TAMBAH DATA MB</button>
             </form>
             <div id="uploadStatusMB"></div>
@@ -263,7 +359,7 @@
             <p style="font-weight: bold; color: var(--secondary-color);">MENAMBAHKAN riwayat baca meter baru (APPEND).</p>
             <p style="font-size: 0.9em; color: #666;">Kunci unik: CMR_ACCOUNT, CMR_RD_DATE. Duplikasi diabaikan.</p>
             <form id="uploadFormSBRS" action="{{ url_for('upload_sbrs_data') }}" method="POST" enctype="multipart/form-data">
-                <input type="file" id="csvFileSBRS" name="file" accept=".csv, .xlsx, .xls" required>
+                <input type="file" id="csvFileSBRS" name="file" accept=".csv, .xlsx, .xls" required class="file-input" style="margin-bottom: 10px; width: 100%; max-width: 300px;">
                 <button type="submit" class="btn-upload-append">TAMBAH DATA SBRS</button>
             </form>
             <div id="uploadStatusSBRS"></div>
@@ -308,6 +404,17 @@
                 return `<p style="text-align: center; color: var(--secondary-color); font-weight: 600;">Tidak ada anomali pemakaian air yang ditemukan.</p>`;
             }
 
+            const headers = [
+                { label: "NOMEN", key: "NOMEN" },
+                { label: "NAMA", key: "NAMA" },
+                { label: "RAYON", key: "RAYON" },
+                { label: "STATUS ANOMALI", key: "STATUS_PEMAKAIAN" },
+                { label: "KUBIK TERBARU", key: "KUBIK_TERBARU" },
+                { label: "KUBIK SEBELUMNYA", key: "KUBIK_SEBELUMNYA" },
+                { label: "SELISIH (m³)", key: "SELISIH_KUBIK" },
+                { label: "% SELISIH", key: "PERSEN_SELISIH" }
+            ];
+
             let tableRows = '';
             anomalies.forEach(item => {
                 let statusClass = '';
@@ -317,20 +424,18 @@
                     statusClass = 'status-turun';
                 } else if (item.STATUS_PEMAKAIAN.includes('ZERO')) {
                     statusClass = 'status-zero';
-                } else {
-                    statusClass = '';
                 }
-
+                
                 tableRows += `
                     <tr>
-                        <td>${item.NOMEN}</td>
-                        <td>${item.NAMA}</td>
-                        <td>${item.RAYON}</td>
-                        <td class="${statusClass}">${item.STATUS_PEMAKAIAN}</td>
-                        <td>${item.KUBIK_TERBARU}</td>
-                        <td>${item.KUBIK_SEBELUMNYA}</td>
-                        <td>${item.SELISIH_KUBIK}</td>
-                        <td>${item.PERSEN_SELISIH}%</td>
+                        <td data-label="NOMEN">${item.NOMEN}</td>
+                        <td data-label="NAMA">${item.NAMA}</td>
+                        <td data-label="RAYON">${item.RAYON}</td>
+                        <td data-label="STATUS ANOMALI" class="${statusClass}">${item.STATUS_PEMAKAIAN}</td>
+                        <td data-label="KUBIK TERBARU">${item.KUBIK_TERBARU}</td>
+                        <td data-label="KUBIK SEBELUMNYA">${item.KUBIK_SEBELUMNYA}</td>
+                        <td data-label="SELISIH (m³)">${item.SELISIH_KUBIK}</td>
+                        <td data-label="% SELISIH">${item.PERSEN_SELISIH}%</td>
                     </tr>
                 `;
             });
@@ -338,24 +443,17 @@
             return `
                 <div class="anomaly-section">
                     <h4 style="color: #856404; margin-top: 0;"><i class="fas fa-exclamation-triangle" style="margin-right: 5px;"></i> ${anomalies.length} Anomali Pemakaian Air Ditemukan:</h4>
-                    <div class="result-table-wrapper">
-                    <table class="anomaly-table">
-                        <thead>
-                            <tr>
-                                <th>NOMEN</th>
-                                <th>NAMA</th>
-                                <th>RAYON</th>
-                                <th>STATUS ANOMALI</th>
-                                <th>KUBIK TERBARU</th>
-                                <th>KUBIK SEBELUMNYA</th>
-                                <th>SELISIH (m³)</th>
-                                <th>% SELISIH</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${tableRows}
-                        </tbody>
-                    </table>
+                    <div class="anomaly-table-wrapper">
+                        <table class="anomaly-table">
+                            <thead>
+                                <tr>
+                                    ${headers.map(h => `<th>${h.label}</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${tableRows}
+                            </tbody>
+                        </table>
                     </div>
                     <p style="font-size: 0.8em; text-align: right; margin-top: 10px; color: #6c757d;">*Dibatasi 100 hasil anomali terbaru.</p>
                 </div>
@@ -369,7 +467,6 @@
             // Formatting angka dengan pemisah ribuan
             const formatNumber = (num) => (num || 0).toLocaleString('id-ID');
 
-            // NOTE: Karena MC, CID, ARDEBT diubah ke APPEND, kita seragamkan tampilan status report
             if (summary.type === 'REPLACE') {
                 detailRows = `
                     <div class="summary-item"><strong>Total Baris File:</strong> ${formatNumber(summary.total_rows)}</div>
