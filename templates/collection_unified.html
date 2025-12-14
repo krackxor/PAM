@@ -75,7 +75,7 @@
     box-shadow: var(--shadow-light);
 }
 
-/* --- NEW TAB STYLES (FROM UPLOAD ADMIN) --- */
+/* --- NEW TAB STYLES --- */
 .tab-menu {
     border-bottom: 2px solid #ddd;
     margin-bottom: 20px;
@@ -105,11 +105,6 @@
     padding: 10px 0;
     border: none;
 }
-.content-section {
-    margin-bottom: 40px;
-    padding-top: 20px;
-    /* Hilangkan border top karena sudah ada di tab */
-}
 .tab-content-tab h3 {
     margin-top: 30px;
     color: var(--primary-color);
@@ -122,6 +117,56 @@
     padding-top: 0;
 }
 /* ------------------------------------------- */
+
+/* CSS for the new Analysis Menu Grid (Card Style) */
+.report-grid-menu {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+    gap: 20px;
+    margin-top: 20px;
+    margin-bottom: 30px; 
+}
+
+.report-card-link {
+    text-decoration: none;
+    color: inherit;
+}
+
+.report-card-aggr {
+    background-color: var(--card-bg);
+    border: 1px solid #e0e0e0; 
+    border-radius: var(--border-radius);
+    padding: 25px 20px; 
+    box-shadow: var(--shadow-light);
+    transition: all 0.3s ease;
+    text-align: center;
+    min-height: 150px; 
+    cursor: pointer;
+}
+
+.report-card-aggr:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0, 123, 255, 0.2); 
+    border-color: var(--primary-color);
+}
+
+.report-card-aggr i {
+    font-size: 3em; 
+    color: var(--primary-color);
+    margin-bottom: 10px;
+}
+
+.report-card-aggr h3 {
+    margin: 10px 0 5px 0;
+    color: var(--text-color);
+    font-size: 1.1em;
+}
+
+.report-card-aggr p {
+    font-size: 0.9em;
+    color: #6c757d; 
+}
+
 
 /* -------------------------------------------------------------------------- */
 /* --- ROMBAK TOTAL UI: LAYOUT MOBILE (LIST TRANSAKSI) --- */
@@ -244,45 +289,61 @@
             <p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat data breakdown tarif...</p>
         </div>
 
-        <h3 style="color: #28a745;">
-            <i class="fas fa-water"></i> Laporan Agregasi Volume Dasar (Historis MC)
-        </h3>
-        
-        <div style="margin-bottom: 20px; text-align: center;">
-            <button id="fetchBasicVolumeBtn" class="btn-primary" style="background-color: var(--secondary-color); color: white; padding: 12px 25px;">
-                <i class="fas fa-sync"></i> Muat Laporan Volume Dasar
-            </button>
-        </div>
-
-        <div id="basicVolumeReportArea">
-            <p class="no-results">Tekan "Muat Laporan Volume Dasar" untuk melihat riwayat volume KUBIK bulanan.</p>
-        </div>
-        
-        <h3 style="color: #dc3545;">
-            <i class="fas fa-layer-group"></i> Laporan Grouping MC: AB Sunter (Reguler R34/R35)
-        </h3>
-        
-        <button id="fetchCustomReportBtn" class="btn-primary" style="background-color: #dc3545; color: white; margin-bottom: 20px;">
-            <i class="fas fa-sync"></i> Muat Laporan AB Sunter
-        </button>
-
-        <div id="customReportArea">
-            <p class="no-results">Tekan "Muat Laporan AB Sunter" untuk melihat hasil agregasi.</p>
-        </div>
-        
         <h3 style="color: var(--primary-color);">
-            <i class="fas fa-list-alt"></i> Daftar Konsumen Spesifik (Top & Status)
+            <i class="fas fa-chart-pie"></i> Laporan Agregasi Khusus (Pilih salah satu kartu untuk memuat)
         </h3>
         
-        <div style="margin-bottom: 20px; text-align: center;">
-            <button id="fetchTopListsBtn" class="btn-primary" style="background-color: var(--primary-color); color: white; padding: 12px 25px;">
-                <i class="fas fa-sync"></i> Muat Daftar Konsumen (4 Kategori)
-            </button>
+        <div class="report-grid-menu">
+        
+            <a href="javascript:void(0);" onclick="fetchCustomReport();" class="report-card-link">
+                <div class="report-card-aggr" style="border-left-color: #dc3545;">
+                    <i class="fas fa-layer-group" style="color: #dc3545;"></i>
+                    <h3>Grouping MC: AB Sunter</h3>
+                    <p>Agregasi Nomen, Kubik, dan Nominal berdasarkan Tarif, Merek, dan Metode Baca untuk R34/R35.</p>
+                </div>
+            </a>
+            
+            <a href="javascript:void(0);" onclick="fetchBasicVolumeReport();" class="report-card-link">
+                <div class="report-card-aggr" style="border-left-color: var(--secondary-color);">
+                    <i class="fas fa-water" style="color: var(--secondary-color);"></i>
+                    <h3>Laporan Volume Dasar</h3>
+                    <p>Riwayat volume KUBIK bulanan dari seluruh data Master Cetak (MC) secara historis.</p>
+                </div>
+            </a>
+            
+            <a href="javascript:void(0);" onclick="fetchTopLists();" class="report-card-link">
+                <div class="report-card-aggr" style="border-left-color: var(--primary-color);">
+                    <i class="fas fa-medal" style="color: var(--primary-color);"></i>
+                    <h3>Daftar Konsumen Top</h3>
+                    <p>Top 500 Tunggakan, Top 500 Premium, serta Daftar Lunas dan Belum Bayar (Snapshot Terbaru).</p>
+                </div>
+            </a>
+            
+        </div>
+        
+        <hr style="margin: 40px 0; border-style: dotted;">
+
+        <h3 style="color: #dc3545;">
+            <i class="fas fa-layer-group"></i> Hasil Laporan AB Sunter
+        </h3>
+        <div id="customReportArea">
+            <p class="no-results">Tekan kartu "Grouping MC: AB Sunter" di atas untuk memuat hasilnya.</p>
+        </div>
+        
+        <h3 style="color: #28a745;">
+            <i class="fas fa-water"></i> Hasil Laporan Volume Dasar
+        </h3>
+        <div id="basicVolumeReportArea">
+            <p class="no-results">Tekan kartu "Laporan Volume Dasar" di atas untuk memuat hasilnya.</p>
         </div>
 
+        <h3 style="color: var(--primary-color);">
+            <i class="fas fa-list-alt"></i> Hasil Daftar Konsumen Spesifik
+        </h3>
         <div id="topListsArea">
-            <p class="no-results">Tekan "Muat Daftar Konsumen" untuk menampilkan laporan 4 kategori (Sudah Bayar, Belum Bayar, Top 500 Tunggakan, Top 500 Premium).</p>
+            <p class="no-results">Tekan kartu "Daftar Konsumen Top" di atas untuk memuat hasilnya.</p>
         </div>
+        
     </div>
 
 
@@ -292,17 +353,17 @@
         const searchBtn = document.getElementById('searchBtn');
         const detailsArea = document.getElementById('detailsArea');
         const exportReportBtn = document.getElementById('exportReportBtn');
-        const fetchCustomBtn = document.getElementById('fetchCustomReportBtn'); 
+        // const fetchCustomBtn = document.getElementById('fetchCustomReportBtn'); // Dihapus/Diganti Card Click
         const customReportArea = document.getElementById('customReportArea');
         const tarifBreakdownArea = document.getElementById('tarifBreakdownArea');
         
         const monitoringSummaryArea = document.getElementById('monitoringSummaryArea');
         const monitoringTableArea = document.getElementById('monitoringTableArea');
         
-        const fetchTopListsBtn = document.getElementById('fetchTopListsBtn');
+        // const fetchTopListsBtn = document.getElementById('fetchTopListsBtn'); // Dihapus/Diganti Card Click
         const topListsArea = document.getElementById('topListsArea');
         
-        const fetchBasicVolumeBtn = document.getElementById('fetchBasicVolumeBtn');
+        // const fetchBasicVolumeBtn = document.getElementById('fetchBasicVolumeBtn'); // Dihapus/Diganti Card Click
         const basicVolumeReportArea = document.getElementById('basicVolumeReportArea');
 
 
@@ -335,16 +396,13 @@
 
             // --- PANGGIL FUNGSI LOAD DATA BERDASARKAN TAB ---
             if (tabName === 'summary') {
-                // Summary & Report Utama harus selalu di-load
                 fetchCollectionReport(); 
             } else if (tabName === 'monitoring') {
-                // Monitoring dan Detail Koleksi harus di-load
                 fetchCollectionMonitoring();
-                fetchCollectionDetails(''); // Muat default detail tanpa filter
+                fetchCollectionDetails(''); 
             } else if (tabName === 'analysis') {
-                 // Analysis harus di-load, kecuali yang punya tombol Muat
                  fetchTarifBreakdown(); // Load tarif breakdown otomatis
-                 // Basic Volume, AB Sunter, Top Lists tetap manual via tombol Muat
+                 // Konten lainnya di Tab Analysis dimuat melalui klik kartu
             }
         }
         // --- END FUNGSI UTILITY UNTUK TAB ---
@@ -352,7 +410,8 @@
         // --- FUNGSI 1: MEMUAT REPORT RINGKAS ---
         async function fetchCollectionReport() {
             // Cek apakah sudah ada data, jika sudah, lewati pemuatan untuk performa
-            if (reportArea.querySelector('.report-grid').children.length > 0 && 
+            if (reportArea.querySelector('.report-grid') && 
+                reportArea.querySelector('.report-grid').children.length > 0 && 
                 !reportArea.querySelector('.report-grid').querySelector('.no-results')) {
                 return; 
             }
@@ -1096,9 +1155,9 @@
             }
         });
         
-        fetchCustomBtn.addEventListener('click', fetchCustomReport);
-        fetchTopListsBtn.addEventListener('click', fetchTopLists); // NEW EVENT LISTENER
-        fetchBasicVolumeBtn.addEventListener('click', fetchBasicVolumeReport); // NEW EVENT LISTENER
+        // fetchCustomBtn.addEventListener('click', fetchCustomReport); // Dihapus
+        // fetchTopListsBtn.addEventListener('click', fetchTopLists); // Dihapus
+        // fetchBasicVolumeBtn.addEventListener('click', fetchBasicVolumeReport); // Dihapus
         
         
         // Muat semua bagian saat halaman dimuat
