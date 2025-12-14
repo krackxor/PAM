@@ -3,12 +3,19 @@
 {% block title %}Ringkasan Piutang & Koleksi Utama{% endblock %}
 
 {% block custom_styles %}
-/* Custom CSS dari file lama, hanya bagian yang relevan untuk ringkasan */
-.report-header { text-align: center; margin-bottom: 20px; }
+/* Custom CSS untuk Tampilan Tab/Sub-Menu (Sinkronisasi & Dinamis) */
+.report-header { 
+    text-align: center; 
+    margin-bottom: 20px; 
+    animation: fadeIn 0.5s ease-out; /* Animasi saat header muncul */
+}
+
+/* Summary Grid (Responsif) */
 .report-grid {
     display: grid;
+    /* Grid akan memiliki minimal 200px per kolom, akan menumpuk di mobile */
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 20px;
+    gap: 15px; /* Kurangi gap sedikit */
     margin-bottom: 30px;
 }
 .summary-card { 
@@ -19,33 +26,116 @@
     text-align: center; 
     border: 1px solid #e0e0e0;
     border-left: 5px solid;
-    transition: transform 0.2s;
+    /* Transisi untuk dinamika */
+    transition: all 0.3s ease;
 }
 .summary-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-medium);
+    transform: translateY(-3px); /* Efek angkat/lift */
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
 }
 .summary-card h4 { margin: 0 0 5px 0; font-size: 0.9em; color: #6c757d; }
 .summary-card p { margin: 0; font-size: 1.6em; font-weight: bold; }
-.report-table-wrapper { overflow-x: auto; margin-top: 20px; }
-.report-table { 
-    width: 100%; border-collapse: collapse; font-size: 14px; 
-    box-shadow: var(--shadow-light); 
+
+/* Detail Table Styling */
+.report-table-wrapper { 
+    overflow-x: auto; 
+    margin-top: 20px; 
+    /* Tambahkan gaya card pada wrapper */
+    box-shadow: var(--shadow-medium); 
     border-radius: var(--border-radius);
-    overflow: hidden; 
+    overflow: hidden;
+    border: 1px solid #e0e0e0;
+}
+.report-table { 
+    width: 100%; 
+    border-collapse: collapse; 
+    font-size: 14px; 
+    min-width: 1000px; /* Minimal width untuk desktop */
 }
 .report-table th, .report-table td { 
-    border: 1px solid #f0f0f0; padding: 10px; text-align: right; white-space: nowrap; 
+    border: 1px solid #f0f0f0; 
+    padding: 10px; 
+    text-align: right; 
+    white-space: nowrap; 
 }
-.report-table th { background-color: #e9ecef; text-align: center; font-weight: 600; }
-.report-table { min-width: 1000px; }
+.report-table th { 
+    background-color: #e9ecef; 
+    text-align: center; 
+    font-weight: 600; 
+}
 .undue-cell { font-weight: bold; color: #17a2b8 !important; }
 .grand-total-row { font-weight: bold; background-color: #d0e7ff; color: var(--text-color); } 
 .percentage-cell { font-weight: bold; color: var(--secondary-color); }
 
-/* Mobile styling */
+.no-results {
+    text-align: center;
+    padding: 20px;
+    color: #6c757d;
+}
+
+/* --- MEDIA QUERY UNTUK LAYAR HP (CARD VIEW) --- */
 @media screen and (max-width: 600px) {
-    .report-table thead { display: none; }
+    /* Summary Grid: Menumpuk ke 1 kolom */
+    .report-grid {
+        grid-template-columns: 1fr;
+    }
+    .summary-card {
+        transform: none; /* Nonaktifkan hover di HP */
+    }
+
+    /* Table Card View Logic */
+    .report-table-wrapper {
+        border: none;
+        box-shadow: none;
+    }
+    .report-table { 
+        min-width: 100%; 
+    }
+    .report-table thead { 
+        display: none; /* Sembunyikan header tabel */
+    }
+    .report-table tr {
+        display: block;
+        margin-bottom: 15px; /* Beri jarak antar card */
+        border: 1px solid #ddd;
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow-light);
+    }
+    .report-table td {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 12px;
+        border: none;
+        border-bottom: 1px solid #eee;
+        text-align: right;
+        white-space: normal; /* Biarkan konten wrap */
+        font-size: 1em;
+    }
+    .report-table td:before {
+        content: attr(data-label); /* Tampilkan label kolom */
+        font-weight: 600;
+        text-align: left;
+        width: 60%; 
+        color: #6c757d;
+    }
+    .grand-total-row {
+        margin-top: 20px;
+        background-color: #d0e7ff !important;
+        border: none !important;
+    }
+    .grand-total-row td:before {
+        /* Hilangkan label untuk baris Grand Total agar rapi */
+        content: ""; 
+        width: 0;
+        padding-right: 0;
+    }
+    .grand-total-row td:first-child {
+        text-align: center;
+        width: 100%;
+        display: block;
+        font-size: 1.1em;
+        padding: 12px;
+    }
 }
 {% endblock %}
 
@@ -172,12 +262,12 @@
                             <th colspan="2" rowspan="2">PERSENTASE (%)</th>
                         </tr>
                         <tr>
-                            <th style="background-color: #ffeeba;">NOMINAL</th>
-                            <th style="background-color: #ffeeba;">KUBIK (m³)</th>
-                            <th style="background-color: #d4edda;">NOMINAL</th>
-                            <th style="background-color: #d4edda;">KUBIK (m³)</th>
-                            <th style="background-color: #d1ecf1;">NOMINAL</th>
-                            <th style="background-color: #d1ecf1;">KUBIK (m³)</th>
+                            <th data-label="MC Piutang Nom" style="background-color: #ffeeba;">NOMINAL</th>
+                            <th data-label="MC Piutang Kubik" style="background-color: #ffeeba;">KUBIK (m³)</th>
+                            <th data-label="MC Koleksi Nom" style="background-color: #d4edda;">NOMINAL</th>
+                            <th data-label="MC Koleksi Kubik" style="background-color: #d4edda;">KUBIK (m³)</th>
+                            <th data-label="MB Undue Nom" style="background-color: #d1ecf1;">NOMINAL</th>
+                            <th data-label="MB Undue Kubik" style="background-color: #d1ecf1;">KUBIK (m³)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -186,7 +276,7 @@
             data.forEach(item => {
                 tableHTML += `
                     <tr>
-                        <td data-label="Rayon">${item.RAYON}</td>
+                        <td data-label="RAYON">${item.RAYON}</td>
                         <td data-label="PCEZ">${item.PCEZ}</td>
                         <td data-label="MC Piutang Nom">${formatRupiah(item.MC_TotalNominal)}</td>
                         <td data-label="MC Piutang Kubik">${formatNumber(item.MC_TotalKubik)}</td>
@@ -202,16 +292,16 @@
             
             tableHTML += `
                 <tr class="grand-total-row">
-                    <td>GRAND TOTAL</td>
-                    <td>-</td>
-                    <td>${formatRupiah(grandTotal.MC_TotalNominal)}</td>
-                    <td>${formatNumber(grandTotal.MC_TotalKubik)}</td>
-                    <td>${formatRupiah(grandTotal.MC_CollectedNominal)}</td>
-                    <td>${formatNumber(grandTotal.MC_CollectedKubik)}</td>
-                    <td>${formatRupiah(grandTotal.MB_UndueNominal)}</td>
-                    <td>${formatNumber(grandTotal.MB_UndueKubik)}</td>
-                    <td class="percentage-cell">${formatPercent(grandTotal.PercentNominal)}</td>
-                    <td class="undue-cell">${formatPercent(grandTotal.UnduePercentNominal)}</td>
+                    <td data-label="RAYON">GRAND TOTAL</td>
+                    <td data-label="PCEZ">-</td>
+                    <td data-label="MC Piutang Nom">${formatRupiah(grandTotal.MC_TotalNominal)}</td>
+                    <td data-label="MC Piutang Kubik">${formatNumber(grandTotal.MC_TotalKubik)}</td>
+                    <td data-label="MC Koleksi Nom">${formatRupiah(grandTotal.MC_CollectedNominal)}</td>
+                    <td data-label="MC Koleksi Kubik">${formatNumber(grandTotal.MC_CollectedKubik)}</td>
+                    <td data-label="MB Undue Nom">${formatRupiah(grandTotal.MB_UndueNominal)}</td>
+                    <td data-label="MB Undue Kubik">${formatNumber(grandTotal.MB_UndueKubik)}</td>
+                    <td data-label="% Nom" class="percentage-cell">${formatPercent(grandTotal.PercentNominal)}</td>
+                    <td data-label="% Undue" class="undue-cell">${formatPercent(grandTotal.UnduePercentNominal)}</td>
                 </tr>
             `;
             
