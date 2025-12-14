@@ -189,7 +189,7 @@
     </div>
 
     <footer>
-        &copy; {{ now().year }} Khirul Anwar. All rights reserved.
+        &copy; 2024 Khirul Anwar. All rights reserved.
     </footer>
     
     <script>
@@ -198,7 +198,8 @@
             const footer = document.querySelector('footer');
             if (footer) {
                 const currentYear = new Date().getFullYear();
-                footer.innerHTML = `&copy; ${currentYear} Khirul Anwar. All rights reserved.`;
+                // Mengganti placeholder tahun (2024) di footer dengan tahun aktual
+                footer.innerHTML = `&copy; ${currentYear} Khirul Anwar. All rights reserved.`; 
             }
         }
         updateFooterYear();
