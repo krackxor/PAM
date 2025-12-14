@@ -7,7 +7,7 @@
 .report-header { text-align: center; margin-bottom: 20px; }
 .report-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); 
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); /* Minmax ditingkatkan */
     gap: 20px;
     margin-bottom: 30px;
 }
@@ -29,7 +29,7 @@
 .summary-card p { margin: 0; font-size: 1.6em; font-weight: bold; }
 
 .filter-input-group { 
-    margin-top: 30px; padding-top: 20px; border-top: 1px dashed #ddd; 
+    margin-top: 20px; padding-top: 10px; border-top: 1px dashed #ddd; 
     display: flex; align-items: stretch; gap: 10px; 
 }
 #filterInput { 
@@ -52,7 +52,6 @@
     border: 1px solid #f0f0f0; padding: 10px; text-align: right; white-space: nowrap; 
 }
 .report-table th, .collection-table th { background-color: #e9ecef; text-align: center; font-weight: 600; }
-/* New styles for improved report table */
 .report-table { min-width: 1000px; }
 .undue-cell { font-weight: bold; color: #17a2b8 !important; }
 
@@ -64,7 +63,7 @@
 /* Styling untuk kelompok tabel kustom (AB Sunter) */
 .breakdown-group {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* 3 kolom yang responsif */
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
     gap: 20px;
     margin-top: 15px;
     margin-bottom: 30px;
@@ -75,6 +74,54 @@
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-light);
 }
+
+/* --- NEW TAB STYLES (FROM UPLOAD ADMIN) --- */
+.tab-menu {
+    border-bottom: 2px solid #ddd;
+    margin-bottom: 20px;
+    display: flex;
+    overflow-x: auto; 
+    white-space: nowrap;
+}
+.tab-button {
+    padding: 10px 20px;
+    cursor: pointer;
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+    border-bottom: none;
+    border-radius: 5px 5px 0 0;
+    font-weight: 600;
+    color: #555;
+    transition: all 0.3s;
+    flex-shrink: 0; 
+}
+.tab-button.active {
+    background-color: white;
+    border-color: var(--primary-color);
+    border-bottom: 2px solid white; 
+    color: var(--primary-color);
+}
+.tab-content-tab {
+    padding: 10px 0;
+    border: none;
+}
+.content-section {
+    margin-bottom: 40px;
+    padding-top: 20px;
+    /* Hilangkan border top karena sudah ada di tab */
+}
+.tab-content-tab h3 {
+    margin-top: 30px;
+    color: var(--primary-color);
+    border-top: 1px solid #e0e0e0;
+    padding-top: 20px;
+}
+.tab-content-tab h3:first-child {
+    margin-top: 0;
+    border-top: none;
+    padding-top: 0;
+}
+/* ------------------------------------------- */
 
 /* -------------------------------------------------------------------------- */
 /* --- ROMBAK TOTAL UI: LAYOUT MOBILE (LIST TRANSAKSI) --- */
@@ -134,82 +181,110 @@
         <i class="fas fa-chart-bar" style="margin-right: 10px;"></i> Laporan Koleksi & Piutang Terpadu
     </h2>
     
-    <div id="reportArea">
-        <p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Laporan Ringkas...</p>
+    <div class="tab-menu">
+        <button class="tab-button active" onclick="showTabCollection('summary')" id="tab-summary">
+            <i class="fas fa-list-alt"></i> Ringkasan & Piutang Utama
+        </button>
+        <button class="tab-button" onclick="showTabCollection('monitoring')" id="tab-monitoring">
+            <i class="fas fa-calendar-alt"></i> Monitoring & Detail Koleksi
+        </button>
+        <button class="tab-button" onclick="showTabCollection('analysis')" id="tab-analysis">
+            <i class="fas fa-layer-group"></i> Analisis Agregasi
+        </button>
     </div>
 
-    <h3 style="margin-top: 40px; color: #dc3545; border-top: 1px solid #dc3545; padding-top: 20px;">
-        <i class="fas fa-calendar-alt"></i> Monitoring Koleksi Harian (Rayon 34 & 35)
-    </h3>
-    
-    <div id="monitoringSummaryArea" class="report-grid">
-        <p class="no-results" style="grid-column: 1 / -1;"><i class="fas fa-spinner fa-spin"></i> Memuat ringkasan monitoring...</p>
-    </div>
-
-    <div id="monitoringTableArea">
+    <div id="content-summary" class="tab-content-tab">
+        <div id="reportArea">
+            <p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Laporan Ringkas...</p>
         </div>
-    <div style="text-align: right; margin-top: 10px; margin-bottom: 20px;">
-        <a href="#" id="exportReportBtn" class="btn-primary" style="background-color: #6c757d; text-decoration: none;">
-            <i class="fas fa-file-excel"></i> Export Summary
-        </a>
     </div>
 
-    <h3 style="margin-top: 40px; color: #17a2b8; border-top: 1px solid #17a2b8; padding-top: 20px;">
-        <i class="fas fa-list-ol"></i> Distribusi Pelanggan Berdasarkan TARIF (Rayon 34/35 Reguler)
-    </h3>
-    
-    <div id="tarifBreakdownArea">
-        <p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat data breakdown tarif...</p>
-    </div>
+    <div id="content-monitoring" class="tab-content-tab" style="display: none;">
+        
+        <h3 style="color: #dc3545;">
+            <i class="fas fa-calendar-alt"></i> Monitoring Koleksi Harian (Rayon 34 & 35)
+        </h3>
+        
+        <div id="monitoringSummaryArea" class="report-grid">
+            <p class="no-results" style="grid-column: 1 / -1;"><i class="fas fa-spinner fa-spin"></i> Memuat ringkasan monitoring...</p>
+        </div>
 
-    <h3 style="margin-top: 40px; color: #28a745; border-top: 1px solid #28a745; padding-top: 20px;">
-        <i class="fas fa-water"></i> Laporan Agregasi Volume Dasar (Historis MC)
-    </h3>
+        <div id="monitoringTableArea">
+        </div>
+        
+        <div style="text-align: right; margin-top: 10px; margin-bottom: 20px;">
+            <a href="#" id="exportReportBtn" class="btn-primary" style="background-color: #6c757d; text-decoration: none;">
+                <i class="fas fa-file-excel"></i> Export Summary
+            </a>
+        </div>
+        
+        <h3 style="color: #007bff;">
+            <i class="fas fa-list-alt"></i> Listing Transaksi Pembayaran (MB Detail)
+        </h3>
+
+        <div class="filter-input-group">
+            <input type="text" id="filterInput" placeholder="Filter Detail (Rayon, PCEZ, NOMEN)...">
+            <button id="searchBtn" class="btn-primary" style="background-color: var(--primary-color); color: white; padding: 12px 18px; border: none; border-radius: 4px;">
+                <i class="fas fa-filter"></i> Filter Detail
+            </button>
+        </div>
+
+        <div id="detailsArea">
+            <p class="no-results">Memuat data transaksi...</p>
+        </div>
+    </div>
     
-    <div style="margin-bottom: 20px; text-align: center;">
-        <button id="fetchBasicVolumeBtn" class="btn-primary" style="background-color: var(--secondary-color); color: white; padding: 12px 25px;">
-            <i class="fas fa-sync"></i> Muat Laporan Volume Dasar
+    <div id="content-analysis" class="tab-content-tab" style="display: none;">
+        
+        <h3 style="color: #17a2b8;">
+            <i class="fas fa-list-ol"></i> Distribusi Pelanggan Berdasarkan TARIF (Rayon 34/35 Reguler)
+        </h3>
+        
+        <div id="tarifBreakdownArea">
+            <p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat data breakdown tarif...</p>
+        </div>
+
+        <h3 style="color: #28a745;">
+            <i class="fas fa-water"></i> Laporan Agregasi Volume Dasar (Historis MC)
+        </h3>
+        
+        <div style="margin-bottom: 20px; text-align: center;">
+            <button id="fetchBasicVolumeBtn" class="btn-primary" style="background-color: var(--secondary-color); color: white; padding: 12px 25px;">
+                <i class="fas fa-sync"></i> Muat Laporan Volume Dasar
+            </button>
+        </div>
+
+        <div id="basicVolumeReportArea">
+            <p class="no-results">Tekan "Muat Laporan Volume Dasar" untuk melihat riwayat volume KUBIK bulanan.</p>
+        </div>
+        
+        <h3 style="color: #dc3545;">
+            <i class="fas fa-layer-group"></i> Laporan Grouping MC: AB Sunter (Reguler R34/R35)
+        </h3>
+        
+        <button id="fetchCustomReportBtn" class="btn-primary" style="background-color: #dc3545; color: white; margin-bottom: 20px;">
+            <i class="fas fa-sync"></i> Muat Laporan AB Sunter
         </button>
+
+        <div id="customReportArea">
+            <p class="no-results">Tekan "Muat Laporan AB Sunter" untuk melihat hasil agregasi.</p>
+        </div>
+        
+        <h3 style="color: var(--primary-color);">
+            <i class="fas fa-list-alt"></i> Daftar Konsumen Spesifik (Top & Status)
+        </h3>
+        
+        <div style="margin-bottom: 20px; text-align: center;">
+            <button id="fetchTopListsBtn" class="btn-primary" style="background-color: var(--primary-color); color: white; padding: 12px 25px;">
+                <i class="fas fa-sync"></i> Muat Daftar Konsumen (4 Kategori)
+            </button>
+        </div>
+
+        <div id="topListsArea">
+            <p class="no-results">Tekan "Muat Daftar Konsumen" untuk menampilkan laporan 4 kategori (Sudah Bayar, Belum Bayar, Top 500 Tunggakan, Top 500 Premium).</p>
+        </div>
     </div>
 
-    <div id="basicVolumeReportArea">
-        <p class="no-results">Tekan "Muat Laporan Volume Dasar" untuk melihat riwayat volume KUBIK bulanan.</p>
-    </div>
-    <h3 style="margin-top: 40px; color: #dc3545; border-top: 1px solid #dc3545; padding-top: 20px;">
-        <i class="fas fa-layer-group"></i> Laporan Grouping MC: AB Sunter
-    </h3>
-    
-    <button id="fetchCustomReportBtn" class="btn-primary" style="background-color: #dc3545; color: white; margin-bottom: 20px;">
-        <i class="fas fa-sync"></i> Muat Laporan AB Sunter
-    </button>
-
-    <div id="customReportArea">
-        <p class="no-results">Tekan "Muat Laporan AB Sunter" untuk melihat hasil agregasi.</p>
-    </div>
-    
-    <h3 style="margin-top: 40px; color: #007bff; border-top: 1px solid #007bff; padding-top: 20px;">
-        <i class="fas fa-list-alt"></i> Daftar Konsumen Spesifik (Top & Status)
-    </h3>
-    
-    <div style="margin-bottom: 20px; text-align: center;">
-        <button id="fetchTopListsBtn" class="btn-primary" style="background-color: var(--primary-color); color: white; padding: 12px 25px;">
-            <i class="fas fa-sync"></i> Muat Daftar Konsumen (4 Kategori)
-        </button>
-    </div>
-
-    <div id="topListsArea">
-        <p class="no-results">Tekan "Muat Daftar Konsumen" untuk menampilkan laporan 4 kategori (Sudah Bayar, Belum Bayar, Top 500 Tunggakan, Top 500 Premium).</p>
-    </div>
-    <div class="filter-input-group">
-        <input type="text" id="filterInput" placeholder="Filter Detail (Rayon, PCEZ, NOMEN)...">
-        <button id="searchBtn" class="btn-primary" style="background-color: var(--primary-color); color: white; padding: 12px 18px; border: none; border-radius: 4px;">
-            <i class="fas fa-filter"></i> Filter Detail
-        </button>
-    </div>
-
-    <div id="detailsArea">
-        <p class="no-results">Memuat data transaksi...</p>
-    </div>
 
     <script>
         const reportArea = document.getElementById('reportArea');
@@ -243,8 +318,46 @@
             return (parseFloat(number) || 0).toFixed(2) + '%';
         }
 
+        // --- FUNGSI UTILITY UNTUK TAB ---
+        function showTabCollection(tabName) {
+            // Sembunyikan semua konten tab
+            document.querySelectorAll('.tab-content-tab').forEach(div => div.style.display = 'none');
+            
+            // Hapus kelas aktif dari semua tombol
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            
+            // Tampilkan konten tab yang dipilih
+            const contentId = `content-${tabName}`;
+            document.getElementById(contentId).style.display = 'block';
+
+            // Set tombol menjadi aktif
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+
+            // --- PANGGIL FUNGSI LOAD DATA BERDASARKAN TAB ---
+            if (tabName === 'summary') {
+                // Summary & Report Utama harus selalu di-load
+                fetchCollectionReport(); 
+            } else if (tabName === 'monitoring') {
+                // Monitoring dan Detail Koleksi harus di-load
+                fetchCollectionMonitoring();
+                fetchCollectionDetails(''); // Muat default detail tanpa filter
+            } else if (tabName === 'analysis') {
+                 // Analysis harus di-load, kecuali yang punya tombol Muat
+                 fetchTarifBreakdown(); // Load tarif breakdown otomatis
+                 // Basic Volume, AB Sunter, Top Lists tetap manual via tombol Muat
+            }
+        }
+        // --- END FUNGSI UTILITY UNTUK TAB ---
+
         // --- FUNGSI 1: MEMUAT REPORT RINGKAS ---
         async function fetchCollectionReport() {
+            // Cek apakah sudah ada data, jika sudah, lewati pemuatan untuk performa
+            if (reportArea.querySelector('.report-grid').children.length > 0 && 
+                !reportArea.querySelector('.report-grid').querySelector('.no-results')) {
+                return; 
+            }
+            reportArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Laporan Ringkas...</p>';
+
             try {
                 // 1. Fetch Main Report Data (MC vs MB)
                 const response = await fetch('{{ url_for("collection_report_api") }}');
@@ -275,7 +388,7 @@
         function renderReport(data, grandTotal) {
             let summaryHTML = `
                 <div class="report-header">
-                    <h3>Ringkasan Total Aplikasi</h3>
+                    <h3 style="color: var(--primary-color); border-top: none;">Ringkasan Total Aplikasi (MC, MB, CID)</h3>
                 </div>
                 <div class="report-grid">
                     <div class="summary-card" style="border-left-color: #007bff;">
@@ -327,7 +440,7 @@
             `;
             
             let tableHTML = `
-                <h3 style="margin-top: 30px;">Detail Perbandingan MC (Piutang) vs MB (Koleksi Undue) per Rayon / PCEZ</h3>
+                <h3 style="margin-top: 30px; color: var(--primary-color);">Detail Perbandingan MC (Piutang) vs MB (Koleksi Undue) per Rayon / PCEZ</h3>
                 <div class="report-table-wrapper">
                 <table class="report-table">
                     <thead>
@@ -504,7 +617,7 @@
             const uniqueNomenCount = uniqueNomen.size;
 
             let tableHTML = `
-                <h3 style="margin-top: 20px;">Listing Transaksi MB (${data.length} Transaksi)</h3>
+                <h4 style="margin-top: 20px;">Listing Transaksi MB (${data.length} Transaksi)</h4>
                 <div class="report-table-wrapper">
                 <table class="collection-table">
                     <thead>
@@ -606,7 +719,7 @@
             // -------------------------------------------------------------------------
             
             let totalSummaryHTML = `
-                <h4 style="color: #dc3545; margin-bottom: 15px;">Ringkasan Nomen, Nominal, dan Kubikasi (Reguler)</h4>
+                <h4 style="color: #dc3545; margin-bottom: 15px;">Ringkasan Nomen, Nominal, dan Kubikasi (Reguler R34/R35)</h4>
                 <div class="report-table-wrapper" style="max-width: 800px; margin-left: auto; margin-right: auto;">
                     <table class="report-table" style="min-width: 100%;">
                         <thead>
@@ -809,7 +922,7 @@
                 if (list.length === 0) return '';
                 
                 let tableHTML = `
-                    <h5 style="margin-top: 20px; color: #007bff;">${title}</h5>
+                    <h4 style="margin-top: 20px; color: #007bff;">${title}</h4>
                     <div class="report-table-wrapper">
                     <table class="report-table" style="min-width: 800px;">
                         <thead>
@@ -990,10 +1103,8 @@
         
         // Muat semua bagian saat halaman dimuat
         document.addEventListener('DOMContentLoaded', () => {
-             fetchCollectionReport(); 
-             fetchCollectionDetails(''); 
-             fetchTarifBreakdown(); 
-             fetchCollectionMonitoring(); // PANGGIL FUNGSI BARU INI SAAT LOAD
+             // Default: Tampilkan Tab Ringkasan dan load datanya
+             showTabCollection('summary'); 
         });
 
     </script>
