@@ -661,7 +661,8 @@ def rayon_tarif_distribution_report():
     
     data_for_display = []
     for item in results:
-        label = f"{item.get("RAYON", "N/A")} - {item.get("TARIF", "N/A")}"
+        # FIX: Menggunakan single quotes di dalam f-string
+        label = f"{item.get('RAYON', 'N/A')} - {item.get('TARIF', 'N/A')}" 
         data_for_display.append({
             "RAYON": item.get("RAYON", "N/A"),
             "TARIF": item.get("TARIF", "N/A"),
@@ -689,7 +690,8 @@ def rayon_meter_distribution_report():
     
     data_for_display = []
     for item in results:
-        label = f"{item.get("RAYON", "N/A")} - {item.get("JENIS_METER", "N/A")}"
+        # FIX: Menggunakan single quotes di dalam f-string
+        label = f"{item.get('RAYON', 'N/A')} - {item.get('JENIS_METER', 'N/A')}" 
         data_for_display.append({
             "RAYON": item.get("RAYON", "N/A"),
             "JENIS_METER": item.get("JENIS_METER", "N/A"),
