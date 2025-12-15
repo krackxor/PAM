@@ -184,18 +184,21 @@ def get_mc_mb_comparison_by_pcez(bulan_tagihan_target):
     
     # 1. Pipeline untuk Master Cetak (MC) - Total Piutang Bulan Berjalan
     mc_pipeline = [
+        # Filter data MC untuk bulan tagihan target
         {'$match': {'BULAN_TAGIHAN': bulan_tagihan_target}},
         
         # Ekstraksi Rayon dan PCEZ dari ZONA_NOVAK MC
         {"$project": {
             "NOMEN": 1,
-            "JML_TAGIHAN": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, 
+            "JML_TAGIHAN": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, # Menggunakan NOMINAL dari MC untuk Piutang
             "CUST_TYPE_MC": "$CUST_TYPE",
-            "RAYON_MC": {"$toUpper": {"$trim": {"input": {"$ifNull": ["$RAYON", "N/A"]}}}},
-            "PCEZ_MC": {"$toUpper": {"$trim": {"input": {"$ifNull": ["$PCEZ", "N/A"]}}}},
+            "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
+            # Ekstrak Rayon/PCEZ dari ZONA_NOVAK MC sebagai fallback:
+            "RAYON_ZONA": {"$substrCP": [{"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}}, 0, 2]},
+            "PCEZ_ZONA": {"$concat": [{"$substrCP": [{"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}}, 2, 3]}, {"$literal": "/"}, {"$substrCP": [{"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}}, 5, 2]}]}
         }},
         
-        # Join dengan CustomerData (CID) untuk mendapatkan data geografi utama
+        # Join dengan CustomerData (CID) untuk mendapatkan data yang paling akurat
         {
             '$lookup': {
                 'from': 'CustomerData',
@@ -204,24 +207,26 @@ def get_mc_mb_comparison_by_pcez(bulan_tagihan_target):
                 'pipeline': [
                     {'$sort': {'TANGGAL_UPLOAD_CID': -1}}, 
                     {'$limit': 1},
+                    # Kita fetch field yang sudah di-decode: PCEZ, RAYON, TIPEPLGGN
                     {'$project': {'_id': 0, 'PCEZ': 1, 'RAYON': 1, 'TIPEPLGGN': 1}},
                 ],
                 'as': 'customer_info'
             }
         },
         
-        {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}}, 
+        # Unwind, dengan preservasi agar data MC tidak hilang
+        {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
         
         # Finalisasi Rayon/PCEZ dan filter TIPEPLGGN REG
         {'$addFields': {
-            # FALLBACK: Prioritas ke CID, lalu ke field MC raw
-            'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MC']}}}}},
-            'CLEAN_PCEZ': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.PCEZ', '$PCEZ_MC']}}}}},
+            # FALLBACK: Prioritas ke CID, lalu ke field MC raw (dari ZONA_NOVAK)
+            'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_ZONA']}}}}},
+            'CLEAN_PCEZ': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.PCEZ', '$PCEZ_ZONA']}}}}},
             'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}}}}},
         }},
         
-        # Filter: Hanya Rayon AB Sunter dan TIPE REG
-        {'$match': {'CLEAN_RAYON': {'$in': RAYON_KEYS}, 'CLEAN_TIPEPLGGN': 'REG'}},
+        # Filter: Hanya Rayon AB Sunter dan TIPE REG, dan PCEZ bukan N/A
+        {'$match': {'CLEAN_RAYON': {'$in': RAYON_KEYS}, 'CLEAN_TIPEPLGGN': 'REG', 'CLEAN_PCEZ': {'$ne': 'N/A'}}},
 
         # Grouping berdasarkan Rayon dan PCEZ
         {
@@ -239,8 +244,8 @@ def get_mc_mb_comparison_by_pcez(bulan_tagihan_target):
         {
             '$project': {
                 '_id': 0,
-                'rayon': {'$ifNull': ['$_id.rayon', 'N/A']},
-                'pcez': {'$ifNull': ['$_id.pcez', 'N/A']},
+                'rayon': '$_id.rayon',
+                'pcez': '$_id.pcez',
                 'total_mc_nominal': 1,
                 'total_mc_nomen': {'$size': '$total_mc_nomen'}
             }
@@ -251,9 +256,10 @@ def get_mc_mb_comparison_by_pcez(bulan_tagihan_target):
 
     # 2. Pipeline untuk Master Bayar (MB) - Total Koleksi Undue Bulan Berjalan
     mb_pipeline = [
+        # Filter MB untuk BULAN_REK target (Undue)
         {'$match': {'BULAN_REK': bulan_tagihan_target, 'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}},
         
-        # Ekstraksi Rayon/PCEZ dari MB
+        # Ekstraksi Rayon/PCEZ dari MB (Fallback jika CID join gagal)
         {"$project": {
             "NOMEN": 1,
             "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
@@ -262,7 +268,7 @@ def get_mc_mb_comparison_by_pcez(bulan_tagihan_target):
             "PCEZ_MB": "$PCEZ",
         }},
         
-        # Join dengan CustomerData (CID)
+        # Join dengan CustomerData (CID) untuk mendapatkan Rayon dan PCEZ
         {
             '$lookup': {
                 'from': 'CustomerData',
@@ -280,15 +286,14 @@ def get_mc_mb_comparison_by_pcez(bulan_tagihan_target):
         
         # Finalisasi Rayon/PCEZ dan filter TIPEPLGGN REG
         {'$addFields': {
-            # FALLBACK: Prioritas ke CID, lalu ke field MB raw
+            # Prioritaskan CID, fallback ke MB data
             'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MB']}}}}},
             'CLEAN_PCEZ': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.PCEZ', '$PCEZ_MB']}}}}},
-            # Asumsi MB hanya untuk REG jika tidak ada info CID
             'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'REG']}}}},}
         }},
         
-        # Filter: Hanya Rayon AB Sunter dan TIPE REG
-        {'$match': {'CLEAN_RAYON': {'$in': RAYON_KEYS}, 'CLEAN_TIPEPLGGN': 'REG'}},
+        # Filter: Hanya Rayon AB Sunter dan TIPE REG, dan PCEZ bukan N/A
+        {'$match': {'CLEAN_RAYON': {'$in': RAYON_KEYS}, 'CLEAN_TIPEPLGGN': 'REG', 'CLEAN_PCEZ': {'$ne': 'N/A'}}},
 
         # Grouping berdasarkan Rayon dan PCEZ
         {
@@ -298,16 +303,16 @@ def get_mc_mb_comparison_by_pcez(bulan_tagihan_target):
                     'pcez': '$CLEAN_PCEZ'
                 },
                 'total_mb_undue_nominal': {'$sum': '$NOMINAL'},
-                'total_mb_transaksi': {'$addToSet': '$NOTAGIHAN'}
+                'total_mb_transaksi': {'$addToSet': '$NOTAGIHAN'} # Hitung jumlah transaksi unik
             }
         },
         
-        # Format output
+        # Rename field hasil grouping
         {
             '$project': {
                 '_id': 0,
-                'rayon': {'$ifNull': ['$_id.rayon', 'N/A']},
-                'pcez': {'$ifNull': ['$_id.pcez', 'N/A']},
+                'rayon': '$_id.rayon',
+                'pcez': '$_id.pcez',
                 'total_mb_undue_nominal': 1,
                 'total_mb_transaksi': {'$size': '$total_mb_transaksi'}
             }
@@ -330,7 +335,8 @@ def get_mc_mb_comparison_by_pcez(bulan_tagihan_target):
     # Gabungkan data MB ke MC map
     for mb_res in mb_results:
         key = (mb_res['rayon'], mb_res['pcez'])
-        mc_data = mc_map.pop(key, {'mc_nominal': 0.0, 'mc_nomen': 0})
+        # Pop untuk menandai bahwa item MC telah diproses
+        mc_data = mc_map.pop(key, {'mc_nominal': 0.0, 'mc_nomen': 0}) 
         
         mc_nominal = mc_data['mc_nominal']
         mb_nominal = mb_res['total_mb_undue_nominal']
@@ -3153,7 +3159,7 @@ def upload_cid_data():
         df.columns = [col.strip().upper() for col in df.columns]
 
         # >>> PERBAIKAN KRITIS CID: NORMALISASI DATA PANDAS <<<
-        columns_to_normalize = ['MERK', 'READ_METHOD', 'TIPEPLGGN', 'RAYON', 'NOMEN', 'TARIFF', 'ZONANOvaK', 'ZONA_NOVAK'] # Tambah ZONA_NOVAK
+        columns_to_normalize = ['MERK', 'READ_METHOD', 'TIPEPLGGN', 'RAYON', 'NOMEN', 'TARIFF', 'ZONANOvaK'] # Tambah ZONANOvaK
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize:
@@ -3164,15 +3170,9 @@ def upload_cid_data():
             df = df.rename(columns={'TARIFF': 'TARIF'})
 
         # >>> START PERUBAHAN KRITIS: DEKODE ZONA_NOVAK <<<
-        # Pastikan ZONANOvaK adalah kolom yang digunakan
-        if 'ZONANOvaK' in df.columns or 'ZONA_NOVAK' in df.columns:
-             df = decode_zona_novak(df)
-             print("Peringatan: Field RAYON, PCEZ, PC, EZ, BLOCK didekode dari ZONANOvaK.")
-        else:
-             # Inject kolom kosong jika ZONA_NOVAK tidak ada
-             for col in ['RAYON', 'PC', 'EZ', 'PCEZ', 'BLOCK']:
-                 if col not in df.columns:
-                     df[col] = 'N/A'
+        # Panggil fungsi decode_zona_novak untuk memastikan RAYON, PCEZ, dll. terbuat.
+        df = decode_zona_novak(df)
+        print("Peringatan: Field RAYON, PCEZ, PC, EZ, BLOCK didekode dari ZONANOvaK.")
         
         # >>> END PERUBAHAN KRITIS: DEKODE ZONA_NOVAK <<<
         
@@ -3547,7 +3547,7 @@ def dashboard_summary_api():
         # 2. Koleksi Hari Ini
         koleksi_today_pipeline = [
             {'$match': {'TGL_BAYAR': today_date, 'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}},
-            {'$group': {'_id': None, 'koleksi_hari_ini': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}}}} # FIX NOMINAL to Double
+            {'$group': {'_id': None, 'koleksi_hari_ini': {'$sum': '$NOMINAL'}}}
         ]
         koleksi_today_result = list(collection_mb.aggregate(koleksi_today_pipeline))
         koleksi_hari_ini = koleksi_today_result[0]['koleksi_hari_ini'] if koleksi_today_result else 0.0
@@ -3555,7 +3555,7 @@ def dashboard_summary_api():
         # 3. Koleksi Bulan Ini (YTD)
         koleksi_month_pipeline = [
             {'$match': {'TGL_BAYAR': {'$regex': f'^{this_month_str}'}, 'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}},
-            {'$group': {'_id': None, 'koleksi_bulan_ini': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}}}} # FIX NOMINAL to Double
+            {'$group': {'_id': None, 'koleksi_bulan_ini': {'$sum': '$NOMINAL'}}}
         ]
         koleksi_month_result = list(collection_mb.aggregate(koleksi_month_pipeline))
         koleksi_bulan_ini = koleksi_month_result[0]['koleksi_bulan_ini'] if koleksi_month_result else 0.0
@@ -3597,7 +3597,7 @@ def dashboard_summary_api():
             
             pipeline = [
                 {'$match': {'TGL_BAYAR': date, 'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}}, 
-                {'$group': {'_id': None, 'total': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}}}} # FIX NOMINAL to Double
+                {'$group': {'_id': None, 'total': {'$sum': '$NOMINAL'}}}
             ]
             result = list(collection_mb.aggregate(pipeline))
             total = result[0]['total'] if result else 0.0
@@ -3631,7 +3631,7 @@ def rayon_analysis_api():
             {'$match': {'BULAN_TAGIHAN': latest_mc_month}}, 
             {'$group': {
                 '_id': '$RAYON',
-                'total_piutang': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}}, # FIX NOMINAL to Double
+                'total_piutang': {'$sum': '$NOMINAL'},
                 'total_pelanggan': {'$addToSet': '$NOMEN'}
             }},
             {'$project': {
@@ -3654,7 +3654,7 @@ def rayon_analysis_api():
             }},
             {'$group': {
                 '_id': '$RAYON',
-                'total_koleksi': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}}, # FIX NOMINAL to Double
+                'total_koleksi': {'$sum': '$NOMINAL'},
             }},
         ]
         koleksi_result = list(collection_mb.aggregate(pipeline_koleksi_rayon))
@@ -3745,7 +3745,7 @@ def critical_alerts_api():
             {'$group': {
                 '_id': '$NOMEN',
                 'months': {'$sum': 1}, # Hitung jumlah baris tunggakan
-                'amount': {'$sum': {'$toDouble': {'$ifNull': ['$JUMLAH', 0]}}} # FIX JUMLAH to Double
+                'amount': {'$sum': '$JUMLAH'}
             }},
             {'$match': {'months': {'$gte': 5}}}, # Nomen dengan 5 periode tunggakan atau lebih
             {'$limit': 20}
