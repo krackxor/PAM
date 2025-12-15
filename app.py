@@ -1042,15 +1042,13 @@ def collection_report_api():
     # 3. MB (UNDUE BULAN INI) - MB yang BULAN_REK sama dengan bulan tagihan MC terbaru
     pipeline_mb_undue = [
         { '$match': { 
-            # Perbaikan filter: Gunakan $project untuk memastikan BULAN_REK bersih
-            'BULAN_REK': latest_mc_month, 
+            'BULAN_REK': latest_mc_month, # Filter bulan tagihan (BILL_PERIOD)
             'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
         }},
         { '$project': {
             'NOMEN': 1,
             'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}, 
             'KUBIKBAYAR': {'$toDouble': {'$ifNull': ['$KUBIKBAYAR', 0]}}, 
-            # Normalisasi Rayon/PCEZ dari MB
             'RAYON_MB': { '$toUpper': { '$trim': { 'input': { '$ifNull': [ '$RAYON', 'N/A' ] } } } },
             'PCEZ_MB': { '$toUpper': { '$trim': { 'input': { '$ifNull': [ '$PCEZ', 'N/A' ] } } } },
         }},
@@ -1097,7 +1095,6 @@ def collection_report_api():
     
     # Merge Billed data
     for item in billed_data:
-        # Gunakan Rayon/PCEZ yang sudah dinormalisasi dari initial_project
         key = (item['_id']['rayon'], item['_id']['pcez'])
         report_map[key] = {
             'RAYON': item['_id']['rayon'],
@@ -3165,159 +3162,178 @@ def dashboard_summary_api():
     try:
         summary_data = {}
         
-        # Ambil BULAN_TAGIHAN terbaru dari MC Historis untuk data PIUTANG AKTIF
+        # Tentukan Bulan Tagihan MC Terbaru (Denominator Koleksi)
         latest_mc_month_doc = collection_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
         latest_mc_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
         
-        # 1. TOTAL PELANGGAN (dari CID - Ambil total nomen unik terbaru)
-        summary_data['total_pelanggan'] = len(collection_cid.distinct('NOMEN'))
-        
-        # 2. TOTAL PIUTANG & TUNGGAKAN
-        pipeline_piutang = [
-            {'$match': {'BULAN_TAGIHAN': latest_mc_month}},
-            {'$group': {
-                '_id': None,
-                'total_piutang': {'$sum': '$NOMINAL'},
-                'jumlah_tagihan': {'$sum': 1}
-            }}
-        ]
-        piutang_result = list(collection_mc.aggregate(pipeline_piutang))
-        summary_data['total_piutang'] = piutang_result[0]['total_piutang'] if piutang_result else 0
-        summary_data['jumlah_tagihan'] = piutang_result[0]['jumlah_tagihan'] if piutang_result else 0
-        
-        pipeline_tunggakan = [
-            {'$group': {
-                '_id': None,
-                'total_tunggakan': {'$sum': '$JUMLAH'},
-                'jumlah_tunggakan': {'$sum': 1}
-            }}
-        ]
-        tunggakan_result = list(collection_ardebt.aggregate(pipeline_tunggakan))
-        summary_data['total_tunggakan'] = tunggakan_result[0]['total_tunggakan'] if tunggakan_result else 0
-        summary_data['jumlah_tunggakan'] = tunggakan_result[0]['jumlah_tunggakan'] if tunggakan_result else 0
-        
-        # 3. KOLEKSI HARI INI (dari MB)
+        if not latest_mc_month:
+             return jsonify({
+                "message": "Tidak ada data Master Cetak (MC) ditemukan.",
+                "summary": {"TotalPelanggan": 0, "TotalPiutangNominal": 0, "TotalPiutangKubik": 0},
+                "ardebt_summary": {"TotalTunggakanPelanggan": 0, "TotalTunggakanNominal": 0, "TotalTunggakanKubik": 0}
+            }), 200
+
+        previous_mc_month = _get_previous_month_year(latest_mc_month)
         today_date = datetime.now().strftime('%Y-%m-%d')
-        pipeline_koleksi_today = [
-            {'$match': {'TGL_BAYAR': today_date,
-                         # Filter untuk Koleksi Rutin
-                         'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
-            }}, 
-            {'$group': {
-                '_id': None,
-                'koleksi_hari_ini': {'$sum': '$NOMINAL'},
-                'transaksi_hari_ini': {'$sum': 1}
-            }}
-        ]
-        koleksi_result = list(collection_mb.aggregate(pipeline_koleksi_today))
-        summary_data['koleksi_hari_ini'] = koleksi_result[0]['koleksi_hari_ini'] if koleksi_result else 0
-        summary_data['transaksi_hari_ini'] = koleksi_result[0]['transaksi_hari_ini'] if koleksi_result else 0
-        
-        # 4. TOTAL KOLEKSI BULAN INI
-        this_month = datetime.now().strftime('%Y-%m')
-        pipeline_koleksi_month = [
-            {'$match': {'TGL_BAYAR': {'$regex': this_month},
-                         # Filter untuk Koleksi Rutin
-                         'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
+        this_month_str = datetime.now().strftime('%Y-%m')
+
+        # --- A. MC METRICS (Piutang Bulan Berjalan) ---
+        mc_summary_pipeline = [
+            {'$match': {'BULAN_TAGIHAN': latest_mc_month}},
+            {"$project": {
+                "NOMEN": 1,
+                "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
+                "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}},
+                "STATUS_CLEAN": {'$toUpper': {'$trim': {'input': {'$ifNull': ['$STATUS', 'N/A']}}}}, 
+                "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
+                "CUST_TYPE_MC": "$CUST_TYPE",
+            }},
+            {"$addFields": {
+                "RAYON_ZONA": {"$substrCP": ["$CLEAN_ZONA", 0, 2]},
+            }},
+            {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
+            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+            {'$addFields': {
+                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}}}}},
+                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_ZONA']}}}}},
+            }},
+            {'$match': {
+                'CLEAN_TIPEPLGGN': 'REG',
+                'CLEAN_RAYON': {'$in': ['34', '35']}
             }},
             {'$group': {
                 '_id': None,
-                'koleksi_bulan_ini': {'$sum': '$NOMINAL'},
-                'transaksi_bulan_ini': {'$sum': 1}
-            }}
-        ]
-        koleksi_month_result = list(collection_mb.aggregate(pipeline_koleksi_month))
-        summary_data['koleksi_bulan_ini'] = koleksi_month_result[0]['koleksi_bulan_ini'] if koleksi_month_result else 0
-        summary_data['transaksi_bulan_ini'] = koleksi_month_result[0]['transaksi_bulan_ini'] if koleksi_month_result else 0
-        
-        # 5. ANOMALI PEMAKAIAN (dari fungsi existing)
-        anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
-        summary_data['total_anomali'] = len(anomalies)
-        
-        # Breakdown anomali per tipe
-        anomali_breakdown = {'kategori': {}}
-        for item in anomalies:
-            status = item.get('STATUS_PEMAKAIAN', 'UNKNOWN')
-            if 'EKSTRIM' in status or 'NAIK' in status:
-                key = 'KENAIKAN_SIGNIFIKAN'
-            elif 'TURUN' in status:
-                key = 'PENURUNAN_SIGNIFIKAN'
-            elif 'ZERO' in status:
-                key = 'ZERO_USAGE'
-            else:
-                key = 'LAINNYA'
-            
-            if key not in anomali_breakdown['kategori']:
-                 anomali_breakdown['kategori'][key] = {'jumlah': 0, 'data': []}
-                
-            anomali_breakdown['kategori'][key]['jumlah'] += 1
-            if len(anomali_breakdown['kategori'][key]['data']) < 10:
-                 anomali_breakdown['kategori'][key]['data'].append(item)
-            
-        summary_data['anomali_breakdown'] = anomali_breakdown
-        
-        # 6. PELANGGAN DENGAN TUNGGAKAN (Distinct NOMEN)
-        pelanggan_tunggakan = collection_ardebt.distinct('NOMEN')
-        summary_data['pelanggan_dengan_tunggakan'] = len(pelanggan_tunggakan)
-        
-        # 7. TOP 5 RAYON DENGAN PIUTANG TERTINGGI (Bulan Tagihan Terbaru)
-        pipeline_top_rayon = [
-            {'$match': {'BULAN_TAGIHAN': latest_mc_month}},
-            {'$group': {
-                '_id': '$RAYON',
-                'total_piutang': {'$sum': '$NOMINAL'},
-                'total_pelanggan': {'$addToSet': '$NOMEN'}
+                'TotalPiutangNominal': {'$sum': '$NOMINAL'},
+                'TotalPiutangKubik': {'$sum': '$KUBIK'},
+                'TotalNomen': {'$addToSet': '$NOMEN'},
+                'TotalCollectedNominal': {'$sum': {'$cond': [{'$eq': ['$STATUS_CLEAN', 'PAYMENT']}, '$NOMINAL', 0]}},
             }},
             {'$project': {
-                '_id': 0,
-                'RAYON': '$_id',
-                'total_piutang': 1,
-                'total_pelanggan': {'$size': '$total_pelanggan'}
+                '_id': 0, 'TotalPiutangNominal': 1, 'TotalPiutangKubik': 1,
+                'TotalNomen': {'$size': '$TotalNomen'},
+                'TotalCollectedNominal': 1
+            }}
+        ]
+        mc_data = list(collection_mc.aggregate(mc_summary_pipeline))
+        
+        mc_summary = mc_data[0] if mc_data else {'TotalPiutangNominal': 0, 'TotalPiutangKubik': 0, 'TotalNomen': 0, 'TotalCollectedNominal': 0}
+        
+        summary_data['mc'] = {
+            "TotalPelanggan": mc_summary['TotalNomen'],
+            "TotalPiutangNominal": mc_summary['TotalPiutangNominal'],
+            "TotalPiutangKubik": mc_summary['TotalPiutangKubik'],
+            "TotalKoleksiMC": mc_summary['TotalCollectedNominal'],
+        }
+
+        # --- B. ARDEBT METRICS (Tunggakan Historis) ---
+        ardebt_summary_pipeline = [
+            {"$project": {
+                "NOMEN": 1,
+                "JUMLAH": {"$toDouble": {"$ifNull": ["$JUMLAH", 0]}},
+                "VOLUME": {"$toDouble": {"$ifNull": ["$VOLUME", 0]}},
+            }},
+            {'$group': {
+                '_id': None,
+                'TotalTunggakanNominal': {'$sum': '$JUMLACH'},
+                'TotalTunggakanKubik': {'$sum': '$VOLUME'},
+                'TotalTunggakanPelanggan': {'$addToSet': '$NOMEN'},
+            }},
+            {'$project': {
+                '_id': 0, 'TotalTunggakanNominal': 1, 'TotalTunggakanKubik': 1,
+                'TotalTunggakanPelanggan': {'$size': '$TotalTunggakanPelanggan'},
+            }}
+        ]
+        ardebt_data = list(collection_ardebt.aggregate(ardebt_summary_pipeline))
+        ardebt_summary = ardebt_data[0] if ardebt_data else {'TotalTunggakanNominal': 0, 'TotalTunggakanKubik': 0, 'TotalTunggakanPelanggan': 0}
+
+        summary_data['ardebt'] = {
+            "TotalTunggakanPelanggan": ardebt_summary['TotalTunggakanPelanggan'],
+            "TotalTunggakanNominal": ardebt_summary['TotalTunggakanNominal'],
+            "TotalTunggakanKubik": ardebt_summary['TotalTunggakanKubik'],
+        }
+
+        # --- C. KOLEKSI MB (MB Undue Koleksi) ---
+        # 1. MB Undue Koleksi (MB yang dibayar BERSAMAAN dengan BULAN REK MC terbaru)
+        mb_undue_pipeline = [
+             { '$match': { 'BULAN_REK': latest_mc_month, 'BILL_REASON': 'BIAYA PEMAKAIAN AIR' }},
+             { '$group': {
+                 '_id': None,
+                 'TotalUndueNominal': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}}
+             }}
+        ]
+        mb_undue_result = list(collection_mb.aggregate(mb_undue_pipeline))
+        mb_undue_nominal = mb_undue_result[0]['TotalUndueNominal'] if mb_undue_result else 0.0
+
+        # 2. Koleksi Hari Ini
+        koleksi_today_pipeline = [
+            {'$match': {'TGL_BAYAR': today_date, 'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}},
+            {'$group': {'_id': None, 'koleksi_hari_ini': {'$sum': '$NOMINAL'}}}
+        ]
+        koleksi_today_result = list(collection_mb.aggregate(koleksi_today_pipeline))
+        koleksi_hari_ini = koleksi_today_result[0]['koleksi_hari ini'] if koleksi_today_result else 0.0
+
+        # 3. Koleksi Bulan Ini (YTD)
+        koleksi_month_pipeline = [
+            {'$match': {'TGL_BAYAR': {'$regex': f'^{this_month_str}'}, 'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}},
+            {'$group': {'_id': None, 'koleksi_bulan_ini': {'$sum': '$NOMINAL'}}}
+        ]
+        koleksi_month_result = list(collection_mb.aggregate(koleksi_month_pipeline))
+        koleksi_bulan_ini = koleksi_month_result[0]['koleksi_bulan_ini'] if koleksi_month_result else 0.0
+        
+        summary_data['koleksi'] = {
+            "KoleksiHariIni": koleksi_hari_ini,
+            "KoleksiBulanIni": koleksi_bulan_ini,
+            "MBUndueNominal": mb_undue_nominal,
+        }
+        
+        # Persentase Koleksi
+        total_piutang_mc = summary_data['mc']['TotalPiutangNominal']
+        summary_data['koleksi']['PercentKoleksi'] = (summary_data['koleksi']['KoleksiBulanIni'] / total_piutang_mc) * 100 if total_piutang_mc > 0 else 0.0
+
+        # --- D. TOP 5 PCEZ ---
+        # Agregasi untuk Piutang Nominal MC Bulan Terbaru, dikelompokkan per PCEZ
+        top_pcez_pipeline = [
+            {'$match': {'BULAN_TAGIHAN': latest_mc_month}},
+            {"$project": {
+                "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
+                "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
+            }},
+            {"$addFields": {"PCEZ_CLEAN": {"$concat": [{"$substrCP": ["$CLEAN_ZONA", 2, 3]}, {"$substrCP": ["$CLEAN_ZONA", 5, 2]}]}}},
+            {'$group': {
+                '_id': '$PCEZ_CLEAN',
+                'total_piutang': {'$sum': '$NOMINAL'},
             }},
             {'$sort': {'total_piutang': -1}},
             {'$limit': 5}
         ]
-        top_rayon = list(collection_mc.aggregate(pipeline_top_rayon))
-        summary_data['top_rayon_piutang'] = [
-            {'rayon': item['RAYON'], 'total': item['total_piutang']} 
-            for item in top_rayon
-        ]
-        
-        # 8. TREN KOLEKSI 7 HARI TERAKHIR
+        top_pcez = list(collection_mc.aggregate(top_pcez_pipeline))
+        summary_data['top_pcez_piutang'] = [{'PCEZ': item['_id'], 'nominal': item['total_piutang']} for item in top_pcez]
+
+        # --- E. TREN KOLEKSI 7 HARI TERAKHIR ---
         trend_data = []
         for i in range(7):
             date_obj = datetime.now() - timedelta(days=i)
             date = date_obj.strftime('%Y-%m-%d')
             
             pipeline = [
-                {'$match': {'TGL_BAYAR': date, 
-                             # Filter untuk Koleksi Rutin
-                             'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}}, 
-                {'$group': {
-                    '_id': None,
-                    'total': {'$sum': '$NOMINAL'},
-                    'count': {'$sum': 1}
-                }}
+                {'$match': {'TGL_BAYAR': date, 'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}}, 
+                {'$group': {'_id': None, 'total': {'$sum': '$NOMINAL'}}}
             ]
             result = list(collection_mb.aggregate(pipeline))
+            total = result[0]['total'] if result else 0.0
+            
             trend_data.append({
                 'tanggal': date,
-                'total': result[0]['total'] if result else 0,
-                'transaksi': result[0]['count'] if result else 0
+                'total_nominal': total
             })
         summary_data['tren_koleksi_7_hari'] = sorted(trend_data, key=lambda x: x['tanggal'])
-        
-        # 9. PERSENTASE KOLEKSI
-        if summary_data['total_piutang'] > 0:
-            summary_data['persentase_koleksi'] = (summary_data['koleksi_bulan_ini'] / summary_data['total_piutang']) * 100
-        else:
-            summary_data['persentase_koleksi'] = 0
         
         return jsonify(summary_data), 200
         
     except Exception as e:
         print(f"Error fetching dashboard summary: {e}")
-        return jsonify({"message": f"Gagal mengambil data dashboard: {e}"}), 500
+        # Jika terjadi error, kirimkan pesan yang lebih informatif
+        return jsonify({"message": f"Gagal mengambil data dashboard: {e}. Pastikan data MC, CID, dan MB sudah ter-upload."}), 500
 
 
 @app.route('/api/dashboard/rayon_analysis', methods=['GET'])
@@ -3489,11 +3505,11 @@ def export_dashboard_data():
         df_summary = pd.DataFrame({
             'Metrik': ['Total Pelanggan', 'Total Piutang (MC)', 'Total Tunggakan (ARDEBT)', 'Koleksi Bulan Ini', 'Persentase Koleksi'],
             'Nilai': [
-                summary_data['total_pelanggan'],
-                summary_data['total_piutang'],
-                summary_data['total_tunggakan'],
-                summary_data['koleksi_bulan_ini'],
-                f"{summary_data['persentase_koleksi']:.2f}%"
+                summary_data['mc']['TotalNomen'],
+                summary_data['mc']['TotalPiutangNominal'],
+                summary_data['ardebt']['TotalTunggakanNominal'],
+                summary_data['koleksi']['KoleksiBulanIni'],
+                f"{summary_data['koleksi']['PercentKoleksi']:.2f}%"
             ]
         })
         
