@@ -160,18 +160,18 @@
             let endpoint = '';
 
             // Mapping Laporan ke Endpoint API yang baru
-            if (reportName.includes('Fluktuasi Volume')) {
-                endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}';
-            } else if (reportName.includes('Perubahan Tarif')) {
+            if (reportName.includes('Perubahan Tarif')) {
+                // Endpoint untuk Perubahan Tarif (analyze_tariff_change_api)
                 endpoint = '{{ url_for("analyze_tariff_change_api") }}';
-            } else if (reportName.includes('Ekstrim')) {
-                endpoint = '{{ url_for("analyze_extreme_usage_api") }}'; 
-            } else if (reportName.includes('Zero')) {
-                endpoint = '{{ url_for("analyze_zero_usage_api") }}'; 
+            } else if (reportName.includes('Ekstrim') || reportName.includes('Turun') || reportName.includes('Zero') || reportName.includes('Fluktuasi Volume')) {
+                // Endpoint untuk Fluktuasi/Anomali Volume SBRS (menggantikan Ekstrim, Turun, Zero)
+                endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}';
             } else if (reportName.includes('Stand Tunggu')) {
-                endpoint = '{{ url_for("analyze_standby_status_api") }}'; 
+                // Endpoint Stand Tunggu (analyze_standby_status_api) - HANYA TEMPLATE URL JANGAN PAKAI url_for()
+                dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan 'Stand Tunggu' belum diimplementasi di sisi server.</p>`;
+                return;
             } else {
-                 dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini belum diimplementasi di frontend.</p>`;
+                 dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini tidak dikenali.</p>`;
                  return;
             }
 
