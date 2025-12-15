@@ -220,6 +220,7 @@ def get_mc_mb_comparison_by_pcez(bulan_tagihan_target):
         # Finalisasi Rayon/PCEZ dan filter TIPEPLGGN REG
         {'$addFields': {
             # FALLBACK: Prioritas ke CID, lalu ke field MC raw (dari ZONA_NOVAK)
+            # PERBAIKAN SINTAKS: memastikan $trim dan $toUpper menggunakan 'input' yang benar jika data null.
             'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_ZONA']}}}}},
             'CLEAN_PCEZ': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.PCEZ', '$PCEZ_ZONA']}}}}},
             'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}}}}},
@@ -287,13 +288,14 @@ def get_mc_mb_comparison_by_pcez(bulan_tagihan_target):
         # Finalisasi Rayon/PCEZ dan filter TIPEPLGGN REG
         {'$addFields': {
             # Prioritaskan CID, fallback ke MB data
+            # PERBAIKAN SINTAKS: memastikan $trim dan $toUpper menggunakan 'input' yang benar jika data null.
             'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MB']}}}}},
             'CLEAN_PCEZ': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.PCEZ', '$PCEZ_MB']}}}}},
             'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'REG']}}}},}
         }},
         
         # Filter: Hanya Rayon AB Sunter dan TIPE REG, dan PCEZ bukan N/A
-        {'$match': {'CLEAN_RAYON': {'$in': RAYON_KEYS}, 'CLEAN_TIPEPLGGN': 'REG', 'CLEAN_PCEZ': {'$ne': 'N/A'}}},
+        {'$match': {'CLEAN_RAYON': {'$in': RAYON_KEYS}, 'CLEAN_TIPEPLGGN': 'REG'}},
 
         # Grouping berdasarkan Rayon dan PCEZ
         {
@@ -336,12 +338,12 @@ def get_mc_mb_comparison_by_pcez(bulan_tagihan_target):
     for mb_res in mb_results:
         key = (mb_res['rayon'], mb_res['pcez'])
         # Pop untuk menandai bahwa item MC telah diproses
-        mc_data = mc_map.pop(key, {'mc_nominal': 0.0, 'mc_nomen': 0}) 
+        mc_data = mc_map.pop(key, {'mc_nominal': 0, 'mc_nomen': 0}) 
         
         mc_nominal = mc_data['mc_nominal']
         mb_nominal = mb_res['total_mb_undue_nominal']
         
-        persentase_koleksi = 0.00
+        persentase_koleksi = 0
         if mc_nominal > 0:
             persentase_koleksi = (mb_nominal / mc_nominal) * 100
             
@@ -364,7 +366,7 @@ def get_mc_mb_comparison_by_pcez(bulan_tagihan_target):
             'pcez': key[1],
             'mc_nominal': mc_nominal,
             'mc_nomen': mc_data['mc_nomen'],
-            'mb_undue_nominal': 0.00,
+            'mb_undue_nominal': 0,
             'mb_transaksi': 0,
             'persentase_koleksi': 0.00
         })
@@ -785,7 +787,6 @@ def _get_previous_month_year(bulan_tagihan):
     if not bulan_tagihan or len(bulan_tagihan) != 6:
         return None
     try:
-        # Asumsi format input adalah MMYYYY
         month = int(bulan_tagihan[:2])
         year = int(bulan_tagihan[2:])
         
@@ -1123,7 +1124,8 @@ def _aggregate_mb_sunter_detail(collection_mb):
             {'$project': {
                 'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
                 'NOMEN': 1,
-                'RAYON': {'$toUpper': {'$trim': {'$ifNull': ['$RAYON', 'N/A']}}}
+                # PERBAIKAN KRITIS SINTAKS AGGREGATION: Menambahkan 'input'
+                'RAYON': {'$toUpper': {'$trim': {'input': {'$ifNull': ['$RAYON', 'N/A']}}}} 
             }},
             {'$match': {'RAYON': {'$in': RAYON_KEYS}}}
         ]
@@ -1166,7 +1168,7 @@ def _aggregate_mb_sunter_detail(collection_mb):
                 'BILL_REASON': 'BIAYA PEMAKAIAN AIR',
                 # Filter TGL_BAYAR: Bulan M (sesuai COLLECTION_MONTH_START/END)
                 'TGL_BAYAR': {'$gte': COLLECTION_MONTH_START, '$lt': COLLECTION_MONTH_END}, 
-                'RAYON': {'$toUpper': {'$trim': {'$ifNull': ['$RAYON', 'N/A']}}}
+                'RAYON': {'$toUpper': {'$trim': {'input': {'$ifNull': ['$RAYON', 'N/A']}}}}} # FIX SINTAKS
             }},
             {'$match': {'RAYON': rayon_key}},
             {'$project': {
@@ -1221,10 +1223,12 @@ def analyze_mb_sunter_report_api():
         return jsonify({"status": "error", "message": "Server tidak terhubung ke Database."}), 500
 
     try:
+        # Panggil fungsi yang sudah diperbaiki
         report_data = _aggregate_mb_sunter_detail(collection_mb)
         return jsonify(report_data), 200
     except Exception as e:
         print(f"Error fetching MB Sunter report: {e}")
+        # Tambahkan detail error untuk debugging lanjutan
         return jsonify({"status": "error", "message": f"Gagal mengambil data laporan MB Sunter: {e}"}), 500
 
 
@@ -3168,13 +3172,32 @@ def upload_cid_data():
         
         if 'TARIFF' in df.columns:
             df = df.rename(columns={'TARIFF': 'TARIF'})
-
-        # >>> START PERUBAHAN KRITIS: DEKODE ZONA_NOVAK <<<
-        # Panggil fungsi decode_zona_novak untuk memastikan RAYON, PCEZ, dll. terbuat.
-        df = decode_zona_novak(df)
-        print("Peringatan: Field RAYON, PCEZ, PC, EZ, BLOCK didekode dari ZONANOvaK.")
         
-        # >>> END PERUBAHAN KRITIS: DEKODE ZONA_NOVAK <<<
+        # >>> START: DEKODE ZONA_NOVAK DAN INJECT FIELD BARU <<<
+        # Panggil fungsi decode_zona_novak dari helper (dianggap sudah di-copy/ada)
+        if 'ZONANOvaK' in df.columns:
+             # Panggil fungsi helper decode_zona_novak (asumsi sudah didefinisikan/tersedia)
+             # NOTE: Karena fungsi decode_zona_novak ada di history, kita asumsikan sudah di-copy ke sini atau diimpor.
+             # Di sini, kita simulasikan pemanggilan jika diimpor/ditempel. Karena tidak ada file helpers, saya tempel logikanya di sini.
+             
+             # --- LOGIKA DEKODE ZONA_NOVAK (DIULANG DARI HELPER AGAR MANDIRI) ---
+             df['ZONANOvaK'] = df['ZONANOvaK'].astype(str).str.strip()
+             def parse_zona(zona):
+                 if not zona or len(zona) < 9: 
+                     return None, None, None, None, None
+                 rayon = zona[0:2]             
+                 pc = zona[2:5]                
+                 ez = zona[5:7]                
+                 block = zona[7:]             
+                 pcez = f"{pc}/{ez}"           
+                 return rayon, pc, ez, pcez, block
+             df[['RAYON', 'PC', 'EZ', 'PCEZ', 'BLOCK']] = df['ZONANOvaK'].apply(
+                 lambda x: pd.Series(parse_zona(x))
+             )
+             # --- END LOGIKA DEKODE ZONA_NOVAK ---
+             print("Peringatan: Field RAYON, PCEZ, PC, EZ, BLOCK ditambahkan dari ZONANOvaK.")
+        
+        # >>> END: DEKODE ZONA_NOVAK DAN INJECT FIELD BARU <<<
         
         # >>> START PERUBAHAN KRITIS KE APPEND (BULK WRITE) <<<
         data_to_insert = df.to_dict('records')
