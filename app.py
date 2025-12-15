@@ -1290,7 +1290,7 @@ def analyze_zero_usage():
 @app.route('/analyze/standby', methods=['GET'])
 @login_required
 def analyze_stand_tungggu():
-    return render_template('analyze_report_template.html', 
+    return render_template('analysis_report_template.html', 
                             title="Stand Tunggu", 
                             description="Menampilkan pelanggan yang berstatus Stand Tunggu (Freeze/Blokir).",
                             report_type="STANDBY_STATUS",
@@ -1616,7 +1616,8 @@ def collection_monitoring_api():
         
         if not latest_mc_month:
              # Default fallback jika tidak ada data MC sama sekali
-            return jsonify({'monitoring_data': {'R34': [], 'R35': []}, 'summary_top': {'R34': {'MC1125': 0, 'CURRENT': 0}, 'R35': {'MC1125': 0, 'CURRENT': 0}, 'GLOBAL': {'TotalPiutangMC': 0, 'TotalUnduePrev': 0, 'CurrentKoleksiTotal': 0, 'TotalKoleksiPersen': 0}}}), 200
+            empty_summary = {'R34': {'MC1125': 0, 'CURRENT': 0}, 'R35': {'MC1125': 0, 'CURRENT': 0}, 'GLOBAL': {'TotalPiutangMC': 0, 'TotalUnduePrev': 0, 'CurrentKoleksiTotal': 0, 'TotalKoleksiPersen': 0}}
+            return jsonify({'monitoring_data': {'R34': [], 'R35': []}, 'summary_top': empty_summary}), 200
 
         # Tentukan Bulan Tagihan MC Sebelumnya (Untuk Koleksi CURRENT dan Total UNDUE Bulan Lalu)
         previous_mc_month = _get_previous_month_year(latest_mc_month)
@@ -2562,7 +2563,7 @@ def upload_mc_data():
 
         # >>> PERBAIKAN KRITIS MC: NORMALISASI DATA PANDAS <<<
         # Pastikan BULAN_TAGIHAN ada di daftar normalisasi string
-        columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF', 'BULAN_TAGIHAN'] 
+        columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF', 'BULAN_TAGIHAN', 'ZONA_NOVAK'] 
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize_mc:
@@ -2574,6 +2575,10 @@ def upload_mc_data():
         
         if 'PC' in df.columns:
             df = df.rename(columns={'PC': 'RAYON'})
+        
+        # --- Sarankan: Pastikan STATUS ada dan dinormalisasi ---
+        if 'STATUS' not in df.columns:
+            df['STATUS'] = 'N/A' # Default status jika tidak ada
 
         # >>> START PERUBAHAN KRITIS KE APPEND (BULK WRITE) <<<
         data_to_insert = df.to_dict('records')
