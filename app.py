@@ -466,12 +466,11 @@ def _get_previous_month_year(bulan_tagihan):
         month = int(bulan_tagihan[:2])
         year = int(bulan_tagihan[2:])
         
-        if month == 1:
-            prev_month = 12
-            prev_year = year - 1
-        else:
-            prev_month = month - 1
-            prev_year = year
+        # Go back one month
+        target_date = datetime(year, month, 1) - timedelta(days=1)
+        
+        prev_month = target_date.month
+        prev_year = target_date.year
             
         return f"{prev_month:02d}{prev_year}"
     except ValueError:
@@ -498,6 +497,28 @@ def _get_month_date_range(bulan_tagihan):
         return start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')
     except ValueError:
         return None, None
+
+# --- NEW HELPER: HITUNG BULAN N BULAN SEBELUMNYA (Robust) ---
+def _mm_yyyy_to_datetime(mm_yyyy_str):
+    """Konversi MMYYYY ke datetime object (1st day)"""
+    try:
+        return datetime.strptime(mm_yyyy_str, '%m%Y')
+    except ValueError:
+        return None
+        
+def _get_month_n_ago(mm_yyyy_str, n):
+    """Mengembalikan string 'MMYYYY' untuk n bulan yang lalu dari mm_yyyy_str."""
+    dt = _mm_yyyy_to_datetime(mm_yyyy_str)
+    if not dt:
+        return None
+        
+    target_dt = dt
+    # Calculate target month and year by iterating n times
+    for _ in range(n):
+        # Subtract one month (by subtracting one day from the 1st of the month)
+        target_dt = target_dt.replace(day=1) - timedelta(days=1)
+        
+    return target_dt.strftime('%m%Y')
 # --- END HELPER BARU ---
 
 # =========================================================================
@@ -527,12 +548,21 @@ def _get_distribution_report(group_fields, collection_mc):
     pipeline = [
         # 1. Filter data untuk bulan tagihan terbaru saja
         {"$match": {"BULAN_TAGIHAN": latest_month}},
-        # 2. Project dan konversi tipe data yang diperlukan
+        # 2. Project dan konversi tipe data yang diperlukan, serta ekstraksi ZONA_NOVAK
         {"$project": {
             **{field: f"${field}" for field in group_fields},
             "NOMEN": 1,
             "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
-            "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}
+            "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}},
+            # --- EKSTRAKSI ZONA_NOVAK BARU ---
+            "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
+        }},
+        {"$addFields": {
+            "RAYON": {"$substrCP": ["$CLEAN_ZONA", 0, 2]}, # Index 0, Length 2
+            "PC": {"$substrCP": ["$CLEAN_ZONA", 2, 3]},    # Index 2, Length 3
+            "EZ": {"$substrCP": ["$CLEAN_ZONA", 5, 2]},    # Index 5, Length 2
+            "BLOCK": {"$substrCP": ["$CLEAN_ZONA", 7, 2]},  # Index 7, Length 2
+            "PCEZ": {"$concat": [{"$substrCP": ["$CLEAN_ZONA", 2, 3]}, {"$substrCP": ["$CLEAN_ZONA", 5, 2]}]} # PC + EZ
         }},
         # 3. Grouping berdasarkan field yang diminta
         {"$group": {
@@ -567,6 +597,7 @@ def _get_distribution_report(group_fields, collection_mc):
 @login_required
 def rayon_distribution_report():
     """Laporan Distribusi Nomen, Piutang, dan Kubikasi per Rayon."""
+    # NOTE: Menggunakan field 'RAYON' yang diekstrak dari ZONA_NOVAK
     results, latest_month = _get_distribution_report(group_fields="RAYON", collection_mc=collection_mc)
     
     data_for_display = []
@@ -584,7 +615,7 @@ def rayon_distribution_report():
 
     return jsonify({
         "data": data_for_display,
-        "title": f"Distribusi Pelanggan per Rayon",
+        "title": f"Distribusi Pelanggan per Rayon (dari ZONA_NOVAK)",
         "subtitle": f"Data Piutang & Kubikasi per Bulan Tagihan Terbaru: {latest_month}",
     })
 
@@ -593,6 +624,7 @@ def rayon_distribution_report():
 @login_required
 def pcez_distribution_report():
     """Laporan Distribusi Nomen, Piutang, dan Kubikasi per PCEZ."""
+    # NOTE: Menggunakan field 'PCEZ' yang diekstrak dari ZONA_NOVAK
     results, latest_month = _get_distribution_report(group_fields="PCEZ", collection_mc=collection_mc)
     
     data_for_display = []
@@ -609,7 +641,7 @@ def pcez_distribution_report():
 
     return jsonify({
         "data": data_for_display,
-        "title": f"Distribusi Pelanggan per PCEZ",
+        "title": f"Distribusi Pelanggan per PCEZ (dari ZONA_NOVAK)",
         "subtitle": f"Data Piutang & Kubikasi per Bulan Tagihan Terbaru: {latest_month}",
     })
 
@@ -618,6 +650,7 @@ def pcez_distribution_report():
 @login_required
 def rayon_tarif_distribution_report():
     """Laporan Distribusi Nomen, Piutang, dan Kubikasi per Rayon dan Tarif."""
+    # NOTE: Menggunakan field 'RAYON' yang diekstrak dari ZONA_NOVAK dan 'TARIF' dari CID/MC
     results, latest_month = _get_distribution_report(group_fields=["RAYON", "TARIF"], collection_mc=collection_mc)
     
     data_for_display = []
@@ -636,7 +669,7 @@ def rayon_tarif_distribution_report():
 
     return jsonify({
         "data": data_for_display,
-        "title": f"Distribusi Pelanggan per Rayon / Tarif",
+        "title": f"Distribusi Pelanggan per Rayon (ZONA) / Tarif",
         "subtitle": f"Data Piutang & Kubikasi per Bulan Tagihan Terbaru: {latest_month}",
     })
 
@@ -664,7 +697,7 @@ def rayon_meter_distribution_report():
 
     return jsonify({
         "data": data_for_display,
-        "title": f"Distribusi Pelanggan per Rayon / Jenis Meter",
+        "title": f"Distribusi Pelanggan per Rayon (ZONA) / Jenis Meter",
         "subtitle": f"Data Piutang & Kubikasi per Bulan Tagihan Terbaru: {latest_month}",
     })
 
@@ -714,38 +747,50 @@ def rayon_meter_distribution_view():
 # === END FUNGSI BARU UNTUK LAPORAN DISTRIBUSI ===
 # =========================================================================
 
-# --- HELPER BARU: AGGREGATE MB SUNTER DETAIL ---
+# --- HELPER BARU: AGGREGATE MB SUNTER DETAIL (MODIFIED) ---
 def _aggregate_mb_sunter_detail(collection_mb):
+    """
+    Menghitung agregasi koleksi (Undue, Current, Tunggakan) berdasarkan
+    definisi Aging yang baru, menggunakan BULAN_TAGIHAN MC terbaru (M) sebagai patokan.
+    """
     if collection_mb is None:
         return {"status": "error", "message": "Database connection failed."}
 
-    # Define the specific months and date range based on user's request (Nov 2025)
-    CURRENT_MONTH_REK = "112025" 
-    LAST_MONTH_REK = "102025"
+    # 1. TENTUKAN PERIODE DINAMIS
+    # Ambil Bulan Tagihan MC terbaru (M)
+    latest_mc_month_doc = collection_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
+    latest_mc_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
+
+    if not latest_mc_month:
+        return {"status": "error", "message": "Tidak ada data MC terbaru untuk menentukan periode koleksi."}
+
+    # M = latest_mc_month (e.g., 122025) -> UNDUE (Aging 0)
+    M_MINUS_1_REK = _get_previous_month_year(latest_mc_month) # M-1 (e.g., 112025) -> CURRENT (Aging 1)
     
-    # Collection Period (TGL_BAYAR) is November 2025
-    COLLECTION_MONTH_START = "2025-11-01"
-    COLLECTION_MONTH_END = "2025-12-01" # Exclusive
+    # Collection Period (TGL_BAYAR) is in Month M (Asumsi koleksi dilakukan di bulan tagihan terbaru)
+    COLLECTION_MONTH_START, COLLECTION_MONTH_END = _get_month_date_range(latest_mc_month)
 
     RAYON_KEYS = ['34', '35']
 
     def _get_mb_collection_metrics(rayon_filter, bulan_rek_filter_type):
         
-        # Base filter for TGL_BAYAR (Payment in November 2025)
+        # Base filter for TGL_BAYAR (Payment in Month M)
         base_match = {
             'BILL_REASON': 'BIAYA PEMAKAIAN AIR',
             'TGL_BAYAR': {'$gte': COLLECTION_MONTH_START, '$lt': COLLECTION_MONTH_END},
         }
 
+        # --- LOGIKA FILTER AGING BARU BERDASARKAN BULAN_REK ---
         if bulan_rek_filter_type == 'UNDUE':
-            # Undue: BULAN_REK = 112025
-            base_match['BULAN_REK'] = CURRENT_MONTH_REK
+            # Undue (Aging 0): BULAN_REK = M
+            base_match['BULAN_REK'] = latest_mc_month
         elif bulan_rek_filter_type == 'CURRENT':
-            # Current: BULAN_REK = 102025
-            base_match['BULAN_REK'] = LAST_MONTH_REK
+            # Current (Aging 1): BULAN_REK = M-1
+            base_match['BULAN_REK'] = M_MINUS_1_REK
         elif bulan_rek_filter_type == 'AGING':
-            # Tunggakan: BULAN_REK < 102025
-            base_match['BULAN_REK'] = {'$lt': LAST_MONTH_REK}
+            # Tunggakan (Aging >= 2): BULAN_REK < M-1 (i.e., M-2 atau lebih lama)
+            # Ini adalah filter untuk semua tagihan yang terbit DUA bulan atau lebih yang lalu.
+            base_match['BULAN_REK'] = {'$lt': M_MINUS_1_REK} 
             
         pipeline = [
             {'$match': base_match},
@@ -789,10 +834,12 @@ def _aggregate_mb_sunter_detail(collection_mb):
     
     # --- DETAIL HARIAN R34 dan R35 (TANGGAL BAYAR NGURUT) ---
     def _get_mb_daily_detail(rayon_key):
+        # Koleksi Harian adalah SEMUA koleksi yang dibayar di bulan M, TANPA filter BULAN_REK.
         pipeline = [
             {'$match': {
                 'BILL_REASON': 'BIAYA PEMAKAIAN AIR',
-                'TGL_BAYAR': {'$gte': COLLECTION_MONTH_START, '$lt': COLLECTION_MONTH_END},
+                # Filter TGL_BAYAR: Bulan M (sesuai COLLECTION_MONTH_START/END)
+                'TGL_BAYAR': {'$gte': COLLECTION_MONTH_START, '$lt': COLLECTION_MONTH_END}, 
                 'RAYON': {'$toUpper': {'$trim': {'$ifNull': ['$RAYON', 'N/A']}}}
             }},
             {'$match': {'RAYON': rayon_key}},
@@ -821,13 +868,17 @@ def _aggregate_mb_sunter_detail(collection_mb):
         '35': _get_mb_daily_detail('35'),
     }
 
+    # --- FINAL PERIODS ---
+    # Bayar bulan adalah bulan MC terbaru (M)
+    bayar_bulan_fmt = datetime.strptime(latest_mc_month, '%m%Y').strftime('%b %Y').upper()
+
     return {
         'status': 'success',
         'periods': {
-            'undue_rek': CURRENT_MONTH_REK,
-            'current_rek': LAST_MONTH_REK,
-            'aging_rek_max': f"<{LAST_MONTH_REK}",
-            'bayar_bulan': "NOV 2025"
+            'bayar_bulan': bayar_bulan_fmt, 
+            'undue_rek': latest_mc_month,
+            'current_rek': M_MINUS_1_REK,
+            'aging_rek_max': f"<{M_MINUS_1_REK}", # Tunggakan: < M-1 (semua sebelum current)
         },
         'summary': summary_data,
         'daily_detail': daily_detail
@@ -1265,15 +1316,25 @@ def _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, r
     # Base pipeline structure (Projection and CID Join for all necessary fields)
     pipeline = [
         {'$match': {'BULAN_TAGIHAN': latest_mc_month}}, # HANYA AMBIL MC BULAN TERBARU
-        {'$project': {
-            'NOMEN': '$NOMEN',
-            'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
-            'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
+        {"$project": {
+            # Kolom Piutang/Kubik
+            "NOMEN": "$NOMEN",
+            "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
+            "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}},
+            # --- EKSTRAKSI ZONA_NOVAK BARU ---
+            "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
+        }},
+        {"$addFields": {
+            "RAYON_ZONA": {"$substrCP": ["$CLEAN_ZONA", 0, 2]}, # Index 0, Length 2
+            "PC_ZONA": {"$substrCP": ["$CLEAN_ZONA", 2, 3]},    # Index 2, Length 3
+            "EZ_ZONA": {"$substrCP": ["$CLEAN_ZONA", 5, 2]},    # Index 5, Length 2
+            "BLOCK_ZONA": {"$substrCP": ["$CLEAN_ZONA", 7, 2]},  # Index 7, Length 2
+            "PCEZ_ZONA": {"$concat": ["$PC_ZONA", "$EZ_ZONA"]} # PC + EZ
         }},
         {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
         {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
         {'$addFields': {
-            'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
+            'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_ZONA']}}}}}, # Menggunakan Rayon dari ZONA jika CID hilang
             'TARIF_CID': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TARIF', 'N/A']}}}}}, 
             'MERK_CID': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
             'READ_METHOD': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}}}}},
@@ -1399,6 +1460,17 @@ def analyze_mc_grouping_summary_api():
 
         pipeline_summary = [
             {'$match': {'BULAN_TAGIHAN': latest_mc_month}}, # HANYA AMBIL MC BULAN TERBARU
+             {"$project": {
+                # Kolom Piutang/Kubik
+                "NOMEN": "$NOMEN",
+                "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
+                "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}},
+                # --- EKSTRAKSI ZONA_NOVAK BARU ---
+                "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
+            }},
+            {"$addFields": {
+                "RAYON_ZONA": {"$substrCP": ["$CLEAN_ZONA", 0, 2]}, # Index 0, Length 2
+            }},
             {'$lookup': {
                'from': 'CustomerData', 
                'localField': 'NOMEN',
@@ -1410,7 +1482,7 @@ def analyze_mc_grouping_summary_api():
             # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}}, 
-                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
+                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_ZONA']}}}}}, # Menggunakan Rayon dari ZONA jika CID hilang
             }},
             # --- END NORMALISASI ---
             
@@ -1463,7 +1535,15 @@ def analyze_mc_tarif_breakdown_api():
              
         pipeline_tarif_breakdown = [
             {'$match': {'BULAN_TAGIHAN': latest_mc_month}}, # HANYA AMBIL MC BULAN TERBARU
-            # 1. Join MC ke CID
+            # 1. Project dan Ekstraksi ZONA_NOVAK
+            {"$project": {
+                "NOMEN": 1, "RAYON": 1, "TARIF": 1,
+                "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
+            }},
+            {"$addFields": {
+                "RAYON_ZONA": {"$substrCP": ["$CLEAN_ZONA", 0, 2]}, # Index 0, Length 2
+            }},
+            # 2. Join MC ke CID
             {'$lookup': {
                'from': 'CustomerData', 
                'localField': 'NOMEN',
@@ -1475,7 +1555,7 @@ def analyze_mc_tarif_breakdown_api():
             # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
                 'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}}, 
-                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
+                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_ZONA']}}}}}, # Menggunakan Rayon dari ZONA jika CID hilang
             }},
             # --- END NORMALISASI ---
             
@@ -1549,9 +1629,16 @@ def collection_monitoring_api():
         # PERBAIKAN: Memastikan filter 'REG' dan Rayon '34'/'35' diterapkan pada denominator Piutang MC
         mc_total_response = collection_mc.aggregate([
             {'$match': {'BULAN_TAGIHAN': latest_mc_month}},
+            {"$project": {
+                "NOMEN": 1, "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
+                "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
+            }},
+            {"$addFields": {
+                "RAYON_ZONA": {"$substrCP": ["$CLEAN_ZONA", 0, 2]}, # Index 0, Length 2
+            }},
             {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}},
-            {'$addFields': {'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', 'N/A']}}}}},
+            {'$addFields': {'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_ZONA']}}}}},
              'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},}},
             
             # FILTER KRITIS: Hanya Piutang AB Sunter (R34/R35) dan tipe REG
@@ -1837,15 +1924,16 @@ def doh_comparison_report_api():
         now = datetime.now()
         day_of_month = now.day # Misal: 14
         
-        this_month_str = now.strftime('%Y-%m') # Misal: 2025-12
+        this_month_str = now.strftime('%Y-%m') # Misal, 2025-12
         last_month = now.replace(day=1) - timedelta(days=1)
-        last_month_str = last_month.strftime('%Y-%m') # Misal: 2025-11
+        last_month_str = last_month.strftime('%Y-%m') # Misal, 2025-11
         
         # 1. Tentukan tanggal perbandingan (DTD)
         date_prefixes = []
         for i in range(1, day_of_month + 1):
             day_str = f'{i:02d}' # 1 menjadi 01, 14 tetap 14
             date_prefixes.append(f"{this_month_str}-{day_str}")
+            # Pastikan bulan lalu juga memiliki tanggal tersebut (misal: Feb tidak punya tgl 30)
             try:
                 datetime.strptime(f"{last_month_str}-{day_str}", '%Y-%m-%d') 
                 date_prefixes.append(f"{last_month_str}-{day_str}")
@@ -1878,6 +1966,7 @@ def doh_comparison_report_api():
                 '_id': {'periode': '$Periode', 'day': '$Day', 'rayon': '$CLEAN_RAYON'},
                 'DailyNominal': {'$sum': '$NOMINAL'},
             }},
+            {'$sort': {'_id.date': 1}}
         ]
         
         raw_data = list(collection_mb.aggregate(pipeline))
@@ -2565,11 +2654,14 @@ def upload_mb_data():
         df.columns = [col.strip().upper() for col in df.columns]
         
         # >>> START PERBAIKAN: MAPPING HEADER KRITIS UNTUK MB <<<
+        # 1. NOTAG/NOTAGIHAN (Nomor Tagihan)
+        # MC & MB menggunakan NOTAGIHAN. Jika file upload menggunakan NOTAG, kita map.
+        # MC tidak ada field TGL_BAYAR, MB menggunakan TGL_BAYAR, jika file upload menggunakan PAY_DT, kita map.
         rename_map = {
-            'NOTAG': 'NOTAGIHAN', # Map NOTAG
-            'PAY_DT': 'TGL_BAYAR', # Map PAY_DT
-            'BILL_PERIOD': 'BULAN_REK', # Map BILL_PERIOD dari Daily Collection ke BULAN_REK
-            'MC VOL OKT 25_NOMEN': 'NOMEN' # Tambahan mapping jika Nomen tidak konsisten (dari snippet)
+            'NOTAG': 'NOTAGIHAN', # Jawaban #1: Map NOTAG (Daily) ke NOTAGIHAN (MB)
+            'PAY_DT': 'TGL_BAYAR', # Jawaban #2: Map PAY_DT (Daily) ke TGL_BAYAR (MB)
+            'BILL_PERIOD': 'BULAN_REK',
+            'MC VOL OKT 25_NOMEN': 'NOMEN' 
         }
         # Menggunakan errors='ignore' memastikan hanya kolom yang ada di file yang diubah namanya
         df = df.rename(columns=lambda x: rename_map.get(x, x), errors='ignore')
