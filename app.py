@@ -173,11 +173,17 @@ def _get_sbrs_anomalies(collection_sbrs, collection_cid):
                 }
             }
         }},
-        {'$addFields': {
+        # NOTE: Mengganti $addFields ke $project dan menyederhanakan logika untuk kompatibilitas
+        {'$project': { 
+            'NOMEN': 1,
+            'KUBIK_TERBARU': {'$round': ['$KUBIK_TERBARU', 0]},
+            'KUBIK_SEBELUMNYA': {'$round': ['$KUBIK_SEBELUMNYA', 0]},
+            'SELISIH_KUBIK': {'$round': ['$SELISIH_KUBIK', 0]},
+            'PERSEN_SELISIH': {'$round': ['$PERSEN_SELISIH', 2]},
             'STATUS_PEMAKAIAN': {
                 '$switch': {
                     'branches': [
-                        { 'case': {'$gte': ['$KUBIK_TERBARU', 150]}, 'then': 'EKSTRIM (>150 m³)' }, # Threshold Ekstrim Tinggi
+                        { 'case': {'$gte': ['$KUBIK_TERBARU', 150]}, 'then': 'EKSTRIM (>150 m³)' },
                         { 'case': {'$gte': ['$PERSEN_SELISIH', 50]}, 'then': 'NAIK EKSTRIM (>=50%)' }, 
                         { 'case': {'$gte': ['$PERSEN_SELISIH', 10]}, 'then': 'NAIK SIGNIFIKAN (>=10%)' }, 
                         { 'case': {'$lte': ['$PERSEN_SELISIH', -50]}, 'then': 'TURUN EKSTRIM (<= -50%)' }, 
@@ -199,10 +205,10 @@ def _get_sbrs_anomalies(collection_sbrs, collection_cid):
             'NOMEN': 1,
             'NAMA': {'$ifNull': ['$customer_info.NAMA', 'N/A']},
             'RAYON': {'$ifNull': ['$customer_info.RAYON', 'N/A']},
-            'KUBIK_TERBARU': {'$round': ['$KUBIK_TERBARU', 0]},
-            'KUBIK_SEBELUMNYA': {'$round': ['$KUBIK_SEBELUMNYA', 0]},
-            'SELISIH_KUBIK': {'$round': ['$SELISIH_KUBIK', 0]},
-            'PERSEN_SELISIH': {'$round': ['$PERSEN_SELISIH', 2]},
+            'KUBIK_TERBARU': 1,
+            'KUBIK_SEBELUMNYA': 1,
+            'SELISIH_KUBIK': 1,
+            'PERSEN_SELISIH': 1,
             'STATUS_PEMAKAIAN': 1
         }},
         {'$match': { 
@@ -607,6 +613,7 @@ def _get_distribution_report(group_fields, collection_mc):
     """
     Menghitung distribusi Nomen (Count Distinct), Piutang (NOMINAL), dan Kubikasi (KUBIK) 
     berdasarkan field yang diberikan untuk BULAN_TAGIHAN terbaru.
+    NOTE: Menggunakan field yang sudah ada di koleksi MC (Rayon/PCEZ), bukan ekstraksi ZONA yang rumit.
     """
     if collection_mc is None:
         return [], "N/A (Koneksi DB Gagal)"
@@ -626,21 +633,13 @@ def _get_distribution_report(group_fields, collection_mc):
     pipeline = [
         # 1. Filter data untuk bulan tagihan terbaru saja
         {"$match": {"BULAN_TAGIHAN": latest_month}},
-        # 2. Project dan konversi tipe data yang diperlukan, serta ekstraksi ZONA_NOVAK
+        # 2. Project dan konversi tipe data yang diperlukan
         {"$project": {
             **{field: f"${field}" for field in group_fields},
             "NOMEN": 1,
-            "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
+            # Perbaikan: Menggunakan $ifNull di dalam $toDouble
+            "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, 
             "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}},
-            # --- EKSTRAKSI ZONA_NOVAK BARU ---
-            "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
-        }},
-        {"$addFields": {
-            "RAYON": {"$substrCP": ["$CLEAN_ZONA", 0, 2]}, # Index 0, Length 2
-            "PC": {"$substrCP": ["$CLEAN_ZONA", 2, 3]},    # Index 2, Length 3
-            "EZ": {"$substrCP": ["$CLEAN_ZONA", 5, 2]},    # Index 5, Length 2
-            "BLOCK": {"$substrCP": ["$CLEAN_ZONA", 7, 2]},  # Index 7, Length 2
-            "PCEZ": {"$concat": [{"$substrCP": ["$CLEAN_ZONA", 2, 3]}, {"$substrCP": ["$CLEAN_ZONA", 5, 2]}]} # PC + EZ
         }},
         # 3. Grouping berdasarkan field yang diminta
         {"$group": {
@@ -875,7 +874,8 @@ def _aggregate_mb_sunter_detail(collection_mb):
             {'$project': {
                 'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
                 'NOMEN': 1,
-                'RAYON': {'$toUpper': {'$trim': {'$ifNull': ['$RAYON', 'N/A']}}}
+                # Menggunakan $ifNull sederhana karena $trim ditemukan sebagai argument yang tidak dikenal
+                'RAYON': {'$toUpper': {'$ifNull': ['$RAYON', 'N/A']}}
             }},
             {'$match': {'RAYON': {'$in': RAYON_KEYS}}}
         ]
@@ -918,7 +918,7 @@ def _aggregate_mb_sunter_detail(collection_mb):
                 'BILL_REASON': 'BIAYA PEMAKAIAN AIR',
                 # Filter TGL_BAYAR: Bulan M (sesuai COLLECTION_MONTH_START/END)
                 'TGL_BAYAR': {'$gte': COLLECTION_MONTH_START, '$lt': COLLECTION_MONTH_END}, 
-                'RAYON': {'$toUpper': {'$trim': {'$ifNull': ['$RAYON', 'N/A']}}}
+                'RAYON': {'$toUpper': {'$ifNull': ['$RAYON', 'N/A']}}
             }},
             {'$match': {'RAYON': rayon_key}},
             {'$project': {
@@ -974,6 +974,7 @@ def analyze_mb_sunter_report_api():
         return jsonify(report_data), 200
     except Exception as e:
         print(f"Error fetching MB Sunter report: {e}")
+        # Menampilkan error yang terjadi
         return jsonify({"status": "error", "message": f"Gagal mengambil data laporan MB Sunter: {e}"}), 500
 
 
@@ -988,6 +989,41 @@ def analysis_mb_sunter_detail():
                             is_admin=current_user.is_admin)
 
 # --- FUNGSI BARU UNTUK REPORT KOLEKSI & PIUTANG ---
+def _get_mc_piutang_denominator(latest_mc_month, collection_mc, collection_cid):
+    """Helper untuk menghitung total Piutang MC kustom (REG Rayon 34/35) yang digunakan sebagai Denominator."""
+    if not latest_mc_month:
+        return 0.0, {'34': 0.0, '35': 0.0}
+
+    pipeline = [
+        {'$match': {'BULAN_TAGIHAN': latest_mc_month}},
+        {"$project": {
+            "NOMEN": 1, "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
+            "CLEAN_ZONA": {"$ifNull": ["$ZONA_NOVAK", ""]},
+            "CUST_TYPE_MC": "$CUST_TYPE",
+            "RAYON_MC": "$RAYON"
+        }},
+        {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
+        {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+        # Menggunakan logika fallback yang kompatibel: $ifNull dan $toUpper
+        {'$project': {
+            'NOMINAL': 1,
+            'CLEAN_RAYON': {'$toUpper': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MC']}}, 
+            'CLEAN_TIPEPLGGN': {'$toUpper': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}},
+        }},
+        {'$match': {'CLEAN_RAYON': {'$in': ['34', '35']}, 'CLEAN_TIPEPLGGN': 'REG', 'NOMINAL': {'$gt': 0}}},
+        {'$group': {'_id': '$CLEAN_RAYON', 'TotalPiutang': {'$sum': '$NOMINAL'}}}
+    ]
+
+    mc_total_response = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
+    
+    mc_totals = {doc['_id']: doc['TotalPiutang'] for doc in mc_total_response}
+    total_mc_34 = mc_totals.get('34', 0)
+    total_mc_35 = mc_totals.get('35', 0)
+    total_mc_nominal_all = total_mc_34 + total_mc_35
+    
+    return total_mc_nominal_all, mc_totals
+
+
 @app.route('/api/collection/report', methods=['GET'])
 @login_required 
 def collection_report_api():
@@ -1066,6 +1102,7 @@ def collection_report_api():
         }},
         {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
         { '$project': {
+             # Menggunakan $ifNull sederhana untuk menghindari error $trim
              'RAYON': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MB']},
              'PCEZ': {'$ifNull': ['$customer_info.PCEZ', '$PCEZ_MB']},
              'NOMEN': 1,
@@ -1156,7 +1193,8 @@ def collection_report_api():
     }
     
     # Simpan total MC (denominator untuk Monitoring)
-    total_mc_nominal_all = grand_total['MC_TotalNominal']
+    # Gunakan helper baru untuk mendapatkan total piutang yang difilter (REG 34/35)
+    total_mc_nominal_all, mc_totals = _get_mc_piutang_denominator(latest_mc_month, collection_mc, collection_cid)
 
     for key, data in report_map.items():
         data.setdefault('MB_UndueNominal', 0.0)
@@ -1402,25 +1440,20 @@ def _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, r
             "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
             "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}},
             "CUST_TYPE_MC": "$CUST_TYPE", # <-- DITAMBAHKAN: Field CUST_TYPE dari MC
-            # --- EKSTRAKSI ZONA_NOVAK BARU ---
-            "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
-        }},
-        {"$addFields": {
-            "RAYON_ZONA": {"$substrCP": ["$CLEAN_ZONA", 0, 2]}, # Index 0, Length 2
-            "PC_ZONA": {"$substrCP": ["$CLEAN_ZONA", 2, 3]},    # Index 2, Length 3
-            "EZ_ZONA": {"$substrCP": ["$CLEAN_ZONA", 5, 2]},    # Index 5, Length 2
-            "BLOCK_ZONA": {"$substrCP": ["$CLEAN_ZONA", 7, 2]},  # Index 7, Length 2
-            "PCEZ_ZONA": {"$concat": ["$PC_ZONA", "$EZ_ZONA"]} # PC + EZ
+            "RAYON_MC": "$RAYON", # Menggunakan field RAYON yang sudah ada di MC
+            "ZONA_NOVAK": "$ZONA_NOVAK"
         }},
         {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
         # PERBAIKAN KRITIS: preserveNullAndEmptyArrays=True agar data MC tidak hilang jika CID tidak match
         {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}}, 
-        {'$addFields': {
-            'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}}}}}, # Fallback ke MC CUST_TYPE
-            'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_ZONA']}}}}}, # Menggunakan Rayon dari ZONA jika CID hilang
-            'TARIF_CID': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TARIF', 'N/A']}}}}}, 
-            'MERK_CID': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
-            'READ_METHOD': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}}}}},
+        {'$project': {
+            'NOMEN': 1, 'NOMINAL': 1, 'KUBIK': 1,
+            # Menggunakan $ifNull sederhana untuk kompatibilitas
+            'CLEAN_TIPEPLGGN': {'$toUpper': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}},
+            'CLEAN_RAYON': {'$toUpper': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MC']}}, 
+            'TARIF_CID': {'$toUpper': {'$ifNull': ['$customer_info.TARIF', 'N/A']}}, 
+            'MERK_CID': {'$toUpper': {'$ifNull': ['$customer_info.MERK', 'N/A']}},
+            'READ_METHOD': {'$toUpper': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}},
         }},
         {'$match': {'CLEAN_TIPEPLGGN': 'REG'}} # Always filter to REG
     ]
@@ -1552,11 +1585,7 @@ def analyze_mc_grouping_summary_api():
                 "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
                 "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}},
                 "CUST_TYPE_MC": "$CUST_TYPE", # <-- DITAMBAHKAN
-                # --- EKSTRAKSI ZONA_NOVAK BARU ---
-                "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
-            }},
-            {"$addFields": {
-                "RAYON_ZONA": {"$substrCP": ["$CLEAN_ZONA", 0, 2]}, # Index 0, Length 2
+                "RAYON_MC": "$RAYON"
             }},
             {'$lookup': {
                'from': 'CustomerData', 
@@ -1567,10 +1596,11 @@ def analyze_mc_grouping_summary_api():
             # PERBAIKAN KRITIS: preserveNullAndEmptyArrays=True
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
             
-            # --- NORMALISASI DATA UNTUK FILTER ---
-            {'$addFields': {
-                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}}}}}, # Fallback ke MC CUST_TYPE
-                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_ZONA']}}}}}, # Menggunakan Rayon dari ZONA jika CID hilang
+            # --- NORMALISASI DATA UNTUK FILTER (Mengganti $trim dengan $ifNull) ---
+            {'$project': {
+                'NOMINAL': 1, 'KUBIK': 1, 'NOMEN': 1,
+                'CLEAN_TIPEPLGGN': {'$toUpper': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}}, 
+                'CLEAN_RAYON': {'$toUpper': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MC']}}, 
             }},
             # --- END NORMALISASI ---
             
@@ -1623,14 +1653,11 @@ def analyze_mc_tarif_breakdown_api():
              
         pipeline_tarif_breakdown = [
             {'$match': {'BULAN_TAGIHAN': latest_mc_month}}, # HANYA AMBIL MC BULAN TERBARU
-            # 1. Project dan Ekstraksi ZONA_NOVAK
+            # 1. Project (menggunakan field asli)
             {"$project": {
-                "NOMEN": 1, "RAYON": 1, "TARIF": 1,
-                "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
-                "CUST_TYPE_MC": "$CUST_TYPE", # <-- DITAMBAHKAN
-            }},
-            {"$addFields": {
-                "RAYON_ZONA": {"$substrCP": ["$CLEAN_ZONA", 0, 2]}, # Index 0, Length 2
+                "NOMEN": 1, "TARIF": 1,
+                "RAYON_MC": "$RAYON",
+                "CUST_TYPE_MC": "$CUST_TYPE", 
             }},
             # 2. Join MC ke CID
             {'$lookup': {
@@ -1639,12 +1666,14 @@ def analyze_mc_tarif_breakdown_api():
                'foreignField': 'NOMEN',
                'as': 'customer_info'
             }},
-            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}}, # Diperbaiki
+            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}}, 
             
-            # --- NORMALISASI DATA UNTUK FILTER ---
-            {'$addFields': {
-                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}}}}}, # Fallback ke MC CUST_TYPE
-                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_ZONA']}}}}}, # Menggunakan Rayon dari ZONA jika CID hilang
+            # --- NORMALISASI DATA UNTUK FILTER (Mengganti $trim dengan $ifNull) ---
+            {'$project': {
+                'NOMEN': 1, 
+                'TARIF': 1,
+                'CLEAN_TIPEPLGGN': {'$toUpper': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}}, 
+                'CLEAN_RAYON': {'$toUpper': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MC']}}, 
             }},
             # --- END NORMALISASI ---
             
@@ -1712,38 +1741,12 @@ def collection_monitoring_api():
         previous_mc_month = _get_previous_month_year(latest_mc_month)
         
         # 1. Hitung Total Piutang MC (Denominator) dari bulan tagihan terbaru
-        mc_total_response = collection_mc.aggregate([
-            {'$match': {'BULAN_TAGIHAN': latest_mc_month}},
-            {"$project": {
-                "NOMEN": 1, "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
-                "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
-                "CUST_TYPE_MC": "$CUST_TYPE", # <-- DITAMBAHKAN
-            }},
-            {"$addFields": {
-                "RAYON_ZONA": {"$substrCP": ["$CLEAN_ZONA", 0, 2]}, # Index 0, Length 2
-            }},
-            {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
-            # PERBAIKAN KRITIS: Mengubah preserveNullAndEmptyArrays menjadi TRUE untuk menghitung Piutang MC yang mungkin tidak ada di CID
-            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
-            {'addFields': {'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_ZONA']}}}}},
-             'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}}}}},}},
-            
-            # FILTER KRITIS: Hanya Piutang AB Sunter (R34/R35) dan tipe REG
-            {'$match': {'CLEAN_RAYON': {'$in': ['34', '35']}, 'CLEAN_TIPEPLGGN': 'REG'}},
-            
-            {'$group': {'_id': '$CLEAN_RAYON', 'TotalPiutang': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}}}}
-        ], allowDiskUse=True)
-        
-        mc_totals = {doc['_id']: doc['TotalPiutang'] for doc in mc_total_response}
+        # Menggunakan helper baru untuk mendapatkan total piutang yang difilter (REG 34/35)
+        total_mc_nominal_all, mc_totals = _get_mc_piutang_denominator(latest_mc_month, collection_mc, collection_cid)
         total_mc_34 = mc_totals.get('34', 0)
         total_mc_35 = mc_totals.get('35', 0)
-        
-        # Total Piutang MC Keseluruhan (Denominator Persentase Koleksi)
-        total_mc_nominal_all = total_mc_34 + total_mc_35
-        
+
         # 2. Hitung Total UNDUE Bulan Sebelumnya (Baseline Collection)
-        # Definition: MB collected IN month M-1 (TGL_BAYAR) where BILL_REK is month M-1 (UNDUE)
-        # Jika previous_mc_month adalah None (misal, bulan pertama), set totalnya ke 0
         total_undue_prev_nominal = 0.0
         
         if previous_mc_month:
@@ -1764,7 +1767,7 @@ def collection_monitoring_api():
             undue_prev_result = list(collection_mb.aggregate(pipeline_undue_prev))
             total_undue_prev_nominal = undue_prev_result[0]['TotalUnduePrev'] if undue_prev_result else 0.0
 
-        # 3. Ambil Data Transaksi MB (Koleksi) Harian (Rp1)
+        # 3. Ambil Data Transaksi MB (Koleksi) Harian (Rp1 - Current Aging 1)
         
         # Koleksi Rp1 (CURRENT) Dihitung dari transaksi MB yang TGL_BAYAR nya bulan ini, 
         # TAPI BULAN_REK-nya adalah bulan lalu (Piutang Lama)
@@ -1773,10 +1776,11 @@ def collection_monitoring_api():
         # Hitung tanggal satu hari setelah bulan ini
         next_month_start = (now.replace(day=1) + timedelta(days=32)).replace(day=1).strftime('%Y-%m-%d')
         
+        # NOTE: Mengganti $project dan $addFields kompleks dengan $project sederhana
         pipeline_mb_daily = [
             {'$match': {
                 'TGL_BAYAR': {'$gte': this_month_start, '$lt': next_month_start}, # Filter A: TGL_BAYAR di bulan ini
-                'BULAN_REK': previous_mc_month, # Filter B: BULAN_REK bulan lalu (atau bulan ini jika previous_mc_month None)
+                'BULAN_REK': previous_mc_month, # Filter B: BULAN_REK bulan lalu (Aging 1)
                 'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
             }}, 
             {'$project': {
@@ -1790,7 +1794,8 @@ def collection_monitoring_api():
             {'$project': {
                  'TGL_BAYAR': 1,
                  'NOMINAL': 1,
-                 'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MB']}}}}},
+                 # Menggunakan $ifNull sederhana untuk kompatibilitas
+                 'CLEAN_RAYON': {'$toUpper': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MB']}},
                  'NOMEN': 1
             }},
             {'$match': {'CLEAN_RAYON': {'$in': ['34', '35']}}},
@@ -2064,8 +2069,11 @@ def doh_comparison_report_api():
                 'Periode': {'$substr': ['$TGL_BAYAR', 0, 7]}
             }},
             # FIX: Normalisasi RAYON dari MB yang mungkin tidak seragam
-            {'$addFields': {
-                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$RAYON', 'N/A']}}}}},
+            {'$project': { # Menggunakan $project sederhana
+                'NOMINAL': 1,
+                'Day': 1,
+                'Periode': 1,
+                'CLEAN_RAYON': {'$toUpper': {'$ifNull': ['$RAYON', 'N/A']}},
             }},
             # Filter hanya Rayon 34 dan 35
             {'$match': {'CLEAN_RAYON': {'$in': ['34', '35']}}},
@@ -2157,25 +2165,21 @@ def _aggregate_tariff_changes(collection_cid):
             },
             '_id': 0
         }},
-        {'$addFields': {
+        {'$project': { # Mengganti $addFields
+            'NOMEN': 1,
             'latest_tarif': {'$arrayElemAt': ['$sorted_history.tarif', -1]}, 
             'previous_tarif': {
                 '$arrayElemAt': [
                     '$sorted_history.tarif',
                     {'$subtract': [{'$size': '$sorted_history.tarif'}, 2]}
                 ]
-            }
+            },
+            'TOTAL_RIWAYAT_CID': {'$size': '$sorted_history'},
+            'TANGGAL_PERUBAHAN_TERAKHIR': {'$arrayElemAt': ['$sorted_history.tanggal', -1]}
         }},
         {'$match': {
             '$expr': {'$ne': ['$latest_tarif', '$previous_tarif']},
             'previous_tarif': {'$ne': None} 
-        }},
-        {'$project': {
-            'NOMEN': 1,
-            'TARIF_SEBELUMNYA': '$previous_tarif',
-            'TARIF_TERBARU': '$latest_tarif',
-            'TOTAL_RIWAYAT_CID': {'$size': '$sorted_history'},
-            'TANGGAL_PERUBAHAN_TERAKHIR': {'$arrayElemAt': ['$sorted_history.tanggal', -1]}
         }},
         {'$limit': 500}
     ]
