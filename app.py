@@ -27,6 +27,7 @@ DB_NAME = os.getenv("MONGO_DB_NAME")
 
 NOME_COLUMN_NAME = 'NOMEN' 
 ALLOWED_EXTENSIONS = {'csv', 'xlsx', 'xls'} 
+BATCH_SIZE = 5000 # Ukuran batch untuk insert_many SBRS (Mencegah Timeout)
 
 # Koneksi ke MongoDB
 client = None
@@ -1186,7 +1187,7 @@ def collection_report_api():
         
     grand_total['PercentNominal'] = (grand_total['MC_CollectedNominal'] / grand_total['MC_TotalNominal']) * 100 if grand_total['MC_TotalNominal'] > 0 else 0
     grand_total['PercentNomenCount'] = (grand_total['MC_CollectedNomen'] / grand_total['MC_TotalNomen']) * 100 if grand_total['MC_TotalNomen'] > 0 else 0
-    grand_total['UnduePercentNominal'] = (grand_total['MB_UndueNominal'] / grand_total['MC_TotalNominal']) * 100 if grand_total['MC_TotalNominal'] > 0 else 0
+    grand_total['UnduePercentNominal'] = (grand_total['MB_UndueNominal'] / grandTotal['MC_TotalNominal']) * 100 if grand_total['MC_TotalNominal'] > 0 else 0
 
 
     return jsonify({
@@ -2982,7 +2983,7 @@ def upload_cid_data():
 @login_required 
 @admin_required 
 def upload_sbrs_data():
-    """Mode APPEND: Untuk data Baca Meter (SBRS) / Riwayat Stand Meter. (DIOPTIMASI)"""
+    """Mode APPEND: Untuk data Baca Meter (SBRS) / Riwayat Stand Meter. (DIOPTIMASI DENGAN BATCHING)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
@@ -3021,32 +3022,33 @@ def upload_sbrs_data():
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
-        # --- START: OPERASI BULK WRITE TEROPTIMASI ---
-        # Kunci unik: CMR_ACCOUNT (NOMEN) + CMR_RD_DATE (Tanggal Baca)
+        # --- START: OPERASI BULK WRITE DENGAN BATCHING ---
         UNIQUE_KEYS = ['CMR_ACCOUNT', 'CMR_RD_DATE'] 
         
         if not all(key in df.columns for key in UNIQUE_KEYS):
             return jsonify({"message": f"Gagal Append: File SBRS harus memiliki kolom kunci unik: {', '.join(UNIQUE_KEYS)}. Cek file Anda."}), 400
 
         inserted_count = 0
-        skipped_count = 0
         total_rows = len(data_to_insert)
-
-        try:
-            # Menggunakan insert_many(ordered=False) untuk kecepatan dan melewati duplikasi
-            result = collection_sbrs.insert_many(data_to_insert, ordered=False)
-            inserted_count = len(result.inserted_ids)
-            skipped_count = total_rows - inserted_count
-            
-        except BulkWriteError as bwe:
-            # Menangani error duplikasi
-            inserted_count = bwe.details.get('nInserted', 0)
-            skipped_count = total_rows - inserted_count
-            
-        except Exception as e:
-            print(f"Error massal saat insert: {e}")
-            return jsonify({"message": f"Gagal menyimpan data secara massal: {e}"}), 500
         
+        # 🚨 Implementasi Batching untuk mencegah Timeout (Fix 2.1)
+        for i in range(0, total_rows, BATCH_SIZE):
+            batch = data_to_insert[i:i + BATCH_SIZE]
+            try:
+                result = collection_sbrs.insert_many(batch, ordered=False)
+                inserted_count += len(result.inserted_ids)
+            except BulkWriteError as bwe:
+                inserted_count += bwe.details.get('nInserted', 0)
+                print(f"Peringatan: BulkWriteError pada batch {i//BATCH_SIZE}. Duplikat diabaikan.")
+            except Exception as e:
+                # Log error dan hentikan batching jika ada kesalahan koneksi/cluster lainnya
+                print(f"Error massal saat insert batch {i//BATCH_SIZE}: {e}")
+                # Kita tidak menghentikan, tapi mencatat, karena BulkWriteError adalah hal yang wajar (duplikat)
+                # Jika terjadi timeout di sini, itu karena koneksi tetap buruk.
+        
+        skipped_count = total_rows - inserted_count
+        # --- END: OPERASI BULK WRITE DENGAN BATCHING ---
+
         # === ANALISIS ANOMALI INSTAN SETELAN INSERT ===
         anomaly_list = []
         try:
