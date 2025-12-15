@@ -22,17 +22,18 @@
     gap: 10px; /* Jarak antar tombol */
 }
 
-/* Wrapper scroll untuk responsivitas tabel */
+/* Wrapper scroll untuk responsivitas tabel (Excel-like) */
 .result-table-wrapper { 
     overflow-x: auto; 
     margin-top: 20px; 
+    /* Excel-like strong outer border */
+    border: 2px solid #c4c4c4;
     box-shadow: var(--shadow-light);
     border-radius: var(--border-radius);
     overflow: hidden;
-    border: 1px solid #ddd;
 }
 
-/* Style Tabel */
+/* Style Tabel (Excel-like) */
 .data-table {
     width: 100%;
     border-collapse: collapse;
@@ -40,13 +41,19 @@
     min-width: 600px; /* Minimal width untuk desktop */
 }
 .data-table th, .data-table td {
-    border: 1px solid #f0f0f0; /* Border lebih halus */
-    padding: 8px;
+    border: 1px solid #c4c4c4; /* Border sel yang jelas */
+    padding: 10px;
     white-space: nowrap; 
 }
 .data-table th {
-    background-color: #e9ecef; /* Sinkronisasi dengan table header lainnya */
-    font-weight: 600;
+    background-color: #e9f5ff; /* Light blue header (Excel-like) */
+    text-align: center;
+    font-weight: 700;
+    color: var(--text-color);
+}
+/* Alternating row colors for Excel feel */
+.data-table tbody tr:nth-child(even) {
+    background-color: #f7f7f7;
 }
 
 /* Tombol Aksi */
@@ -72,6 +79,7 @@
     .result-table-wrapper {
         box-shadow: none;
         border: none;
+        overflow-x: auto;
     }
     .data-table {
         min-width: 100%;
@@ -82,16 +90,20 @@
     .data-table tr {
         display: block;
         margin-bottom: 10px;
-        border: 1px solid #ddd;
+        border: 1px solid #c4c4c4; /* Menggunakan batas yang lebih jelas untuk Card */
         border-radius: var(--border-radius);
         box-shadow: var(--shadow-light);
+        background-color: var(--card-bg) !important;
+    }
+    .data-table tbody tr:nth-child(even) {
+        background-color: transparent !important; /* Disable striping in card view */
     }
     .data-table td {
         display: flex;
         justify-content: space-between;
         padding: 8px 12px;
         border: none;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid #f0f0f0; /* Garis pemisah antar field */
         white-space: normal;
         font-size: 1em;
     }
@@ -119,7 +131,7 @@
         <button onclick="window.history.back()" class="btn-primary" style="background-color: #6c757d; color: white; padding: 10px 15px; border-radius: 4px; border: none;">
             ← Kembali ke Analisis
         </button>
-        <button class="btn-primary" onclick="fetchReportData('{{ title }}')" style="background-color: var(--primary-color); color: white; padding: 10px 15px; border-radius: 4px; border: none;">
+        <button class="btn-primary" onclick="fetchReportData('{{ title }}')" style="background-color: var(--secondary-color); color: white; padding: 10px 15px; border-radius: 4px; border: none;">
             Muat Data Laporan
         </button>
     </div>
@@ -148,7 +160,7 @@
             let endpoint = '';
 
             // Mapping Laporan ke Endpoint API yang baru
-            if (reportName.includes('Naik/Turun')) {
+            if (reportName.includes('Fluktuasi Volume')) {
                 endpoint = '{{ url_for("analyze_volume_fluctuation_api") }}';
             } else if (reportName.includes('Perubahan Tarif')) {
                 endpoint = '{{ url_for("analyze_tariff_change_api") }}';
@@ -156,6 +168,8 @@
                 endpoint = '{{ url_for("analyze_extreme_usage_api") }}'; 
             } else if (reportName.includes('Zero')) {
                 endpoint = '{{ url_for("analyze_zero_usage_api") }}'; 
+            } else if (reportName.includes('Stand Tunggu')) {
+                endpoint = '{{ url_for("analyze_standby_status_api") }}'; 
             } else {
                  dataArea.innerHTML = `<p style="text-align: center; color: red;">Endpoint API untuk laporan ini belum diimplementasi di frontend.</p>`;
                  return;
@@ -190,7 +204,6 @@
                 return;
             }
 
-            // Dapatkan headers dari kunci objek pertama
             const headers = Object.keys(data[0]);
             
             let tableHTML = `<h4 style="margin-bottom: 10px; color: var(--secondary-color);">Ditemukan ${formatNumber(data.length)} Hasil</h4>`;
@@ -201,7 +214,7 @@
             tableHTML += `</tr></thead><tbody>`;
 
             data.forEach(item => {
-                tableHTML += `<tr>`;
+                tableHTML += '<tr>';
                 headers.forEach(h => {
                     let cellValue = item[h];
                     let cellClass = '';
@@ -210,14 +223,14 @@
                     if (h.includes('PERSEN')) {
                         cellValue = formatPercent(cellValue);
                         cellClass = (parseFloat(item[h]) > 0) ? 'text-danger' : 'text-success';
-                    } else if (h.includes('KUBIK') || h.includes('NOMINAL')) {
+                    } else if (h.includes('KUBIK') || h.includes('NOMINAL') || h.includes('AMOUNT') || h.includes('Piutang')) {
                          cellValue = formatNumber(cellValue);
                     }
                     
-                    // Tambahkan data-label untuk mobile view
+                    // PENTING: Tambahkan data-label untuk mobile view
                     tableHTML += `<td data-label="${h.replace(/_/g, ' ')}" class="${cellClass}">${cellValue}</td>`;
                 });
-                tableHTML += `</tr>`;
+                tableHTML += '</tr>';
             });
 
             tableHTML += `</tbody></table></div>`;
