@@ -2754,6 +2754,7 @@ def upload_mb_data():
         total_rows = len(data_to_insert)
 
         try:
+            # Menggunakan insert_many(ordered=False) untuk kecepatan dan melewati duplikasi
             result = collection_mb.insert_many(data_to_insert, ordered=False)
             inserted_count = len(result.inserted_ids)
             skipped_count = total_rows - inserted_count
