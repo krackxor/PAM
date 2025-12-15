@@ -403,7 +403,6 @@ def collection_landing_page():
 @app.route('/collection/summary', methods=['GET'])
 @login_required 
 def collection_summary():
-    # Mengarahkan ke template baru: collection_summary.html
     return render_template('collection_summary.html', is_admin=current_user.is_admin)
 
 @app.route('/collection/monitoring', methods=['GET'])
@@ -662,7 +661,7 @@ def rayon_tarif_distribution_report():
     
     data_for_display = []
     for item in results:
-        label = f"{item.get('RAYON', 'N/A')} - {item.get('TARIF', 'N/A')}"
+        label = f"{item.get("RAYON", "N/A")} - {item.get("TARIF", "N/A")}"
         data_for_display.append({
             "RAYON": item.get("RAYON", "N/A"),
             "TARIF": item.get("TARIF", "N/A"),
@@ -690,7 +689,7 @@ def rayon_meter_distribution_report():
     
     data_for_display = []
     for item in results:
-        label = f"{item.get('RAYON', 'N/A')} - {item.get('JENIS_METER', 'N/A')}"
+        label = f"{item.get("RAYON", "N/A")} - {item.get("JENIS_METER", "N/A")}"
         data_for_display.append({
             "RAYON": item.get("RAYON", "N/A"),
             "JENIS_METER": item.get("JENIS_METER", "N/A"),
@@ -2727,7 +2726,7 @@ def upload_mc_data():
         return jsonify({"message": f"Gagal memproses file MC: {e}. Pastikan format data benar."}), 500
     
     finally:
-        # --- START INDEX RECREATION (HARUS DILAKUKAN SETELAH INSERT) ---
+        # --- START INDEX RECREATION (HARUS DILAKUKAN SETELAN INSERT) ---
         try:
             # 3. RECREATE INDEXES KRITIS
             collection_mc.create_index([('NOMEN', 1), ('BULAN_TAGIHAN', -1)], name='idx_mc_nomen_hist')
@@ -3393,7 +3392,7 @@ def dashboard_summary_api():
                 "NOMEN": 1, "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
                 "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}, 
                 "STATUS_CLEAN": {'$toUpper': {'$trim': {'input': {'$ifNull': ['$STATUS', 'N/A']}}}}, 
-                "CLEAN_ZONA": {"$trim": {"input": {"$ifNull': ["$ZONA_NOVAK", ""]}}},
+                "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}}, # FIX APLIKASI
                 "CUST_TYPE_MC": "$CUST_TYPE",
             }},
             {"$addFields": {"RAYON_ZONA": {"$substrCP": ["$CLEAN_ZONA", 0, 2]}}},
