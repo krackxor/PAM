@@ -14,7 +14,7 @@
 .report-grid {
     display: grid;
     /* Grid akan memiliki minimal 200px per kolom, akan menumpuk di mobile */
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 15px; /* Kurangi gap sedikit */
     margin-bottom: 30px;
 }
@@ -23,11 +23,12 @@
     padding: 15px; 
     border-radius: var(--border-radius); 
     box-shadow: var(--shadow-light);
-    text-align: center; 
+    text-align: left; 
     border: 1px solid #e0e0e0;
     border-left: 5px solid;
     /* Transisi untuk dinamika */
     transition: all 0.3s ease;
+    min-height: 100px; /* Pastikan tinggi konsisten */
 }
 .summary-card:hover {
     transform: translateY(-3px); /* Efek angkat/lift */
@@ -35,6 +36,8 @@
 }
 .summary-card h4 { margin: 0 0 5px 0; font-size: 0.9em; color: #6c757d; }
 .summary-card p { margin: 0; font-size: 1.6em; font-weight: bold; }
+.summary-card .subtitle { font-size: 0.8em; color: #999; margin-top: 5px; }
+
 
 /* Detail Table Styling */
 .report-table-wrapper { 
@@ -50,7 +53,10 @@
     width: 100%; 
     border-collapse: collapse; 
     font-size: 14px; 
-    min-width: 1000px; /* Minimal width untuk desktop */
+    min-width: 800px; /* Minimal width untuk desktop */
+}
+.report-table.table-ranking {
+    min-width: 100%;
 }
 .report-table th, .report-table td { 
     border: 1px solid #f0f0f0; 
@@ -63,9 +69,11 @@
     text-align: center; 
     font-weight: 600; 
 }
-.undue-cell { font-weight: bold; color: #17a2b8 !important; }
-.grand-total-row { font-weight: bold; background-color: #d0e7ff; color: var(--text-color); } 
-.percentage-cell { font-weight: bold; color: var(--secondary-color); }
+.trend-positive { font-weight: bold; color: #28a745; }
+.trend-negative { font-weight: bold; color: #dc3545; }
+.ranking-cell { text-align: left; }
+.ranking-cell.top-rank { font-weight: 900; color: #ffc107; }
+.ranking-nominal { font-weight: bold; color: #dc3545; }
 
 .no-results {
     text-align: center;
@@ -118,203 +126,316 @@
         width: 60%; 
         color: #6c757d;
     }
-    .grand-total-row {
-        margin-top: 20px;
-        background-color: #d0e7ff !important;
-        border: none !important;
-    }
-    .grand-total-row td:before {
-        /* Hilangkan label untuk baris Grand Total agar rapi */
-        content: ""; 
-        width: 0;
-        padding-right: 0;
-    }
-    .grand-total-row td:first-child {
-        text-align: center;
-        width: 100%;
-        display: block;
-        font-size: 1.1em;
-        padding: 12px;
+    /* Kustomisasi untuk table ranking */
+    .ranking-table-container {
+        margin-bottom: 20px;
     }
 }
 {% endblock %}
 
 {% block content %}
     <h2 style="text-align: left; border-bottom: none; margin-bottom: 20px; color: var(--primary-color);">
-        <i class="fas fa-chart-bar" style="margin-right: 10px;"></i> Ringkasan Piutang & Koleksi Utama
+        <i class="fas fa-chart-bar" style="margin-right: 10px;"></i> Ringkasan Dashboard Utama
     </h2>
     
-    <div id="reportArea">
-        <p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Laporan Ringkas...</p>
+    <div id="loading-indicator" class="report-header">
+        <p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Dashboard Ringkas...</p>
+    </div>
+    
+    <div id="error-indicator" style="display:none; text-align: center; color: red; background-color: #f8d7da; padding: 15px; border-radius: 8px;">
+        Gagal memuat data. <span id="error-detail"></span>
     </div>
 
-    <script>
-        // Utility Functions (Harus diulang di setiap halaman untuk fungsionalitas)
-        function formatRupiah(number) {
-            return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
-        }
+    <div id="dashboard-content" style="display:none;">
         
-        function formatNumber(number) {
-            return (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
-        }
+        <!-- KELOMPOK 1: RINGKASAN METRIK KUNCI (MC & ARDEBT) -->
+        <h3 style="color: var(--primary-color); margin-top: 0;">1. Metrik Piutang & Tunggakan (Kinerja Pokok)</h3>
+        <div class="report-grid" id="summary-metrics">
+            <!-- Cards akan diisi di sini -->
+        </div>
 
-        function formatPercent(number) {
-            return (parseFloat(number) || 0).toFixed(2) + '%';
-        }
+        <!-- KELOMPOK 2: KOLEKSI & PERBANDINGAN TREN -->
+        <h3 style="color: var(--primary-color); margin-top: 30px;">2. Koleksi & Perbandingan Kinerja Kumulatif</h3>
         
-        // --- FUNGSI 1: MEMUAT REPORT RINGKAS ---
-        const reportArea = document.getElementById('reportArea');
+        <!-- Sub-Grid Koleksi Hari Ini/Bulan Ini -->
+        <div class="report-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+             <div class="summary-card" id="koleksi-hari-ini-card" style="border-left-color: #28a745;">
+                <h4>Koleksi Hari Ini</h4>
+                <p id="koleksi-hari-ini-val">Rp 0</p>
+             </div>
+             <div class="summary-card" id="koleksi-bulan-ini-card" style="border-left-color: #17a2b8;">
+                <h4>Koleksi Bulan Ini</h4>
+                <p id="koleksi-bulan-ini-val">Rp 0</p>
+             </div>
+        </div>
 
-        async function fetchCollectionReport() {
-            reportArea.innerHTML = '<p class="no-results"><i class="fas fa-spinner fa-spin"></i> Memuat Laporan Ringkas...</p>';
-
-            try {
-                // Asumsi endpoint Flask: collection_report_api dan analyze_mc_grouping_summary_api
-                const response = await fetch('{{ url_for("collection_report_api") }}');
-                const result = await response.json();
-                
-                const customSummaryResponse = await fetch('{{ url_for("analyze_mc_grouping_summary_api") }}');
-                const customSummaryResult = await customSummaryResponse.json();
-
-                if (response.status !== 200) {
-                    reportArea.innerHTML = `<p class="no-results" style="color: red;">❌ Gagal memuat report: ${result.message || 'Error Server'}</p>`;
-                    return;
-                }
-                
-                // Gabungkan ringkasan kustom (untuk kartu summary)
-                result.grand_total.TotalPiutangKustomNominal = customSummaryResult.TotalPiutangKustomNominal || 0;
-                result.grand_total.TotalPiutangKustomKubik = customSummaryResult.TotalPiutangKustomKubik || 0;
-                result.grand_total.TotalNomenKustom = customSummaryResult.TotalNomenKustom || 0;
-
-                renderReport(result.report_data, result.grand_total);
-
-            } catch (error) {
-                reportArea.innerHTML = '<p class="no-results" style="color: red;">Gagal mengambil data report dari server.</p>';
-                console.error('Report Error:', error);
-            }
-        }
-        
-        function renderReport(data, grandTotal) {
-            let summaryHTML = `
-                <div class="report-header">
-                    <h3 style="color: var(--primary-color); border-top: none;">Ringkasan Total Aplikasi (MC, MB, CID)</h3>
-                </div>
-                <div class="report-grid">
-                    <div class="summary-card" style="border-left-color: #007bff;">
-                        <h4>Total Pelanggan (CID)</h4>
-                        <p>${grandTotal.TotalPelanggan.toLocaleString('id-ID')}</p>
-                    </div>
-                    <div class="summary-card" style="border-left-color: var(--primary-color);">
-                        <h4>Total Pelanggan MC (Count Nomen)</h4>
-                        <p>${formatNumber(grandTotal.MC_TotalNomen)}</p>
-                    </div>
-                    <div class="summary-card" style="border-left-color: #ffc107;">
-                        <h4>Total Piutang MC (Nominal)</h4>
-                        <p>${formatRupiah(grandTotal.MC_TotalNominal)}</p>
-                    </div>
-                    <div class="summary-card" style="border-left-color: #dc3545;">
-                        <h4>Total Piutang MC (Kubik)</h4>
-                        <p>${formatNumber(grandTotal.MC_TotalKubik)} m³</p>
-                    </div>
-                    
-                    <div class="summary-card" style="border-left-color: #dc3545;">
-                        <h4>Piutang Kustom (Rayon 34/35 Reg)</h4>
-                        <p>${formatRupiah(grandTotal.TotalPiutangKustomNominal)}</p>
-                    </div>
-                    <div class="summary-card" style="border-left-color: #dc3545;">
-                        <h4>Kubik Kustom (Rayon 34/35 Reg)</h4>
-                        <p>${formatNumber(grandTotal.TotalPiutangKustomKubik)} m³</p>
-                    </div>
-                    <div class="summary-card" style="border-left-color: #dc3545;">
-                        <h4>Nomen Kustom (Rayon 34/35 Reg)</h4>
-                        <p>${formatNumber(grandTotal.TotalNomenKustom)}</p>
-                    </div>
-                    <div class="summary-card" style="border-left-color: #28a745;">
-                        <h4>Total Koleksi MC (Nominal)</h4>
-                        <p>${formatRupiah(grandTotal.MC_CollectedNominal)}</p>
-                    </div>
-                    <div class="summary-card" style="border-left-color: #17a2b8;">
-                        <h4>MB "Undue" Koleksi (Nominal)</h4>
-                        <p>${formatRupiah(grandTotal.MB_UndueNominal)}</p>
-                    </div>
-                    <div class="summary-card" style="border-left-color: #0056b3;">
-                        <h4>MB "Undue" (Nominal %)</h4>
-                        <p>${formatPercent(grandTotal.UnduePercentNominal)}</p>
-                    </div>
-                    <div class="summary-card" style="border-left-color: #6c757d;">
-                        <h4>MC Koleksi (Nominal %)</h4>
-                        <p>${formatPercent(grandTotal.PercentNominal)}</p>
-                    </div>
-                </div>
-            `;
-            
-            let tableHTML = `
-                <h3 style="margin-top: 30px; color: var(--primary-color);">Detail Perbandingan MC (Piutang) vs MB (Koleksi Undue) per Rayon / PCEZ</h3>
-                <div class="report-table-wrapper">
-                <table class="report-table">
-                    <thead>
-                        <tr>
-                            <th rowspan="2">RAYON</th>
-                            <th rowspan="2">PCEZ</th>
-                            <th colspan="2" style="background-color: #ffeeba;">MC (PIUTANG)</th>
-                            <th colspan="2" style="background-color: #d4edda;">MC (KOLEKSI)</th>
-                            <th colspan="2" style="background-color: #d1ecf1;">MB ("UNDUE")</th>
-                            <th colspan="2" rowspan="2">PERSENTASE (%)</th>
-                        </tr>
-                        <tr>
-                            <th data-label="MC Piutang Nom" style="background-color: #ffeeba;">NOMINAL</th>
-                            <th data-label="MC Piutang Kubik" style="background-color: #ffeeba;">KUBIK (m³)</th>
-                            <th data-label="MC Koleksi Nom" style="background-color: #d4edda;">NOMINAL</th>
-                            <th data-label="MC Koleksi Kubik" style="background-color: #d4edda;">KUBIK (m³)</th>
-                            <th data-label="MB Undue Nom" style="background-color: #d1ecf1;">NOMINAL</th>
-                            <th data-label="MB Undue Kubik" style="background-color: #d1ecf1;">KUBIK (m³)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            data.forEach(item => {
-                tableHTML += `
+        <!-- Tabel Perbandingan Kumulatif MoM -->
+        <div class="report-table-wrapper" style="margin-bottom: 30px;">
+            <table class="report-table">
+                <caption>Perbandingan Koleksi Kumulatif (CM vs PM) - Day-to-Date</caption>
+                <thead>
                     <tr>
-                        <td data-label="RAYON">${item.RAYON}</td>
-                        <td data-label="PCEZ">${item.PCEZ}</td>
-                        <td data-label="MC Piutang Nom">${formatRupiah(item.MC_TotalNominal)}</td>
-                        <td data-label="MC Piutang Kubik">${formatNumber(item.MC_TotalKubik)}</td>
-                        <td data-label="MC Koleksi Nom">${formatRupiah(item.MC_CollectedNominal)}</td>
-                        <td data-label="MC Koleksi Kubik">${formatNumber(item.MC_CollectedKubik)}</td>
-                        <td data-label="MB Undue Nom" class="undue-cell">${formatRupiah(item.MB_UndueNominal)}</td>
-                        <td data-label="MB Undue Kubik" class="undue-cell">${formatNumber(item.MB_UndueKubik)}</td>
-                        <td data-label="% Nom" class="percentage-cell">${formatPercent(item.PercentNominal)}</td>
-                        <td data-label="% Undue" class="undue-cell">${formatPercent(item.UnduePercentNominal)}</td>
+                        <th data-label="Tanggal">Tanggal</th>
+                        <th data-label="CM Kumulatif (Rp)">CM Kumulatif (Rp)</th>
+                        <th data-label="PM Kumulatif (Rp)">PM Kumulatif (Rp)</th>
+                        <th data-label="% Perubahan" style="width: 15%;">% Perubahan</th>
+                        <th data-label="CM Pelanggan">CM Pelanggan</th>
+                        <th data-label="PM Pelanggan">PM Pelanggan</th>
+                    </tr>
+                </thead>
+                <tbody id="table-kumulatif">
+                    <!-- Data Kumulatif MoM akan dimasukkan di sini -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- KELOMPOK 3: RANKING & FOKUS AREA -->
+        <h3 style="color: var(--primary-color); margin-top: 30px;">3. Ranking Fokus Area (Piutang & Tunggakan Tertinggi)</h3>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
+            
+            <!-- Top 5 PCEZ MC -->
+            <div class="ranking-table-container">
+                 <div class="report-table-wrapper">
+                    <table class="report-table table-ranking">
+                        <caption>Top 5 PCEZ (Piutang MC Terbesar)</caption>
+                        <thead>
+                            <tr>
+                                <th data-label="PCEZ">PCEZ ID</th>
+                                <th data-label="Nominal">Nominal (Rp)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-pcez">
+                             <!-- Data ranking PCEZ akan dimasukkan di sini -->
+                        </tbody>
+                    </table>
+                 </div>
+            </div>
+
+            <!-- Top 10 Tunggakan Rayon 34 -->
+            <div class="ranking-table-container">
+                <div class="report-table-wrapper">
+                    <table class="report-table table-ranking">
+                        <caption>Top 10 Tunggakan Pelanggan Rayon 34</caption>
+                        <thead>
+                            <tr>
+                                <th data-label="ID Pelanggan">ID Pelanggan</th>
+                                <th data-label="Nominal">Nominal (Rp)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-rayon-34">
+                             <!-- Data ranking R34 akan dimasukkan di sini -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Top 10 Tunggakan Rayon 35 -->
+            <div class="ranking-table-container">
+                <div class="report-table-wrapper">
+                    <table class="report-table table-ranking">
+                        <caption>Top 10 Tunggakan Pelanggan Rayon 35</caption>
+                        <thead>
+                            <tr>
+                                <th data-label="ID Pelanggan">ID Pelanggan</th>
+                                <th data-label="Nominal">Nominal (Rp)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-rayon-35">
+                             <!-- Data ranking R35 akan dimasukkan di sini -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- KELOMPOK 4: DATA HEALTH CHECK -->
+        <h3 style="color: var(--primary-color); margin-top: 30px;">4. Health Check Data Terakhir</h3>
+        <div style="max-width: 400px;" class="report-table-wrapper">
+             <table class="report-table table-ranking">
+                 <tbody id="table-health">
+                    <!-- Data Health Check akan dimasukkan di sini -->
+                 </tbody>
+             </table>
+        </div>
+    </div>
+    <div style="height: 50px;"></div>
+
+    <script>
+        const API_URL = '{{ url_for("dashboard_summary_api") }}';
+
+        // Utility Functions 
+        function formatRupiah(number) {
+            return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+        }
+        
+        function formatNumber(number) {
+            return (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+        }
+
+        function formatPercent(number) {
+            return (parseFloat(number) || 0).toFixed(2) + '%';
+        }
+        
+        function createSummaryCard(title, value, subtitle, borderColor) {
+            return `
+                <div class="summary-card" style="border-left-color: ${borderColor};">
+                    <h4>${title}</h4>
+                    <p>${value}</p>
+                    <p class="subtitle">${subtitle}</p>
+                </div>
+            `;
+        }
+        
+        function createHealthRow(label, value, isCritical = false) {
+             const valueClass = isCritical ? 'trend-negative' : 'trend-positive';
+             return `
+                 <tr>
+                     <td data-label="${label}" style="text-align: left; width: 60%;">${label}</td>
+                     <td data-label="Status" class="${valueClass}" style="width: 40%;">${value}</td>
+                 </tr>
+             `;
+        }
+
+        function renderRankingTable(elementId, dataArray, nominalKey, isDebt = false) {
+            const tableBody = document.getElementById(elementId);
+            if (!tableBody) return;
+
+            tableBody.innerHTML = '';
+            if (dataArray.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="2" class="no-results">Tidak ada data ranking.</td></tr>';
+                return;
+            }
+
+            dataArray.forEach((item, index) => {
+                const nominal = item[nominalKey] || 0;
+                const rankClass = index < 3 ? 'top-rank' : '';
+                const nominalClass = isDebt ? 'ranking-nominal' : '';
+
+                const row = `
+                    <tr>
+                        <td data-label="Ranking" class="ranking-cell ${rankClass}">${index + 1}. ${item.pelanggan_id || item.id}</td>
+                        <td data-label="Nominal" class="${nominalClass}">${formatRupiah(nominal)}</td>
                     </tr>
                 `;
+                tableBody.innerHTML += row;
             });
+        }
+        
+        // --- MAIN RENDER FUNCTION ---
+        function renderDashboard(data) {
+            const { metrics, rankings, data_health_check, timestamp } = data;
             
-            tableHTML += `
-                <tr class="grand-total-row">
-                    <td data-label="RAYON">GRAND TOTAL</td>
-                    <td data-label="PCEZ">-</td>
-                    <td data-label="MC Piutang Nom">${formatRupiah(grandTotal.MC_TotalNominal)}</td>
-                    <td data-label="MC Piutang Kubik">${formatNumber(grandTotal.MC_TotalKubik)}</td>
-                    <td data-label="MC Koleksi Nom">${formatRupiah(grandTotal.MC_CollectedNominal)}</td>
-                    <td data-label="MC Koleksi Kubik">${formatNumber(grandTotal.MC_CollectedKubik)}</td>
-                    <td data-label="MB Undue Nom">${formatRupiah(grandTotal.MB_UndueNominal)}</td>
-                    <td data-label="MB Undue Kubik">${formatNumber(grandTotal.MB_UndueKubik)}</td>
-                    <td data-label="% Nom" class="percentage-cell">${formatPercent(grandTotal.PercentNominal)}</td>
-                    <td data-label="% Undue" class="undue-cell">${formatPercent(grandTotal.UnduePercentNominal)}</td>
-                </tr>
+            document.getElementById('loading-indicator').style.display = 'none';
+            document.getElementById('dashboard-content').style.display = 'block';
+            
+            // 0. Update Timestamp
+            document.getElementById('timestamp').textContent = new Date(timestamp).toLocaleString('id-ID');
+
+            // 1. RINGKASAN METRIK KUNCI (MC & ARDEBT)
+            const piutangMC = metrics.piutang_mc;
+            const ardebt = metrics.tunggakan_ardebt;
+            const summaryMetricsEl = document.getElementById('summary-metrics');
+            summaryMetricsEl.innerHTML = ''; // Clear existing content
+
+            summaryMetricsEl.innerHTML += createSummaryCard(
+                'Piutang MC (REG 34/35)', 
+                formatRupiah(piutangMC.nominal_piutang), 
+                `Pelanggan: ${formatNumber(piutangMC.total_pelanggan)} | Periode: ${piutangMC.bulan_tagihan}`, 
+                '#007bff'
+            );
+            summaryMetricsEl.innerHTML += createSummaryCard(
+                'Kubik Piutang MC', 
+                formatNumber(piutangMC.kubik_piutang) + ' M³', 
+                `Total Piutang: ${piutangMC.bulan_tagihan}`, 
+                '#17a2b8'
+            );
+            summaryMetricsEl.innerHTML += createSummaryCard(
+                'Total Tunggakan (ARDEBT)', 
+                formatRupiah(ardebt.total_nominal_tunggakan), 
+                `Total Pelanggan Menunggak: ${formatNumber(ardebt.jumlah_pelanggan_tunggakan)}`, 
+                '#dc3545'
+            );
+
+            // 2. KOLEKSI & PERBANDINGAN TREN (Summary & Kumulatif Table)
+            const collection = metrics.koleksi_dan_tren;
+            document.getElementById('koleksi-hari-ini-val').textContent = formatRupiah(collection.koleksi_hari_ini);
+            document.getElementById('koleksi-bulan-ini-val').textContent = formatRupiah(collection.koleksi_bulan_ini);
+
+            const tableKumulatifEl = document.getElementById('table-kumulatif');
+            tableKumulatifEl.innerHTML = '';
+            
+            if (collection.tabel_perbandingan_kumulatif.length === 0) {
+                 tableKumulatifEl.innerHTML = '<tr><td colspan="6" class="no-results">Tidak ada data perbandingan MoM.</td></tr>';
+            } else {
+                collection.tabel_perbandingan_kumulatif.forEach(item => {
+                    const isNegative = item.persen_perubahan_kumulatif < 0;
+                    const percentClass = isNegative ? 'trend-negative' : 'trend-positive';
+                    
+                    const row = `
+                        <tr>
+                            <td data-label="Tanggal" style="text-align: left;">${item.tanggal ? item.tanggal.slice(5) : 'N/A'}</td>
+                            <td data-label="CM Kumulatif (Rp)">${formatRupiah(item.cm_kumulatif)}</td>
+                            <td data-label="PM Kumulatif (Rp)">${formatRupiah(item.pm_kumulatif)}</td>
+                            <td data-label="% Perubahan" class="${percentClass}">${formatPercent(item.persen_perubahan_kumulatif)}</td>
+                            <td data-label="CM Pelanggan">${formatNumber(item.cm_pelanggan)}</td>
+                            <td data-label="PM Pelanggan">${formatNumber(item.pm_pelanggan)}</td>
+                        </tr>
+                    `;
+                    tableKumulatifEl.innerHTML += row;
+                });
+            }
+
+            // 3. RANKING & FOKUS AREA
+            
+            // Top 5 PCEZ MC
+            renderRankingTable('table-pcez', rankings.top_5_pcez_mc, 'nominal', false);
+
+            // Top 10 Tunggakan Rayon 34
+            renderRankingTable('table-rayon-34', rankings.top_tunggakan_rayon_34, 'nominal_tunggakan', true);
+
+            // Top 10 Tunggakan Rayon 35
+            renderRankingTable('table-rayon-35', rankings.top_tunggakan_rayon_35, 'nominal_tunggakan', true);
+
+            // 4. DATA HEALTH CHECK
+            const tableHealthEl = document.getElementById('table-health');
+            
+            const skippedCount = data_health_check.record_skipped;
+            const isSkippedCritical = skippedCount > 0;
+
+            tableHealthEl.innerHTML = `
+                ${createHealthRow('Update MC Terakhir (Bulan Tagihan)', data_health_check.mc_last_update, false)}
+                ${createHealthRow('Update CID Terakhir (Tgl Upload)', data_health_check.cid_last_update, false)}
+                ${createHealthRow('Record Skipped (Upload Error)', formatNumber(skippedCount), isSkippedCritical)}
             `;
-            
-            tableHTML += `
-                    </tbody>
-                </table>
-                </div>
-            `;
-            
-            reportArea.innerHTML = summaryHTML + tableHTML;
         }
 
-        // Panggil fungsi saat halaman dimuat
-        document.addEventListener('DOMContentLoaded', fetchCollectionReport);
-    </script>
+        // --- FETCH DATA ---
+        async function fetchCollectionReport() {
+            document.getElementById('loading-indicator').style.display = 'block';
+            document.getElementById('dashboard-content').style.display = 'none';
+            document.getElementById('error-indicator').style.display = 'none';
+
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+
+                if (!response.ok || data.status === 'error') {
+                    throw new Error(data.message || data.detail || 'Gagal terhubung ke API Dashboard.');
+                }
+                
+                renderDashboard(data);
+                
+            } catch (error) {
+                console.error("Fetch Error:", error);
+                document.getElementById('error-indicator').style.display = 'block';
+                document.getElementById('error-detail').textContent = error.message;
+            } finally {
+                document.getElementById('loading-indicator').style.display = 'none';
+            }
+        }
+
+        // Panggil fungsi saat halaman dimuat
+        document.addEventListener('DOMContentLoaded', fetchCollectionReport);
+    </script>
 {% endblock %}
