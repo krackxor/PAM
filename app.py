@@ -747,7 +747,73 @@ def rayon_meter_distribution_view():
 # === END FUNGSI BARU UNTUK LAPORAN DISTRIBUSI ===
 # =========================================================================
 
-# --- HELPER BARU: AGGREGATE MB SUNTER DETAIL (MODIFIED) ---
+# --- HELPER BARU: HITUNG BULAN SEBELUMNYA ---
+def _get_previous_month_year(bulan_tagihan):
+    """Mengubah format 'MMYYYY' menjadi 'MMYYYY' bulan sebelumnya."""
+    if not bulan_tagihan or len(bulan_tagihan) != 6:
+        return None
+    try:
+        month = int(bulan_tagihan[:2])
+        year = int(bulan_tagihan[2:])
+        
+        # Go back one month
+        target_date = datetime(year, month, 1) - timedelta(days=1)
+        
+        prev_month = target_date.month
+        prev_year = target_date.year
+            
+        return f"{prev_month:02d}{prev_year}"
+    except ValueError:
+        return None
+        
+def _get_month_date_range(bulan_tagihan):
+    """Converts MMYYYY to YYYY-MM-DD start and YYYY-MM-DD end (exclusive)."""
+    if not bulan_tagihan or len(bulan_tagihan) != 6:
+        return None, None
+    try:
+        month = int(bulan_tagihan[:2])
+        year = int(bulan_tagihan[2:])
+        start_date = datetime(year, month, 1)
+        
+        # Calculate next month to get the end date (exclusive)
+        if month == 12:
+            next_month = 1
+            next_year = year + 1
+        else:
+            next_month = month + 1
+            next_year = year
+        end_date = datetime(next_year, next_month, 1)
+        
+        return start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')
+    except ValueError:
+        return None, None
+
+# --- NEW HELPER: HITUNG BULAN N BULAN SEBELUMNYA (Robust) ---
+def _mm_yyyy_to_datetime(mm_yyyy_str):
+    """Konversi MMYYYY ke datetime object (1st day)"""
+    try:
+        return datetime.strptime(mm_yyyy_str, '%m%Y')
+    except ValueError:
+        return None
+        
+def _get_month_n_ago(mm_yyyy_str, n):
+    """Mengembalikan string 'MMYYYY' untuk n bulan yang lalu dari mm_yyyy_str."""
+    dt = _mm_yyyy_to_datetime(mm_yyyy_str)
+    if not dt:
+        return None
+        
+    target_dt = dt
+    # Calculate target month and year by iterating n times
+    for _ in range(n):
+        # Subtract one month (by subtracting one day from the 1st of the month)
+        target_dt = target_dt.replace(day=1) - timedelta(days=1)
+        
+    return target_dt.strftime('%m%Y')
+# --- END HELPER BARU ---
+
+# =========================================================================
+# === HELPER AGGREGATE MB SUNTER DETAIL (MODIFIED) ===
+# =========================================================================
 def _aggregate_mb_sunter_detail(collection_mb):
     """
     Menghitung agregasi koleksi (Undue, Current, Tunggakan) berdasarkan
@@ -777,6 +843,7 @@ def _aggregate_mb_sunter_detail(collection_mb):
         # Base filter for TGL_BAYAR (Payment in Month M)
         base_match = {
             'BILL_REASON': 'BIAYA PEMAKAIAN AIR',
+            # Memastikan TGL_BAYAR berada dalam bulan yang sama dengan Bulan Tagihan MC terbaru (latest_mc_month)
             'TGL_BAYAR': {'$gte': COLLECTION_MONTH_START, '$lt': COLLECTION_MONTH_END},
         }
 
@@ -789,7 +856,6 @@ def _aggregate_mb_sunter_detail(collection_mb):
             base_match['BULAN_REK'] = M_MINUS_1_REK
         elif bulan_rek_filter_type == 'AGING':
             # Tunggakan (Aging >= 2): BULAN_REK < M-1 (i.e., M-2 atau lebih lama)
-            # Ini adalah filter untuk semua tagihan yang terbit DUA bulan atau lebih yang lalu.
             base_match['BULAN_REK'] = {'$lt': M_MINUS_1_REK} 
             
         pipeline = [
@@ -883,6 +949,9 @@ def _aggregate_mb_sunter_detail(collection_mb):
         'summary': summary_data,
         'daily_detail': daily_detail
     }
+# =========================================================================
+# === END HELPER AGGREGATE MB SUNTER DETAIL ===
+# =========================================================================
     
 @app.route('/api/analyze/mb_sunter_report', methods=['GET'])
 @login_required
@@ -929,14 +998,16 @@ def collection_report_api():
     # Filter MC hanya untuk bulan terbaru
     mc_filter = {'BULAN_TAGIHAN': latest_mc_month}
     
+    # Kunci untuk Proyeksi Awal (Digunakan di Pipeline Billed dan Collected)
     initial_project = {
         '$project': {
             'RAYON': { '$ifNull': [ '$RAYON', 'N/A' ] }, 
             'PCEZ': { '$ifNull': [ '$PCEZ', 'N/A' ] }, 
             'NOMEN': 1,
             'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}, 
-            'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}}, # NEW: Include KUBIK for billed volume
-            'STATUS': 1
+            'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
+            # PERBAIKAN KRITIS: Normalisasi STATUS di awal proyeksi
+            'STATUS': {'$toUpper': {'$trim': {'input': {'$ifNull': ['$STATUS', 'N/A']}}}}, 
         }
     }
     
@@ -979,7 +1050,10 @@ def collection_report_api():
             'KUBIKBAYAR': {'$toDouble': {'$ifNull': ['$KUBIKBAYAR', 0]}}, 
             'RAYON_MB': { '$ifNull': [ '$RAYON', 'N/A' ] },
             'PCEZ_MB': { '$ifNull': [ '$PCEZ', 'N/A' ] },
+            # PERBAIKAN KRITIS: Normalisasi BULAN_REK
+            'BULAN_REK_CLEAN': {'$toUpper': {'$trim': {'input': {'$ifNull': ['$BULAN_REK', 'N/A']}}}},
         }},
+        # Lookup ke CID untuk memastikan Rayon/PCEZ yang digunakan konsisten dengan CID/MC
         {'$lookup': {
            'from': 'CustomerData', 
            'localField': 'NOMEN',
@@ -988,6 +1062,7 @@ def collection_report_api():
         }},
         {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
         { '$project': {
+             # Prioritaskan CID, fallback ke MB data
              'RAYON': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MB']},
              'PCEZ': {'$ifNull': ['$customer_info.PCEZ', '$PCEZ_MB']},
              'NOMEN': 1,
@@ -1004,7 +1079,6 @@ def collection_report_api():
     mb_undue_data = list(collection_mb.aggregate(pipeline_mb_undue))
 
     # 4. MB (UNDUE BULAN SEBELUMNYA) - Transaksi MB dari bulan lalu untuk Koleksi %
-    # Sesuai aturan #4: 'Total UNDUE Bulan Kemarin'
     pipeline_mb_undue_prev = [
         { '$match': { 
             'BULAN_REK': previous_mc_month, # Filter bulan tagihan bulan sebelumnya
@@ -1308,16 +1382,16 @@ def _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, r
     
     # FIX: Ambil BULAN_TAGIHAN terbaru dari MC Historis
     latest_mc_month_doc = collection_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
-    latest_mc_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
+    latest_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
     
-    if not latest_mc_month:
+    if not latest_month:
         return {'CountOfNOMEN': 0, 'SumOfKUBIK': 0, 'SumOfNOMINAL': 0}
 
     dimension_map = {'TARIF': '$TARIF_CID', 'MERK': '$MERK_CID', 'READ_METHOD': '$READ_METHOD'}
     
     # Base pipeline structure (Projection and CID Join for all necessary fields)
     pipeline = [
-        {'$match': {'BULAN_TAGIHAN': latest_mc_month}}, # HANYA AMBIL MC BULAN TERBARU
+        {'$match': {'BULAN_TAGIHAN': latest_month}}, # HANYA AMBIL MC BULAN TERBARU
         {"$project": {
             # Kolom Piutang/Kubik
             "NOMEN": "$NOMEN",
