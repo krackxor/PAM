@@ -100,25 +100,33 @@ except Exception as e:
     print(f"Gagal terhubung ke MongoDB atau mengkonfigurasi index: {e}")
     client = None
 
-# --- FUNGSI UTILITY INTERNAL: ZONA PARSER ---
+# --- FUNGSI UTILITY INTERNAL: ZONA PARSER (Kini lebih robust) ---
 def _parse_zona_novak(zona_str):
     """
     Mengekstrak Rayon, PC, EZ, PCEZ, dan Block dari ZONA_NOVAK string.
-    Format: RRCCCZZEEBB (RR=Rayon, CCC=PC, ZZ=EZ, EE=Block)
+    Format: RRCCCZZEEBB (RR=Rayon, CCC=PC, ZZ=EZ, BB=Block)
     Contoh: 350960217 -> Rayon: 35, PC: 096, EZ: 02, Block: 17, PCEZ: 09602
     """
     zona = str(zona_str).strip().upper()
     if len(zona) < 9:
         return {'RAYON_ZONA': 'N/A', 'PC_ZONA': 'N/A', 'EZ_ZONA': 'N/A', 'PCEZ_ZONA': 'N/A', 'BLOCK_ZONA': 'N/A'}
     
-    # Menggunakan substring berdasarkan posisi yang dikonfirmasi
-    return {
-        'RAYON_ZONA': zona[0:2],
-        'PC_ZONA': zona[2:5],
-        'EZ_ZONA': zona[5:7],
-        'PCEZ_ZONA': zona[2:7], # PC + EZ (3 + 2 = 5 chars)
-        'BLOCK_ZONA': zona[7:9]
-    }
+    try:
+        # Menggunakan substring berdasarkan posisi yang dikonfirmasi
+        rayon = zona[0:2]
+        pc = zona[2:5]
+        ez = zona[5:7]
+        block = zona[7:9]
+        
+        return {
+            'RAYON_ZONA': rayon,
+            'PC_ZONA': pc,
+            'EZ_ZONA': ez,
+            'PCEZ_ZONA': pc + ez, # PC + EZ (3 + 2 = 5 chars)
+            'BLOCK_ZONA': block
+        }
+    except Exception:
+        return {'RAYON_ZONA': 'N/A', 'PC_ZONA': 'N/A', 'EZ_ZONA': 'N/A', 'PCEZ_ZONA': 'N/A', 'BLOCK_ZONA': 'N/A'}
 
 # --- FUNGSI UTILITY INTERNAL: ANALISIS SBRS ---
 def _get_sbrs_anomalies(collection_sbrs, collection_cid):
@@ -315,7 +323,6 @@ def search_nomen():
         cleaned_nomen = query_nomen.strip().upper()
         
         # 1. DATA STATIS (CID) - Ambil data CID TERBARU
-        # CID: Sumber master untuk NAMA, ALAMAT, TIPEPLGGN, MERK, SERIAL, STATUS_PELANGGAN.
         cid_result = collection_cid.find({'NOMEN': cleaned_nomen}).sort('TANGGAL_UPLOAD_CID', -1).limit(1)
         cid_result = list(cid_result)[0] if list(cid_result) else None
         
@@ -326,7 +333,6 @@ def search_nomen():
             }), 404
 
         # 2. RIWAYAT PIUTANG (MC) - Semua riwayat yang pernah di-upload
-        # MC: Sumber master untuk NOMINAL, KUBIK, TARIF, ZONA_NOVAK (untuk Rayon/PCEZ), STATUS tagihan.
         mc_results = list(collection_mc.find({'NOMEN': cleaned_nomen}).sort('BULAN_TAGIHAN', -1))
         piutang_nominal_total = sum(item.get('NOMINAL', 0) for item in mc_results)
         
@@ -335,12 +341,10 @@ def search_nomen():
         tunggakan_nominal_total = sum(item.get('JUMLAH', 0) for item in ardebt_results)
         
         # 4. RIWAYAT PEMBAYARAN TERAKHIR (MB)
-        # MB: Sumber master untuk TGL_BAYAR, KUBIKBAYAR.
         mb_last_payment_cursor = collection_mb.find({'NOMEN': cleaned_nomen}).sort('TGL_BAYAR', -1).limit(1)
         last_payment = list(mb_last_payment_cursor)[0] if list(mb_last_payment_cursor) else None
         
         # 5. RIWAYAT BACA METER (SBRS) - 2 Riwayat terakhir untuk Anomaly Check
-        # SBRS: Sumber master untuk CMR_READING, CMR_RD_DATE (PENCATET).
         sbrs_last_read_cursor = collection_sbrs.find({'CMR_ACCOUNT': cleaned_nomen}).sort('CMR_RD_DATE', -1).limit(2)
         sbrs_history = list(sbrs_last_read_cursor)
         
@@ -368,8 +372,10 @@ def search_nomen():
         # C. Status Pemakaian (Anomaly Check)
         status_pemakaian = "DATA SBRS KURANG"
         kubik_terakhir = 0
+        sbrs_latest = sbrs_history[0] if sbrs_history else {}
+        
         if len(sbrs_history) >= 1:
-            kubik_terakhir = sbrs_history[0].get('CMR_KUBIK', 0)
+            kubik_terakhir = sbrs_latest.get('CMR_KUBIK', 0)
             
             if kubik_terakhir > 100: # Threshold Ekstrim
                 status_pemakaian = f"EKSTRIM ({kubik_terakhir} m³)"
@@ -380,16 +386,53 @@ def search_nomen():
             else:
                 status_pemakaian = f"NORMAL ({kubik_terakhir} m³)"
 
+        # MENGUMPULKAN PROFILE PELANGGAN TERPADU (Sesuai Struktur Permintaan)
+        # Prioritas Sumber: (CID -> Master Data Statis) | (MC -> Data Tagihan/ZONA) | (SBRS -> Pencatatan)
+        
+        # CID Data (Master Data Statis)
+        cid_master = cid_result
+        
+        # MC Data Terbaru (Untuk Stand dan Nominal)
+        mc_latest_data = mc_latest if mc_latest else {}
 
-        # Menggunakan CID sebagai master data statis, MC/ZONA untuk Rayon/Tarif Tagihan Terbaru
+        # SBRS Data Terbaru (Untuk Pencatat/PENCATET)
+        sbrs_latest_data = sbrs_latest
+        
+        # Profil Pelanggan Terpadu
+        profile_pelanggan = {
+            "NOMEN": cleaned_nomen,
+            "NAMA_PEL": mc_latest_data.get('NAMA_PEL', cid_master.get('NAMA', 'N/A')),
+            "ALAMAT": cid_master.get('ALAMAT', 'N/A'), # CID
+            "ALM3_PEL": mc_latest_data.get('ALM3_PEL', 'N/A'), # MC
+            "STATUS_PELANGGAN": cid_master.get('STATUS_PELANGGAN', 'N/A'), # CID
+            "TIPEPLGGN": cid_master.get('TIPEPLGGN', 'N/A'), # CID
+            "TARIF": mc_latest_data.get('TARIF', cid_master.get('TARIF', 'N/A')), # MC
+            
+            # ZONA/Rayon dari ZONA_NOVAK MC terbaru
+            "RAYON": zona_info.get('RAYON_ZONA', cid_master.get('RAYON', 'N/A')),
+            "PC": zona_info.get('PC_ZONA', 'N/A'),
+            "PCEZ": zona_info.get('PCEZ_ZONA', cid_master.get('PCEZ', 'N/A')),
+            
+            # Detail Meter & Pemakaian
+            "MERK": cid_master.get('MERK', 'N/A'), # CID
+            "SERIAL": cid_master.get('SERIAL', 'N/A'), # CID
+            "STAN_AWAL": mc_latest_data.get('STAN_AWAL', 'N/A'), # MC
+            "STAN_AKIR": mc_latest_data.get('STAN_AKIR', 'N/A'), # MC
+            "STAND": cid_master.get('STAND', 'N/A'), # CID (Stand Terakhir)
+            "KUBIK": mc_latest_data.get('KUBIK', 'N/A'), # MC (Kubikasi Tagihan)
+            "NOMINAL_MC": mc_latest_data.get('NOMINAL', 0), # MC
+            "READ_METHOD": cid_master.get('READ_METHOD', 'N/A'), # CID
+            "HARI": cid_master.get('HARI', 'N/A'), # CID
+            
+            # Data Pencatatan
+            "PENCATET": sbrs_latest_data.get('CMR_READER', 'N/A'), # SBRS (menggunakan CMR_READER)
+            "TGL_BAYAR_TERAKHIR": last_payment_date,
+        }
+
         health_summary = {
             "NOMEN": query_nomen,
-            "NAMA_PEL": mc_latest.get('NAMA_PEL', cid_result.get('NAMA', 'N/A')) if mc_latest else cid_result.get('NAMA', 'N/A'),
-            "ALAMAT": cid_result.get('ALAMAT', 'N/A'),
-            "RAYON": zona_info.get('RAYON_ZONA', cid_result.get('RAYON', 'N/A')), # Prioritas ZONA
-            "PCEZ": zona_info.get('PCEZ_ZONA', cid_result.get('PCEZ', 'N/A')), # Prioritas ZONA
-            "TARIF": mc_latest.get('TARIF', cid_result.get('TARIF', 'N/A')) if mc_latest else cid_result.get('TARIF', 'N/A'), # Prioritas MC
-            "TIPEPLGGN": cid_result.get('TIPEPLGGN', 'N/A'),
+            "NAMA": profile_pelanggan['NAMA_PEL'],
+            "RAYON": profile_pelanggan['RAYON'],
             "STATUS_FINANSIAL": status_financial,
             "TOTAL_KEWAJIBAN_NOMINAL": piutang_nominal_total + tunggakan_nominal_total,
             "PEMBAYARAN_TERAKHIR": last_payment_date,
@@ -401,7 +444,7 @@ def search_nomen():
             doc.pop('_id', None)
             return doc
         
-        # Tambahkan data ZONA ke CID result untuk kejelasan
+        # Gabungkan ZONA Info ke CID result untuk kejelasan
         cid_data_clean = clean_mongo_id(cid_result)
         cid_data_clean.update(zona_info)
 
@@ -409,6 +452,7 @@ def search_nomen():
         return jsonify({
             "status": "success",
             "summary": health_summary,
+            "profile_pelanggan": profile_pelanggan, # Profil terpadu
             "cid_data": cid_data_clean, # CID + ZONA Info
             "mc_data": [clean_mongo_id(doc) for doc in mc_results], 
             "ardebt_data": [clean_mongo_id(doc) for doc in ardebt_results],
