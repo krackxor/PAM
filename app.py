@@ -416,46 +416,46 @@ def collection_analysis():
 @login_required 
 def analysis_tarif_breakdown():
     return render_template('analysis_report_template.html', 
-                            title="Distribusi Tarif Pelanggan (R34/R35)",
-                            description="Laporan detail Distribusi Tarif Nomen, Piutang, dan Kubikasi per Rayon/Tarif. (Memuat chart dan tabel)",
-                            report_type="TARIF_BREAKDOWN", # <--- KUNCI PENTING
-                            is_admin=current_user.is_admin)
+                           title="Distribusi Tarif Pelanggan (R34/R35)",
+                           description="Laporan detail Distribusi Tarif Nomen, Piutang, dan Kubikasi per Rayon/Tarif. (Memuat chart dan tabel)",
+                           report_type="TARIF_BREAKDOWN", # <--- KUNCI PENTING
+                           is_admin=current_user.is_admin)
 
 @app.route('/analysis/grouping', methods=['GET'])
 @login_required 
 def analysis_grouping_sunter():
     return render_template('analysis_report_template.html', 
-                            title="Grouping MC: AB Sunter Detail",
-                            description="Laporan agregasi Nomen, Nominal, dan Kubikasi berdasarkan Tarif, Merek, dan Metode Baca untuk R34/R35.",
-                            report_type="MC_GROUPING_AB_SUNTER", # <--- KUNCI PENTING
-                            is_admin=current_user.is_admin)
+                           title="Grouping MC: AB Sunter Detail",
+                           description="Laporan agregasi Nomen, Nominal, dan Kubikasi berdasarkan Tarif, Merek, dan Metode Baca untuk R34/R35.",
+                           report_type="MC_GROUPING_AB_SUNTER", # <--- KUNCI PENTING
+                           is_admin=current_user.is_admin)
 
 @app.route('/analysis/aging', methods=['GET'])
 @login_required 
 def analysis_aging_report():
     return render_template('analysis_report_template.html', 
-                            title="Analisis Umur Piutang (Aging Report)",
-                            description="Daftar pelanggan dengan Piutang Lama (> 1 Bulan Tagihan) yang statusnya belum lunas.",
-                            report_type="AGING_REPORT",
-                            is_admin=current_user.is_admin)
+                           title="Analisis Umur Piutang (Aging Report)",
+                           description="Daftar pelanggan dengan Piutang Lama (> 1 Bulan Tagihan) yang statusnya belum lunas.",
+                           report_type="AGING_REPORT",
+                           is_admin=current_user.is_admin)
 
 @app.route('/analysis/top', methods=['GET'])
 @login_required 
 def analysis_top_lists():
     return render_template('analysis_report_template.html', 
-                            title="Daftar Konsumen Top & Status Pembayaran",
-                            description="Menampilkan Top 500 Tunggakan, Top 500 Premium, serta Daftar Lunas dan Belum Bayar (Snapshot Terbaru).",
-                            report_type="TOP_LISTS", # <--- KUNCI PENTING
-                            is_admin=current_user.is_admin)
+                           title="Daftar Konsumen Top & Status Pembayaran",
+                           description="Menampilkan Top 500 Tunggakan, Top 500 Premium, serta Daftar Lunas dan Belum Bayar (Snapshot Terbaru).",
+                           report_type="TOP_LISTS", # <--- KUNCI PENTING
+                           is_admin=current_user.is_admin)
 
 @app.route('/analysis/volume', methods=['GET'])
 @login_required 
 def analysis_volume_dasar():
     return render_template('analysis_report_template.html', 
-                            title="Laporan Volume Dasar Historis",
-                            description="Riwayat volume KUBIK bulanan agregat berdasarkan Rayon dari seluruh data Master Cetak (MC).",
-                            report_type="BASIC_VOLUME",
-                            is_admin=current_user.is_admin)
+                           title="Laporan Volume Dasar Historis",
+                           description="Riwayat volume KUBIK bulanan agregat berdasarkan Rayon dari seluruh data Master Cetak (MC).",
+                           report_type="BASIC_VOLUME",
+                           is_admin=current_user.is_admin)
 
 # --- HELPER BARU: HITUNG BULAN SEBELUMNYA ---
 def _get_previous_month_year(bulan_tagihan):
@@ -562,8 +562,7 @@ def _get_distribution_report(group_fields, collection_mc):
             "PC": {"$substrCP": ["$CLEAN_ZONA", 2, 3]},    # Index 2, Length 3
             "EZ": {"$substrCP": ["$CLEAN_ZONA", 5, 2]},    # Index 5, Length 2
             "BLOCK": {"$substrCP": ["$CLEAN_ZONA", 7, 2]},  # Index 7, Length 2
-            # Perbaikan: Menggunakan '/' di PCEZ sesuai format kebutuhan
-            "PCEZ": {"$concat": [{"$substrCP": ["$CLEAN_ZONA", 2, 3]}, {"$literal": "/"}, {"$substrCP": ["$CLEAN_ZONA", 5, 2]}]}
+            "PCEZ": {"$concat": [{"$substrCP": ["$CLEAN_ZONA", 2, 3]}, {"$substrCP": ["$CLEAN_ZONA", 5, 2]}]} # PC + EZ
         }},
         # 3. Grouping berdasarkan field yang diminta
         {"$group": {
@@ -748,506 +747,7 @@ def rayon_meter_distribution_view():
 # === END FUNGSI BARU UNTUK LAPORAN DISTRIBUSI ===
 # =========================================================================
 
-# =========================================================================
-# === START: FUNGSI BARU UNTUK MC vs MB UNDUE PER RAYON/PCEZ ===
-# =========================================================================
-
-def get_mc_mb_comparison_by_pcez(bulan_tagihan_target):
-    """
-    Menghitung perbandingan Piutang Master Cetak (MC) bulan berjalan
-    terhadap Koleksi Belum Jatuh Tempo (MB Undue) berdasarkan Rayon dan PCEZ.
-    
-    Args:
-        bulan_tagihan_target (str): Bulan tagihan target (format MMYYYY, cth: '122025').
-        
-    Returns:
-        list: Daftar hasil perbandingan per Rayon/PCEZ.
-    """
-    
-    if collection_mc is None or collection_mb is None:
-        return []
-
-    # Filter dasar untuk Rayon yang dianalisis
-    RAYON_KEYS = ['34', '35']
-    
-    # 1. Pipeline untuk Master Cetak (MC) - Total Piutang Bulan Berjalan
-    mc_pipeline = [
-        # Filter data MC untuk bulan tagihan target
-        {'$match': {'BULAN_TAGIHAN': bulan_tagihan_target}},
-        
-        # Ekstraksi Rayon dan PCEZ dari ZONA_NOVAK MC (Fallback jika CID join gagal)
-        {"$project": {
-            "NOMEN": 1,
-            "JML_TAGIHAN": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, # Menggunakan NOMINAL untuk Piutang
-            "CUST_TYPE_MC": "$CUST_TYPE",
-            "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
-        }},
-        {"$addFields": {
-            "RAYON_ZONA": {"$substrCP": ["$CLEAN_ZONA", 0, 2]},
-            "PCEZ_ZONA": {"$concat": [{"$substrCP": ["$CLEAN_ZONA", 2, 3]}, {"$literal": "/"}, {"$substrCP": ["$CLEAN_ZONA", 5, 2]}]}
-        }},
-        
-        # Join dengan CustomerData (CID) untuk mendapatkan data yang paling akurat
-        {
-            '$lookup': {
-                'from': 'CustomerData',
-                'localField': 'NOMEN',
-                'foreignField': 'NOMEN',
-                'pipeline': [
-                    {'$sort': {'TANGGAL_UPLOAD_CID': -1}}, 
-                    {'$limit': 1},
-                    {'$project': {'_id': 0, 'PCEZ': 1, 'RAYON': 1, 'TIPEPLGGN': 1}},
-                ],
-                'as': 'customer_info'
-            }
-        },
-        
-        # Unwind, dengan preservasi agar data MC tidak hilang
-        {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
-        
-        # Finalisasi Rayon/PCEZ dan filter TIPEPLGGN REG
-        {'$addFields': {
-            'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_ZONA']}}}}},
-            'CLEAN_PCEZ': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.PCEZ', '$PCEZ_ZONA']}}}}},
-            'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}}}}},
-        }},
-        
-        # Filter: Hanya Rayon AB Sunter dan TIPE REG
-        {'$match': {'CLEAN_RAYON': {'$in': RAYON_KEYS}, 'CLEAN_TIPEPLGGN': 'REG'}},
-
-        # Grouping berdasarkan Rayon dan PCEZ
-        {
-            '$group': {
-                '_id': {
-                    'rayon': '$CLEAN_RAYON',
-                    'pcez': '$CLEAN_PCEZ'
-                },
-                'total_mc_nominal': {'$sum': '$JML_TAGIHAN'},
-                'total_mc_nomen': {'$addToSet': '$NOMEN'}
-            }
-        },
-        
-        # Rename field hasil grouping
-        {
-            '$project': {
-                '_id': 0,
-                'rayon': '$_id.rayon',
-                'pcez': '$_id.pcez',
-                'total_mc_nominal': 1,
-                'total_mc_nomen': {'$size': '$total_mc_nomen'}
-            }
-        },
-    ]
-    
-    mc_results = list(collection_mc.aggregate(mc_pipeline, allowDiskUse=True))
-
-    # 2. Pipeline untuk Master Bayar (MB) - Total Koleksi Undue Bulan Berjalan
-    # Undue = BULAN_REK MB sama dengan BULAN_TAGIHAN MC terbaru
-    mb_pipeline = [
-        # Filter MB untuk BULAN_REK target (Undue)
-        {'$match': {'BULAN_REK': bulan_tagihan_target, 'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}},
-        
-        # Ekstraksi Rayon/PCEZ dari MB (Fallback jika CID join gagal)
-        {"$project": {
-            "NOMEN": 1,
-            "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
-            "RAYON_MB": "$RAYON",
-            "PCEZ_MB": "$PCEZ",
-        }},
-        
-        # Join dengan CustomerData (CID) untuk mendapatkan Rayon dan PCEZ
-        {
-            '$lookup': {
-                'from': 'CustomerData',
-                'localField': 'NOMEN',
-                'foreignField': 'NOMEN',
-                'pipeline': [
-                    {'$sort': {'TANGGAL_UPLOAD_CID': -1}}, 
-                    {'$limit': 1},
-                    {'$project': {'_id': 0, 'PCEZ': 1, 'RAYON': 1, 'TIPEPLGGN': 1}},
-                ],
-                'as': 'customer_info'
-            }
-        },
-        {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
-        
-        # Finalisasi Rayon/PCEZ dan filter TIPEPLGGN REG
-        {'$addFields': {
-            # Prioritaskan CID, fallback ke MB data
-            'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MB']}}}}},
-            'CLEAN_PCEZ': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.PCEZ', '$PCEZ_MB']}}}}},
-            'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'REG']}}}},}
-        }},
-        
-        # Filter: Hanya Rayon AB Sunter dan TIPE REG
-        {'$match': {'CLEAN_RAYON': {'$in': RAYON_KEYS}, 'CLEAN_TIPEPLGGN': 'REG'}},
-
-        # Grouping berdasarkan Rayon dan PCEZ
-        {
-            '$group': {
-                '_id': {
-                    'rayon': '$CLEAN_RAYON',
-                    'pcez': '$CLEAN_PCEZ'
-                },
-                'total_mb_undue_nominal': {'$sum': '$NOMINAL'},
-                'total_mb_transaksi': {'$addToSet': '$NOTAGIHAN'} # Hitung jumlah transaksi unik
-            }
-        },
-        
-        # Rename field hasil grouping
-        {
-            '$project': {
-                '_id': 0,
-                'rayon': '$_id.rayon',
-                'pcez': '$_id.pcez',
-                'total_mb_undue_nominal': 1,
-                'total_mb_transaksi': {'$size': '$total_mb_transaksi'}
-            }
-        },
-    ]
-    
-    mb_results = list(collection_mb.aggregate(mb_pipeline, allowDiskUse=True))
-
-    # 3. Gabungkan Hasil (Merge) di Python
-    mc_map = {
-        (res['rayon'], res['pcez']): {
-            'mc_nominal': res['total_mc_nominal'],
-            'mc_nomen': res['total_mc_nomen']
-        }
-        for res in mc_results
-    }
-    
-    final_report = []
-    
-    # Gabungkan data MB ke MC map
-    for mb_res in mb_results:
-        key = (mb_res['rayon'], mb_res['pcez'])
-        # Pop untuk menandai bahwa item MC telah diproses
-        mc_data = mc_map.pop(key, {'mc_nominal': 0, 'mc_nomen': 0}) 
-        
-        mc_nominal = mc_data['mc_nominal']
-        mb_nominal = mb_res['total_mb_undue_nominal']
-        
-        persentase_koleksi = 0
-        if mc_nominal > 0:
-            persentase_koleksi = (mb_nominal / mc_nominal) * 100
-            
-        final_report.append({
-            'rayon': mb_res['rayon'],
-            'pcez': mb_res['pcez'],
-            'mc_nominal': mc_nominal,
-            'mc_nomen': mc_data['mc_nomen'],
-            'mb_undue_nominal': mb_nominal,
-            'mb_transaksi': mb_res['total_mb_transaksi'],
-            'persentase_koleksi': round(persentase_koleksi, 2)
-        })
-
-    # Tambahkan sisa data MC yang belum ada koleksi
-    for key, mc_data in mc_map.items():
-        mc_nominal = mc_data['mc_nominal']
-        
-        final_report.append({
-            'rayon': key[0],
-            'pcez': key[1],
-            'mc_nominal': mc_nominal,
-            'mc_nomen': mc_data['mc_nomen'],
-            'mb_undue_nominal': 0,
-            'mb_transaksi': 0,
-            'persentase_koleksi': 0.00
-        })
-
-    # Urutkan berdasarkan Rayon dan PCEZ
-    final_report.sort(key=lambda x: (x['rayon'], x['pcez']))
-    
-    return final_report
-
-# =========================================================================
-# === END: FUNGSI BARU UNTUK MC vs MB UNDUE PER RAYON/PCEZ ===
-# =========================================================================
-
-# =========================================================================
-# === START: RUTE BARU UNTUK MC vs MB UNDUE PER RAYON/PCEZ ===
-# =========================================================================
-
-@app.route('/api/collection/comparison/rayon_pcez', methods=['GET'])
-@login_required
-def collection_comparison_rayon_pcez_api():
-    """Endpoint API untuk data perbandingan MC vs MB Undue per Rayon/PCEZ."""
-    
-    if client is None:
-        return jsonify({'error': 'Server tidak terhubung ke Database.'}), 500
-
-    # Tentukan Bulan Tagihan Target (Bulan Terbaru)
-    try:
-        latest_mc = collection_mc.find_one({}, sort=[('BULAN_TAGIHAN', -1)])
-        bulan_target = latest_mc['BULAN_TAGIHAN'] if latest_mc else None
-    except Exception as e:
-        print(f"Error fetching latest BULAN_TAGIHAN: {e}")
-        return jsonify({'error': 'Gagal mengambil bulan tagihan terbaru.'}), 500
-        
-    if not bulan_target:
-        return jsonify({'error': 'Tidak ada data Master Cetak (MC) ditemukan.'}), 404
-
-    try:
-        comparison_data = get_mc_mb_comparison_by_pcez(bulan_target)
-        
-        # Mengubah format bulan untuk tampilan
-        formatted_month = datetime.strptime(bulan_target, '%m%Y').strftime('%b %Y')
-        
-        return jsonify({
-            'bulan_tagihan': formatted_month,
-            'data': comparison_data
-        })
-    except Exception as e:
-        print(f"Error generating comparison report: {e}")
-        return jsonify({'error': f'Gagal memproses data perbandingan: {e}'}), 500
-
-@app.route('/collection/report/comparison_rayon_pcez')
-@login_required
-def collection_comparison_rayon_pcez_view():
-    """Rute view untuk halaman laporan perbandingan MC vs MB per Rayon/PCEZ."""
-    # Menggunakan template analysis_report_template.html yang bersifat universal
-    return render_template(
-        'analysis_report_template.html',
-        title="Perbandingan MC vs MB (Undue) per Rayon/PCEZ",
-        description="Detail Piutang (MC) Bulan Berjalan vs Koleksi (MB) Belum Jatuh Tempo, dikelompokkan per Rayon dan PCEZ.",
-        report_type="MC_MB_COMPARE_PCEZ", # Kunci untuk JavaScript memanggil API yang benar
-        is_admin=current_user.is_admin
-    )
-
-# =========================================================================
-# === END: RUTE BARU UNTUK MC vs MB UNDUE PER RAYON/PCEZ ===
-# =========================================================================
-
-# --- HELPER BARU: HITUNG BULAN SEBELUMNYA ---
-def _get_previous_month_year(bulan_tagihan):
-    """Mengubah format 'MMYYYY' menjadi 'MMYYYY' bulan sebelumnya."""
-    if not bulan_tagihan or len(bulan_tagihan) != 6:
-        return None
-    try:
-        month = int(bulan_tagihan[:2])
-        year = int(bulan_tagihan[2:])
-        
-        # Go back one month
-        target_date = datetime(year, month, 1) - timedelta(days=1)
-        
-        prev_month = target_date.month
-        prev_year = target_date.year
-            
-        return f"{prev_month:02d}{prev_year}"
-    except ValueError:
-        return None
-        
-def _get_month_date_range(bulan_tagihan):
-    """Converts MMYYYY to YYYY-MM-DD start and YYYY-MM-DD end (exclusive)."""
-    if not bulan_tagihan or len(bulan_tagihan) != 6:
-        return None, None
-    try:
-        month = int(bulan_tagihan[:2])
-        year = int(bulan_tagihan[2:])
-        start_date = datetime(year, month, 1)
-        
-        # Calculate next month to get the end date (exclusive)
-        if month == 12:
-            next_month = 1
-            next_year = year + 1
-        else:
-            next_month = month + 1
-            next_year = year
-        end_date = datetime(next_year, next_month, 1)
-        
-        return start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')
-    except ValueError:
-        return None, None
-
-# --- NEW HELPER: HITUNG BULAN N BULAN SEBELUMNYA (Robust) ---
-def _mm_yyyy_to_datetime(mm_yyyy_str):
-    """Konversi MMYYYY ke datetime object (1st day)"""
-    try:
-        return datetime.strptime(mm_yyyy_str, '%m%Y')
-    except ValueError:
-        return None
-        
-def _get_month_n_ago(mm_yyyy_str, n):
-    """Mengembalikan string 'MMYYYY' untuk n bulan yang lalu dari mm_yyyy_str."""
-    dt = _mm_yyyy_to_datetime(mm_yyyy_str)
-    if not dt:
-        return None
-        
-    target_dt = dt
-    # Calculate target month and year by iterating n times
-    for _ in range(n):
-        # Subtract one month (by subtracting one day from the 1st of the month)
-        target_dt = target_dt.replace(day=1) - timedelta(days=1)
-        
-    return target_dt.strftime('%m%Y')
-# --- END HELPER BARU ---
-
-# =========================================================================
-# === START FUNGSI BARU UNTUK LAPORAN DISTRIBUSI (Lanjutan) ===
-# =========================================================================
-
-# NOTE: Fungsi _get_distribution_report telah diperbaiki di atas untuk dekode ZONA_NOVAK
-# dan akan diterapkan di sini.
-
-# --- 1. API Distribusi Rayon ---
-@app.route("/api/distribution/rayon_report")
-@login_required
-def rayon_distribution_report():
-    """Laporan Distribusi Nomen, Piutang, dan Kubikasi per Rayon."""
-    # NOTE: Menggunakan field 'RAYON' yang diekstrak dari ZONA_NOVAK
-    results, latest_month = _get_distribution_report(group_fields="RAYON", collection_mc=collection_mc)
-    
-    data_for_display = []
-    for item in results:
-        data_for_display.append({
-            "RAYON": item.get("RAYON", "N/A"),
-            "Jumlah Nomen": f"{item['total_nomen']:,.0f}",
-            "Total Piutang (Rp)": f"Rp {item['total_piutang']:,.0f}",
-            "Total Kubikasi (m³)" : f"{item['total_kubikasi']:,.0f}",
-            # Data Mentah untuk Chart (agar mudah diproses JS)
-            "chart_label": item.get("RAYON", "N/A"),
-            "chart_data_nomen": item['total_nomen'],
-            "chart_data_piutang": round(item['total_piutang'], 2),
-        })
-
-    return jsonify({
-        "data": data_for_display,
-        "title": f"Distribusi Pelanggan per Rayon (dari ZONA_NOVAK)",
-        "subtitle": f"Data Piutang & Kubikasi per Bulan Tagihan Terbaru: {latest_month}",
-    })
-
-# --- 2. API Distribusi PCEZ ---
-@app.route("/api/distribution/pcez_report")
-@login_required
-def pcez_distribution_report():
-    """Laporan Distribusi Nomen, Piutang, dan Kubikasi per PCEZ."""
-    # NOTE: Menggunakan field 'PCEZ' yang diekstrak dari ZONA_NOVAK
-    results, latest_month = _get_distribution_report(group_fields="PCEZ", collection_mc=collection_mc)
-    
-    data_for_display = []
-    for item in results:
-        data_for_display.append({
-            "PCEZ": item.get("PCEZ", "N/A"),
-            "Jumlah Nomen": f"{item['total_nomen']:,.0f}",
-            "Total Piutang (Rp)": f"Rp {item['total_piutang']:,.0f}",
-            "Total Kubikasi (m³)" : f"{item['total_kubikasi']:,.0f}",
-            "chart_label": item.get("PCEZ", "N/A"),
-            "chart_data_nomen": item['total_nomen'],
-            "chart_data_piutang": round(item['total_piutang'], 2),
-        })
-
-    return jsonify({
-        "data": data_for_display,
-        "title": f"Distribusi Pelanggan per PCEZ (dari ZONA_NOVAK)",
-        "subtitle": f"Data Piutang & Kubikasi per Bulan Tagihan Terbaru: {latest_month}",
-    })
-
-# --- 3. API Distribusi Rayon/Tarif ---
-@app.route("/api/distribution/rayon_tarif_report")
-@login_required
-def rayon_tarif_distribution_report():
-    """Laporan Distribusi Nomen, Piutang, dan Kubikasi per Rayon dan Tarif."""
-    # NOTE: Menggunakan field 'RAYON' yang diekstrak dari ZONA_NOVAK dan 'TARIF' dari CID/MC
-    results, latest_month = _get_distribution_report(group_fields=["RAYON", "TARIF"], collection_mc=collection_mc)
-    
-    data_for_display = []
-    for item in results:
-        label = f"{item.get('RAYON', 'N/A')} - {item.get('TARIF', 'N/A')}"
-        data_for_display.append({
-            "RAYON": item.get("RAYON", "N/A"),
-            "TARIF": item.get("TARIF", "N/A"),
-            "Jumlah Nomen": f"{item['total_nomen']:,.0f}",
-            "Total Piutang (Rp)": f"Rp {item['total_piutang']:,.0f}",
-            "Total Kubikasi (m³)" : f"{item['total_kubikasi']:,.0f}",
-            "chart_label": label,
-            "chart_data_nomen": item['total_nomen'],
-            "chart_data_piutang": round(item['total_piutang'], 2),
-        })
-
-    return jsonify({
-        "data": data_for_display,
-        "title": f"Distribusi Pelanggan per Rayon (ZONA) / Tarif",
-        "subtitle": f"Data Piutang & Kubikasi per Bulan Tagihan Terbaru: {latest_month}",
-    })
-
-# --- 4. API Distribusi Rayon/Jenis Meter ---
-@app.route("/api/distribution/rayon_meter_report")
-@login_required
-def rayon_meter_distribution_report():
-    """Laporan Distribusi Nomen, Piutang, dan Kubikasi per Rayon dan Jenis Meter."""
-    # Asumsi field untuk Jenis Meter adalah 'JENIS_METER' di koleksi MC.
-    results, latest_month = _get_distribution_report(group_fields=["RAYON", "JENIS_METER"], collection_mc=collection_mc)
-    
-    data_for_display = []
-    for item in results:
-        label = f"{item.get('RAYON', 'N/A')} - {item.get('JENIS_METER', 'N/A')}"
-        data_for_display.append({
-            "RAYON": item.get("RAYON", "N/A"),
-            "JENIS_METER": item.get("JENIS_METER", "N/A"),
-            "Jumlah Nomen": f"{item['total_nomen']:,.0f}",
-            "Total Piutang (Rp)": f"Rp {item['total_piutang']:,.0f}",
-            "Total Kubikasi (m³)" : f"{item['total_kubikasi']:,.0f}",
-            "chart_label": label,
-            "chart_data_nomen": item['total_nomen'],
-            "chart_data_piutang": round(item['total_piutang'], 2),
-        })
-
-    return jsonify({
-        "data": data_for_display,
-        "title": f"Distribusi Pelanggan per Rayon (ZONA) / Jenis Meter",
-        "subtitle": f"Data Piutang & Kubikasi per Bulan Tagihan Terbaru: {latest_month}",
-    })
-
-
-# --- RUTE HTML VIEW BARU UNTUK LAPORAN DISTRIBUSI ---
-@app.route("/collection/report/rayon_distribution")
-@login_required
-def rayon_distribution_view():
-    return render_template(
-        "analysis_report_template.html", 
-        title="Distribusi Rayon Pelanggan",
-        description="Laporan detail Distribusi Nomen, Piutang, dan Kubikasi per Rayon.",
-        report_type="DIST_RAYON"
-    )
-
-@app.route("/collection/report/pcez_distribution")
-@login_required
-def pcez_distribution_view():
-    return render_template(
-        "analysis_report_template.html", 
-        title="Distribusi PCEZ Pelanggan",
-        description="Laporan detail Distribusi Nomen, Piutang, dan Kubikasi per PCEZ.",
-        report_type="DIST_PCEZ"
-    )
-
-@app.route("/collection/report/rayon_tarif_distribution")
-@login_required
-def rayon_tarif_distribution_view():
-    return render_template(
-        "analysis_report_template.html", 
-        title="Distribusi Rayon / Tarif Pelanggan",
-        description="Laporan detail Distribusi Nomen, Piutang, dan Kubikasi per Rayon dan Tarif.",
-        report_type="DIST_RAYON_TARIF"
-    )
-
-@app.route("/collection/report/rayon_meter_distribution")
-@login_required
-def rayon_meter_distribution_view():
-    return render_template(
-        "analysis_report_template.html", 
-        title="Distribusi Rayon / Jenis Meter Pelanggan",
-        description="Laporan detail Distribusi Nomen, Piutang, dan Kubikasi per Rayon dan Jenis Meter.",
-        report_type="DIST_RAYON_METER"
-    )
-
-# =========================================================================
-# === END FUNGSI BARU UNTUK LAPORAN DISTRIBUSI ===
-# =========================================================================
-
-# =========================================================================
-# === HELPER AGGREGATE MB SUNTER DETAIL (MODIFIED) ===
-# =========================================================================
+# --- HELPER BARU: AGGREGATE MB SUNTER DETAIL (MODIFIED) ---
 def _aggregate_mb_sunter_detail(collection_mb):
     """
     Menghitung agregasi koleksi (Undue, Current, Tunggakan) berdasarkan
@@ -1277,7 +777,6 @@ def _aggregate_mb_sunter_detail(collection_mb):
         # Base filter for TGL_BAYAR (Payment in Month M)
         base_match = {
             'BILL_REASON': 'BIAYA PEMAKAIAN AIR',
-            # Memastikan TGL_BAYAR berada dalam bulan yang sama dengan Bulan Tagihan MC terbaru (latest_mc_month)
             'TGL_BAYAR': {'$gte': COLLECTION_MONTH_START, '$lt': COLLECTION_MONTH_END},
         }
 
@@ -1290,6 +789,7 @@ def _aggregate_mb_sunter_detail(collection_mb):
             base_match['BULAN_REK'] = M_MINUS_1_REK
         elif bulan_rek_filter_type == 'AGING':
             # Tunggakan (Aging >= 2): BULAN_REK < M-1 (i.e., M-2 atau lebih lama)
+            # Ini adalah filter untuk semua tagihan yang terbit DUA bulan atau lebih yang lalu.
             base_match['BULAN_REK'] = {'$lt': M_MINUS_1_REK} 
             
         pipeline = [
@@ -1383,9 +883,6 @@ def _aggregate_mb_sunter_detail(collection_mb):
         'summary': summary_data,
         'daily_detail': daily_detail
     }
-# =========================================================================
-# === END HELPER AGGREGATE MB SUNTER DETAIL ===
-# =========================================================================
     
 @app.route('/api/analyze/mb_sunter_report', methods=['GET'])
 @login_required
@@ -1407,10 +904,10 @@ def analyze_mb_sunter_report_api():
 def analysis_mb_sunter_detail():
     """Rute view untuk laporan detail koleksi MB Sunter."""
     return render_template('analysis_report_template.html', 
-                            title="Grouping MB: AB Sunter Detail (Koleksi & Aging)",
-                            description="Laporan agregasi detail koleksi (Undue, Current, Tunggakan) berdasarkan Rayon dan per hari.",
-                            report_type="MB_SUNTER_DETAIL", # <--- KUNCI PENTING BARU
-                            is_admin=current_user.is_admin)
+                           title="Grouping MB: AB Sunter Detail (Koleksi & Aging)",
+                           description="Laporan agregasi detail koleksi (Undue, Current, Tunggakan) berdasarkan Rayon dan per hari.",
+                           report_type="MB_SUNTER_DETAIL", # <--- KUNCI PENTING BARU
+                           is_admin=current_user.is_admin)
 
 # --- FUNGSI BARU UNTUK REPORT KOLEKSI & PIUTANG ---
 @app.route('/api/collection/report', methods=['GET'])
@@ -1432,17 +929,14 @@ def collection_report_api():
     # Filter MC hanya untuk bulan terbaru
     mc_filter = {'BULAN_TAGIHAN': latest_mc_month}
     
-    # Kunci untuk Proyeksi Awal (Digunakan di Pipeline Billed dan Collected)
     initial_project = {
         '$project': {
-            # PERBAIKAN KRITIS: Memastikan RAYON dan PCEZ dinormalisasi di awal
-            'RAYON': {'$toUpper': {'$trim': {'input': { '$ifNull': [ '$RAYON', 'N/A' ] }}}},
-            'PCEZ': {'$toUpper': {'$trim': {'input': { '$ifNull': [ '$PCEZ', 'N/A' ] }}}},
+            'RAYON': { '$ifNull': [ '$RAYON', 'N/A' ] }, 
+            'PCEZ': { '$ifNull': [ '$PCEZ', 'N/A' ] }, 
             'NOMEN': 1,
             'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}, 
-            'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
-            # PERBAIKAN KRITIS: Normalisasi STATUS di awal proyeksi
-            'STATUS_CLEAN': {'$toUpper': {'$trim': {'input': {'$ifNull': ['$STATUS', 'N/A']}}}}, 
+            'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}}, # NEW: Include KUBIK for billed volume
+            'STATUS': 1
         }
     }
     
@@ -1463,7 +957,7 @@ def collection_report_api():
     pipeline_collected = [
         { '$match': mc_filter }, 
         initial_project, 
-        { '$match': { 'STATUS_CLEAN': 'PAYMENT' } }, # Menggunakan STATUS_CLEAN
+        { '$match': { 'STATUS': 'PAYMENT' } }, # Gunakan UPPERCASE yang sudah bersih
         { '$group': {
             '_id': { 'rayon': '$RAYON', 'pcez': '$PCEZ' },
             'collected_nomen': { '$addToSet': '$NOMEN' }, 
@@ -1483,10 +977,9 @@ def collection_report_api():
             'NOMEN': 1,
             'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}, 
             'KUBIKBAYAR': {'$toDouble': {'$ifNull': ['$KUBIKBAYAR', 0]}}, 
-            'RAYON_MB': { '$toUpper': { '$trim': { 'input': { '$ifNull': [ '$RAYON', 'N/A' ] } } } },
-            'PCEZ_MB': { '$toUpper': { '$trim': { 'input': { '$ifNull': [ '$PCEZ', 'N/A' ] } } } },
+            'RAYON_MB': { '$ifNull': [ '$RAYON', 'N/A' ] },
+            'PCEZ_MB': { '$ifNull': [ '$PCEZ', 'N/A' ] },
         }},
-        # Lookup ke CID untuk memastikan Rayon/PCEZ yang digunakan konsisten dengan CID/MC
         {'$lookup': {
            'from': 'CustomerData', 
            'localField': 'NOMEN',
@@ -1495,7 +988,6 @@ def collection_report_api():
         }},
         {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
         { '$project': {
-             # Prioritaskan CID, fallback ke MB data
              'RAYON': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MB']},
              'PCEZ': {'$ifNull': ['$customer_info.PCEZ', '$PCEZ_MB']},
              'NOMEN': 1,
@@ -1512,6 +1004,7 @@ def collection_report_api():
     mb_undue_data = list(collection_mb.aggregate(pipeline_mb_undue))
 
     # 4. MB (UNDUE BULAN SEBELUMNYA) - Transaksi MB dari bulan lalu untuk Koleksi %
+    # Sesuai aturan #4: 'Total UNDUE Bulan Kemarin'
     pipeline_mb_undue_prev = [
         { '$match': { 
             'BULAN_REK': previous_mc_month, # Filter bulan tagihan bulan sebelumnya
@@ -1563,8 +1056,8 @@ def collection_report_api():
                  'MC_CollectedNominal': 0.0, 
                  'MC_CollectedKubik': 0.0,
                  'MC_CollectedNomen': 0, 
-               }
-             
+             }
+            
         report_map[key]['MB_UndueNominal'] = float(item['mb_undue_nominal'])
         report_map[key]['MB_UndueKubik'] = float(item['mb_undue_kubik'])
         report_map[key]['MB_UndueNomen'] = len(item['mb_undue_nomen'])
@@ -1754,54 +1247,54 @@ def analyze_reports_landing():
 @login_required
 def analyze_tariff_change_report():
     return render_template('analyze_report_template.html', 
-                             title="Laporan Perubahan Tarif Pelanggan", 
-                             description="Menampilkan pelanggan yang memiliki perbedaan data Tarif antara riwayat data CID terbaru dan sebelumnya. (Memerlukan CID dalam mode historis).",
-                             report_type="TARIFF_CHANGE",
-                             is_admin=current_user.is_admin)
+                            title="Laporan Perubahan Tarif Pelanggan", 
+                            description="Menampilkan pelanggan yang memiliki perbedaan data Tarif antara riwayat data CID terbaru dan sebelumnya. (Memerlukan CID dalam mode historis).",
+                            report_type="TARIFF_CHANGE",
+                            is_admin=current_user.is_admin)
 
 @app.route('/analyze/full_mc_report', methods=['GET'])
 @login_required
 def analyze_full_mc_report():
     return render_template('analyze_report_template.html', 
-                             title="Laporan Grup Master Cetak (MC) Lengkap", 
-                             description="Menyajikan data agregasi NOMEN, Kubik, dan Nominal berdasarkan Rayon, Metode Baca, Tarif, dan Jenis Meter.",
-                             is_admin=current_user.is_admin)
+                            title="Laporan Grup Master Cetak (MC) Lengkap", 
+                            description="Menyajikan data agregasi NOMEN, Kubik, dan Nominal berdasarkan Rayon, Metode Baca, Tarif, dan Jenis Meter.",
+                            is_admin=current_user.is_admin)
 
 @app.route('/analyze/extreme', methods=['GET'])
 @login_required
 def analyze_extreme_usage():
     return render_template('analyze_report_template.html', 
-                             title="Pemakaian Air Ekstrim", 
-                             description="Menampilkan pelanggan dengan konsumsi air di atas ambang batas (memerlukan join MC, CID, dan SBRS) dan fluktuasi signifikan.",
-                             report_type="EXTREME_USAGE",
-                             is_admin=current_user.is_admin)
+                            title="Pemakaian Air Ekstrim", 
+                            description="Menampilkan pelanggan dengan konsumsi air di atas ambang batas (memerlukan join MC, CID, dan SBRS) dan fluktuasi signifikan.",
+                            report_type="EXTREME_USAGE",
+                            is_admin=current_user.is_admin)
 
 @app.route('/analyze/reduced', methods=['GET'])
 @login_required
 def analyze_reduced_usage():
     return render_template('analyze_report_template.html', 
-                             title="Pemakaian Air Naik/Turun (Fluktuasi Volume)", 
-                             description="Menampilkan pelanggan dengan fluktuasi konsumsi air signifikan (naik atau turun) dengan membandingkan 2 periode SBRS terakhir.",
-                             report_type="FLUX_REPORT",
-                             is_admin=current_user.is_admin)
+                            title="Pemakaian Air Naik/Turun (Fluktuasi Volume)", 
+                            description="Menampilkan pelanggan dengan fluktuasi konsumsi air signifikan (naik atau turun) dengan membandingkan 2 periode SBRS terakhir.",
+                            report_type="FLUX_REPORT",
+                            is_admin=current_user.is_admin)
 
 @app.route('/analyze/zero', methods=['GET'])
 @login_required
 def analyze_zero_usage():
     return render_template('analyze_report_template.html', 
-                             title="Tidak Ada Pemakaian (Zero)", 
-                             description="Menampilkan pelanggan dengan konsumsi air nol (Zero) di periode tagihan terakhir.",
-                             report_type="ZERO_USAGE",
-                             is_admin=current_user.is_admin)
+                            title="Tidak Ada Pemakaian (Zero)", 
+                            description="Menampilkan pelanggan dengan konsumsi air nol (Zero) di periode tagihan terakhir.",
+                            report_type="ZERO_USAGE",
+                            is_admin=current_user.is_admin)
 
 @app.route('/analyze/standby', methods=['GET'])
 @login_required
 def analyze_stand_tungggu():
     return render_template('analysis_report_template.html', 
-                             title="Stand Tunggu", 
-                             description="Menampilkan pelanggan yang berstatus Stand Tunggu (Freeze/Blokir).",
-                             report_type="STANDBY_STATUS",
-                             is_admin=current_user.is_admin)
+                            title="Stand Tunggu", 
+                            description="Menampilkan pelanggan yang berstatus Stand Tunggu (Freeze/Blokir).",
+                            report_type="STANDBY_STATUS",
+                            is_admin=current_user.is_admin)
 
 # =========================================================================
 # === API GROUPING MC KUSTOM (HELPER FUNCTION) ===
@@ -1815,16 +1308,16 @@ def _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, r
     
     # FIX: Ambil BULAN_TAGIHAN terbaru dari MC Historis
     latest_mc_month_doc = collection_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
-    latest_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
+    latest_mc_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
     
-    if not latest_month:
+    if not latest_mc_month:
         return {'CountOfNOMEN': 0, 'SumOfKUBIK': 0, 'SumOfNOMINAL': 0}
 
     dimension_map = {'TARIF': '$TARIF_CID', 'MERK': '$MERK_CID', 'READ_METHOD': '$READ_METHOD'}
     
     # Base pipeline structure (Projection and CID Join for all necessary fields)
     pipeline = [
-        {'$match': {'BULAN_TAGIHAN': latest_month}}, # HANYA AMBIL MC BULAN TERBARU
+        {'$match': {'BULAN_TAGIHAN': latest_mc_month}}, # HANYA AMBIL MC BULAN TERBARU
         {"$project": {
             # Kolom Piutang/Kubik
             "NOMEN": "$NOMEN",
@@ -1971,7 +1464,7 @@ def analyze_mc_grouping_summary_api():
         latest_mc_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
         
         if not latest_mc_month:
-              return jsonify({ 'TotalPiutangKustomNominal': 0, 'TotalPiutangKustomKubik': 0, 'TotalNomenKustom': 0 }), 200
+             return jsonify({ 'TotalPiutangKustomNominal': 0, 'TotalPiutangKustomKubik': 0, 'TotalNomenKustom': 0 }), 200
 
         pipeline_summary = [
             {'$match': {'BULAN_TAGIHAN': latest_mc_month}}, # HANYA AMBIL MC BULAN TERBARU
@@ -2048,8 +1541,8 @@ def analyze_mc_tarif_breakdown_api():
         latest_mc_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
         
         if not latest_mc_month:
-              return jsonify([]), 200
-              
+             return jsonify([]), 200
+             
         pipeline_tarif_breakdown = [
             {'$match': {'BULAN_TAGIHAN': latest_mc_month}}, # HANYA AMBIL MC BULAN TERBARU
             # 1. Project dan Ekstraksi ZONA_NOVAK
@@ -2217,10 +1710,10 @@ def collection_monitoring_api():
             {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
             {'$project': {
-                'TGL_BAYAR': 1,
-                'NOMINAL': 1,
-                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MB']}}}}},
-                'NOMEN': 1
+                 'TGL_BAYAR': 1,
+                 'NOMINAL': 1,
+                 'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MB']}}}}},
+                 'NOMEN': 1
             }},
             {'$match': {'CLEAN_RAYON': {'$in': ['34', '35']}}},
             {'$group': {
@@ -2922,28 +2415,6 @@ def aging_report_api():
                 'RAYON': {'$ifNull': ['$customer_info.RAYON', '$RayonMC']},
                 'PiutangLama': {'$round': ['$TotalPiutangLama', 0]},
                 'Bulan_Tagihan_Terlama': '$Bulan_Tagihan_Terlama',
-                # Hitung Aging dalam Bulan (asumsi MMYYYY)
-                'Aging_in_Months': {
-                    '$subtract': [
-                        {'$toInt': {'$substr': ['$Bulan_Tagihan_Terlama', 2, 4]}}, # Year of oldest debt
-                        {'$toInt': {'$substr': ['$Bulan_Tagihan_Terlama', 0, 2]}}  # Month of oldest debt
-                    ]
-                }
-            }},
-            # Menghitung selisih bulan secara kasar (butuh perbaikan helper di Python jika ingin akurat)
-            {'$addFields': {
-                'Aging_Bulan': {
-                    '$subtract': [
-                        {'$add': [
-                            {'$multiply': [{'$toInt': {'$substr': [latest_mc_month, 2, 4]}}, 12]},
-                            {'$toInt': {'$substr': [latest_mc_month, 0, 2]}}
-                        ]},
-                        {'$add': [
-                            {'$multiply': [{'$toInt': {'$substr': ['$Bulan_Tagihan_Terlama', 2, 4]}}, 12]},
-                            {'$toInt': {'$substr': ['$Bulan_Tagihan_Terlama', 0, 2]}}
-                        ]}
-                    ]
-                }
             }},
             {'$sort': {'PiutangLama': -1}},
             {'$limit': 500} # Batasi 500 pelanggan dengan piutang lama terbesar
@@ -3342,7 +2813,7 @@ def upload_cid_data():
         df.columns = [col.strip().upper() for col in df.columns]
 
         # >>> PERBAIKAN KRITIS CID: NORMALISASI DATA PANDAS <<<
-        columns_to_normalize = ['MERK', 'READ_METHOD', 'TIPEPLGGN', 'RAYON', 'NOMEN', 'TARIFF', 'ZONANOvaK'] # Tambah ZONANOvaK
+        columns_to_normalize = ['MERK', 'READ_METHOD', 'TIPEPLGGN', 'RAYON', 'NOMEN', 'TARIFF']
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize:
@@ -3351,32 +2822,6 @@ def upload_cid_data():
         
         if 'TARIFF' in df.columns:
             df = df.rename(columns={'TARIFF': 'TARIF'})
-        
-        # >>> START: DEKODE ZONA_NOVAK DAN INJECT FIELD BARU <<<
-        # Panggil fungsi decode_zona_novak dari helper (dianggap sudah di-copy/ada)
-        if 'ZONANOvaK' in df.columns:
-             # Panggil fungsi helper decode_zona_novak (asumsi sudah didefinisikan/tersedia)
-             # NOTE: Karena fungsi decode_zona_novak ada di history, kita asumsikan sudah di-copy ke sini atau diimpor.
-             # Di sini, kita simulasikan pemanggilan jika diimpor/ditempel. Karena tidak ada file helpers, saya tempel logikanya di sini.
-             
-             # --- LOGIKA DEKODE ZONA_NOVAK (DIULANG DARI HELPER AGAR MANDIRI) ---
-             df['ZONANOvaK'] = df['ZONANOvaK'].astype(str).str.strip()
-             def parse_zona(zona):
-                 if not zona or len(zona) < 9: 
-                     return None, None, None, None, None
-                 rayon = zona[0:2]             
-                 pc = zona[2:5]                
-                 ez = zona[5:7]                
-                 block = zona[7:]             
-                 pcez = f"{pc}/{ez}"           
-                 return rayon, pc, ez, pcez, block
-             df[['RAYON', 'PC', 'EZ', 'PCEZ', 'BLOCK']] = df['ZONANOvaK'].apply(
-                 lambda x: pd.Series(parse_zona(x))
-             )
-             # --- END LOGIKA DEKODE ZONA_NOVAK ---
-             print("Peringatan: Field RAYON, PCEZ, PC, EZ, BLOCK ditambahkan dari ZONANOvaK.")
-        
-        # >>> END: DEKODE ZONA_NOVAK DAN INJECT FIELD BARU <<<
         
         # >>> START PERUBAHAN KRITIS KE APPEND (BULK WRITE) <<<
         data_to_insert = df.to_dict('records')
@@ -3644,178 +3089,159 @@ def dashboard_summary_api():
     try:
         summary_data = {}
         
-        # Tentukan Bulan Tagihan MC Terbaru (Denominator Koleksi)
+        # Ambil BULAN_TAGIHAN terbaru dari MC Historis untuk data PIUTANG AKTIF
         latest_mc_month_doc = collection_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
         latest_mc_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
         
-        if not latest_mc_month:
-              return jsonify({
-                 "message": "Tidak ada data Master Cetak (MC) ditemukan.",
-                 "summary": {"TotalPelanggan": 0, "TotalPiutangNominal": 0, "TotalPiutangKubik": 0},
-                 "ardebt_summary": {"TotalTunggakanPelanggan": 0, "TotalTunggakanNominal": 0, "TotalTunggakanKubik": 0}
-            }), 200
-
-        previous_mc_month = _get_previous_month_year(latest_mc_month)
-        today_date = datetime.now().strftime('%Y-%m-%d')
-        this_month_str = datetime.now().strftime('%Y-%m')
-
-        # --- A. MC METRICS (Piutang Bulan Berjalan) ---
-        mc_summary_pipeline = [
+        # 1. TOTAL PELANGGAN (dari CID - Ambil total nomen unik terbaru)
+        summary_data['total_pelanggan'] = len(collection_cid.distinct('NOMEN'))
+        
+        # 2. TOTAL PIUTANG & TUNGGAKAN
+        pipeline_piutang = [
             {'$match': {'BULAN_TAGIHAN': latest_mc_month}},
-            {"$project": {
-                "NOMEN": 1,
-                "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
-                "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}},
-                "STATUS_CLEAN": {'$toUpper': {'$trim': {'input': {'$ifNull': ['$STATUS', 'N/A']}}}}, 
-                "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
-                "CUST_TYPE_MC": "$CUST_TYPE",
-            }},
-            {"$addFields": {
-                "RAYON_ZONA": {"$substrCP": ["$CLEAN_ZONA", 0, 2]},
-            }},
-            {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
-            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
-            {'$addFields': {
-                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}}}}},
-                'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_ZONA']}}}}},
-            }},
-            {'$match': {
-                'CLEAN_TIPEPLGGN': 'REG',
-                'CLEAN_RAYON': {'$in': ['34', '35']}
-            }},
             {'$group': {
                 '_id': None,
-                'TotalPiutangNominal': {'$sum': '$NOMINAL'},
-                'TotalPiutangKubik': {'$sum': '$KUBIK'},
-                'TotalNomen': {'$addToSet': '$NOMEN'},
-                'TotalCollectedNominal': {'$sum': {'$cond': [{'$eq': ['$STATUS_CLEAN', 'PAYMENT']}, '$NOMINAL', 0]}},
-            }},
-            {'$project': {
-                '_id': 0, 'TotalPiutangNominal': 1, 'TotalPiutangKubik': 1,
-                'TotalNomen': {'$size': '$TotalNomen'},
-                'TotalCollectedNominal': 1
-            }}
-        ]
-        mc_data = list(collection_mc.aggregate(mc_summary_pipeline))
-        
-        mc_summary = mc_data[0] if mc_data else {'TotalPiutangNominal': 0, 'TotalPiutangKubik': 0, 'TotalNomen': 0, 'TotalCollectedNominal': 0}
-        
-        summary_data['mc'] = {
-            "TotalPelanggan": mc_summary['TotalNomen'],
-            "TotalPiutangNominal": mc_summary['TotalPiutangNominal'],
-            "TotalPiutangKubik": mc_summary['TotalPiutangKubik'],
-            "TotalKoleksiMC": mc_summary['TotalCollectedNominal'],
-        }
-
-        # --- B. ARDEBT METRICS (Tunggakan Historis) ---
-        ardebt_summary_pipeline = [
-            {"$project": {
-                "NOMEN": 1,
-                "JUMLAH": {"$toDouble": {"$ifNull": ["$JUMLAH", 0]}},
-                "VOLUME": {"$toDouble": {"$ifNull": ["$VOLUME", 0]}},
-            }},
-            {'$group': {
-                '_id': None,
-                'TotalTunggakanNominal': {'$sum': '$JUMLAH'},
-                'TotalTunggakanKubik': {'$sum': '$VOLUME'},
-                'TotalTunggakanPelanggan': {'$addToSet': '$NOMEN'},
-            }},
-            {'$project': {
-                '_id': 0, 'TotalTunggakanNominal': 1, 'TotalTunggakanKubik': 1,
-                'TotalTunggakanPelanggan': {'$size': '$TotalTunggakanPelanggan'},
-            }}
-        ]
-        ardebt_data = list(collection_ardebt.aggregate(ardebt_summary_pipeline))
-        ardebt_summary = ardebt_data[0] if ardebt_data else {'TotalTunggakanNominal': 0, 'TotalTunggakanKubik': 0, 'TotalTunggakanPelanggan': 0}
-
-        summary_data['ardebt'] = {
-            "TotalTunggakanPelanggan": ardebt_summary['TotalTunggakanPelanggan'],
-            "TotalTunggakanNominal": ardebt_summary['TotalTunggakanNominal'],
-            "TotalTunggakanKubik": ardebt_summary['TotalTunggakanKubik'],
-        }
-
-        # --- C. KOLEKSI MB (MB Undue Koleksi) ---
-        # 1. MB Undue Koleksi (MB yang dibayar BERSAMAAN dengan BULAN REK MC terbaru)
-        mb_undue_pipeline = [
-             { '$match': { 'BULAN_REK': latest_mc_month, 'BILL_REASON': 'BIAYA PEMAKAIAN AIR' }},
-             { '$group': {
-                 '_id': None,
-                 'TotalUndueNominal': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}}
-             }}
-        ]
-        mb_undue_result = list(collection_mb.aggregate(mb_undue_pipeline))
-        mb_undue_nominal = mb_undue_result[0]['TotalUndueNominal'] if mb_undue_result else 0.0
-
-        # 2. Koleksi Hari Ini
-        koleksi_today_pipeline = [
-            {'$match': {'TGL_BAYAR': today_date, 'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}},
-            {'$group': {'_id': None, 'koleksi_hari_ini': {'$sum': '$NOMINAL'}}}
-        ]
-        koleksi_today_result = list(collection_mb.aggregate(koleksi_today_pipeline))
-        koleksi_hari_ini = koleksi_today_result[0]['koleksi_hari_ini'] if koleksi_today_result else 0.0
-
-        # 3. Koleksi Bulan Ini (YTD)
-        koleksi_month_pipeline = [
-            {'$match': {'TGL_BAYAR': {'$regex': f'^{this_month_str}'}, 'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}},
-            {'$group': {'_id': None, 'koleksi_bulan_ini': {'$sum': '$NOMINAL'}}}
-        ]
-        koleksi_month_result = list(collection_mb.aggregate(koleksi_month_pipeline))
-        koleksi_bulan_ini = koleksi_month_result[0]['koleksi_bulan_ini'] if koleksi_month_result else 0.0
-        
-        summary_data['koleksi'] = {
-            "KoleksiHariIni": koleksi_hari_ini,
-            "KoleksiBulanIni": koleksi_bulan_ini,
-            "MBUndueNominal": mb_undue_nominal,
-        }
-        
-        # Persentase Koleksi
-        total_piutang_mc = summary_data['mc']['TotalPiutangNominal']
-        summary_data['koleksi']['PercentKoleksi'] = (summary_data['koleksi']['KoleksiBulanIni'] / total_piutang_mc) * 100 if total_piutang_mc > 0 else 0.0
-
-        # --- D. TOP 5 PCEZ ---
-        # Agregasi untuk Piutang Nominal MC Bulan Terbaru, dikelompokkan per PCEZ
-        top_pcez_pipeline = [
-            {'$match': {'BULAN_TAGIHAN': latest_mc_month}},
-            {"$project": {
-                "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
-                "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
-            }},
-            {"$addFields": {"PCEZ_CLEAN": {"$concat": [{"$substrCP": ["$CLEAN_ZONA", 2, 3]}, {"$substrCP": ["$CLEAN_ZONA", 5, 2]}]}}},
-            {'$group': {
-                '_id': '$PCEZ_CLEAN',
                 'total_piutang': {'$sum': '$NOMINAL'},
+                'jumlah_tagihan': {'$sum': 1}
+            }}
+        ]
+        piutang_result = list(collection_mc.aggregate(pipeline_piutang))
+        summary_data['total_piutang'] = piutang_result[0]['total_piutang'] if piutang_result else 0
+        summary_data['jumlah_tagihan'] = piutang_result[0]['jumlah_tagihan'] if piutang_result else 0
+        
+        pipeline_tunggakan = [
+            {'$group': {
+                '_id': None,
+                'total_tunggakan': {'$sum': '$JUMLAH'},
+                'jumlah_tunggakan': {'$sum': 1}
+            }}
+        ]
+        tunggakan_result = list(collection_ardebt.aggregate(pipeline_tunggakan))
+        summary_data['total_tunggakan'] = tunggakan_result[0]['total_tunggakan'] if tunggakan_result else 0
+        summary_data['jumlah_tunggakan'] = tunggakan_result[0]['jumlah_tunggakan'] if tunggakan_result else 0
+        
+        # 3. KOLEKSI HARI INI (dari MB)
+        today_date = datetime.now().strftime('%Y-%m-%d')
+        pipeline_koleksi_today = [
+            {'$match': {'TGL_BAYAR': today_date,
+                         # Filter untuk Koleksi Rutin
+                         'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
+            }}, 
+            {'$group': {
+                '_id': None,
+                'koleksi_hari_ini': {'$sum': '$NOMINAL'},
+                'transaksi_hari_ini': {'$sum': 1}
+            }}
+        ]
+        koleksi_result = list(collection_mb.aggregate(pipeline_koleksi_today))
+        summary_data['koleksi_hari_ini'] = koleksi_result[0]['koleksi_hari_ini'] if koleksi_result else 0
+        summary_data['transaksi_hari_ini'] = koleksi_result[0]['transaksi_hari_ini'] if koleksi_result else 0
+        
+        # 4. TOTAL KOLEKSI BULAN INI
+        this_month = datetime.now().strftime('%Y-%m')
+        pipeline_koleksi_month = [
+            {'$match': {'TGL_BAYAR': {'$regex': this_month},
+                         # Filter untuk Koleksi Rutin
+                         'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
+            }},
+            {'$group': {
+                '_id': None,
+                'koleksi_bulan_ini': {'$sum': '$NOMINAL'},
+                'transaksi_bulan_ini': {'$sum': 1}
+            }}
+        ]
+        koleksi_month_result = list(collection_mb.aggregate(pipeline_koleksi_month))
+        summary_data['koleksi_bulan_ini'] = koleksi_month_result[0]['koleksi_bulan_ini'] if koleksi_month_result else 0
+        summary_data['transaksi_bulan_ini'] = koleksi_month_result[0]['transaksi_bulan_ini'] if koleksi_month_result else 0
+        
+        # 5. ANOMALI PEMAKAIAN (dari fungsi existing)
+        anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        summary_data['total_anomali'] = len(anomalies)
+        
+        # Breakdown anomali per tipe
+        anomali_breakdown = {'kategori': {}}
+        for item in anomalies:
+            status = item.get('STATUS_PEMAKAIAN', 'UNKNOWN')
+            if 'EKSTRIM' in status or 'NAIK' in status:
+                key = 'KENAIKAN_SIGNIFIKAN'
+            elif 'TURUN' in status:
+                key = 'PENURUNAN_SIGNIFIKAN'
+            elif 'ZERO' in status:
+                key = 'ZERO_USAGE'
+            else:
+                key = 'LAINNYA'
+            
+            if key not in anomali_breakdown['kategori']:
+                 anomali_breakdown['kategori'][key] = {'jumlah': 0, 'data': []}
+                
+            anomali_breakdown['kategori'][key]['jumlah'] += 1
+            if len(anomali_breakdown['kategori'][key]['data']) < 10:
+                 anomali_breakdown['kategori'][key]['data'].append(item)
+            
+        summary_data['anomali_breakdown'] = anomali_breakdown
+        
+        # 6. PELANGGAN DENGAN TUNGGAKAN (Distinct NOMEN)
+        pelanggan_tunggakan = collection_ardebt.distinct('NOMEN')
+        summary_data['pelanggan_dengan_tunggakan'] = len(pelanggan_tunggakan)
+        
+        # 7. TOP 5 RAYON DENGAN PIUTANG TERTINGGI (Bulan Tagihan Terbaru)
+        pipeline_top_rayon = [
+            {'$match': {'BULAN_TAGIHAN': latest_mc_month}},
+            {'$group': {
+                '_id': '$RAYON',
+                'total_piutang': {'$sum': '$NOMINAL'},
+                'total_pelanggan': {'$addToSet': '$NOMEN'}
+            }},
+            {'$project': {
+                '_id': 0,
+                'RAYON': '$_id',
+                'total_piutang': 1,
+                'total_pelanggan': {'$size': '$total_pelanggan'}
             }},
             {'$sort': {'total_piutang': -1}},
             {'$limit': 5}
         ]
-        top_pcez = list(collection_mc.aggregate(top_pcez_pipeline))
-        summary_data['top_pcez_piutang'] = [{'PCEZ': item['_id'], 'nominal': item['total_piutang']} for item in top_pcez]
-
-        # --- E. TREN KOLEKSI 7 HARI TERAKHIR ---
+        top_rayon = list(collection_mc.aggregate(pipeline_top_rayon))
+        summary_data['top_rayon_piutang'] = [
+            {'rayon': item['RAYON'], 'total': item['total_piutang']} 
+            for item in top_rayon
+        ]
+        
+        # 8. TREN KOLEKSI 7 HARI TERAKHIR
         trend_data = []
         for i in range(7):
             date_obj = datetime.now() - timedelta(days=i)
             date = date_obj.strftime('%Y-%m-%d')
             
             pipeline = [
-                {'$match': {'TGL_BAYAR': date, 'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}}, 
-                {'$group': {'_id': None, 'total': {'$sum': '$NOMINAL'}}}
+                {'$match': {'TGL_BAYAR': date, 
+                             # Filter untuk Koleksi Rutin
+                             'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}}, 
+                {'$group': {
+                    '_id': None,
+                    'total': {'$sum': '$NOMINAL'},
+                    'count': {'$sum': 1}
+                }}
             ]
             result = list(collection_mb.aggregate(pipeline))
-            total = result[0]['total'] if result else 0.0
-            
             trend_data.append({
                 'tanggal': date,
-                'total_nominal': total
+                'total': result[0]['total'] if result else 0,
+                'transaksi': result[0]['count'] if result else 0
             })
         summary_data['tren_koleksi_7_hari'] = sorted(trend_data, key=lambda x: x['tanggal'])
+        
+        # 9. PERSENTASE KOLEKSI
+        if summary_data['total_piutang'] > 0:
+            summary_data['persentase_koleksi'] = (summary_data['koleksi_bulan_ini'] / summary_data['total_piutang']) * 100
+        else:
+            summary_data['persentase_koleksi'] = 0
         
         return jsonify(summary_data), 200
         
     except Exception as e:
         print(f"Error fetching dashboard summary: {e}")
-        # Jika terjadi error, kirimkan pesan yang lebih informatif
-        return jsonify({"message": f"Gagal mengambil data dashboard: {e}. Pastikan data MC, CID, dan MB sudah ter-upload."}), 500
+        return jsonify({"message": f"Gagal mengambil data dashboard: {e}"}), 500
 
 
 @app.route('/api/dashboard/rayon_analysis', methods=['GET'])
@@ -3851,8 +3277,8 @@ def rayon_analysis_api():
         this_month = datetime.now().strftime('%Y-%m')
         pipeline_koleksi_rayon = [
             {'$match': {'TGL_BAYAR': {'$regex': this_month},
-                             # Filter untuk Koleksi Rutin
-                             'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
+                         # Filter untuk Koleksi Rutin
+                         'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
             }},
             {'$group': {
                 '_id': '$RAYON',
@@ -3987,11 +3413,11 @@ def export_dashboard_data():
         df_summary = pd.DataFrame({
             'Metrik': ['Total Pelanggan', 'Total Piutang (MC)', 'Total Tunggakan (ARDEBT)', 'Koleksi Bulan Ini', 'Persentase Koleksi'],
             'Nilai': [
-                summary_data['mc']['TotalNomen'],
-                summary_data['mc']['TotalPiutangNominal'],
-                summary_data['ardebt']['TotalTunggakanNominal'],
-                summary_data['koleksi']['KoleksiBulanIni'],
-                f"{summary_data['koleksi']['PercentKoleksi']:.2f}%"
+                summary_data['total_pelanggan'],
+                summary_data['total_piutang'],
+                summary_data['total_tunggakan'],
+                summary_data['koleksi_bulan_ini'],
+                f"{summary_data['persentase_koleksi']:.2f}%"
             ]
         })
         
