@@ -1001,13 +1001,14 @@ def collection_report_api():
     # Kunci untuk Proyeksi Awal (Digunakan di Pipeline Billed dan Collected)
     initial_project = {
         '$project': {
-            'RAYON': { '$ifNull': [ '$RAYON', 'N/A' ] }, 
-            'PCEZ': { '$ifNull': [ '$PCEZ', 'N/A' ] }, 
+            # PERBAIKAN KRITIS: Memastikan RAYON dan PCEZ dinormalisasi di awal
+            'RAYON': {'$toUpper': {'$trim': {'input': { '$ifNull': [ '$RAYON', 'N/A' ] }}}},
+            'PCEZ': {'$toUpper': {'$trim': {'input': { '$ifNull': [ '$PCEZ', 'N/A' ] }}}},
             'NOMEN': 1,
             'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}, 
             'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
             # PERBAIKAN KRITIS: Normalisasi STATUS di awal proyeksi
-            'STATUS': {'$toUpper': {'$trim': {'input': {'$ifNull': ['$STATUS', 'N/A']}}}}, 
+            'STATUS_CLEAN': {'$toUpper': {'$trim': {'input': {'$ifNull': ['$STATUS', 'N/A']}}}}, 
         }
     }
     
@@ -1028,7 +1029,7 @@ def collection_report_api():
     pipeline_collected = [
         { '$match': mc_filter }, 
         initial_project, 
-        { '$match': { 'STATUS': 'PAYMENT' } }, # Gunakan UPPERCASE yang sudah bersih
+        { '$match': { 'STATUS_CLEAN': 'PAYMENT' } }, # Menggunakan STATUS_CLEAN
         { '$group': {
             '_id': { 'rayon': '$RAYON', 'pcez': '$PCEZ' },
             'collected_nomen': { '$addToSet': '$NOMEN' }, 
@@ -1041,17 +1042,17 @@ def collection_report_api():
     # 3. MB (UNDUE BULAN INI) - MB yang BULAN_REK sama dengan bulan tagihan MC terbaru
     pipeline_mb_undue = [
         { '$match': { 
-            'BULAN_REK': latest_mc_month, # Filter bulan tagihan (BILL_PERIOD)
+            # Perbaikan filter: Gunakan $project untuk memastikan BULAN_REK bersih
+            'BULAN_REK': latest_mc_month, 
             'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
         }},
         { '$project': {
             'NOMEN': 1,
             'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}, 
             'KUBIKBAYAR': {'$toDouble': {'$ifNull': ['$KUBIKBAYAR', 0]}}, 
-            'RAYON_MB': { '$ifNull': [ '$RAYON', 'N/A' ] },
-            'PCEZ_MB': { '$ifNull': [ '$PCEZ', 'N/A' ] },
-            # PERBAIKAN KRITIS: Normalisasi BULAN_REK
-            'BULAN_REK_CLEAN': {'$toUpper': {'$trim': {'input': {'$ifNull': ['$BULAN_REK', 'N/A']}}}},
+            # Normalisasi Rayon/PCEZ dari MB
+            'RAYON_MB': { '$toUpper': { '$trim': { 'input': { '$ifNull': [ '$RAYON', 'N/A' ] } } } },
+            'PCEZ_MB': { '$toUpper': { '$trim': { 'input': { '$ifNull': [ '$PCEZ', 'N/A' ] } } } },
         }},
         # Lookup ke CID untuk memastikan Rayon/PCEZ yang digunakan konsisten dengan CID/MC
         {'$lookup': {
@@ -1096,6 +1097,7 @@ def collection_report_api():
     
     # Merge Billed data
     for item in billed_data:
+        # Gunakan Rayon/PCEZ yang sudah dinormalisasi dari initial_project
         key = (item['_id']['rayon'], item['_id']['pcez'])
         report_map[key] = {
             'RAYON': item['_id']['rayon'],
