@@ -36,6 +36,12 @@ collection_cid = None
 collection_sbrs = None
 collection_ardebt = None
 
+# --- DAFTAR INDEX KRITIS UNTUK DI DROP/RECREATE ---
+# Ini harus sesuai dengan index yang didefinisikan di blok try awal
+MC_CRITICAL_INDEXES = ['idx_mc_nomen_hist', 'idx_mc_rayon_pcez', 'idx_mc_status', 'idx_mc_tarif_volume']
+ARDEBT_CRITICAL_INDEXES = ['idx_ardebt_nomen_hist']
+# -------------------------------------------------
+
 try:
     # PERBAIKAN KRITIS UNTUK BULK WRITE/SBRS: Meningkatkan batas waktu koneksi dan socket.
     # Peningkatan timeout membantu mencegah hang pada query besar
@@ -397,6 +403,7 @@ def collection_landing_page():
 @app.route('/collection/summary', methods=['GET'])
 @login_required 
 def collection_summary():
+    # Mengarahkan ke template baru: collection_summary.html
     return render_template('collection_summary.html', is_admin=current_user.is_admin)
 
 @app.route('/collection/monitoring', methods=['GET'])
@@ -1381,16 +1388,16 @@ def _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, r
     
     # FIX: Ambil BULAN_TAGIHAN terbaru dari MC Historis
     latest_mc_month_doc = collection_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
-    latest_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
+    latest_mc_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
     
-    if not latest_month:
+    if not latest_mc_month:
         return {'CountOfNOMEN': 0, 'SumOfKUBIK': 0, 'SumOfNOMINAL': 0}
 
     dimension_map = {'TARIF': '$TARIF_CID', 'MERK': '$MERK_CID', 'READ_METHOD': '$READ_METHOD'}
     
     # Base pipeline structure (Projection and CID Join for all necessary fields)
     pipeline = [
-        {'$match': {'BULAN_TAGIHAN': latest_month}}, # HANYA AMBIL MC BULAN TERBARU
+        {'$match': {'BULAN_TAGIHAN': latest_mc_month}}, # HANYA AMBIL MC BULAN TERBARU
         {"$project": {
             # Kolom Piutang/Kubik
             "NOMEN": "$NOMEN",
@@ -2603,7 +2610,7 @@ def admin_upload_unified_page():
 @login_required 
 @admin_required 
 def upload_mc_data():
-    """Mode HISTORIS: Untuk Master Cetak (MC) / Piutang Bulanan. (DIOPTIMASI)"""
+    """Mode HISTORIS: Untuk Master Cetak (MC) / Piutang Bulanan. (DIOPTIMASI DENGAN DROP INDEX)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
     
@@ -2616,6 +2623,26 @@ def upload_mc_data():
 
     filename = secure_filename(file.filename)
     file_extension = filename.rsplit('.', 1)[1].lower()
+
+    # --- START INDEX MANAGEMENT ---
+    restored_indexes = []
+    try:
+        # 1. DROP INDEXES KRITIS
+        for index_name in MC_CRITICAL_INDEXES:
+            try:
+                collection_mc.drop_index(index_name)
+                restored_indexes.append(index_name)
+            except Exception as e:
+                # Aman jika index tidak ada
+                print(f"Info: Gagal drop index {index_name} (mungkin tidak ada).")
+    except Exception as e:
+        print(f"Error saat dropping index MC: {e}")
+        # Lanjutkan proses insert meskipun drop gagal
+    # --- END INDEX MANAGEMENT ---
+
+    inserted_count = 0
+    skipped_count = 0
+    total_rows = 0
 
     try:
         # Get Month and Year from the request form data (sent from JS)
@@ -2667,6 +2694,7 @@ def upload_mc_data():
 
         # >>> START PERUBAHAN KRITIS KE APPEND (BULK WRITE) <<<
         data_to_insert = df.to_dict('records')
+        total_rows = len(data_to_insert)
         
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
@@ -2674,17 +2702,12 @@ def upload_mc_data():
         # Kunci Unik: NOMEN + BULAN_TAGIHAN (untuk cek duplikasi internal)
         UNIQUE_KEYS = ['NOMEN', 'BULAN_TAGIHAN'] 
         
-        # Check this again for safety, though it should pass now
         if not all(key in df.columns for key in UNIQUE_KEYS):
              # Jika ini dieksekusi, ada masalah serius di Pandas/Loading.
              return jsonify({"message": "Kesalahan Internal: Kolom kunci 'NOMEN' atau 'BULAN_TAGIHAN' hilang setelah pemrosesan Pandas."}), 500
 
-        inserted_count = 0
-        skipped_count = 0
-        total_rows = len(data_to_insert)
-
         try:
-            # Menggunakan insert_many(ordered=False) untuk kecepatan dan melewati duplikasi
+            # 2. INSERT (Hampir) TANPA INDEXING
             result = collection_mc.insert_many(data_to_insert, ordered=False)
             inserted_count = len(result.inserted_ids)
             skipped_count = total_rows - inserted_count
@@ -2699,6 +2722,23 @@ def upload_mc_data():
             print(f"Error massal saat insert: {e}")
             return jsonify({"message": f"Gagal menyimpan data secara massal: {e}"}), 500
         
+    except Exception as e:
+        print(f"Error saat memproses file MC: {e}")
+        return jsonify({"message": f"Gagal memproses file MC: {e}. Pastikan format data benar."}), 500
+    
+    finally:
+        # --- START INDEX RECREATION (HARUS DILAKUKAN SETELAH INSERT) ---
+        try:
+            # 3. RECREATE INDEXES KRITIS
+            collection_mc.create_index([('NOMEN', 1), ('BULAN_TAGIHAN', -1)], name='idx_mc_nomen_hist')
+            collection_mc.create_index([('RAYON', 1), ('PCEZ', 1)], name='idx_mc_rayon_pcez') 
+            collection_mc.create_index([('STATUS', 1)], name='idx_mc_status')
+            collection_mc.create_index([('TARIF', 1), ('KUBIK', 1), ('NOMINAL', 1)], name='idx_mc_tarif_volume')
+            print("Sukses: Index Master Cetak telah dibuat ulang.")
+        except Exception as e:
+            print(f"Peringatan KRITIS: Gagal membuat ulang Index Master Cetak! Database mungkin lambat. {e}")
+        # --- END INDEX RECREATION ---
+        
         return jsonify({
             "status": "success",
             "message": f"Sukses Historis! {inserted_count} baris Master Cetak (MC) baru ditambahkan. ({skipped_count} duplikat diabaikan).",
@@ -2710,11 +2750,6 @@ def upload_mc_data():
             },
             "anomaly_list": []
         }), 200
-        # >>> END PERUBAHAN KRITIS KE APPEND (BULK WRITE) <<<
-
-    except Exception as e:
-        print(f"Error saat memproses file MC: {e}")
-        return jsonify({"message": f"Gagal memproses file MC: {e}. Pastikan format data benar."}), 500
 
 
 @app.route('/upload/mb', methods=['POST'])
@@ -2734,6 +2769,10 @@ def upload_mb_data():
 
     filename = secure_filename(file.filename)
     file_extension = filename.rsplit('.', 1)[1].lower()
+
+    # MB tidak dioptimasi drop index karena index uniknya (NOTAGIHAN, TGL_BAYAR, NOMINAL) 
+    # diperlukan untuk menahan duplikasi yang TIDAK boleh dilewati.
+    # Namun, karena di index awal kita buat UNIK=FALSE, kita tetap bisa menggunakan insert_many(ordered=False)
 
     try:
         if file_extension == 'csv':
@@ -3038,7 +3077,7 @@ def upload_sbrs_data():
 @login_required 
 @admin_required 
 def upload_ardebt_data():
-    """Mode HISTORIS: Untuk data Detail Tunggakan (ARDEBT). (DIOPTIMASI & ROBUST KEY CHECK)"""
+    """Mode HISTORIS: Untuk data Detail Tunggakan (ARDEBT). (DIOPTIMASI DENGAN DROP INDEX)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
     
@@ -3051,6 +3090,23 @@ def upload_ardebt_data():
 
     filename = secure_filename(file.filename)
     file_extension = filename.rsplit('.', 1)[1].lower()
+
+    # --- START INDEX MANAGEMENT ---
+    try:
+        # 1. DROP INDEXES KRITIS
+        for index_name in ARDEBT_CRITICAL_INDEXES:
+            try:
+                collection_ardebt.drop_index(index_name)
+            except Exception:
+                pass # Aman jika index tidak ada
+    except Exception as e:
+        print(f"Error saat dropping index ARDEBT: {e}")
+        # Lanjutkan proses insert meskipun drop gagal
+    # --- END INDEX MANAGEMENT ---
+
+    inserted_count = 0
+    skipped_count = 0
+    total_rows = 0
 
     try:
         if file_extension == 'csv':
@@ -3100,6 +3156,7 @@ def upload_ardebt_data():
 
         # >>> START PERUBAHAN KRITIS KE APPEND (BULK WRITE) <<<
         data_to_insert = df.to_dict('records')
+        total_rows = len(data_to_insert)
         
         if not data_to_insert:
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
@@ -3107,12 +3164,8 @@ def upload_ardebt_data():
         # Kunci Unik: NOMEN + PERIODE_BILL + JUMLAH 
         UNIQUE_KEYS = ['NOMEN', 'PERIODE_BILL', 'JUMLAH'] 
         
-        inserted_count = 0
-        skipped_count = 0
-        total_rows = len(data_to_insert)
-
         try:
-            # Menggunakan insert_many(ordered=False) untuk kecepatan dan melewati duplikasi
+            # 2. INSERT (Hampir) TANPA INDEXING
             result = collection_ardebt.insert_many(data_to_insert, ordered=False)
             inserted_count = len(result.inserted_ids)
             skipped_count = total_rows - inserted_count
@@ -3125,6 +3178,20 @@ def upload_ardebt_data():
         except Exception as e:
             print(f"Error massal saat insert: {e}")
             return jsonify({"message": f"Gagal menyimpan data secara massal: {e}"}), 500
+
+    except Exception as e:
+        print(f"Error saat memproses file ARDEBT: {e}")
+        return jsonify({"message": f"Gagal memproses file ARDEBT: {e}. Pastikan format data benar."}), 500
+    
+    finally:
+        # --- START INDEX RECREATION (HARUS DILAKUKAN SETELAH INSERT) ---
+        try:
+            # 3. RECREATE INDEXES KRITIS
+            collection_ardebt.create_index([('NOMEN', 1), ('PERIODE_BILL', -1), ('JUMLAH', 1)], name='idx_ardebt_nomen_hist')
+            print("Sukses: Index Account Receivable telah dibuat ulang.")
+        except Exception as e:
+            print(f"Peringatan KRITIS: Gagal membuat ulang Index Account Receivable! Database mungkin lambat. {e}")
+        # --- END INDEX RECREATION ---
         
         return jsonify({
             "status": "success",
@@ -3137,11 +3204,6 @@ def upload_ardebt_data():
             },
             "anomaly_list": []
         }), 200
-        # >>> END PERUBAHAN KRITIS KE APPEND (BULK WRITE) <<<
-
-    except Exception as e:
-        print(f"Error saat memproses file ARDEBT: {e}")
-        return jsonify({"message": f"Gagal memproses file ARDEBT: {e}. Pastikan format data benar."}), 500
 
 
 # =========================================================================
@@ -3298,7 +3360,8 @@ def _get_collection_mom_comparison(collection_mb):
 @app.route('/dashboard', methods=['GET'])
 @login_required
 def analytics_dashboard():
-    return render_template('dashboard_analytics.html', is_admin=current_user.is_admin)
+    # 🚨 PERBAIKAN: Mengarahkan rute lama '/dashboard' ke rute baru yang benar: /collection/summary
+    return redirect(url_for('collection_summary'))
 
 @app.route('/api/dashboard/summary', methods=['GET'])
 @login_required
@@ -3330,7 +3393,7 @@ def dashboard_summary_api():
                 "NOMEN": 1, "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
                 "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}, 
                 "STATUS_CLEAN": {'$toUpper': {'$trim': {'input': {'$ifNull': ['$STATUS', 'N/A']}}}}, 
-                "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
+                "CLEAN_ZONA": {"$trim": {"input": {"$ifNull': ["$ZONA_NOVAK", ""]}}},
                 "CUST_TYPE_MC": "$CUST_TYPE",
             }},
             {"$addFields": {"RAYON_ZONA": {"$substrCP": ["$CLEAN_ZONA", 0, 2]}}},
@@ -3443,11 +3506,14 @@ def dashboard_summary_api():
         mc_date = mc_last_update['BULAN_TAGIHAN'] if mc_last_update else 'N/A'
         cid_date = cid_last_update['TANGGAL_UPLOAD_CID'] if cid_last_update else 'N/A'
 
+        # TEMPORARY: Read skipped count from latest MB upload log if exists, otherwise assume 0
+        skipped_count = 0 
+        
         data_health_check = {
             "mc_last_update": mc_date,
             "cid_last_update": cid_date,
             # Placeholder, harus diisi dengan logic penghitungan skipped rows
-            "record_skipped": 0 
+            "record_skipped": skipped_count 
         }
 
         # Menggabungkan semua hasil ke dalam respons akhir
@@ -3466,7 +3532,7 @@ def dashboard_summary_api():
         return jsonify(response_data)
 
     except Exception as e:
-        print(f"Error in dashboard_summary_api: {e}")
+        print(f"Error fetching dashboard summary: {e}")
         return jsonify({
             "status": "error",
             "message": "Terjadi kesalahan saat mengambil atau mengolah data dashboard.",
