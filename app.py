@@ -1301,8 +1301,10 @@ def analyze_stand_tungggu():
 # =========================================================================
 
 def _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, rayon_filter=None):
-    # This helper will return a list of aggregated results grouped by the dimension.
-    # It filters to 'REG' type and applies rayon filter if provided ('34', '35', or 'TOTAL_34_35').
+    """
+    Menghitung Piutang Kustom (Rayon 34/35 REG) untuk laporan grup (mis. Grouping MC).
+    Diperbaiki: Menggunakan preserveNullAndEmptyArrays=True dan fallback CUST_TYPE MC.
+    """
     
     # FIX: Ambil BULAN_TAGIHAN terbaru dari MC Historis
     latest_mc_month_doc = collection_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
@@ -1321,6 +1323,7 @@ def _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, r
             "NOMEN": "$NOMEN",
             "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
             "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}},
+            "CUST_TYPE_MC": "$CUST_TYPE", # <-- DITAMBAHKAN: Field CUST_TYPE dari MC
             # --- EKSTRAKSI ZONA_NOVAK BARU ---
             "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
         }},
@@ -1332,13 +1335,14 @@ def _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, r
             "PCEZ_ZONA": {"$concat": ["$PC_ZONA", "$EZ_ZONA"]} # PC + EZ
         }},
         {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
-        {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}}, 
+        # PERBAIKAN KRITIS: preserveNullAndEmptyArrays=True agar data MC tidak hilang jika CID tidak match
+        {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}}, 
         {'$addFields': {
+            'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}}}}}, # Fallback ke MC CUST_TYPE
             'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_ZONA']}}}}}, # Menggunakan Rayon dari ZONA jika CID hilang
             'TARIF_CID': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TARIF', 'N/A']}}}}}, 
             'MERK_CID': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.MERK', 'N/A']}}}}},
             'READ_METHOD': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}}}}},
-            'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},
         }},
         {'$match': {'CLEAN_TIPEPLGGN': 'REG'}} # Always filter to REG
     ]
@@ -1447,6 +1451,10 @@ def analyze_mc_grouping_api():
 @app.route('/api/analyze/mc_grouping/summary', methods=['GET'])
 @login_required 
 def analyze_mc_grouping_summary_api():
+    """
+    Menghitung Piutang Kustom (Rayon 34/35 REG) untuk kartu KPI.
+    Diperbaiki: Menggunakan preserveNullAndEmptyArrays=True dan fallback CUST_TYPE MC.
+    """
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
 
@@ -1465,6 +1473,7 @@ def analyze_mc_grouping_summary_api():
                 "NOMEN": "$NOMEN",
                 "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
                 "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}},
+                "CUST_TYPE_MC": "$CUST_TYPE", # <-- DITAMBAHKAN
                 # --- EKSTRAKSI ZONA_NOVAK BARU ---
                 "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
             }},
@@ -1477,11 +1486,12 @@ def analyze_mc_grouping_summary_api():
                'foreignField': 'NOMEN',
                'as': 'customer_info'
             }},
-            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}},
+            # PERBAIKAN KRITIS: preserveNullAndEmptyArrays=True
+            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
             
             # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
-                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}}, 
+                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}}}}}, # Fallback ke MC CUST_TYPE
                 'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_ZONA']}}}}}, # Menggunakan Rayon dari ZONA jika CID hilang
             }},
             # --- END NORMALISASI ---
@@ -1539,6 +1549,7 @@ def analyze_mc_tarif_breakdown_api():
             {"$project": {
                 "NOMEN": 1, "RAYON": 1, "TARIF": 1,
                 "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
+                "CUST_TYPE_MC": "$CUST_TYPE", # <-- DITAMBAHKAN
             }},
             {"$addFields": {
                 "RAYON_ZONA": {"$substrCP": ["$CLEAN_ZONA", 0, 2]}, # Index 0, Length 2
@@ -1550,11 +1561,11 @@ def analyze_mc_tarif_breakdown_api():
                'foreignField': 'NOMEN',
                'as': 'customer_info'
             }},
-            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}},
+            {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}}, # Diperbaiki
             
             # --- NORMALISASI DATA UNTUK FILTER ---
             {'$addFields': {
-                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}}, 
+                'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}}}}}, # Fallback ke MC CUST_TYPE
                 'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_ZONA']}}}}}, # Menggunakan Rayon dari ZONA jika CID hilang
             }},
             # --- END NORMALISASI ---
@@ -1633,6 +1644,7 @@ def collection_monitoring_api():
             {"$project": {
                 "NOMEN": 1, "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
                 "CLEAN_ZONA": {"$trim": {"input": {"$ifNull": ["$ZONA_NOVAK", ""]}}},
+                "CUST_TYPE_MC": "$CUST_TYPE", # <-- DITAMBAHKAN
             }},
             {"$addFields": {
                 "RAYON_ZONA": {"$substrCP": ["$CLEAN_ZONA", 0, 2]}, # Index 0, Length 2
@@ -1640,7 +1652,7 @@ def collection_monitoring_api():
             {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': False}},
             {'$addFields': {'CLEAN_RAYON': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.RAYON', '$RAYON_ZONA']}}}}},
-             'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', 'N/A']}}}}},}},
+             'CLEAN_TIPEPLGGN': {'$toUpper': {'$trim': {'input': {'$toString': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}}}}},}},
             
             # FILTER KRITIS: Hanya Piutang AB Sunter (R34/R35) dan tipe REG
             {'$match': {'CLEAN_RAYON': {'$in': ['34', '35']}, 'CLEAN_TIPEPLGGN': 'REG'}},
@@ -2563,7 +2575,7 @@ def upload_mc_data():
 
         # >>> PERBAIKAN KRITIS MC: NORMALISASI DATA PANDAS <<<
         # Pastikan BULAN_TAGIHAN ada di daftar normalisasi string
-        columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF', 'BULAN_TAGIHAN', 'ZONA_NOVAK'] 
+        columns_to_normalize_mc = ['PC', 'EMUH', 'NOMEN', 'STATUS', 'TARIF', 'BULAN_TAGIHAN', 'ZONA_NOVAK', 'CUST_TYPE'] # DITAMBAH CUST_TYPE
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize_mc:
