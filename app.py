@@ -100,6 +100,26 @@ except Exception as e:
     print(f"Gagal terhubung ke MongoDB atau mengkonfigurasi index: {e}")
     client = None
 
+# --- FUNGSI UTILITY INTERNAL: ZONA PARSER ---
+def _parse_zona_novak(zona_str):
+    """
+    Mengekstrak Rayon, PC, EZ, PCEZ, dan Block dari ZONA_NOVAK string.
+    Format: RRCCCZZEEBB (RR=Rayon, CCC=PC, ZZ=EZ, EE=Block)
+    Contoh: 350960217 -> Rayon: 35, PC: 096, EZ: 02, Block: 17, PCEZ: 09602
+    """
+    zona = str(zona_str).strip().upper()
+    if len(zona) < 9:
+        return {'RAYON_ZONA': 'N/A', 'PC_ZONA': 'N/A', 'EZ_ZONA': 'N/A', 'PCEZ_ZONA': 'N/A', 'BLOCK_ZONA': 'N/A'}
+    
+    # Menggunakan substring berdasarkan posisi yang dikonfirmasi
+    return {
+        'RAYON_ZONA': zona[0:2],
+        'PC_ZONA': zona[2:5],
+        'EZ_ZONA': zona[5:7],
+        'PCEZ_ZONA': zona[2:7], # PC + EZ (3 + 2 = 5 chars)
+        'BLOCK_ZONA': zona[7:9]
+    }
+
 # --- FUNGSI UTILITY INTERNAL: ANALISIS SBRS ---
 def _get_sbrs_anomalies(collection_sbrs, collection_cid):
     """
@@ -295,7 +315,7 @@ def search_nomen():
         cleaned_nomen = query_nomen.strip().upper()
         
         # 1. DATA STATIS (CID) - Ambil data CID TERBARU
-        # Menggunakan CID historis, ambil dokumen CID terbaru berdasarkan TANGGAL_UPLOAD_CID
+        # CID: Sumber master untuk NAMA, ALAMAT, TIPEPLGGN, MERK, SERIAL, STATUS_PELANGGAN.
         cid_result = collection_cid.find({'NOMEN': cleaned_nomen}).sort('TANGGAL_UPLOAD_CID', -1).limit(1)
         cid_result = list(cid_result)[0] if list(cid_result) else None
         
@@ -306,6 +326,7 @@ def search_nomen():
             }), 404
 
         # 2. RIWAYAT PIUTANG (MC) - Semua riwayat yang pernah di-upload
+        # MC: Sumber master untuk NOMINAL, KUBIK, TARIF, ZONA_NOVAK (untuk Rayon/PCEZ), STATUS tagihan.
         mc_results = list(collection_mc.find({'NOMEN': cleaned_nomen}).sort('BULAN_TAGIHAN', -1))
         piutang_nominal_total = sum(item.get('NOMINAL', 0) for item in mc_results)
         
@@ -314,21 +335,26 @@ def search_nomen():
         tunggakan_nominal_total = sum(item.get('JUMLAH', 0) for item in ardebt_results)
         
         # 4. RIWAYAT PEMBAYARAN TERAKHIR (MB)
+        # MB: Sumber master untuk TGL_BAYAR, KUBIKBAYAR.
         mb_last_payment_cursor = collection_mb.find({'NOMEN': cleaned_nomen}).sort('TGL_BAYAR', -1).limit(1)
         last_payment = list(mb_last_payment_cursor)[0] if list(mb_last_payment_cursor) else None
         
         # 5. RIWAYAT BACA METER (SBRS) - 2 Riwayat terakhir untuk Anomaly Check
+        # SBRS: Sumber master untuk CMR_READING, CMR_RD_DATE (PENCATET).
         sbrs_last_read_cursor = collection_sbrs.find({'CMR_ACCOUNT': cleaned_nomen}).sort('CMR_RD_DATE', -1).limit(2)
         sbrs_history = list(sbrs_last_read_cursor)
         
         # --- LOGIKA KECERDASAN (INTEGRASI & DIAGNOSTIK) ---
         
-        # A. Status Tunggakan/Piutang (Menggunakan Total Piutang Aktif)
-        # Ambil status dari MC/ARDEBT terbaru (Asumsi MC/ARDEBT terbaru adalah tagihan/tunggakan aktif)
         mc_latest = mc_results[0] if mc_results else None
         
+        # Ekstraksi ZONA dari MC terbaru untuk melengkapi data Rayon/PCEZ (Prioritas MC/ZONA)
+        zona_info = {}
+        if mc_latest and mc_latest.get('ZONA_NOVAK'):
+             zona_info = _parse_zona_novak(mc_latest['ZONA_NOVAK'])
+
+        # A. Status Tunggakan/Piutang (Menggunakan Total Piutang Aktif)
         if tunggakan_nominal_total > 0:
-            # Periksa tunggakan yang belum dibayar di periode terbaru
             aktif_ardebt = [d for d in ardebt_results if d.get('STATUS', 'N/A') != 'LUNAS']
             status_financial = f"TUNGGAKAN AKTIF ({len(aktif_ardebt)} Periode)"
         elif mc_latest and mc_latest.get('STATUS') != 'PAYMENT' and mc_latest.get('NOMINAL', 0) > 0:
@@ -355,14 +381,17 @@ def search_nomen():
                 status_pemakaian = f"NORMAL ({kubik_terakhir} m³)"
 
 
+        # Menggunakan CID sebagai master data statis, MC/ZONA untuk Rayon/Tarif Tagihan Terbaru
         health_summary = {
             "NOMEN": query_nomen,
-            "NAMA": cid_result.get('NAMA', 'N/A'),
+            "NAMA_PEL": mc_latest.get('NAMA_PEL', cid_result.get('NAMA', 'N/A')) if mc_latest else cid_result.get('NAMA', 'N/A'),
             "ALAMAT": cid_result.get('ALAMAT', 'N/A'),
-            "RAYON": cid_result.get('RAYON', 'N/A'),
-            "TIPE_PLGGN": cid_result.get('TIPEPLGGN', 'N/A'),
+            "RAYON": zona_info.get('RAYON_ZONA', cid_result.get('RAYON', 'N/A')), # Prioritas ZONA
+            "PCEZ": zona_info.get('PCEZ_ZONA', cid_result.get('PCEZ', 'N/A')), # Prioritas ZONA
+            "TARIF": mc_latest.get('TARIF', cid_result.get('TARIF', 'N/A')) if mc_latest else cid_result.get('TARIF', 'N/A'), # Prioritas MC
+            "TIPEPLGGN": cid_result.get('TIPEPLGGN', 'N/A'),
             "STATUS_FINANSIAL": status_financial,
-            "TOTAL_PIUTANG_NOMINAL": piutang_nominal_total + tunggakan_nominal_total,
+            "TOTAL_KEWAJIBAN_NOMINAL": piutang_nominal_total + tunggakan_nominal_total,
             "PEMBAYARAN_TERAKHIR": last_payment_date,
             "STATUS_PEMAKAIAN": status_pemakaian
         }
@@ -371,13 +400,18 @@ def search_nomen():
         def clean_mongo_id(doc):
             doc.pop('_id', None)
             return doc
+        
+        # Tambahkan data ZONA ke CID result untuk kejelasan
+        cid_data_clean = clean_mongo_id(cid_result)
+        cid_data_clean.update(zona_info)
+
 
         return jsonify({
             "status": "success",
             "summary": health_summary,
-            "cid_data": clean_mongo_id(cid_result),
-            "mc_data": [clean_mongo_id(doc) for doc in mc_results], # Kini berisi RIWAYAT MC
-            "ardebt_data": [clean_mongo_id(doc) for doc in ardebt_results], # Kini berisi RIWAYAT ARDEBT
+            "cid_data": cid_data_clean, # CID + ZONA Info
+            "mc_data": [clean_mongo_id(doc) for doc in mc_results], 
+            "ardebt_data": [clean_mongo_id(doc) for doc in ardebt_results],
             "sbrs_data": [clean_mongo_id(doc) for doc in sbrs_history]
         }), 200
 
@@ -2683,23 +2717,21 @@ def upload_mb_data():
         
         df.columns = [col.strip().upper() for col in df.columns]
         
-        # >>> START PERBAIKAN: MAPPING HEADER KRITIS UNTUK MB <<<
-        # 1. NOTAG/NOTAGIHAN (Nomor Tagihan)
-        # MC & MB menggunakan NOTAGIHAN. Jika file upload menggunakan NOTAG, kita map.
-        # MC tidak ada field TGL_BAYAR, MB menggunakan TGL_BAYAR, jika file upload menggunakan PAY_DT, kita map.
+        # >>> START PERBAIKAN: MAPPING HEADER KRITIS UNTUK MB (Sesuai Permintaan) <<<
         rename_map = {
-            'NOTAG': 'NOTAGIHAN', # Jawaban #1: Map NOTAG (Daily) ke NOTAGIHAN (MB)
-            'PAY_DT': 'TGL_BAYAR', # Jawaban #2: Map PAY_DT (Daily) ke TGL_BAYAR (MB)
+            # #1: NOTAG/NOTAGIHAN
+            'NOTAG': 'NOTAGIHAN', 
+            # #2: TGL_BAYAR/PAY_DT
+            'PAY_DT': 'TGL_BAYAR', 
             'BILL_PERIOD': 'BULAN_REK',
             'MC VOL OKT 25_NOMEN': 'NOMEN' 
         }
-        # Menggunakan errors='ignore' memastikan hanya kolom yang ada di file yang diubah namanya
         df = df.rename(columns=lambda x: rename_map.get(x, x), errors='ignore')
         # >>> END PERBAIKAN: MAPPING HEADER KRITIS UNTUK MB <<<
         
         # >>> START PERBAIKAN: INJECT MISSING KRITICAL COLUMNS <<<
         
-        # Pastikan BILL_REASON ada. Jika hilang, set ke 'UNKNOWN' (agar tidak termasuk 'BIAYA PEMAKAIAN AIR' di laporan)
+        # Pastikan BILL_REASON ada. Jika hilang, set ke 'UNKNOWN' 
         if 'BILL_REASON' not in df.columns:
             df['BILL_REASON'] = 'UNKNOWN'
             print("Peringatan: Kolom BILL_REASON hilang, diisi dengan UNKNOWN.")
