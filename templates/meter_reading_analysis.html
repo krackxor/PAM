@@ -1,76 +1,254 @@
 {% extends "base.html" %}
 
-{% block title %}Analisis Meter Reading{% endblock %}
-
 {% block content %}
-<div class="report-container" style="max-width: 90%; margin: 20px auto; text-align: center;">
-    <h1 style="color: var(--primary-color); margin-bottom: 20px;">
-        <i class="fas fa-chart-pie"></i> Analisis Meter Reading
-    </h1>
+<h1 class="mb-4">{{ title }}</h1>
+<p class="lead">{{ description }}</p>
+
+<!-- Peringatan Koneksi DB (diambil dari status global) -->
+<div id="db-warning" class="alert alert-danger d-none" role="alert">
+    <strong>Koneksi Database Gagal:</strong> Fitur analisis data ini membutuhkan koneksi MongoDB aktif. Mohon cek status koneksi di halaman utama.
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6 mb-3">
+        <div class="card shadow h-100">
+            <div class="card-header bg-primary text-white">
+                <h6><i class="fas fa-chart-pie"></i> Navigasi Laporan Baca Meter</h6>
+            </div>
+            <div class="card-body">
+                <p>Pindah ke halaman laporan utama untuk melihat tren dan ringkasan bulanan SBRS.</p>
+                <a href="{{ url_for('bp_meter_reading.meter_reading_report_view') }}" class="btn" style="background-color: #28a745; color: white; display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
+                    <i class="fas fa-tachometer-alt"></i> Lihat Laporan Utama
+                </a>
+            </div>
+        </div>
+    </div>
     
-    <p style="font-size: 1.1rem; color: var(--secondary-color); margin-bottom: 30px;">
-        Pilih laporan analisis Volume Dasar dan Distribusi Metode Baca. Laporan sudah mencakup dimensi lengkap **AB Sunter, Rayon, PCEZ, Tarif, Merek, dan Cycle**.
-    </p>
-
-    <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 20px;">
-
-        <!-- CARD: Riwayat Volume (Menu 4) -->
-        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
-            <i class="fas fa-chart-area fa-2x" style="color: #28a745; margin-bottom: 10px;"></i>
-            <h4 style="margin-top: 0;">4. Riwayat Volume (Historis)</h4>
-            <p style="font-size: 0.9rem;">Riwayat volume KUBIK bulanan agregat berdasarkan Rayon dari seluruh data Master Cetak (MC).</p>
-            <a href="{{ url_for('bp_meter_reading.meter_reading_riwayat_view') }}" class="btn" style="background-color: #28a745; color: white; display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
-                Lihat Laporan <i class="fas fa-arrow-right"></i>
-            </a>
+    <div class="col-md-6 mb-3">
+        <div class="card shadow h-100">
+            <div class="card-header bg-danger text-white">
+                <h6><i class="fas fa-exclamation-triangle"></i> Filter Anomali</h6>
+            </div>
+            <div class="card-body">
+                <form id="anomaly-filter-form">
+                    <div class="form-group">
+                        <label for="filter-status">Filter Status Anomali:</label>
+                        <select id="filter-status" class="form-control">
+                            <option value="">Semua Anomali</option>
+                            <option value="EKSTRIM">Kubikasi Ekstrim (>150 m³)</option>
+                            <option value="NAIK">Naik Signifikan (>=10%)</option>
+                            <option value="TURUN">Turun Signifikan (<= -10%)</option>
+                            <option value="ZERO">Zero / Nol</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-danger btn-block"><i class="fas fa-filter"></i> Terapkan Filter</button>
+                </form>
+            </div>
         </div>
-        
-        <!-- CARD: Distribusi Metode Baca -->
-        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
-            <i class="fas fa-clipboard-list fa-2x" style="color: #17a2b8; margin-bottom: 10px;"></i>
-            <h4 style="margin-top: 0;">Distribusi Metode Baca</h4>
-            <p style="font-size: 0.9rem;">Persentase pelanggan berdasarkan Metode Pembacaan (Manual, Self Entry) di Master Data.</p>
-            <a href="{{ url_for('bp_meter_reading.analysis_read_method') }}" class="btn" style="background-color: #17a2b8; color: white; display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
-                Lihat Laporan <i class="fas fa-arrow-right"></i>
-            </a>
-        </div>
-        
-        <!-- CARD: Distribusi Jenis Meter (Menggunakan API dari Collection karena data ada di MC/CID) -->
-        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
-            <i class="fas fa-wrench fa-2x" style="color: #ffc107; margin-bottom: 10px;"></i>
-            <h4 style="margin-top: 0;">Distribusi Jenis Meter</h4>
-            <p style="font-size: 0.9rem;">Distribusi pelanggan, piutang, dan kubikasi yang dikelompokkan berdasarkan Rayon dan Jenis/Merk Meter.</p>
-            <a href="{{ url_for('bp_collection.rayon_meter_distribution_report') }}" class="btn" style="background-color: #ffc107; color: var(--text-color); display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
-                Lihat Laporan <i class="fas fa-arrow-right"></i>
-            </a>
-        </div>
-
-        <!-- CARD: Top List Anomali (Menu 3) -->
-        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
-            <i class="fas fa-bug fa-2x" style="color: #dc3545; margin-bottom: 10px;"></i>
-            <h4 style="margin-top: 0;">3. Top List Anomali</h4>
-            <p style="font-size: 0.9rem;">Daftar pelanggan dengan anomali pemakaian (Ekstrim/Zero) yang diperkaya data pelanggan lengkap.</p>
-            <a href="{{ url_for('bp_meter_reading.meter_reading_top_view') }}" class="btn" style="background-color: #dc3545; color: white; display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
-                Lihat Laporan <i class="fas fa-arrow-right"></i>
-            </a>
-        </div>
-
     </div>
 </div>
 
-<style>
-    .card {
-        transition: all 0.3s ease;
-        min-height: 230px; 
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
+<!-- Container Laporan Anomali -->
+<div class="card shadow mb-4">
+    <div class="card-header bg-info text-white">
+        <h6><i class="fas fa-list-alt"></i> Detail Hasil Anomali SBRS (<span id="anomaly-count">0</span> Data)</h6>
+    </div>
+    <div class="card-body">
+        <div id="anomaly-loading" class="text-center d-none">
+            <div class="spinner-border text-info" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+            <p class="mt-2">Memuat data anomali terbaru...</p>
+        </div>
+        <div id="anomaly-chart-container" class="chart-container mb-4">
+            <canvas id="anomalyChart"></canvas>
+        </div>
+        <div id="anomaly-table-container">
+            <!-- Tabel data anomali akan dimuat di sini -->
+        </div>
+        <div id="anomaly-error-message" class="alert alert-danger d-none"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/Chart.min.js"></script>
+
+<script>
+    const API_ENDPOINT = "{{ url_for('bp_meter_reading.get_anomalies_api') }}";
+    const ANOMALY_LOADING = document.getElementById('anomaly-loading');
+    const ANOMALY_TABLE_CONTAINER = document.getElementById('anomaly-table-container');
+    const ANOMALY_ERROR_MESSAGE = document.getElementById('anomaly-error-message');
+    const ANOMALY_COUNT = document.getElementById('anomaly-count');
+    const ANOMALY_FILTER_FORM = document.getElementById('anomaly-filter-form');
+    const FILTER_STATUS = document.getElementById('filter-status');
+    const CHART_CONTEXT = document.getElementById('anomalyChart').getContext('2d');
+    const DB_WARNING = document.getElementById('db-warning');
+    
+    let allAnomalies = [];
+    let chartInstance = null;
+
+    // Helper untuk memformat angka mata uang Rupiah
+    const formatCurrency = (amount) => {
+        if (typeof amount !== 'number') return 'N/A';
+        return new Intl.NumberFormat('id-ID', {
+            style: 'currency',
+            currency: 'IDR',
+            minimumFractionDigits: 0
+        }).format(amount);
+    };
+
+    // Helper untuk memformat angka dengan pemisah ribuan
+    const formatNumber = (num) => {
+        if (typeof num !== 'number') return 'N/A';
+        return new Intl.NumberFormat('id-ID').format(num);
+    };
+    
+    // Fungsi untuk membuat tabel HTML dari data JSON
+    function createDataTable(data, schema) {
+        if (!data || data.length === 0 || !schema) {
+            return '<div class="alert alert-info">Tidak ada data anomali yang ditemukan untuk filter ini.</div>';
+        }
+
+        let tableHtml = '<table class="table table-striped table-bordered table-sm">';
+        
+        // Header
+        tableHtml += '<thead><tr>';
+        schema.forEach(col => {
+            tableHtml += `<th>${col.label}</th>`;
+        });
+        tableHtml += '</tr></thead>';
+
+        // Body
+        tableHtml += '<tbody>';
+        data.forEach(row => {
+            tableHtml += '<tr>';
+            schema.forEach(col => {
+                let cellValue = row[col.key];
+                if (col.type === 'currency' && typeof cellValue === 'number') {
+                    cellValue = formatCurrency(cellValue);
+                } else if (col.type === 'integer' && typeof cellValue === 'number') {
+                    cellValue = formatNumber(cellValue);
+                } else if (col.type === 'percent' && typeof cellValue === 'number') {
+                    cellValue = `${formatNumber(cellValue)}%`;
+                } else if (col.key === 'STATUS_PEMAKAIAN') {
+                    let badgeClass = 'secondary';
+                    if (cellValue.includes('EKSTRIM') || cellValue.includes('ZERO')) badgeClass = 'danger';
+                    else if (cellValue.includes('NAIK') || cellValue.includes('TURUN')) badgeClass = 'warning';
+                    else badgeClass = 'success';
+                    cellValue = `<span class="badge badge-${badgeClass}">${cellValue}</span>`;
+                }
+                
+                tableHtml += `<td>${cellValue !== undefined && cellValue !== null ? cellValue : 'N/A'}</td>`;
+            });
+            tableHtml += '</tr>';
+        });
+        tableHtml += '</tbody>';
+        tableHtml += '</table>';
+
+        return tableHtml;
     }
-    .card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+
+    // Fungsi untuk membuat Chart Bar
+    function createChart(data) {
+        if (chartInstance) {
+            chartInstance.destroy();
+        }
+
+        const top10Data = data.slice(0, 10);
+        const labels = top10Data.map(d => d.chart_label);
+        const kubikData = top10Data.map(d => d.chart_data_kubik);
+        
+        chartInstance = new Chart(CHART_CONTEXT, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Kubikasi Terbaru (m³)',
+                    data: kubikData,
+                    backgroundColor: 'rgba(23, 162, 184, 0.8)',
+                    borderColor: 'rgba(23, 162, 184, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                title: {
+                    display: true,
+                    text: 'Top 10 Anomali Berdasarkan Kubikasi Terbaru'
+                },
+                scales: {
+                    yAxes: [{
+                        ticks: {
+                            beginAtZero: true
+                        },
+                        scaleLabel: {
+                            display: true,
+                            labelString: 'Kubikasi (m³)'
+                        }
+                    }]
+                }
+            }
+        });
     }
-    .btn {
-        margin-top: auto; 
+
+    // Fungsi utama untuk memuat dan menampilkan data
+    async function loadAnomalyData(filter = '') {
+        ANOMALY_LOADING.classList.remove('d-none');
+        ANOMALY_ERROR_MESSAGE.classList.add('d-none');
+        ANOMALY_TABLE_CONTAINER.innerHTML = '';
+        
+        try {
+            const response = await fetch(API_ENDPOINT);
+            const apiData = await response.json();
+
+            if (apiData.status === 'error') {
+                DB_WARNING.classList.remove('d-none');
+                ANOMALY_ERROR_MESSAGE.textContent = apiData.message;
+                ANOMALY_ERROR_MESSAGE.classList.remove('d-none');
+                return;
+            }
+            
+            DB_WARNING.classList.add('d-none');
+            allAnomalies = apiData.data || [];
+            const schema = apiData.schema || [];
+            
+            // Terapkan filter
+            let filteredData = allAnomalies;
+            if (filter) {
+                filteredData = allAnomalies.filter(item => item.STATUS_PEMAKAIAN && item.STATUS_PEMAKAIAN.includes(filter.toUpperCase()));
+            }
+
+            // Tampilkan jumlah data
+            ANOMALY_COUNT.textContent = filteredData.length;
+
+            // Sortir data (misalnya berdasarkan Kubikasi Terbaru)
+            filteredData.sort((a, b) => (b.KUBIK_TERBARU || 0) - (a.KUBIK_TERBARU || 0));
+
+            // Tampilkan tabel
+            ANOMALY_TABLE_CONTAINER.innerHTML = createDataTable(filteredData, schema);
+
+            // Tampilkan chart
+            createChart(filteredData);
+            
+        } catch (error) {
+            console.error('Error loading anomalies:', error);
+            ANOMALY_ERROR_MESSAGE.textContent = 'Gagal memuat data anomali dari server API.';
+            ANOMALY_ERROR_MESSAGE.classList.remove('d-none');
+        } finally {
+            ANOMALY_LOADING.classList.add('d-none');
+        }
     }
-</style>
+
+    // Event listener untuk filter form
+    ANOMALY_FILTER_FORM.addEventListener('submit', function(e) {
+        e.preventDefault();
+        loadAnomalyData(FILTER_STATUS.value);
+    });
+
+    // Muat data saat DOM siap
+    document.addEventListener('DOMContentLoaded', () => loadAnomalyData());
+
+</script>
 {% endblock %}
