@@ -1096,7 +1096,7 @@ def collection_report_api():
             'RAYON_MB': { '$ifNull': [ '$RAYON', 'N/A' ] },
             'PCEZ_MB': { '$ifNull': [ '$PCEZ', 'N/A' ] },
         }},
-        {'#lookup': {
+        {'$lookup': { # <-- FIX: Mengganti {'#lookup': ...} menjadi { '$lookup': ... }
            'from': 'CustomerData', 
            'localField': 'NOMEN',
            'foreignField': 'NOMEN',
@@ -1339,7 +1339,7 @@ def export_collection_report():
         ]
 
         output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        with pd.ExcelWriter(output, engine='openypxl') as writer:
             df_export.to_excel(writer, sheet_name='Laporan Koleksi & Piutang', index=False)
             
         output.seek(0)
@@ -1794,7 +1794,7 @@ def collection_monitoring_api():
                 'NOMEN': 1,
                 'RAYON_MB': { '$ifNull': [ '$RAYON', 'N/A' ] },
             }},
-            {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
+            {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}}, # <-- FIX: Mengganti {'#lookup': ...} menjadi { '$lookup': ... }
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
             {'$project': {
                  'TGL_BAYAR': 1,
@@ -2625,6 +2625,7 @@ def analyze_data():
     
     return jsonify({
         "status": "success",
+        ""
         "summary": data_summary,
         "stats": descriptive_stats,
         "head": merged_df.head().to_html(classes='table table-striped') 
