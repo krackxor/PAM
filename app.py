@@ -874,7 +874,7 @@ def _aggregate_mb_sunter_detail(collection_mb):
         pipeline = [
             {'$match': base_match},
             {'$project': {
-                'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
+                'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, # FIX
                 'NOMEN': 1,
                 # Menggunakan $ifNull sederhana karena $trim ditemukan sebagai argument yang tidak dikenal
                 'RAYON': {'$toUpper': {'$ifNull': ['$RAYON', 'N/A']}}
@@ -925,7 +925,7 @@ def _aggregate_mb_sunter_detail(collection_mb):
             {'$match': {'RAYON': rayon_key}},
             {'$project': {
                 'TGL_BAYAR': 1,
-                'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
+                'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, # FIX
                 'NOMEN': 1
             }},
             {'$group': {
@@ -1050,8 +1050,8 @@ def collection_report_api():
             'RAYON': { '$ifNull': [ '$RAYON', 'N/A' ] }, 
             'PCEZ': { '$ifNull': [ '$PCEZ', 'N/A' ] }, 
             'NOMEN': 1,
-            'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}, 
-            'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}}, # NEW: Include KUBIK for billed volume
+            'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, 
+            'KUBIK': {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}, # NEW: Include KUBIK for billed volume
             'STATUS': 1
         }
     }
@@ -1091,8 +1091,8 @@ def collection_report_api():
         }},
         { '$project': {
             'NOMEN': 1,
-            'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}, 
-            'KUBIKBAYAR': {'$toDouble': {'$ifNull': ['$KUBIKBAYAR', 0]}}, 
+            'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, # FIX
+            'KUBIKBAYAR': {"$toDouble": {"$ifNull": ["$KUBIKBAYAR", 0]}}, # FIX
             'RAYON_MB': { '$ifNull': [ '$RAYON', 'N/A' ] },
             'PCEZ_MB': { '$ifNull': [ '$PCEZ', 'N/A' ] },
         }},
@@ -1185,7 +1185,7 @@ def collection_report_api():
         }},
         { '$group': {
             '_id': None,
-            'mb_undue_prev_nominal': { '$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}} },
+            'mb_undue_prev_nominal': { '$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}} },
         }}
     ]
     mb_undue_prev_result = list(collection_mb.aggregate(pipeline_mb_undue_prev))
@@ -1640,8 +1640,8 @@ def analyze_mc_grouping_summary_api():
              {"$project": {
                 # Kolom Piutang/Kubik
                 "NOMEN": "$NOMEN",
-                "NOMINAL": {"$toDouble": {"$ifNull': ["$NOMINAL", 0]}},
-                "KUBIK": {"$toDouble": {"$ifNull': ["$KUBIK", 0]}},
+                "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, # FIXED: Used " for $ifNull
+                "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}, # FIXED: Used " for $ifNull
                 "CUST_TYPE_MC": "$CUST_TYPE", # <-- DITAMBAHKAN
                 "RAYON_MC": "$RAYON"
             }},
@@ -1668,8 +1668,8 @@ def analyze_mc_grouping_summary_api():
             }},
             {'$group': {
                 '_id': None,
-                'SumOfKUBIK': {'$sum': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}}},
-                'SumOfNOMINAL': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}},
+                'SumOfKUBIK': {'$sum': {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}}, # FIXED: Used " for $ifNull
+                'SumOfNOMINAL': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}}, # FIXED: Used " for $ifNull
                 'CountOfNOMEN': {'$addToSet': '$NOMEN'}
             }},
             {'$project': {
@@ -1819,7 +1819,7 @@ def collection_monitoring_api():
                 }},
                 { '$group': {
                     '_id': None,
-                    'TotalUnduePrev': { '$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}} },
+                    'TotalUnduePrev': { '$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}} },
                 }}
             ]
             undue_prev_result = list(collection_mb.aggregate(pipeline_undue_prev))
@@ -1843,7 +1843,7 @@ def collection_monitoring_api():
             }}, 
             {'$project': {
                 'TGL_BAYAR': 1,
-                'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}, 
+                'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, # FIX
                 'NOMEN': 1,
                 'RAYON_MB': { '$ifNull': [ '$RAYON', 'N/A' ] },
                 'PCEZ_MB': { '$ifNull': [ '$PCEZ', 'N/A' ] }, # Tambahkan PCEZ dari MB
@@ -2064,7 +2064,7 @@ def mom_report_api():
                 'BILL_REASON': 'BIAYA PEMAKAIAN AIR' 
             }},
             {'$project': {
-                'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
+                'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
                 'NOMEN': 1,
                 'Periode': {'$substr': ['$TGL_BAYAR', 0, 7]} 
             }},
@@ -2162,7 +2162,7 @@ def doh_comparison_report_api():
                 'BILL_REASON': 'BIAYA PEMAKAIAN AIR' 
             }},
             {'$project': {
-                'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
+                'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
                 'RAYON': 1,
                 # Ekstrak Hari (DD) dan Periode (YYYY-MM)
                 'Day': {'$substr': ['$TGL_BAYAR', 8, 2]},
@@ -2332,7 +2332,7 @@ def _aggregate_top_debt(collection_mc, collection_ardebt, collection_cid):
     pipeline_ardebt_total = [
         {'$group': {
             '_id': '$NOMEN',
-            'TotalARDEBT': {'$sum': {'$toDouble': {'$ifNull': ['$JUMLAH', 0]}}},
+            'TotalARDEBT': {'$sum': {"$toDouble": {"$ifNull": ["$JUMLAH", 0]}}},
             'TotalPeriodeTunggakan': {'$sum': 1}
         }}
     ]
@@ -2343,7 +2343,7 @@ def _aggregate_top_debt(collection_mc, collection_ardebt, collection_cid):
         {'$match': {'BULAN_TAGIHAN': latest_mc_month}} if latest_mc_month else {'$match': {'NOMEN': {'$exists': True}}}, 
         {'$group': {
             '_id': '$NOMEN',
-            'MC_Piutang': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}}
+            'MC_Piutang': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}}
         }}
     ]
     mc_piutang = {doc['_id']: doc['MC_Piutang'] for doc in collection_mc.aggregate(pipeline_mc_piutang, allowDiskUse=True)}
@@ -2389,8 +2389,8 @@ def _aggregate_top_premium(collection_mc, collection_cid):
         {'$match': {'KUBIK': {'$gt': 0}}}, 
         {'$group': {
             '_id': '$NOMEN',
-            'TotalKubik': {'$sum': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}}},
-            'TotalNominal': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}}
+            'TotalKubik': {'$sum': {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}},
+            'TotalNominal': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}}
         }},
         {'$sort': {'TotalKubik': -1}}, 
         {'$limit': 500},
@@ -2436,8 +2436,8 @@ def report_top_lists_api():
             {'$project': {
                 '_id': 0, 'NOMEN': 1, 'NAMA': {'$ifNull': ['$cid.NAMA', 'N/A']},
                 'RAYON': {'$ifNull': ['$cid.RAYON', 'N/A']},
-                'NOMINAL_MC': {'$round': [{'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}, 0]},
-                'KUBIK_MC': {'$round': [{'$toDouble': {'$ifNull': ['$KUBIK', 0]}}, 0]},
+                'NOMINAL_MC': {'$round': [{"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, 0]},
+                'KUBIK_MC': {'$round': [{"$toDouble": {"$ifNull": ["$KUBIK", 0]}}, 0]},
                 'STATUS': 1
             }}
         ]
@@ -2452,8 +2452,8 @@ def report_top_lists_api():
             {'$project': {
                 '_id': 0, 'NOMEN': 1, 'NAMA': {'$ifNull': ['$cid.NAMA', 'N/A']},
                 'RAYON': {'$ifNull': ['$cid.RAYON', 'N/A']},
-                'NOMINAL_MC': {'$round': [{'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}, 0]},
-                'KUBIK_MC': {'$round': [{'$toDouble': {'$ifNull': ['$KUBIK', 0]}}, 0]},
+                'NOMINAL_MC': {'$round': [{"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, 0]},
+                'KUBIK_MC': {'$round': [{"$toDouble": {"$ifNull": ["$KUBIK", 0]}}, 0]},
                 'STATUS': 1
             }}
         ]
@@ -2490,7 +2490,7 @@ def basic_volume_report_api():
         pipeline_basic_volume = [
             {'$project': {
                 'NOMEN': 1,
-                'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}},
+                'KUBIK': {"$toDouble": {"$ifNull": ["$KUBIK", 0]}},
                 'RAYON': 1,
                 'BULAN_TAGIHAN': 1 # Kunci pembeda historis
             }},
@@ -2593,7 +2593,7 @@ def aging_report_api():
             {'$project': {
                 'NOMEN': 1,
                 'RAYON': 1,
-                'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}},
+                'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
                 'BULAN_TAGIHAN': 1
             }},
             # Grouping berdasarkan NOMEN, menjumlahkan total nominal piutang lama
@@ -3309,7 +3309,7 @@ def dashboard_summary_api():
             {'$match': {'BULAN_TAGIHAN': latest_mc_month, 'NOMINAL': {'$gt': 0}}} if latest_mc_month else {'$match': {'NOMINAL': {'$gt': 0}}},
             {'$group': {
                 '_id': None,
-                'total_piutang': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}},
+                'total_piutang': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
                 'jumlah_tagihan': {'$sum': 1}
             }}
         ]
@@ -3322,7 +3322,7 @@ def dashboard_summary_api():
             {'$match': {'JUMLAH': {'$gt': 0}}},
             {'$group': {
                 '_id': None,
-                'total_tunggakan': {'$sum': {'$toDouble': {'$ifNull': ['$JUMLAH', 0]}}},
+                'total_tunggakan': {'$sum': {"$toDouble": {"$ifNull": ["$JUMLAH", 0]}}},
                 'jumlah_tunggakan': {'$sum': 1}
             }}
         ]
@@ -3339,7 +3339,7 @@ def dashboard_summary_api():
             }}, 
             {'$group': {
                 '_id': None,
-                'koleksi_hari_ini': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}},
+                'koleksi_hari_ini': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
                 'transaksi_hari_ini': {'$sum': 1}
             }}
         ]
@@ -3356,7 +3356,7 @@ def dashboard_summary_api():
             }},
             {'$group': {
                 '_id': None,
-                'koleksi_bulan_ini': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}},
+                'koleksi_bulan_ini': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
                 'transaksi_bulan_ini': {'$sum': 1}
             }}
         ]
@@ -3400,7 +3400,7 @@ def dashboard_summary_api():
             {'$match': {'BULAN_TAGIHAN': latest_mc_month, 'NOMINAL': {'$gt': 0}}},
             {'$group': {
                 '_id': '$RAYON',
-                'total_piutang': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}},
+                'total_piutang': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
                 'total_pelanggan': {'$addToSet': '$NOMEN'}
             }},
             {'$project': {
@@ -3430,7 +3430,7 @@ def dashboard_summary_api():
                                  'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}}, 
                 {'$group': {
                     '_id': None,
-                    'total': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}},
+                    'total': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
                     'count': {'$sum': 1}
                 }}
             ]
@@ -3471,7 +3471,7 @@ def rayon_analysis_api():
             {'$match': {'BULAN_TAGIHAN': latest_mc_month, 'NOMINAL': {'$gt': 0}}} if latest_mc_month else {'$match': {'NOMINAL': {'$gt': 0}}}, 
             {'$group': {
                 '_id': '$RAYON',
-                'total_piutang': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}},
+                'total_piutang': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
                 'total_pelanggan': {'$addToSet': '$NOMEN'}
             }},
             {'$project': {
@@ -3494,7 +3494,7 @@ def rayon_analysis_api():
             }},
             {'$group': {
                 '_id': '$RAYON',
-                'total_koleksi': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}},
+                'total_koleksi': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
             }},
         ]
         koleksi_result = list(collection_mb.aggregate(pipeline_koleksi_rayon))
@@ -3587,7 +3587,7 @@ def critical_alerts_api():
             {'$group': {
                 '_id': '$NOMEN',
                 'months': {'$sum': 1}, # Hitung jumlah baris tunggakan
-                'amount': {'$sum': {'$toDouble': {'$ifNull': ['$JUMLAH', 0]}}}
+                'amount': {'$sum': {"$toDouble": {"$ifNull": ["$JUMLAH", 0]}}}
             }},
             {'$match': {'months': {'$gte': 5}}}, # Nomen dengan 5 periode tunggakan atau lebih
             {'$limit': 20}
