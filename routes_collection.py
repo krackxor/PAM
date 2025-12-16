@@ -1,9 +1,11 @@
 from flask import Blueprint, request, jsonify, render_template, url_for, flash, redirect
 from flask_login import login_required, current_user
 from functools import wraps
-from utils import get_db_status, _get_previous_month_year, _get_day_n_ago, _generate_distribution_schema
+from datetime import datetime
+# Pastikan get_comprehensive_stats diimport dari utils untuk dashboard utama
+from utils import get_db_status, _get_previous_month_year, _get_day_n_ago, _generate_distribution_schema, get_comprehensive_stats
 
-# Definisikan Blueprint
+# Definisikan Blueprint dengan nama 'bp_collection'
 bp_collection = Blueprint('bp_collection', __name__, url_prefix='/collection')
 
 # --- Middleware Dekorator untuk Cek Admin (Wajib di Blueprint) ---
@@ -64,18 +66,29 @@ def _get_distribution_report(group_fields, collection_mc):
 
     return results, latest_month
     
-# --- RUTE VIEW FRONTEND (Konsisten UI) ---
+# --- RUTE VIEW FRONTEND (Halaman HTML) ---
 
-# Menu 1: Laporan Piutang & Koleksi (Ringkasan KPI)
+# Menu 1: Laporan Piutang & Koleksi (Ringkasan KPI Dashboard)
 @bp_collection.route('/laporan', methods=['GET'])
 @login_required 
 def collection_laporan_view():
+    # Ambil periode dari request atau default ke bulan saat ini
+    # Format input month HTML biasanya 'YYYY-MM', utils butuh 'YYYYMM' atau regex
+    current_period = datetime.now().strftime('%Y%m')
+    raw_period = request.args.get('period', current_period) # Misal: 2025-12
+    period = raw_period.replace('-', '') # Misal: 202512
+
+    # Ambil statistik lengkap dari utils (Server-Side Rendering untuk performa cepat)
+    stats = get_comprehensive_stats(period)
+
     return render_template('collection_summary.html', 
                            title="Laporan Piutang & Koleksi",
                            description="Ringkasan Kinerja Piutang, Koleksi, dan Analisis Rayon Terbaru.",
+                           stats=stats,       # Variable penting: Data untuk KPI, Grafik, Tabel
+                           period=raw_period, # Variable penting: Untuk nilai input filter
                            is_admin=current_user.is_admin)
 
-# Menu 2: Analisis Piutang & Koleksi (Distribusi & MoM)
+# Menu 2: Analisis Piutang & Koleksi (Halaman Menu Analisis)
 @bp_collection.route('/analisis', methods=['GET'])
 @login_required 
 def collection_analisis_view():
@@ -84,7 +97,7 @@ def collection_analisis_view():
                            description="Pilih laporan analisis Piutang, Kubikasi, dan perbandingan MoM berdasarkan dimensi pelanggan.",
                            is_admin=current_user.is_admin)
 
-# Menu 3: Top List Piutang (Top Debtors)
+# Menu 3: Top List Piutang (Top Debtors Report)
 @bp_collection.route('/top', methods=['GET'])
 @login_required 
 def collection_top_view():
@@ -95,7 +108,7 @@ def collection_top_view():
                             is_admin=current_user.is_admin,
                             api_endpoint=url_for("bp_collection.top_debtors_report_api"))
 
-# Menu 4: Riwayat Koleksi (MoM)
+# Menu 4: Riwayat Koleksi (MoM Comparison)
 @bp_collection.route('/riwayat', methods=['GET'])
 @login_required 
 def collection_riwayat_view():
@@ -106,7 +119,7 @@ def collection_riwayat_view():
                             is_admin=current_user.is_admin,
                             api_endpoint=url_for("bp_collection.mom_comparison_report_api"))
 
-# Sub-Menu Perbandingan Koleksi (DoD)
+# Sub-Menu Perbandingan Koleksi (DoD Comparison)
 @bp_collection.route('/dod_comparison', methods=['GET'])
 @login_required 
 def analysis_dod_comparison():
@@ -117,7 +130,7 @@ def analysis_dod_comparison():
                             is_admin=current_user.is_admin,
                             api_endpoint=url_for("bp_collection.dod_comparison_report_api"))
 
-# --- API REPORTING (DISTRIBUSI) ---
+# --- API REPORTING (Endpoint JSON untuk Grafik/Tabel Distribusi) ---
 
 @bp_collection.route("/api/distribution/rayon_report")
 @login_required
