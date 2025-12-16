@@ -5,9 +5,8 @@ from datetime import datetime, timedelta
 from functools import wraps
 
 # --- KONFIGURASI DAN KONEKSI GLOBAL ---
-# Variabel lingkungan dimuat secara otomatis oleh app.py (melalui python-dotenv)
 MONGO_URI = os.getenv("MONGO_URI")
-DB_NAME = os.getenv("MONGO_DB_NAME")
+DB_NAME = os.getenv("MONGO_DB_NAME") or "pam_analytics"
 
 client = None
 db = None
@@ -18,22 +17,18 @@ def init_db(app):
     global client, db, collections
     
     if client:
-        # Sudah terinisialisasi
         return
     
     if not MONGO_URI:
         print("KRITIS: Variabel lingkungan MONGO_URI tidak ditemukan. Koneksi gagal.")
         return
         
-    # Diagnostik: Tampilkan URI yang digunakan (menghilangkan kredensial sensitif)
     display_uri = MONGO_URI.split('@')[-1] if '@' in MONGO_URI else MONGO_URI
     print(f"Mencoba koneksi ke URI: {display_uri.split('?')[0]}...")
 
     try:
-        # Memperluas timeout koneksi untuk operasi upload yang besar
-        # Menambah serverSelectionTimeoutMS untuk mendeteksi kegagalan koneksi
-        client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=120000, socketTimeoutMS=900000, connectTimeoutMS=30000)
-        client.admin.command('ping') 
+        client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=12000, socketTimeoutMS=90000, connectTimeoutMS=30000)
+        # client.admin.command('ping') # Optional, can slow down startup if connection poor
         db = client[DB_NAME]
         
         # Inisialisasi Koleksi (Mapping)
@@ -54,36 +49,33 @@ def init_db(app):
 
         # MC (MasterCetak)
         collections['mc'].create_index([('NOMEN', 1), ('BULAN_TAGIHAN', -1)], name='idx_mc_nomen_hist')
+        collections['mc'].create_index([('PERIODE', 1)], name='idx_mc_periode') # Added for dashboard
         collections['mc'].create_index([('RAYON', 1), ('PCEZ', 1)], name='idx_mc_rayon_pcez') 
+        collections['mc'].create_index([('KODERAYON', 1)], name='idx_mc_koderayon') # Alias handling
         collections['mc'].create_index([('STATUS', 1)], name='idx_mc_status')
         collections['mc'].create_index([('TARIF', 1), ('KUBIK', 1), ('NOMINAL', 1)], name='idx_mc_tarif_volume')
 
         # MB (MasterBayar)
-        # Unique set to False is correct for MB, just ensuring index exists
         collections['mb'].create_index([('NOTAGIHAN', 1), ('TGL_BAYAR', 1), ('NOMINAL', 1)], name='idx_mb_unique_transaction', unique=False)
         collections['mb'].create_index([('TGL_BAYAR', -1)], name='idx_mb_paydate_desc')
+        collections['mb'].create_index([('BULAN_REK', 1)], name='idx_mb_bulan_rek') # Added for dashboard
         collections['mb'].create_index([('NOMEN', 1)], name='idx_mb_nomen')
         collections['mb'].create_index([('RAYON', 1), ('PCEZ', 1), ('TGL_BAYAR', -1)], name='idx_mb_rayon_pcez_date')
 
         # SBRS (MeterReading)
-        # SBRS index should be unique to prevent duplicates on (account, date)
-        # Dropping existing index if it's the wrong type is safer
         try:
-             # Coba buat index unik. Jika gagal, berarti ada data duplikat/konflik
             collections['sbrs'].create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', 1)], name='idx_sbrs_unique_read', unique=True)
         except OperationFailure:
-            # Jika unique index gagal (karena duplikat data lama atau index lama non-unique), 
-            # buat index non-unique saja agar program tetap jalan.
             collections['sbrs'].create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', 1)], name='idx_sbrs_unique_read', unique=False)
             
         collections['sbrs'].create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', -1)], name='idx_sbrs_history')
         
         # ARDEBT (AccountReceivable)
         collections['ardebt'].create_index([('NOMEN', 1), ('PERIODE_BILL', -1), ('JUMLAH', 1)], name='idx_ardebt_nomen_hist')
+        collections['ardebt'].create_index([('RAYON', 1)], name='idx_ardebt_rayon') # Added for dashboard
         
         print("Koneksi MongoDB berhasil dan index dikonfigurasi!")
     except (ConnectionFailure, ServerSelectionTimeoutError) as e:
-        # Menangkap error koneksi spesifik untuk memberikan pesan yang lebih jelas
         print(f"Gagal terhubung ke MongoDB atau mengkonfigurasi index: {e}")
         client = None
     except Exception as e:
@@ -99,7 +91,6 @@ def get_db_status():
 # --- HELPER LOGIC WAKTU ---
 
 def _get_previous_month_year(bulan_tagihan):
-    """Mengubah format 'MMYYYY' menjadi 'MMYYYY' bulan sebelumnya."""
     if not bulan_tagihan or len(bulan_tagihan) != 6:
         return None
     try:
@@ -113,14 +104,12 @@ def _get_previous_month_year(bulan_tagihan):
         return None
         
 def _get_day_n_ago(n):
-    """Mengembalikan string tanggal YYYY-MM-DD untuk n hari yang lalu dari hari ini."""
     return (datetime.now() - timedelta(days=n)).strftime('%Y-%m-%d')
 
 
 # --- HELPER LOGIC AGREGASI KHUSUS ---
 
 def _parse_zona_novak(zona_str):
-    """Mengekstrak Rayon, PC, EZ, PCEZ, dan Block dari ZONA_NOVAK string."""
     zona = str(zona_str).strip().upper()
     if len(zona) < 9:
         return {'RAYON_ZONA': 'N/A', 'PC_ZONA': 'N/A', 'EZ_ZONA': 'N/A', 'PCEZ_ZONA': 'N/A', 'BLOCK_ZONA': 'N/A'}
@@ -142,7 +131,6 @@ def _parse_zona_novak(zona_str):
         return {'RAYON_ZONA': 'N/A', 'PC_ZONA': 'N/A', 'EZ_ZONA': 'N/A', 'PCEZ_ZONA': 'N/A', 'BLOCK_ZONA': 'N/A'}
 
 def _get_sbrs_anomalies(collection_sbrs, collection_cid):
-    """Menjalankan pipeline agregasi untuk menemukan anomali pemakaian (Naik/Turun/Zero/Ekstrim)."""
     if collection_sbrs is None or collection_cid is None:
         return []
         
@@ -244,10 +232,7 @@ def _get_sbrs_anomalies(collection_sbrs, collection_cid):
         
     return anomalies
 
-# --- HELPER: Skema Dinamis untuk Laporan Distribusi ---
-
 def _generate_distribution_schema(group_fields):
-    """Menghasilkan skema kolom yang dinamis dengan label dan tipe data."""
     schema = []
     
     field_labels = {
@@ -292,3 +277,152 @@ def _generate_distribution_schema(group_fields):
     ])
     
     return schema
+
+# --- NEW: DASHBOARD STATISTICS FUNCTIONS (DITAMBAHKAN) ---
+
+def _aggregate_category(collection, money_field, usage_field, period, date_field=None):
+    """
+    Fungsi agregasi untuk dashboard Piutang, Tunggakan, dan Collection.
+    """
+    if collection is None:
+        return {'totals': {'count':0, 'total_usage':0, 'total_nominal':0}, 'largest': {}, 'charts': {}, 'lists': {}}
+
+    match_stage = {}
+    if period and date_field:
+        # Regex match untuk periode (misal: "202311" atau "112023")
+        # Asumsi format di DB konsisten dengan format period yang dikirim
+        match_stage = {date_field: {'$regex': f"{period}"}} 
+    
+    # 1. Base Totals
+    try:
+        totals_pipeline = [
+            {'$match': match_stage},
+            {'$group': {
+                '_id': None,
+                'count': {'$sum': 1},
+                'total_usage': {'$sum': {'$ifNull': [f'${usage_field}', 0]}},
+                'total_nominal': {'$sum': {'$ifNull': [f'${money_field}', 0]}}
+            }}
+        ]
+        totals_res = list(collection.aggregate(totals_pipeline))
+        base = totals_res[0] if totals_res else {'count': 0, 'total_usage': 0, 'total_nominal': 0}
+    except Exception as e:
+        print(f"Error aggregating totals: {e}")
+        base = {'count': 0, 'total_usage': 0, 'total_nominal': 0}
+
+    # Helper untuk mencari kontributor terbesar
+    def get_largest(group_field):
+        # Coba field 'RAYON' atau 'KODERAYON' karena penamaan di DB bisa beragam
+        # Gunakan $ifNull untuk fallback jika field tidak ada
+        target_field = f'${group_field}'
+        
+        try:
+            res = list(collection.aggregate([
+                {'$match': match_stage},
+                {'$group': {
+                    '_id': target_field,
+                    'total': {'$sum': {'$ifNull': [f'${money_field}', 0]}}
+                }},
+                {'$sort': {'total': -1}},
+                {'$limit': 1}
+            ]))
+            return res[0] if res else {'_id': '-', 'total': 0}
+        except Exception:
+            return {'_id': '-', 'total': 0}
+
+    # Mencari Rayon, PC, PCEZ terbesar
+    # Note: Sesuaikan nama field dengan schema DB Anda (RAYON vs KODERAYON)
+    # Di sini kita mencoba field standard 'RAYON', 'PC', 'PCEZ'
+    largest = {
+        'rayon': get_largest('RAYON'),
+        'pc': get_largest('PC'),
+        'pcez': get_largest('PCEZ')
+    }
+
+    # 3. Breakdowns (Tarif & Merek)
+    def get_distribution(group_field, rayon_filter=None):
+        match = match_stage.copy()
+        if rayon_filter:
+            match['RAYON'] = rayon_filter # Filter rayon
+        
+        try:
+            return list(collection.aggregate([
+                {'$match': match},
+                {'$group': {'_id': f'${group_field}', 'val': {'$sum': 1}}},
+                {'$sort': {'val': -1}},
+                {'$limit': 10}
+            ]))
+        except Exception:
+            return []
+
+    breakdowns = {
+        'tarif_all': get_distribution('TARIF'),
+        'tarif_34': get_distribution('TARIF', '34'),
+        'tarif_35': get_distribution('TARIF', '35'),
+        'merek_all': get_distribution('MERK'),
+        'merek_34': get_distribution('MERK', '34'),
+        'merek_35': get_distribution('MERK', '35'),
+    }
+
+    # 4. Top 500 Lists
+    def get_top_500(rayon):
+        match = match_stage.copy()
+        match['RAYON'] = rayon
+        
+        projection = {
+            'NOMEN': 1, 'NAMA': 1, '_id': 0,
+            money_field: 1
+        }
+        # Only project usage if it's not a dummy field
+        if usage_field:
+            projection[usage_field] = 1
+
+        try:
+            return list(collection.find(match, projection).sort(money_field, -1).limit(500))
+        except Exception:
+            return []
+
+    top_lists = {
+        'top_34': get_top_500('34'),
+        'top_35': get_top_500('35')
+    }
+
+    return {
+        'totals': base,
+        'largest': largest,
+        'charts': breakdowns,
+        'lists': top_lists
+    }
+
+def get_comprehensive_stats(period=None):
+    """
+    Mengambil statistik lengkap untuk Piutang (MC), Tunggakan (ARDEBT), dan Collection (MB).
+    """
+    # Pastikan collections sudah terisi (init_db sudah dipanggil)
+    if not collections:
+        return {}
+
+    stats = {
+        'piutang': _aggregate_category(
+            collections.get('mc'), 
+            money_field="NOMINAL", # Sesuai header MC: NOMINAL
+            usage_field="KUBIK",   # Sesuai header MC: KUBIK
+            period=period, 
+            date_field="PERIODE"   # MC field: PERIODE (Format MMYYYY biasanya)
+        ),
+        'tunggakan': _aggregate_category(
+            collections.get('ardebt'), 
+            money_field="JUMLAH", 
+            usage_field="PEMAKAIAN", # Mungkin 0 di ARDEBT
+            period=period, 
+            date_field=None # ARDEBT biasanya snapshot, tidak difilter periode
+        ),
+        'collection': _aggregate_category(
+            collections.get('mb'), 
+            money_field="NOMINAL", 
+            usage_field="KUBIKBAYAR", # Sesuai header MB
+            period=period, 
+            date_field="BULAN_REK" # atau TGL_BAYAR. BULAN_REK (Format MMYYYY)
+        )
+    }
+    return stats
