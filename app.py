@@ -1047,8 +1047,9 @@ def collection_report_api():
     
     initial_project = {
         '$project': {
+            # FIX: Ambil PCEZ dari MC. Rayon di MC adalah PCEZ ZONA_NOVAK
             'RAYON': { '$ifNull': [ '$RAYON', 'N/A' ] }, 
-            'PCEZ': { '$ifNull': [ '$PCEZ', 'N/A' ] }, 
+            'PCEZ': { '$ifNull': [ '$PCEZ', 'N/A' ] }, # Ambil PCEZ dari MC
             'NOMEN': 1,
             'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}, 
             'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}}, # NEW: Include KUBIK for billed volume
@@ -1096,7 +1097,7 @@ def collection_report_api():
             'RAYON_MB': { '$ifNull': [ '$RAYON', 'N/A' ] },
             'PCEZ_MB': { '$ifNull': [ '$PCEZ', 'N/A' ] },
         }},
-        {'$lookup': { # <-- FIX: Mengganti {'#lookup': ...} menjadi { '$lookup': ... }
+        {'$lookup': { 
            'from': 'CustomerData', 
            'localField': 'NOMEN',
            'foreignField': 'NOMEN',
@@ -1104,9 +1105,20 @@ def collection_report_api():
         }},
         {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
         { '$project': {
-             # Menggunakan $ifNull sederhana untuk menghindari error $trim
-             'RAYON': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MB']},
-             'PCEZ': {'$ifNull': ['$customer_info.PCEZ', '$PCEZ_MB']},
+             # Prioritas 1: CID PCEZ, Prioritas 2: MB PCEZ (Jika ada), Prioritas 3: N/A
+             'PCEZ': {
+                 '$ifNull': [
+                     {'$ifNull': ['$customer_info.PCEZ', '$PCEZ_MB']},
+                     'N/A'
+                 ]
+             },
+             # Prioritas 1: CID RAYON, Prioritas 2: MB RAYON (Jika ada), Prioritas 3: N/A
+             'RAYON': {
+                 '$ifNull': [
+                     {'$ifNull': ['$customer_info.RAYON', '$RAYON_MB']},
+                     'N/A'
+                 ]
+             },
              'NOMEN': 1,
              'NOMINAL': 1,
              'KUBIKBAYAR': 1
@@ -1339,7 +1351,7 @@ def export_collection_report():
         ]
 
         output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openypxl') as writer:
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df_export.to_excel(writer, sheet_name='Laporan Koleksi & Piutang', index=False)
             
         output.seek(0)
@@ -1793,39 +1805,55 @@ def collection_monitoring_api():
                 'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}, 
                 'NOMEN': 1,
                 'RAYON_MB': { '$ifNull': [ '$RAYON', 'N/A' ] },
+                'PCEZ_MB': { '$ifNull': [ '$PCEZ', 'N/A' ] }, # Tambahkan PCEZ dari MB
             }},
-            {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}}, # <-- FIX: Mengganti {'#lookup': ...} menjadi { '$lookup': ... }
+            {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}}, 
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
             {'$project': {
                  'TGL_BAYAR': 1,
                  'NOMINAL': 1,
-                 # Menggunakan $ifNull sederhana untuk kompatibilitas
-                 'CLEAN_RAYON': {'$toUpper': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MB']}},
-                 'NOMEN': 1
+                 'NOMEN': 1,
+                 # FIX: Logika Fallback untuk Rayon (CID -> MB)
+                 'CLEAN_RAYON': {'$toUpper': {
+                     '$ifNull': [
+                         {'$ifNull': ['$customer_info.RAYON', '$RAYON_MB']},
+                         'N/A'
+                     ]
+                 }},
+                 # FIX: Logika Fallback untuk PCEZ (CID -> MB)
+                 'CLEAN_PCEZ': {'$toUpper': {
+                     '$ifNull': [
+                         {'$ifNull': ['$customer_info.PCEZ', '$PCEZ_MB']},
+                         'N/A'
+                     ]
+                 }}
             }},
             {'$match': {'CLEAN_RAYON': {'$in': ['34', '35']}}},
             {'$group': {
-                '_id': {'date': '$TGL_BAYAR', 'rayon': '$CLEAN_RAYON'},
+                # FIX: Grouping berdasarkan Rayon dan PCEZ untuk detail (meskipun output saat ini tidak menggunakannya)
+                '_id': {'date': '$TGL_BAYAR', 'rayon': '$CLEAN_RAYON', 'pcez': '$CLEAN_PCEZ'},
                 'DailyNominal': {'$sum': '$NOMINAL'},
                 'DailyCustCount': {'$addToSet': '$NOMEN'}
             }},
-            {'$sort': {'_id.date': 1}}
+            # FIX: Proyeksi kembali ke format lama, tetapi output akan menggunakan Rayon saja
+            {'$project': { 
+                '_id': 0,
+                'TGL': '$_id.date',
+                'RAYON': '$_id.rayon',
+                'COLL_NOMINAL': '$DailyNominal',
+                'CUST_COUNT': {'$size': '$DailyCustCount'},
+            }},
+            {'$sort': {'TGL': 1}}
         ]
         
         mb_daily_data = list(collection_mb.aggregate(pipeline_mb_daily, allowDiskUse=True))
 
         # 4. Proses di Pandas untuk Kumulatif & Persentase
-        df_monitoring = pd.DataFrame([
-            {'TGL': doc['_id']['date'], 
-             'RAYON': doc['_id']['rayon'], 
-             'COLL_NOMINAL': doc['DailyNominal'], 
-             'CUST_COUNT': len(doc['DailyCustCount'])}
-             for doc in mb_daily_data
-        ])
+        df_monitoring = pd.DataFrame(mb_daily_data)
 
         if df_monitoring.empty:
              # Jika data monitoring kosong, gunakan ringkasan Piutang MC dan Undue Prev
-             empty_summary = {'R34': {'MC1125': total_mc_34, 'CURRENT': 0}, 'R35': {'MC1125': total_mc_35, 'CURRENT': 0}, 'GLOBAL': {'TotalPiutangMC': total_mc_nominal_all, 'TotalUnduePrev': total_undue_prev_nominal, 'CurrentKoleksiTotal': 0, 'TotalKoleksiPersen': 0}}
+             empty_summary = {'R34': {'MC1125': total_mc_34, 'CURRENT': 0}, 'R35': {'MC1125': 0, 'CURRENT': 0}, 'GLOBAL': {'TotalPiutangMC': total_mc_nominal_all, 'TotalUnduePrev': total_undue_prev_nominal, 'CurrentKoleksiTotal': 0, 'TotalKoleksiPersen': 0}}
              return jsonify({'monitoring_data': {'R34': [], 'R35': []}, 'summary_top': empty_summary}), 200
 
         # Pastikan kolom TGL adalah datetime
