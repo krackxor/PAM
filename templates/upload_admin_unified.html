@@ -1,585 +1,252 @@
 {% extends "base.html" %}
 
-{% block title %}Kelola Data Piutang & Koleksi{% endblock %}
+{% block title %}Admin Upload Data{% endblock %}
 
 {% block custom_styles %}
-/* Custom CSS untuk Tampilan Tab/Sub-Menu (Dinamis dan Responsif) */
-.tab-menu {
-    border-bottom: 2px solid #ddd;
-    margin-bottom: 20px;
-    display: flex;
-    overflow-x: auto; /* Memungkinkan scroll horizontal di mobile */
-    white-space: nowrap;
-    padding-bottom: 5px; 
-    -webkit-overflow-scrolling: touch; /* iOS smooth scrolling */
-}
-.tab-button {
-    padding: 10px 20px;
-    cursor: pointer;
-    background-color: #f8f9fa;
-    border: 1px solid #ddd;
-    border-bottom: none;
-    border-radius: 5px 5px 0 0;
-    font-weight: 600;
-    color: #555;
-    transition: all 0.3s ease;
-    flex-shrink: 0; 
-}
-.tab-button:hover:not(.active) {
-    background-color: #e9ecef;
-    color: var(--primary-color);
-}
-.tab-button.active {
-    background-color: white;
-    border-color: var(--primary-color);
-    border-bottom: 2px solid white; 
-    color: var(--primary-color);
-    box-shadow: var(--shadow-light);
-}
-
-.tab-content {
-    padding: 10px;
-    border: none; /* Hilangkan border ganda */
-    border-top: none;
-    animation: fadeIn 0.5s ease-out; /* Animasi saat tab diganti */
-}
-.upload-section { 
-    padding: 20px; 
-    border-radius: var(--border-radius); 
-    margin-bottom: 30px; 
-    text-align: left; 
-    background-color: var(--card-bg);
-    box-shadow: var(--shadow-light);
-}
-
-/* --- BUTTON STYLING (Sinkronisasi dengan base.html) --- */
-.btn-upload-replace, .btn-upload-append { 
-    color: white;
-    border: none;
-    padding: 12px 25px; 
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    font-weight: 600;
-    transition: all 0.3s ease;
-    display: inline-block;
-    margin-top: 10px;
-}
-.btn-upload-replace { 
-    background-color: #dc3545; 
-}
-.btn-upload-replace:hover { 
-    background-color: #c82333; 
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(220, 53, 69, 0.2);
-}
-.btn-upload-append { 
-    background-color: var(--primary-color); 
-}
-.btn-upload-append:hover { 
-    background-color: #0056b3;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.2);
-}
-
-/* Status Summary Card Styling */
-.upload-summary-card {
-    margin-top: 15px;
-    padding: 15px;
-    border: 1px solid #e0e0e0;
-    border-left: 5px solid; 
-    border-radius: var(--border-radius);
-    background-color: #f8f8f8;
-    box-shadow: var(--shadow-light);
-    animation: fadeIn 0.5s ease-out;
-}
-.summary-header {
-    display: flex;
-    align-items: center;
-    margin-bottom: 10px;
-}
-.summary-message {
-    font-weight: 700;
-    font-size: 1.1em;
-    margin-left: 10px;
-    color: var(--text-color);
-}
-.summary-details {
-    padding-left: 15px;
-    border-left: 3px solid #ccc;
-    font-size: 0.9em;
-    margin-bottom: 10px;
-}
-.status-success { color: var(--secondary-color); }
-.status-replace { color: #dc3545; }
-.status-info { color: #17a2b8; }
-
-/* Anomaly List Styling */
-.anomaly-section {
-    margin-top: 20px;
-    padding: 15px;
-    border: 1px solid #ffc107;
-    border-radius: var(--border-radius);
-    background-color: #fff8e1;
-    box-shadow: var(--shadow-light);
-}
-.anomaly-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 10px;
-    font-size: 0.9em;
-    min-width: 600px; /* Minimal width untuk desktop */
-}
-.anomaly-table th, .anomaly-table td {
-    border: 1px solid #ffeeba;
-    padding: 8px;
-    text-align: left;
-    white-space: nowrap;
-}
-.anomaly-table th {
-    background-color: #ffecb3;
-}
-.anomaly-table td.status-ekstrim { color: #dc3545; font-weight: 700; }
-.anomaly-table td.status-turun { color: #17a2b8; font-weight: 600; }
-.anomaly-table td.status-zero { color: #343a40; font-weight: 600; }
-.anomaly-table td.status-naik { color: #ffc107; font-weight: 600; }
-
-/* Style for individual sections inside the Monthly tab */
-.monthly-group {
-    border: 1px dashed #ced4da;
+/* Custom styles for the upload page */
+.upload-container {
     padding: 20px;
-    margin-bottom: 20px;
+    max-width: 1100px;
+    margin: 20px auto;
+    background-color: var(--background-color-light);
     border-radius: var(--border-radius);
-    text-align: center;
-    transition: box-shadow 0.3s;
+    box-shadow: var(--shadow-medium);
 }
-.monthly-group:hover {
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+.upload-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
 }
-.monthly-group p {
-    font-size: 0.9em;
+.upload-card {
+    padding: 20px;
+    border: 1px solid #e0e0e0;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-light);
+    transition: transform 0.2s;
 }
-
-/* Flex group for Month/Year inputs */
-.date-input-group {
+.upload-card:hover {
+    transform: translateY(-3px);
+}
+.upload-card h4 {
+    margin-top: 0;
+    color: var(--primary-color);
+    border-bottom: 1px dashed #eee;
+    padding-bottom: 10px;
     margin-bottom: 15px;
-    display: flex;
-    gap: 10px;
-    justify-content: center;
 }
-
-/* Common style for file inputs/selects/number inputs */
-.file-input, .date-input-group select, .date-input-group input[type="number"] {
-    padding: 10px;
+.upload-form label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+.upload-form input[type="file"],
+.upload-form select,
+.upload-form input[type="text"] {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
     border-radius: 4px;
-    border: 1px solid #ced4da;
-    transition: border-color 0.3s;
     box-sizing: border-box;
 }
-.date-input-group select {
-    flex-grow: 1;
+.upload-button {
+    background-color: #28a745;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 100%;
+    transition: background-color 0.2s;
+}
+.upload-button:hover {
+    background-color: #1e7e34;
+}
+.status-message {
+    margin-top: 15px;
+    padding: 10px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+.status-success {
+    background-color: #d1e7dd;
+    color: #0f5132;
+    border: 1px solid #badbcc;
+}
+.status-error {
+    background-color: #f8d7da;
+    color: #842029;
+    border: 1px solid #f5c2c7;
 }
 
-/* --- MEDIA QUERY UNTUK LAYAR HP (MAX 600px) --- */
-@media (max-width: 600px) {
-    .tab-button {
-        padding: 10px 15px;
-        font-size: 0.9em;
-    }
-    
-    /* Monthly Group: Stack Select/Input Vertically */
-    .date-input-group {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    .date-input-group input[type="number"] {
-        width: 100% !important;
-        text-align: center;
-    }
-
-    /* Anomaly Table: Implement Card View */
-    .anomaly-table-wrapper {
-        border: none;
-        box-shadow: none;
-    }
-    .anomaly-table {
-        min-width: 100%;
-    }
-    .anomaly-table thead {
-        display: none;
-    }
-    .anomaly-table tr {
-        display: block;
-        margin-bottom: 15px;
-        border: 1px solid #ddd;
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow-light);
-    }
-    .anomaly-table td {
-        display: flex;
-        justify-content: space-between;
-        padding: 10px 12px;
-        border: none;
-        border-bottom: 1px solid #eee;
-        font-size: 1em;
-        white-space: normal;
-    }
-    .anomaly-table td:before {
-        content: attr(data-label);
-        font-weight: 600;
-        text-align: left;
-        width: 45%; 
-        padding-right: 10px;
-        color: #6c757d;
-    }
-    
-    .btn-upload-replace, .btn-upload-append {
-        width: 100%;
-        display: block;
-    }
+/* Flex untuk Grouping Bulan/Tahun */
+.date-group {
+    display: flex;
+    gap: 10px;
 }
+.date-group > div {
+    flex: 1;
+}
+.date-group input {
+    margin-bottom: 0 !important; /* Override default margin */
+}
+
 {% endblock %}
 
 {% block content %}
-    <h2 style="text-align: left; border-bottom: none; margin-bottom: 20px; color: var(--primary-color);">
-        <i class="fas fa-upload" style="margin-right: 10px;"></i> Kelola Data Sumber
+<div class="upload-container">
+    <h2 style="color: var(--primary-color); margin-bottom: 20px;">
+        <i class="fas fa-upload"></i> Admin Upload Data - Manajemen Master Data
     </h2>
-    
-    <div class="tab-menu">
-        <button class="tab-button active" onclick="showTab('monthly')" id="tab-monthly">
-            <i class="fas fa-calendar-alt"></i> BULANAN (MC, CID, ARDEBT)
-        </button>
-        <button class="tab-button" onclick="showTab('daily')" id="tab-daily">
-            <i class="fas fa-money-check-alt"></i> DAILY (MB - Koleksi)
-        </button>
-        <button class="tab-button" onclick="showTab('cycle')" id="tab-cycle">
-            <i class="fas fa-tachometer-alt"></i> CYCLE (SBRS - Baca Meter)
-        </button>
-    </div>
+    <p class="text-muted" style="margin-bottom: 30px;">
+        Unggah file data master (CSV/XLSX) untuk memperbarui koleksi database. Harap perhatikan kolom kunci (NOMEN, NOTAGIHAN) dan Periode Tagihan/Tunggakan yang diperlukan untuk data historis.
+    </p>
 
-    <div id="content-monthly" class="tab-content">
-        <div class="upload-section">
-            <h3>Update Data Bulanan (Mode Historis / APPEND)</h3>
-            <p style="font-weight: bold; color: var(--secondary-color); text-align: center;">Semua data akan disimpan sebagai riwayat (APPEND). Bulan dan Tahun harus diisi untuk MC dan ARDEBT.</p>
-
-            <div class="monthly-group" style="border-color: var(--secondary-color);">
-                <h4>MC: MASTER CETAK (MODE HISTORI)</h4>
-                <p>Data Piutang Bulanan. **MENAMBAHKAN** riwayat ke koleksi `MasterCetak`.</p>
-                <p style="font-size: 0.9em; color: #666;">Kunci unik: NOMEN dan BULAN_TAGIHAN.</p>
-
-                <div class="date-input-group">
-                    <select id="mcMonth" name="month" required class="file-input">
-                        <option value="">-- Pilih Bulan Tagihan --</option>
-                        <option value="01">01 - Januari</option>
-                        <option value="02">02 - Februari</option>
-                        <option value="03">03 - Maret</option>
-                        <option value="04">04 - April</option>
-                        <option value="05">05 - Mei</option>
-                        <option value="06">06 - Juni</option>
-                        <option value="07">07 - Juli</option>
-                        <option value="08">08 - Agustus</option>
-                        <option value="09">09 - September</option>
-                        <option value="10">10 - Oktober</option>
-                        <option value="11">11 - November</option>
-                        <option value="12">12 - Desember</option>
-                    </select>
-                    <input type="number" id="mcYear" name="year" placeholder="Tahun (YYYY)" required 
-                            min="2000" max="2100" class="file-input"
-                            style="width: 100px;">
+    <div class="upload-grid">
+        
+        <!-- 1. Master Cetak (MC) / Piutang Bulanan -->
+        <div class="upload-card">
+            <h4 style="border-left: 4px solid #007bff; padding-left: 10px;">Master Cetak (MC)</h4>
+            <p style="font-size: 0.8rem; color: var(--secondary-color);">Data Tagihan Bulanan (Perlu Bulan/Tahun)</p>
+            <form class="upload-form" id="formMC" data-endpoint="{{ url_for('upload_mc_data') }}">
+                <div class="date-group">
+                    <div>
+                        <label for="monthMC">Bulan Tagihan (MM)</label>
+                        <input type="text" id="monthMC" name="month" placeholder="contoh: 12" required maxlength="2">
+                    </div>
+                    <div>
+                        <label for="yearMC">Tahun Tagihan (YYYY)</label>
+                        <input type="text" id="yearMC" name="year" placeholder="contoh: 2025" required maxlength="4">
+                    </div>
                 </div>
-                
-                <form id="uploadFormMC" action="{{ url_for('upload_mc_data') }}" method="POST" enctype="multipart/form-data">
-                    <input type="file" id="csvFileMC" name="file" accept=".csv, .xlsx, .xls" required class="file-input" style="margin-bottom: 10px; width: 100%; max-width: 300px;">
-                    <button type="submit" class="btn-upload-append">TAMBAH DATA MC (HISTORI)</button>
-                </form>
-                <div id="uploadStatusMC"></div>
-            </div>
-
-            <div class="monthly-group" style="border-color: var(--secondary-color);">
-                <h4>ARDEBT: DETAIL TUNGGAKAN (MODE HISTORI)</h4>
-                <p>Data Tunggakan Historis. **MENAMBAHKAN** riwayat ke koleksi `AccountReceivable`.</p>
-                <p style="font-size: 0.9em; color: #666;">Kunci unik: NOMEN, PERIODE_BILL, dan JUMLAH.</p>
-
-                <div class="date-input-group">
-                    <select id="ardebtMonth" name="month" required class="file-input">
-                        <option value="">-- Pilih Bulan Tunggakan --</option>
-                        <option value="01">01 - Januari</option>
-                        <option value="02">02 - Februari</option>
-                        <option value="03">03 - Maret</option>
-                        <option value="04">04 - April</option>
-                        <option value="05">05 - Mei</option>
-                        <option value="06">06 - Juni</option>
-                        <option value="07">07 - Juli</option>
-                        <option value="08">08 - Agustus</option>
-                        <option value="09">09 - September</option>
-                        <option value="10">10 - Oktober</option>
-                        <option value="11">11 - November</option>
-                        <option value="12">12 - Desember</option>
-                    </select>
-                    <input type="number" id="ardebtYear" name="year" placeholder="Tahun (YYYY)" required 
-                            min="2000" max="2100" class="file-input"
-                            style="width: 100px;">
-                </div>
-
-                <form id="uploadFormARDEBT" action="{{ url_for('upload_ardebt_data') }}" method="POST" enctype="multipart/form-data">
-                    <input type="file" id="csvFileARDEBT" name="file" accept=".csv, .xlsx, .xls" required class="file-input" style="margin-bottom: 10px; width: 100%; max-width: 300px;">
-                    <button type="submit" class="btn-upload-append">TAMBAH DATA ARDEBT (HISTORI)</button>
-                </form>
-                <div id="uploadStatusARDEBT"></div>
-            </div>
-
-            <div class="monthly-group" style="border-color: var(--secondary-color);">
-                <h4>CID: CUSTOMER DATA (MODE HISTORI)</h4>
-                <p>Data Profil Pelanggan Statis. **MENAMBAHKAN** riwayat profil ke koleksi `CustomerData`.</p>
-                <p style="font-size: 0.9em; color: #666;">Kunci unik: NOMEN dan TANGGAL_UPLOAD_CID.</p>
-                <form id="uploadFormCID" action="{{ url_for('upload_cid_data') }}" method="POST" enctype="multipart/form-data">
-                    <input type="file" id="csvFileCID" name="file" accept=".csv, .xlsx, .xls" required class="file-input" style="margin-bottom: 10px; width: 100%; max-width: 300px;">
-                    <button type="submit" class="btn-upload-append">TAMBAH DATA CID (HISTORI)</button>
-                </form>
-                <div id="uploadStatusCID"></div>
-            </div>
-        </div>
-    </div>
-
-    <div id="content-daily" class="tab-content" style="display: none;">
-        <div class="upload-section" style="border: 1px dashed var(--secondary-color); text-align: center;">
-            <h3>MB: MASTER BAYAR (UPDATE HARIAN)</h3>
-            <p style="font-weight: bold; color: var(--secondary-color);">MENAMBAHKAN data transaksi pembayaran baru (APPEND).</p>
-            <p style="font-size: 0.9em; color: #666;">Kunci unik: NOTAGIHAN, TGL_BAYAR, NOMINAL. Duplikasi diabaikan.</p>
-            <form id="uploadFormMB" action="{{ url_for('upload_mb_data') }}" method="POST" enctype="multipart/form-data">
-                <input type="file" id="csvFileMB" name="file" accept=".csv, .xlsx, .xls" required class="file-input" style="margin-bottom: 10px; width: 100%; max-width: 300px;">
-                <button type="submit" class="btn-upload-append">TAMBAH DATA MB</button>
+                <label for="fileMC">Pilih File MC (.csv, .xlsx)</label>
+                <input type="file" id="fileMC" name="file" accept=".csv, .xlsx, .xls" required>
+                <button type="submit" class="upload-button"><i class="fas fa-database"></i> Upload MC Data</button>
+                <div id="statusMC" class="status-message" style="display: none;"></div>
             </form>
-            <div id="uploadStatusMB"></div>
         </div>
-    </div>
-    
-    <div id="content-cycle" class="tab-content" style="display: none;">
-        <div class="upload-section" style="border: 1px dashed var(--secondary-color); text-align: center;">
-            <h3>SBRS: RIWAYAT BACA METER (UPDATE HARIAN)</h3>
-            <p style="font-weight: bold; color: var(--secondary-color);">MENAMBAHKAN riwayat baca meter baru (APPEND).</p>
-            <p style="font-size: 0.9em; color: #666;">Kunci unik: CMR_ACCOUNT, CMR_RD_DATE. Duplikasi diabaikan.</p>
-            <form id="uploadFormSBRS" action="{{ url_for('upload_sbrs_data') }}" method="POST" enctype="multipart/form-data">
-                <input type="file" id="csvFileSBRS" name="file" accept=".csv, .xlsx, .xls" required class="file-input" style="margin-bottom: 10px; width: 100%; max-width: 300px;">
-                <button type="submit" class="btn-upload-append">TAMBAH DATA SBRS</button>
+        
+        <!-- 2. Master Bayar (MB) / Koleksi Harian -->
+        <div class="upload-card">
+            <h4 style="border-left: 4px solid #28a745; padding-left: 10px;">Master Bayar (MB)</h4>
+            <p style="font-size: 0.8rem; color: var(--secondary-color);">Data Transaksi Pembayaran Harian (Mode Append)</p>
+            <form class="upload-form" id="formMB" data-endpoint="{{ url_for('upload_mb_data') }}">
+                <label for="fileMB">Pilih File MB (.csv, .xlsx)</label>
+                <input type="file" id="fileMB" name="file" accept=".csv, .xlsx, .xls" required>
+                <button type="submit" class="upload-button" style="background-color: #28a745;"><i class="fas fa-hand-holding-usd"></i> Upload MB Data</button>
+                <div id="statusMB" class="status-message" style="display: none;"></div>
             </form>
-            <div id="uploadStatusSBRS"></div>
+        </div>
+        
+        <!-- 3. Customer Data (CID) / Master Pelanggan -->
+        <div class="upload-card">
+            <h4 style="border-left: 4px solid #ffc107; color: #343a40; padding-left: 10px;">Customer Data (CID)</h4>
+            <p style="font-size: 0.8rem; color: var(--secondary-color);">Data Induk Pelanggan (Mode Replace/Historis)</p>
+            <form class="upload-form" id="formCID" data-endpoint="{{ url_for('upload_cid_data') }}">
+                <label for="fileCID">Pilih File CID (.csv, .xlsx)</label>
+                <input type="file" id="fileCID" name="file" accept=".csv, .xlsx, .xls" required>
+                <button type="submit" class="upload-button" style="background-color: #ffc107; color: var(--text-color);"><i class="fas fa-user-circle"></i> Upload CID Data</button>
+                <div id="statusCID" class="status-message" style="display: none;"></div>
+            </form>
+        </div>
+
+        <!-- 4. Meter Reading (SBRS) / Stand Meter -->
+        <div class="upload-card">
+            <h4 style="border-left: 4px solid #17a2b8; padding-left: 10px;">Meter Reading (SBRS)</h4>
+            <p style="font-size: 0.8rem; color: var(--secondary-color);">Data Pembacaan Meter Lapangan (Mode Append)</p>
+            <form class="upload-form" id="formSBRS" data-endpoint="{{ url_for('upload_sbrs_data') }}">
+                <label for="fileSBRS">Pilih File SBRS (.csv, .xlsx)</label>
+                <input type="file" id="fileSBRS" name="file" accept=".csv, .xlsx, .xls" required>
+                <button type="submit" class="upload-button" style="background-color: #17a2b8;"><i class="fas fa-tint"></i> Upload SBRS Data</button>
+                <div id="statusSBRS" class="status-message" style="display: none;"></div>
+            </form>
+        </div>
+
+        <!-- 5. Account Receivable Debt (ARDEBT) / Detail Tunggakan -->
+        <div class="upload-card">
+            <h4 style="border-left: 4px solid #dc3545; padding-left: 10px;">Detail Tunggakan (ARDEBT)</h4>
+            <p style="font-size: 0.8rem; color: var(--secondary-color);">Detail Piutang/Tunggakan per Pelanggan (Perlu Bulan/Tahun)</p>
+            <form class="upload-form" id="formARDEBT" data-endpoint="{{ url_for('upload_ardebt_data') }}">
+                <div class="date-group">
+                    <div>
+                        <label for="monthAR">Bulan Tunggakan (MM)</label>
+                        <input type="text" id="monthAR" name="month" placeholder="contoh: 12" required maxlength="2">
+                    </div>
+                    <div>
+                        <label for="yearAR">Tahun Tunggakan (YYYY)</label>
+                        <input type="text" id="yearAR" name="year" placeholder="contoh: 2025" required maxlength="4">
+                    </div>
+                </div>
+                <label for="fileAR">Pilih File ARDEBT (.csv, .xlsx)</label>
+                <input type="file" id="fileAR" name="file" accept=".csv, .xlsx, .xls" required>
+                <button type="submit" class="upload-button" style="background-color: #dc3545;"><i class="fas fa-hand-holding-usd"></i> Upload ARDEBT Data</button>
+                <div id="statusARDEBT" class="status-message" style="display: none;"></div>
+            </form>
         </div>
     </div>
+</div>
 
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const forms = ['formMC', 'formMB', 'formCID', 'formSBRS', 'formARDEBT'];
 
-    <script>
-        const formMC = document.getElementById('uploadFormMC');
-        const formMB = document.getElementById('uploadFormMB');
-        const formCID = document.getElementById('uploadFormCID');
-        const formSBRS = document.getElementById('uploadFormSBRS');
-        const formARDEBT = document.getElementById('uploadFormARDEBT');
-
-        const statusMC = document.getElementById('uploadStatusMC');
-        const statusMB = document.getElementById('uploadStatusMB');
-        const statusCID = document.getElementById('uploadStatusCID');
-        const statusSBRS = document.getElementById('uploadStatusSBRS');
-        const statusARDEBT = document.getElementById('uploadStatusARDEBT');
-
-        function showTab(tabName) {
-            // Mapping dari nama tab baru ke ID konten
-            const contentMap = {
-                'monthly': 'content-monthly',
-                'daily': 'content-daily',
-                'cycle': 'content-cycle'
-            };
-            
-            document.querySelectorAll('.tab-content').forEach(div => div.style.display = 'none');
-            
-            const contentId = contentMap[tabName];
-            if (contentId) {
-                document.getElementById(contentId).style.display = 'block';
+        forms.forEach(formId => {
+            const form = document.getElementById(formId);
+            if (form) {
+                form.addEventListener('submit', handleUpload);
             }
-
-            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(`tab-${tabName}`).classList.add('active');
-        }
-        
-        function renderAnomalyList(anomalies) {
-            if (!anomalies || anomalies.length === 0) {
-                return `<p style="text-align: center; color: var(--secondary-color); font-weight: 600;">Tidak ada anomali pemakaian air yang ditemukan.</p>`;
-            }
-
-            const headers = [
-                { label: "NOMEN", key: "NOMEN" },
-                { label: "NAMA", key: "NAMA" },
-                { label: "RAYON", key: "RAYON" },
-                { label: "STATUS ANOMALI", key: "STATUS_PEMAKAIAN" },
-                { label: "KUBIK TERBARU", key: "KUBIK_TERBARU" },
-                { label: "KUBIK SEBELUMNYA", key: "KUBIK_SEBELUMNYA" },
-                { label: "SELISIH (m³)", key: "SELISIH_KUBIK" },
-                { label: "% SELISIH", key: "PERSEN_SELISIH" }
-            ];
-
-            let tableRows = '';
-            anomalies.forEach(item => {
-                let statusClass = '';
-                if (item.STATUS_PEMAKAIAN.includes('EKSTRIM') || item.STATUS_PEMAKAIAN.includes('NAIK')) {
-                    statusClass = 'status-ekstrim';
-                } else if (item.STATUS_PEMAKAIAN.includes('TURUN')) {
-                    statusClass = 'status-turun';
-                } else if (item.STATUS_PEMAKAIAN.includes('ZERO')) {
-                    statusClass = 'status-zero';
-                }
-                
-                tableRows += `
-                    <tr>
-                        <td data-label="NOMEN">${item.NOMEN}</td>
-                        <td data-label="NAMA">${item.NAMA}</td>
-                        <td data-label="RAYON">${item.RAYON}</td>
-                        <td data-label="STATUS ANOMALI" class="${statusClass}">${item.STATUS_PEMAKAIAN}</td>
-                        <td data-label="KUBIK TERBARU">${item.KUBIK_TERBARU}</td>
-                        <td data-label="KUBIK SEBELUMNYA">${item.KUBIK_SEBELUMNYA}</td>
-                        <td data-label="SELISIH (m³)">${item.SELISIH_KUBIK}</td>
-                        <td data-label="% SELISIH">${item.PERSEN_SELISIH}%</td>
-                    </tr>
-                `;
-            });
-
-            return `
-                <div class="anomaly-section">
-                    <h4 style="color: #856404; margin-top: 0;"><i class="fas fa-exclamation-triangle" style="margin-right: 5px;"></i> ${anomalies.length} Anomali Pemakaian Air Ditemukan:</h4>
-                    <div class="anomaly-table-wrapper">
-                        <table class="anomaly-table">
-                            <thead>
-                                <tr>
-                                    ${headers.map(h => `<th>${h.label}</th>`).join('')}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${tableRows}
-                            </tbody>
-                        </table>
-                    </div>
-                    <p style="font-size: 0.8em; text-align: right; margin-top: 10px; color: #6c757d;">*Dibatasi 100 hasil anomali terbaru.</p>
-                </div>
-            `;
-        }
-
-        
-        function renderSummaryReport(summary, message, color, anomalyList) {
-            let detailRows = '';
-
-            // Formatting angka dengan pemisah ribuan
-            const formatNumber = (num) => (num || 0).toLocaleString('id-ID');
-
-            if (summary.type === 'REPLACE') {
-                detailRows = `
-                    <div class="summary-item"><strong>Total Baris File:</strong> ${formatNumber(summary.total_rows)}</div>
-                    <div class="summary-item status-replace"><strong>Baris Diganti:</strong> ${formatNumber(summary.replaced_count)}</div>
-                `;
-            } else if (summary.type === 'APPEND') {
-                const insertedCount = summary.inserted_count || summary.total_rows;
-                const skippedCount = summary.skipped_count || 0;
-
-                detailRows = `
-                    <div class="summary-item"><strong>Total Baris File:</strong> ${formatNumber(summary.total_rows)}</div>
-                    <div class="summary-item status-success"><strong>Baris Baru Ditambahkan:</strong> ${formatNumber(insertedCount)}</div>
-                    <div class="summary-item status-info"><strong>Baris Duplikat/Lama Diabaikan:</strong> ${formatNumber(skippedCount)}</div>
-                `;
-            }
-
-            let reportHtml = `
-                <div class="upload-summary-card" style="border-left-color: ${color};">
-                    <div class="summary-header">
-                        <span class="status-icon" style="color: ${color};"><i class="fas fa-check-circle"></i></span>
-                        <div class="summary-message">${message}</div>
-                    </div>
-                    <div class="summary-details">
-                        ${detailRows}
-                    </div>
-                </div>
-            `;
-            
-            // Tambahkan daftar anomali jika ada
-            if (anomalyList && anomalyList.length > 0) {
-                reportHtml += renderAnomalyList(anomalyList);
-            }
-            
-            return reportHtml;
-        }
-
-
-        async function handleUpload(event, form, statusElement, successColor) {
-            event.preventDefault();
-            
-            const formData = new FormData(form);
-            statusElement.innerHTML = '<span style="color: orange; font-weight: 500;"><i class="fas fa-spinner fa-spin"></i> Memproses... Harap tunggu.</span>';
-            
-            // --- START NEW LOGIC FOR MC AND ARDEBT ---
-            let month, year;
-            if (form.id === 'uploadFormMC') {
-                month = document.getElementById('mcMonth').value;
-                year = document.getElementById('mcYear').value;
-                
-                if (!month || !year) {
-                    statusElement.innerHTML = '<span style="color: #dc3545;">❌ Harap pilih Bulan dan masukkan Tahun Tagihan MC.</span>';
-                    return;
-                }
-                formData.append('month', month);
-                formData.append('year', year);
-                
-            } else if (form.id === 'uploadFormARDEBT') {
-                month = document.getElementById('ardebtMonth').value;
-                year = document.getElementById('ardebtYear').value;
-                
-                if (!month || !year) {
-                    statusElement.innerHTML = '<span style="color: #dc3545;">❌ Harap pilih Bulan dan masukkan Tahun Tunggakan ARDEBT.</span>';
-                    return;
-                }
-                formData.append('month', month);
-                formData.append('year', year);
-            }
-            // --- END NEW LOGIC FOR MC AND ARDEBT ---
-            
-            try {
-                const response = await fetch(form.action, { 
-                    method: 'POST',
-                    body: formData
-                });
-
-                const result = await response.json();
-
-                if (response.ok) {
-                    // Berhasil: Render Summary Report + Anomali
-                    const summary = result.summary_report;
-                    const anomalies = result.anomaly_list || [];
-
-                    // Panggil fungsi renderSummaryReport dengan anomalyList
-                    const reportHtml = renderSummaryReport(summary, result.message, successColor, anomalies);
-                    statusElement.innerHTML = reportHtml;
-
-                } else if (response.status === 401) {
-                    window.location.href = '{{ url_for("login") }}'; 
-                } else {
-                    statusElement.innerHTML = `<span style="color: #dc3545;">❌ Error: ${result.message}</span>`;
-                }
-            } catch (error) {
-                statusElement.innerHTML = `<span style="color: #dc3545;">❌ Gagal terhubung ke server atau terjadi error jaringan.</span>`;
-                console.error('Error:', error);
-            }
-        }
-        
-        // Event Listeners untuk semua Form (Semua menggunakan secondary-color untuk status sukses)
-        const APPEND_SUCCESS_COLOR = 'var(--secondary-color)';
-        
-        formMC.addEventListener('submit', (e) => handleUpload(e, formMC, statusMC, APPEND_SUCCESS_COLOR));
-        formCID.addEventListener('submit', (e) => handleUpload(e, formCID, statusCID, APPEND_SUCCESS_COLOR));
-        formARDEBT.addEventListener('submit', (e) => handleUpload(e, formARDEBT, statusARDEBT, APPEND_SUCCESS_COLOR));
-
-        formMB.addEventListener('submit', (e) => handleUpload(e, formMB, statusMB, APPEND_SUCCESS_COLOR));
-        
-        // SBRS (CYCLE)
-        formSBRS.addEventListener('submit', (e) => handleUpload(e, formSBRS, statusSBRS, APPEND_SUCCESS_COLOR));
-
-        
-        // Tampilkan tab Monthly saat pertama kali dimuat
-        document.addEventListener('DOMContentLoaded', () => {
-            showTab('monthly');
         });
-    </script>
+
+        async function handleUpload(e) {
+            e.preventDefault();
+            const form = e.target;
+            const statusDiv = document.getElementById(`status${form.id.slice(4)}`);
+            const button = form.querySelector('button');
+            const endpoint = form.dataset.endpoint;
+            
+            statusDiv.style.display = 'none';
+            statusDiv.classList.remove('status-success', 'status-error');
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
+
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    body: formData,
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    statusDiv.classList.add('status-success');
+                    statusDiv.innerHTML = `<i class="fas fa-check-circle"></i> ${result.message}`;
+                } else {
+                    statusDiv.classList.add('status-error');
+                    statusDiv.innerHTML = `<i class="fas fa-times-circle"></i> ${result.message}`;
+                }
+
+            } catch (error) {
+                statusDiv.classList.add('status-error');
+                statusDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Terjadi kesalahan jaringan atau server (${error.message}).`;
+                console.error('Upload error:', error);
+            } finally {
+                statusDiv.style.display = 'block';
+                button.disabled = false;
+                button.innerHTML = button.dataset.originalHtml || form.id.includes('MC') ? '<i class="fas fa-database"></i> Upload MC Data' :
+                                   form.id.includes('MB') ? '<i class="fas fa-hand-holding-usd"></i> Upload MB Data' :
+                                   form.id.includes('CID') ? '<i class="fas fa-user-circle"></i> Upload CID Data' :
+                                   form.id.includes('SBRS') ? '<i class="fas fa-tint"></i> Upload SBRS Data' :
+                                   form.id.includes('ARDEBT') ? '<i class="fas fa-hand-holding-usd"></i> Upload ARDEBT Data' : 'Upload Data';
+
+                // Simpan original HTML button untuk penggunaan berikutnya
+                if (!button.dataset.originalHtml) {
+                    button.dataset.originalHtml = button.innerHTML;
+                }
+            }
+        }
+    });
+</script>
 {% endblock %}
