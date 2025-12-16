@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, make_response
 from pymongo import MongoClient
 from dotenv import load_dotenv
@@ -19,7 +20,7 @@ load_dotenv()
 
 # --- KONFIGURASI APLIKASI & DATABASE ---
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
+app.config['SECRET_KEY'] = os.getenv("SECRET_KEY", "dev_key_rahasia")
 
 # Konfigurasi MongoDB
 MONGO_URI = os.getenv("MONGO_URI")
@@ -93,8 +94,6 @@ try:
     # === END OPTIMASI: INDEXING KRITIS ===
     # ==========================================================
     
-    collection_data = collection_mc
-
     print("Koneksi MongoDB berhasil dan index dikonfigurasi!")
 except Exception as e:
     print(f"Gagal terhubung ke MongoDB atau mengkonfigurasi index: {e}")
@@ -1094,7 +1093,7 @@ def collection_report_api():
             'RAYON_MB': { '$ifNull': [ '$RAYON', 'N/A' ] },
             'PCEZ_MB': { '$ifNull': [ '$PCEZ', 'N/A' ] },
         }},
-        {'$lookup': {
+        {'#lookup': {
            'from': 'CustomerData', 
            'localField': 'NOMEN',
            'foreignField': 'NOMEN',
@@ -1406,7 +1405,7 @@ def analyze_zero_usage():
 @app.route('/analyze/standby', methods=['GET'])
 @login_required
 def analyze_stand_tungggu():
-    return render_template('analysis_report_template.html', 
+    return render_template('analyze_report_template.html', 
                              title="Stand Tunggu", 
                              description="Menampilkan pelanggan yang berstatus Stand Tunggu (Freeze/Blokir).",
                              report_type="STANDBY_STATUS",
@@ -1449,7 +1448,7 @@ def _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, r
         {'$project': {
             'NOMEN': 1, 'NOMINAL': 1, 'KUBIK': 1,
             # Menggunakan $ifNull sederhana untuk kompatibilitas
-            'CLEAN_TIPEPLGGN': {'$toUpper': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}},
+            'CLEAN_TIPEPLGGN': {'$toUpper': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}}, 
             'CLEAN_RAYON': {'$toUpper': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MC']}}, 
             'TARIF_CID': {'$toUpper': {'$ifNull': ['$customer_info.TARIF', 'N/A']}}, 
             'MERK_CID': {'$toUpper': {'$ifNull': ['$customer_info.MERK', 'N/A']}},
@@ -2449,7 +2448,7 @@ def basic_volume_report_api():
         total_row = pd.Series(pivot_kubik.sum(axis=0), name='TOTAL')
         pivot_kubik = pd.concat([pivot_kubik, total_row.to_frame().T])
         
-        pivot_kubik = pivot_kub.reset_index().rename(columns={'index': 'RAYON'})
+        pivot_kubik = pivot_kubik.reset_index().rename(columns={'index': 'RAYON'})
 
         return jsonify({
             'status': 'success',
@@ -3300,7 +3299,7 @@ def dashboard_summary_api():
                 'total_piutang': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}},
                 'total_pelanggan': {'$addToSet': '$NOMEN'}
             }},
-            {'project': {
+            {'$project': {
                 '_id': 0,
                 'RAYON': '$_id',
                 'total_piutang': 1,
