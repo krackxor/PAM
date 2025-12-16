@@ -1,91 +1,268 @@
 {% extends "base.html" %}
 
-{% block title %}Analisis Piutang & Koleksi{% endblock %}
+{% block title %}Laporan Piutang & Koleksi{% endblock %}
+
+{% block custom_styles %}
+/* Custom styles for KPI cards and charts */
+.summary-container {
+    padding: 20px;
+}
+.kpi-card {
+    background-color: var(--card-bg);
+    padding: 20px;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-light);
+    margin-bottom: 20px;
+    text-align: center;
+}
+.kpi-card h4 {
+    color: var(--secondary-color);
+    font-size: 1rem;
+    margin-bottom: 5px;
+}
+.kpi-card p {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+.grid-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 40px;
+}
+.chart-wrapper {
+    background-color: var(--card-bg);
+    padding: 20px;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-medium);
+}
+.section-title {
+    color: var(--primary-color);
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+    margin-top: 40px;
+}
+.trend-chart-container {
+    height: 350px;
+}
+.rayon-card-list {
+    text-align: left;
+}
+.rayon-item {
+    padding: 8px 0;
+    border-bottom: 1px dashed #eee;
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.95rem;
+}
+.rayon-item:last-child {
+    border-bottom: none;
+}
+/* Responsive adjustment for chart grid */
+@media (max-width: 992px) {
+    .main-grid {
+        grid-template-columns: 1fr;
+    }
+}
+{% endblock %}
 
 {% block content %}
-<div class="report-container" style="max-width: 90%; margin: 20px auto; text-align: center;">
-    <h1 style="color: var(--primary-color); margin-bottom: 20px;">
-        <i class="fas fa-chart-line"></i> Analisis Piutang & Koleksi
-    </h1>
+<div class="summary-container">
+    <h2 class="section-title">
+        <i class="fas fa-file-invoice-dollar"></i> Laporan Piutang & Koleksi
+    </h2>
     
-    <p style="font-size: 1.1rem; color: var(--secondary-color); margin-bottom: 30px;">
-        Pilih laporan analisis Piutang, Kubikasi, dan perbandingan MoM berdasarkan dimensi pelanggan.
-    </p>
+    <div id="loadingStatus" style="text-align: center; padding: 30px; color: #6c757d;">
+        <i class="fas fa-spinner fa-spin"></i> Memuat Ringkasan KPI dan Data...
+    </div>
 
-    <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 20px;">
-        
-        <!-- NEW CARD: MoM Comparison (Menu Riwayat yang diletakkan di Analisis) -->
-        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
-            <i class="fas fa-calendar-alt fa-2x" style="color: #6f42c1; margin-bottom: 10px;"></i>
-            <h4 style="margin-top: 0;">4. Riwayat Piutang (MoM)</h4>
-            <p style="font-size: 0.9rem;">Analisis detil perbandingan Piutang dan Kubikasi (M vs M-1) berdasarkan kriteria AB Sunter, Rayon, Tarif, Merek, Cycle, dan PCEZ.</p>
-            <a href="{{ url_for('bp_collection.collection_riwayat_view') }}" class="btn" style="background-color: #6f42c1; color: white; display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
-                Lihat Laporan <i class="fas fa-arrow-right"></i>
-            </a>
-        </div>
-
-        <!-- Kartu Laporan Distribusi Utama -->
-        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
-            <i class="fas fa-sitemap fa-2x" style="color: #28a745; margin-bottom: 10px;"></i>
-            <h4 style="margin-top: 0;">Distribusi Rayon</h4>
-            <p style="font-size: 0.9rem;">Distribusi jumlah pelanggan, piutang, dan kubikasi per Rayon/Area Layanan.</p>
-            <a href="{{ url_for('bp_collection.rayon_distribution_report') }}" class="btn" style="background-color: #28a745; color: white; display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
-                Lihat Laporan <i class="fas fa-arrow-right"></i>
-            </a>
-        </div>
-        
-        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
-            <i class="fas fa-user-tag fa-2x" style="color: #ffc107; margin-bottom: 10px;"></i>
-            <h4 style="margin-top: 0;">Distribusi Rayon & Tarif</h4>
-            <p style="font-size: 0.9rem;">Detail piutang dan kubikasi yang dikelompokkan berdasarkan Rayon dan Kode Tarif.</p>
-            <a href="{{ url_for('bp_collection.rayon_tarif_distribution_report') }}" class="btn" style="background-color: #ffc107; color: var(--text-color); display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
-                Lihat Laporan <i class="fas fa-arrow-right"></i>
-            </a>
-        </div>
-        
-        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
-            <i class="fas fa-compass fa-2x" style="color: #17a2b8; margin-bottom: 10px;"></i>
-            <h4 style="margin-top: 0;">Distribusi PCEZ</h4>
-            <p style="font-size: 0.9rem;">Distribusi piutang berdasarkan Petugas Catat dan Zona (PCEZ).</p>
-            <a href="{{ url_for('bp_collection.pcez_distribution_report') }}" class="btn" style="background-color: #17a2b8; color: white; display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
-                Lihat Laporan <i class="fas fa-arrow-right"></i>
-            </a>
-        </div>
-        
-        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
-            <i class="fas fa-wrench fa-2x" style="color: #6c757d; margin-bottom: 10px;"></i>
-            <h4 style="margin-top: 0;">Distribusi Jenis Meter</h4>
-            <p style="font-size: 0.9rem;">Analisis piutang yang dikelompokkan berdasarkan Rayon dan Jenis/Merk Meter.</p>
-            <a href="{{ url_for('bp_collection.rayon_meter_distribution_report') }}" class="btn" style="background-color: #6c757d; color: white; display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
-                Lihat Laporan <i class="fas fa-arrow-right"></i>
-            </a>
+    <div id="dashboardContent" style="display: none;">
+        <!-- KPI Cards -->
+        <div class="grid-container">
+            <div class="kpi-card" style="border-left: 4px solid #dc3545;">
+                <h4>Total Piutang (MC Aktif)</h4>
+                <p id="total_piutang">Rp 0</p>
+                <small id="piutang_status" style="color: var(--secondary-color);"></small>
+            </div>
+            <div class="kpi-card" style="border-left: 4px solid #ffc107;">
+                <h4>Total Tunggakan (ARDEBT)</h4>
+                <p id="total_tunggakan">Rp 0</p>
+                <small id="tunggakan_status" style="color: #842029;">0 Pelanggan</small>
+            </div>
+            <div class="kpi-card" style="background-color: #d1e7dd; border-left: 4px solid #0f5132;">
+                <h4>Koleksi Nominal Bulan Ini</h4>
+                <p id="koleksi_bulan_ini" style="color: #0f5132;">Rp 0</p>
+                <small id="koleksi_persentase" style="color: #0f5132; font-weight: bold;">0.00% dari Piutang</small>
+            </div>
+            <div class="kpi-card" style="border-left: 4px solid #007bff;">
+                <h4>Total Pelanggan Aktif</h4>
+                <p id="total_pelanggan">0</p>
+                <small>Total Nomen di Master Data</small>
+            </div>
         </div>
 
-        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
-            <i class="fas fa-hand-holding-usd fa-2x" style="color: var(--primary-color); margin-bottom: 10px;"></i>
-            <h4 style="margin-top: 0;">3. Top List Piutang Terbesar</h4>
-            <p style="font-size: 0.9rem;">Daftar pelanggan dengan total nominal piutang aktif terbesar (belum lunas) di sistem.</p>
-            <a href="{{ url_for('bp_collection.collection_top_view') }}" class="btn" style="background-color: var(--primary-color); color: white; display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
-                Lihat Laporan <i class="fas fa-arrow-right"></i>
-            </a>
+        <!-- Charts and Lists -->
+        <div class="grid-container main-grid" style="grid-template-columns: 2fr 1fr;">
+            <!-- 1. Koleksi Trend Chart -->
+            <div class="chart-wrapper">
+                <h3 style="margin-top: 0;">Tren Koleksi 7 Hari Terakhir</h3>
+                <div class="trend-chart-container">
+                    <canvas id="collectionTrendChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- 2. Top Rayon Piutang -->
+            <div class="chart-wrapper">
+                <h3 style="margin-top: 0;">Top 5 Rayon Piutang Terbesar</h3>
+                <div class="rayon-card-list" id="topRayonList">
+                    <!-- Data akan dimasukkan di sini -->
+                    <p style="text-align: center; color: var(--secondary-color);">Memuat data...</p>
+                </div>
+            </div>
         </div>
+
     </div>
 </div>
 
-<style>
-    .card {
-        transition: all 0.3s ease;
-        min-height: 230px; /* Menjaga tinggi kartu konsisten */
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+<script>
+    // Menggunakan url_for yang sesuai dengan Blueprint
+    const API_SUMMARY = "{{ url_for('dashboard_summary_api') }}";
+    const API_RAYON_ANALYSIS = "{{ url_for('rayon_analysis_api') }}"; 
+    
+    // --- Utility Formatting ---
+    function formatRupiah(number) {
+        return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
     }
-    .card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    function formatNumber(number) {
+         return (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
     }
-    .btn {
-        margin-top: auto; /* Memastikan tombol di bawah */
+    
+    // Fungsi Utama untuk Fetch Data
+    async function fetchSummaryData() {
+        try {
+            const [summaryResponse, rayonResponse] = await Promise.all([
+                fetch(API_SUMMARY),
+                fetch(API_RAYON_ANALYSIS)
+            ]);
+
+            const summaryData = await summaryResponse.json();
+            const rayonData = await rayonResponse.json();
+
+            if (summaryData.message && summaryData.message.includes('Gagal')) {
+                document.getElementById('loadingStatus').innerHTML = `<p class="alert danger">❌ Error Summary: ${summaryData.message}</p>`;
+                return;
+            }
+
+            // 1. Update KPI Cards
+            document.getElementById('total_piutang').innerText = formatRupiah(summaryData.total_piutang);
+            document.getElementById('piutang_status').innerText = `Dari ${formatNumber(summaryData.jumlah_tagihan)} Tagihan MC`;
+            
+            document.getElementById('total_tunggakan').innerText = formatRupiah(summaryData.total_tunggakan);
+            document.getElementById('tunggakan_status').innerText = `${formatNumber(summaryData.pelanggan_dengan_tunggakan)} Pelanggan Tunggakan`;
+
+            document.getElementById('koleksi_bulan_ini').innerText = formatRupiah(summaryData.koleksi_bulan_ini);
+            document.getElementById('koleksi_persentase').innerText = `${summaryData.persentase_koleksi.toFixed(2)}% dari Piutang`;
+
+            document.getElementById('total_pelanggan').innerText = formatNumber(summaryData.total_pelanggan);
+
+
+            // 2. Render Tren Koleksi Chart
+            renderCollectionTrend(summaryData.tren_koleksi_7_hari);
+
+            // 3. Render Top Rayon List
+            // Menggunakan data rayon yang sudah dianalisis (rayonData)
+            renderTopRayonList(rayonData.sort((a, b) => b.total_piutang - a.total_piutang).slice(0, 5));
+
+            document.getElementById('loadingStatus').style.display = 'none';
+            document.getElementById('dashboardContent').style.display = 'block';
+
+        } catch (error) {
+            document.getElementById('loadingStatus').innerHTML = `<p class="alert danger">❌ Gagal memuat data dari server atau koneksi terputus.</p>`;
+            console.error('Fetch Error:', error);
+        }
     }
-</style>
+
+    // Fungsi untuk membuat Chart Tren Koleksi
+    function renderCollectionTrend(trendData) {
+        const ctx = document.getElementById('collectionTrendChart').getContext('2d');
+        
+        const sortedData = trendData.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
+
+        const labels = sortedData.map(item => {
+            const date = new Date(item.tanggal);
+            return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+        });
+        
+        const nominalData = sortedData.map(item => item.total);
+
+        // Hancurkan instance chart yang ada (jika ada)
+        const existingChart = Chart.getChart(ctx);
+        if (existingChart) {
+            existingChart.destroy();
+        }
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Koleksi Nominal (Rp)',
+                    data: nominalData,
+                    borderColor: 'var(--primary-color)',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: 5
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => 'Koleksi: ' + formatRupiah(context.parsed.y)
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value, index, ticks) {
+                                if (Math.abs(value) >= 1000000) {
+                                    return (value / 1000000).toFixed(1) + ' Jt';
+                                }
+                                return formatRupiah(value);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Fungsi untuk menampilkan Top Rayon
+    function renderTopRayonList(rayonData) {
+        const listContainer = document.getElementById('topRayonList');
+        if (!rayonData || rayonData.length === 0) {
+            listContainer.innerHTML = '<p style="text-align: center; color: var(--secondary-color);">Tidak ada data Rayon.</p>';
+            return;
+        }
+
+        listContainer.innerHTML = rayonData.map((item, index) => `
+            <div class="rayon-item">
+                <span style="font-weight: 700;">${index + 1}. Rayon ${item.RAYON}</span>
+                <span>${formatRupiah(item.total_piutang)}</span>
+            </div>
+        `).join('');
+    }
+
+    document.addEventListener('DOMContentLoaded', fetchSummaryData);
+</script>
 {% endblock %}
