@@ -58,6 +58,8 @@ try:
     # CID (CustomerData)
     collection_cid.create_index([('NOMEN', 1), ('TANGGAL_UPLOAD_CID', -1)], name='idx_cid_nomen_hist')
     collection_cid.create_index([('RAYON', 1), ('TIPEPLGGN', 1)], name='idx_cid_rayon_tipe')
+    # Pastikan PCEZ di CID juga di-index
+    collection_cid.create_index([('PCEZ', 1)], name='idx_cid_pcez') 
 
     # MC (MasterCetak)
     collection_mc.create_index([('NOMEN', 1), ('BULAN_TAGIHAN', -1)], name='idx_mc_nomen_hist')
@@ -1101,18 +1103,33 @@ def collection_report_api():
            'as': 'customer_info'
         }},
         {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+        # **NEW LOOKUP (Fallback PCEZ ke MC)**
+        {'$lookup': { 
+           'from': 'MasterCetak', 
+           'localField': 'NOMEN',
+           'foreignField': 'NOMEN',
+           'pipeline': [
+                {'$match': {'BULAN_TAGIHAN': latest_mc_month}}, # Ambil PCEZ dari MC terbaru
+                {'$project': {'PCEZ_MC': {'$toUpper': {'$ifNull': ['$PCEZ', '']}}, '_id': 0}}
+            ],
+           'as': 'mc_latest_info'
+        }},
+        {'$unwind': {'path': '$mc_latest_info', 'preserveNullAndEmptyArrays': True}},
+        
         # FIX KRITIS BARU: Menggunakan $cond untuk fallback yang lebih kuat terhadap "N/A" dan ""
         { '$project': {
+             # Field untuk PCEZ dan RAYON dari CID dan MB (dibersihkan)
              'CID_PCEZ': {'$toUpper': {'$ifNull': ['$customer_info.PCEZ', '']}},
-             'MB_PCEZ_RAW': {'$toUpper': {'$ifNull': ['$PCEZ_MB', '']}}, # Gunakan _RAW untuk PCEZ dari MB
+             'MB_PCEZ_RAW': {'$toUpper': {'$ifNull': ['$PCEZ_MB', '']}}, 
+             'MC_PCEZ_RAW': {'$ifNull': ['$mc_latest_info.PCEZ_MC', '']}, # Ambil PCEZ dari MC terbaru
              'CID_RAYON': {'$toUpper': {'$ifNull': ['$customer_info.RAYON', '']}},
-             'MB_RAYON_RAW': {'$toUpper': {'$ifNull': ['$RAYON_MB', '']}}, # Gunakan _RAW untuk RAYON dari MB
+             'MB_RAYON_RAW': {'$toUpper': {'$ifNull': ['$RAYON_MB', '']}},
              'NOMEN': 1,
              'NOMINAL': 1,
              'KUBIKBAYAR': 1
         }},
         { '$project': {
-             # Prioritas PCEZ: 1. CID (Jika bukan N/A atau ""), 2. MB (Jika bukan N/A atau ""), 3. N/A
+             # Prioritas PCEZ: 1. CID (Valid) 2. MB (Valid) 3. MC (Valid) 4. N/A
              'PCEZ': {
                  '$cond': {
                      'if': { '$and': [{'$ne': ['$CID_PCEZ', 'N/A']}, {'$ne': ['$CID_PCEZ', '']}] },
@@ -1121,12 +1138,18 @@ def collection_report_api():
                          '$cond': {
                              'if': { '$and': [{'$ne': ['$MB_PCEZ_RAW', 'N/A']}, {'$ne': ['$MB_PCEZ_RAW', '']}] },
                              'then': '$MB_PCEZ_RAW',
-                             'else': 'N/A'
+                             'else': {
+                                 '$cond': {
+                                     'if': { '$and': [{'$ne': ['$MC_PCEZ_RAW', 'N/A']}, {'$ne': ['$MC_PCEZ_RAW', '']}] },
+                                     'then': '$MC_PCEZ_RAW',
+                                     'else': 'N/A'
+                                 }
+                             }
                          }
                      }
                  }
              },
-             # Prioritas RAYON: 1. CID, 2. MB, 3. N/A
+             # Prioritas RAYON: 1. CID (Valid) 2. MB (Valid) 3. N/A
              'RAYON': {
                  '$cond': {
                      'if': { '$and': [{'$ne': ['$CID_RAYON', 'N/A']}, {'$ne': ['$CID_RAYON', '']}] },
@@ -1617,8 +1640,8 @@ def analyze_mc_grouping_summary_api():
              {"$project": {
                 # Kolom Piutang/Kubik
                 "NOMEN": "$NOMEN",
-                "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
-                "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}},
+                "NOMINAL": {"$toDouble": {"$ifNull': ["$NOMINAL", 0]}},
+                "KUBIK": {"$toDouble": {"$ifNull': ["$KUBIK", 0]}},
                 "CUST_TYPE_MC": "$CUST_TYPE", # <-- DITAMBAHKAN
                 "RAYON_MC": "$RAYON"
             }},
