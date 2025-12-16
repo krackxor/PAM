@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block title %}Laporan Pembacaan Meter{% endblock %}
+
+{% block custom_styles %}
+/* Custom styles for KPI cards and charts (similar to collection_summary) */
+.summary-container {
+    padding: 20px;
+}
+.kpi-card {
+    background-color: var(--card-bg);
+    padding: 20px;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-light);
+    margin-bottom: 20px;
+    text-align: center;
+}
+.kpi-card h4 {
+    color: var(--secondary-color);
+    font-size: 1rem;
+    margin-bottom: 5px;
+}
+.kpi-card p {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+.grid-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 40px;
+}
+.chart-wrapper {
+    background-color: var(--card-bg);
+    padding: 20px;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-medium);
+}
+.section-title {
+    color: var(--primary-color);
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+    margin-top: 40px;
+}
+/* Chart container height adjustment */
+.anomaly-chart-container {
+    height: 350px; 
+}
+{% endblock %}
+
+{% block content %}
+<div class="summary-container">
+    <h2 class="section-title">
+        <i class="fas fa-file-alt"></i> Laporan Pembacaan Meter
+    </h2>
+    
+    <div id="loadingStatus" style="text-align: center; padding: 30px; color: #6c757d;">
+        <i class="fas fa-spinner fa-spin"></i> Memuat Ringkasan Anomali dan Metode Baca...
+    </div>
+
+    <div id="meterReadingContent" style="display: none;">
+        
+        <!-- KPI Anomali -->
+        <div class="grid-container">
+            <div class="kpi-card" style="background-color: #f8d7da; border-left: 4px solid #842029;">
+                <h4>Total Anomali Terdeteksi</h4>
+                <p id="total_anomali" style="color: #842029;">0</p>
+                <small>Lonjakan, Penurunan Signifikan, & Zero</small>
+            </div>
+            <div class="kpi-card" style="border-left: 4px solid #6f42c1;">
+                <h4>Anomali Zero Usage (0 m³)</h4>
+                <p id="anomali_zero">0</p>
+                <small>Memerlukan Verifikasi Lapangan</small>
+            </div>
+            <div class="kpi-card" style="border-left: 4px solid #ffc107;">
+                <h4>Anomali Kenaikan Signifikan</h4>
+                <p id="anomali_naik">0</p>
+                <small>Termasuk Pemakaian Ekstrim (>150 m³)</small>
+            </div>
+            <div class="kpi-card" style="border-left: 4px solid #007bff;">
+                <h4>Total Pelanggan (CID)</h4>
+                <p id="total_pelanggan">0</p>
+                <small>Total Nomen di Master Data</small>
+            </div>
+        </div>
+
+        <!-- Distribusi Chart -->
+        <div class="chart-wrapper">
+            <h3 style="margin-top: 0;">Breakdown Anomali Berdasarkan Kategori</h3>
+            <div class="anomaly-chart-container">
+                <canvas id="anomalyBreakdownChart"></canvas>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+<script>
+    // Endpoint API dari App Core
+    const API_ANOMALY = "{{ url_for('anomaly_summary_api') }}";
+    const API_SUMMARY = "{{ url_for('dashboard_summary_api') }}";
+    
+    // --- UTILITY FORMATTING ---
+    function formatNumber(number) {
+        return (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+    }
+    
+    // Fungsi Utama untuk Fetch Data
+    async function fetchMeterReadingSummary() {
+        try {
+            const anomalyResponse = await fetch(API_ANOMALY);
+            const anomalyData = await anomalyResponse.json();
+            
+            const summaryResponse = await fetch(API_SUMMARY);
+            const summaryData = await summaryResponse.json();
+
+            // Cek jika ada error dari API
+            if (anomalyData.message || summaryData.message) {
+                 document.getElementById('loadingStatus').innerHTML = `<p class="alert danger">❌ Error memuat data: ${anomalyData.message || summaryData.message}</p>`;
+                 return;
+            }
+
+            // 1. Update KPI Cards
+            document.getElementById('total_anomali').innerText = formatNumber(anomalyData.total_anomali);
+            document.getElementById('anomali_zero').innerText = formatNumber(anomalyData.kategori.zero.jumlah);
+            
+            const naik_ekstrim = anomalyData.kategori.ekstrim.jumlah + anomalyData.kategori.naik_signifikan.jumlah;
+            document.getElementById('anomali_naik').innerText = formatNumber(naik_ekstrim);
+
+            document.getElementById('total_pelanggan').innerText = formatNumber(summaryData.total_pelanggan);
+
+
+            // 2. Render Anomaly Breakdown Chart
+            renderAnomalyChart(anomalyData.kategori);
+
+            document.getElementById('loadingStatus').style.display = 'none';
+            document.getElementById('meterReadingContent').style.display = 'block';
+
+        } catch (error) {
+            document.getElementById('loadingStatus').innerHTML = `<p class="alert danger">❌ Gagal terhubung ke server atau memproses data.</p>`;
+            console.error('Fetch Error:', error);
+        }
+    }
+
+    // Fungsi untuk membuat Chart Breakdown Anomali
+    function renderAnomalyChart(kategori) {
+        const ctx = document.getElementById('anomalyBreakdownChart').getContext('2d');
+        
+        const labels = [];
+        const data = [];
+        const colors = [];
+
+        // Mapping kategori ke label yang user-friendly dan warna
+        const categoryMap = {
+            'EKSTRIM': {label: 'Ekstrim (>150m³)', color: '#dc3545'},
+            'KENAIKAN_SIGNIFIKAN': {label: 'Naik Signifikan', color: '#ffc107'},
+            'PENURUNAN_SIGNIFIKAN': {label: 'Turun Signifikan', color: '#17a2b8'},
+            'ZERO_USAGE': {label: 'Zero Usage (Nol)', color: '#6f42c1'}
+        };
+        
+        // Gabungkan data sesuai kategori mapping (API summary menggunakan nama internal)
+        const totalCounts = {
+            'EKSTRIM': kategori.ekstrim.jumlah,
+            'KENAIKAN_SIGNIFIKAN': kategori.naik_signifikan.jumlah,
+            'PENURUNAN_SIGNIFIKAN': kategori.turun_signifikan.jumlah,
+            'ZERO_USAGE': kategori.zero.jumlah,
+        };
+
+        Object.keys(categoryMap).forEach(key => {
+            const count = totalCounts[key] || 0;
+            if (count > 0) {
+                labels.push(categoryMap[key].label);
+                data.push(count);
+                colors.push(categoryMap[key].color);
+            }
+        });
+        
+        // Hancurkan instance chart yang ada
+        const existingChart = Chart.getChart(ctx);
+        if (existingChart) {
+            existingChart.destroy();
+        }
+
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: colors,
+                    hoverOffset: 10
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                    },
+                    title: {
+                        display: false,
+                    }
+                }
+            }
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', fetchMeterReadingSummary);
+</script>
+{% endblock %}
