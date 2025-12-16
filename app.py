@@ -838,10 +838,9 @@ def _aggregate_mb_sunter_detail(collection_mb):
     # 1. TENTUKAN PERIODE DINAMIS
     # Ambil Bulan Tagihan MC terbaru (M)
     latest_mc_month_doc = collection_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
-    latest_mc_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
+    # FIX: Tambahkan fallback default jika koleksi MC kosong
+    latest_mc_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else datetime.now().strftime('%m%Y')
 
-    if not latest_mc_month:
-        return {"status": "error", "message": "Tidak ada data MC terbaru untuk menentukan periode koleksi."}
 
     # M = latest_mc_month (e.g., 122025) -> UNDUE (Aging 0)
     M_MINUS_1_REK = _get_previous_month_year(latest_mc_month) # M-1 (e.g., 112025) -> CURRENT (Aging 1)
@@ -868,7 +867,6 @@ def _aggregate_mb_sunter_detail(collection_mb):
             base_match['BULAN_REK'] = M_MINUS_1_REK
         elif bulan_rek_filter_type == 'AGING':
             # Tunggakan (Aging >= 2): BULAN_REK < M-1 (i.e., M-2 atau lebih lama)
-            # Ini adalah filter untuk semua tagihan yang terbit DUA bulan atau lebih yang lalu.
             base_match['BULAN_REK'] = {'$lt': M_MINUS_1_REK} 
             
         pipeline = [
@@ -931,7 +929,7 @@ def _aggregate_mb_sunter_detail(collection_mb):
             {'$group': {
                 '_id': '$TGL_BAYAR',
                 'DailyNominal': {'$sum': '$NOMINAL'},
-                'DailyNomenCount': {'$addToSet': '$NOMEN'}
+                'DailyCustCount': {'$addToSet': '$NOMEN'}
             }},
             {'$project': {
                 '_id': 0,
@@ -1033,7 +1031,7 @@ def collection_report_api():
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
 
-    # FIX: Ambil BULAN_TAGIHAN terbaru dari MC Historis
+    # 1. Tentukan Bulan Tagihan MC Terbaru
     latest_mc_month_doc = collection_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
     latest_mc_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
     
@@ -1104,7 +1102,6 @@ def collection_report_api():
            'as': 'customer_info'
         }},
         {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
-        # **MENGHILANGKAN LOOKUP MC KARENA PCEZ ADA DI CID**
         
         # FIX KRITIS BARU: Menggunakan $cond untuk fallback yang lebih kuat terhadap "N/A" dan ""
         { '$project': {
@@ -1769,20 +1766,20 @@ def collection_monitoring_api():
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
         
     try:
-        # Tentukan Bulan Tagihan MC Terbaru (Bulan Piutang)
+        # 1. Tentukan Bulan Tagihan MC Terbaru (M)
         latest_mc_month_doc = collection_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
-        latest_mc_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
+        # FIX: Tambahkan fallback default jika koleksi MC kosong
+        latest_mc_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else datetime.now().strftime('%m%Y')
         
         if not latest_mc_month:
              # Default fallback jika tidak ada data MC sama sekali
              empty_summary = {'R34': {'MC1125': 0, 'CURRENT': 0}, 'R35': {'MC1125': 0, 'CURRENT': 0}, 'GLOBAL': {'TotalPiutangMC': 0, 'TotalUnduePrev': 0, 'CurrentKoleksiTotal': 0, 'TotalKoleksiPersen': 0}}
              return jsonify({'monitoring_data': {'R34': [], 'R35': []}, 'summary_top': empty_summary}), 200
 
-        # Tentukan Bulan Tagihan MC Sebelumnya (Untuk Koleksi CURRENT dan Total UNDUE Bulan Lalu)
+        # Tentukan Bulan Tagihan MC Sebelumnya (M-1)
         previous_mc_month = _get_previous_month_year(latest_mc_month)
         
-        # 1. Hitung Total Piutang MC (Denominator) dari bulan tagihan terbaru
-        # Menggunakan helper baru untuk mendapatkan total piutang yang difilter (REG 34/35)
+        # 1. Hitung Total Piutang MC (Denominator)
         total_mc_nominal_all, mc_totals = _get_mc_piutang_denominator(latest_mc_month, collection_mc, collection_cid)
         total_mc_34 = mc_totals.get('34', 0)
         total_mc_35 = mc_totals.get('35', 0)
@@ -1791,14 +1788,15 @@ def collection_monitoring_api():
         total_undue_prev_nominal = 0.0
         
         if previous_mc_month:
-            prev_month_start_date, prev_month_end_date = _get_month_date_range(previous_mc_month)
-
+            # FIX KRITIS: Menggunakan regex untuk TGL_BAYAR (YYYY-MM) agar lebih fleksibel
+            prev_month_year_regex = previous_mc_month[2:6] + '-' + previous_mc_month[0:2] # MMYYYY -> YYYY-MM
+            
             pipeline_undue_prev = [
                 { '$match': { 
                     'BULAN_REK': previous_mc_month, 
                     'BILL_REASON': 'BIAYA PEMAKAIAN AIR',
-                    # 🚨 PERBAIKAN KRITIS: Filter TGL_BAYAR harus dalam rentang bulan M-1
-                    'TGL_BAYAR': {'$gte': prev_month_start_date, '$lt': prev_month_end_date} 
+                    # 🚨 PERBAIKAN KRITIS: Menggunakan regex untuk mencocokkan bulan YYYY-MM
+                    'TGL_BAYAR': {'$regex': f'^{re.escape(prev_month_year_regex)}'} 
                 }},
                 { '$group': {
                     '_id': None,
@@ -1807,20 +1805,18 @@ def collection_monitoring_api():
             ]
             undue_prev_result = list(collection_mb.aggregate(pipeline_undue_prev))
             total_undue_prev_nominal = undue_prev_result[0]['TotalUnduePrev'] if undue_prev_result else 0.0
+            
+        # FIX: JIKA MB KOSONG, PASTIKAN HASIL UNDUE PREV ADALAH 0 (Bukan crash)
+        # Logika di atas sudah menangani ini dengan `if undue_prev_result else 0.0`
 
         # 3. Ambil Data Transaksi MB (Koleksi) Harian (Rp1 - Current Aging 1)
-        
-        # Koleksi Rp1 (CURRENT) Dihitung dari transaksi MB yang TGL_BAYAR nya bulan ini, 
-        # TAPI BULAN_REK-nya adalah bulan lalu (Piutang Lama)
         now = datetime.now()
         this_month_start = now.strftime('%Y-%m-01')
-        # Hitung tanggal satu hari setelah bulan ini
         next_month_start = (now.replace(day=1) + timedelta(days=32)).replace(day=1).strftime('%Y-%m-%d')
         
-        # NOTE: Mengganti $project dan $addFields kompleks dengan $project sederhana
         pipeline_mb_daily = [
             {'$match': {
-                'TGL_BAYAR': {'$gte': this_month_start, '$lt': next_month_start}, # Filter A: TGL_BAYAR di bulan ini
+                'TGL_BAYAR': {'$gte': this_month_start, '$lt': next_month_start},
                 'BULAN_REK': previous_mc_month, # Filter B: BULAN_REK bulan lalu (Aging 1)
                 'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
             }}, 
@@ -1828,18 +1824,18 @@ def collection_monitoring_api():
                 # **NORMALISASI NOMEN SEBELUM LOOKUP**
                 'NOMEN': {'$toString': '$NOMEN'}, 
                 'TGL_BAYAR': 1,
-                'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, # FIX
+                'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, 
                 'RAYON_MB': { '$ifNull': [ '$RAYON', 'N/A' ] },
-                'PCEZ_MB': { '$ifNull': [ '$PCEZ', 'N/A' ] }, # Tambahkan PCEZ dari MB
+                'PCEZ_MB': { '$ifNull': [ '$PCEZ', 'N/A' ] }, 
             }},
             {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}}, 
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+            
             # FIX KRITIS BARU: Agregasi Fallback PCEZ/Rayon
             {'$project': {
                  'TGL_BAYAR': 1,
                  'NOMINAL': 1,
                  'NOMEN': 1,
-                 # Field untuk PCEZ dan RAYON dari CID dan MB (dibersihkan)
                  'CID_PCEZ': {'$toUpper': {'$ifNull': ['$customer_info.PCEZ', '']}},
                  'MB_PCEZ_RAW': {'$toUpper': {'$ifNull': ['$PCEZ_MB', '']}},
                  'CID_RAYON': {'$toUpper': {'$ifNull': ['$customer_info.RAYON', '']}},
@@ -1881,8 +1877,7 @@ def collection_monitoring_api():
             # Filter hanya yang Rayon 34 dan 35
             {'$match': {'CLEAN_RAYON': {'$in': ['34', '35']}}},
             {'$group': {
-                # Grouping berdasarkan Rayon saja untuk output monitoring
-                '_id': {'date': '$TGL_BAYAR', 'rayon': '$CLEAN_RAYON'},
+                '_id': {'date': '$TGL_BAYAR', 'rayon': '$CLEAN_RAYON', 'pcez': '$CLEAN_PCEZ'}, # Tambahkan PCEZ ke grouping key
                 'DailyNominal': {'$sum': '$NOMINAL'},
                 'DailyCustCount': {'$addToSet': '$NOMEN'}
             }},
@@ -1891,6 +1886,7 @@ def collection_monitoring_api():
                 '_id': 0,
                 'TGL': '$_id.date',
                 'RAYON': '$_id.rayon',
+                'PCEZ': '$_id.pcez', # EXPOSE PCEZ untuk tabel Detail Area Total Sunter
                 'COLL_NOMINAL': '$DailyNominal',
                 'CUST_COUNT': {'$size': '$DailyCustCount'},
             }},
@@ -1903,9 +1899,9 @@ def collection_monitoring_api():
         df_monitoring = pd.DataFrame(mb_daily_data)
 
         if df_monitoring.empty:
-             # Jika data monitoring kosong, gunakan ringkasan Piutang MC dan Undue Prev
+             # Jika data monitoring kosong
              empty_summary = {'R34': {'MC1125': total_mc_34, 'CURRENT': 0}, 'R35': {'MC1125': total_mc_35, 'CURRENT': 0}, 'GLOBAL': {'TotalPiutangMC': total_mc_nominal_all, 'TotalUnduePrev': total_undue_prev_nominal, 'CurrentKoleksiTotal': 0, 'TotalKoleksiPersen': 0}}
-             return jsonify({'monitoring_data': {'R34': [], 'R35': []}, 'summary_top': empty_summary}), 200
+             return jsonify({'monitoring_data': {'R34': [], 'R35': []}, 'summary_top': empty_summary, 'pcez_detail': []}), 200
 
         # Pastikan kolom TGL adalah datetime
         df_monitoring['TGL'] = pd.to_datetime(df_monitoring['TGL'])
@@ -1932,8 +1928,6 @@ def collection_monitoring_api():
         # Penanganan kasus total_mc_nominal_all = 0
         if total_mc_nominal_all > 0:
             # Persentase Kumulatif Harian Global (Sesuai Rumus Bisnis)
-            # Denominator: TotalPiutangMC (total_mc_nominal_all)
-            # Numerator: Rp1 Kumulatif Global + Total Undue Bulan Lalu
             df_monitoring['COLL_Kumulatif_Persen'] = (
                 (df_monitoring['Rp1_Kumulatif_Global'] + total_undue_prev_nominal) / total_mc_nominal_all
             ) * 100
@@ -1941,10 +1935,9 @@ def collection_monitoring_api():
             
             # Hitung COLL_VAR (Daily Change in Percentage)
             df_monitoring['COLL_VAR'] = df_monitoring.groupby('RAYON')['COLL_Kumulatif_Persen'].diff()
-            # Isi NaN pertama (hari pertama) dengan nilai kumulatifnya
+            
             for rayon in df_monitoring['RAYON'].unique():
                 is_first = (df_monitoring['RAYON'] == rayon) & (df_monitoring['COLL_VAR'].isna())
-                    # Gunakan .loc untuk menghindari SettingWithCopyWarning
                 df_monitoring.loc[is_first, 'COLL_VAR'] = df_monitoring.loc[is_first, 'COLL_Kumulatif_Persen']
             df_monitoring['COLL_VAR'] = df_monitoring['COLL_VAR'].fillna(0)
         else:
@@ -1983,6 +1976,17 @@ def collection_monitoring_api():
             'CurrentKoleksiTotal': current_koleksi_total,
             'TotalKoleksiPersen': total_koleksi_persen
         }
+        
+        # 6. Tambahkan data PCEZ harian untuk tabel Detail Area Total Sunter
+        # Group data DF monitoring berdasarkan PCEZ dan RAYON
+        # Note: PCEZ di df_monitoring berasal dari pipeline yang memiliki PCEZ yang sudah dibersihkan
+        df_pcez_summary = df_monitoring.groupby(['RAYON', 'PCEZ']).agg(
+            TotalNominal=('COLL_NOMINAL', 'sum'),
+            TotalNomen=('CUST_COUNT', 'sum')
+        ).reset_index()
+        
+        pcez_detail_data = df_pcez_summary.to_dict('records')
+
 
         return jsonify({
             'monitoring_data': {
@@ -1993,12 +1997,21 @@ def collection_monitoring_api():
                 'R34': summary_r34,
                 'R35': summary_r35,
                 'GLOBAL': grand_total_summary
-            }
+            },
+            'pcez_detail': pcez_detail_data # NEW: Detail Area Total Sunter
         }), 200
 
     except Exception as e:
+        # LOG CRASH DETAIL
         print(f"Error collection monitoring: {e}")
-        return jsonify({"message": f"Gagal membuat data monitoring koleksi: {e}"}), 500
+        # Kembalikan struktur kosong dengan pesan error
+        empty_summary = {'R34': {'MC1125': 0, 'CURRENT': 0}, 'R35': {'MC1125': 0, 'CURRENT': 0}, 'GLOBAL': {'TotalPiutangMC': 0, 'TotalUnduePrev': 0, 'CurrentKoleksiTotal': 0, 'TotalKoleksiPersen': 0}}
+        return jsonify({
+            'monitoring_data': {'R34': [], 'R35': []}, 
+            'summary_top': empty_summary,
+            'pcez_detail': [],
+            'error': f"Gagal memuat monitoring: {str(e)}"
+        }), 500
 
 # =========================================================================
 # === API PERBANDINGAN KOLEKSI MoM (Month-over-Month) ===
@@ -2170,7 +2183,7 @@ def doh_comparison_report_api():
         ]
         
         raw_data = list(collection_mb.aggregate(pipeline))
-        
+
         # 3. Strukturisasi Data untuk Frontend
         
         # Buat daftar hari (01 hingga day_of_month)
@@ -2301,7 +2314,7 @@ def _aggregate_top_debt(collection_mc, collection_ardebt, collection_cid):
     
     # Pre-fetch semua data CID terbaru (untuk JOIN cepat)
     cid_data_map = {doc['NOMEN']: doc for doc in collection_cid.aggregate([
-        {'$sort': {'NOMEN': 1, 'TANGGAL_UPLOAD_CID': -1}},
+        {'$sort': {'NOMEN': 1, 'TANGGAL_UPLOAD_CID', -1}},
         {'$group': {
             '_id': '$NOMEN',
             'NAMA': {'$first': '$NAMA'},
