@@ -36,8 +36,8 @@
                         <select id="filter-status" class="form-control">
                             <option value="">Semua Anomali</option>
                             <option value="EKSTRIM">Kubikasi Ekstrim (>150 m³)</option>
-                            <option value="NAIK">Naik Signifikan (>=10%)</option>
-                            <option value="TURUN">Turun Signifikan (<= -10%)</option>
+                            <option value="NAIK">Naik Signifikan (>=50% / >=10%)</option>
+                            <option value="TURUN">Turun Signifikan (<= -50% / <= -10%)</option>
                             <option value="ZERO">Zero / Nol</option>
                         </select>
                     </div>
@@ -60,10 +60,11 @@
             </div>
             <p class="mt-2">Memuat data anomali terbaru...</p>
         </div>
-        <div id="anomaly-chart-container" class="chart-container mb-4">
+        <!-- Ubah ketinggian agar lebih responsif di mobile -->
+        <div id="anomaly-chart-container" class="chart-container mb-4" style="height: 350px;">
             <canvas id="anomalyChart"></canvas>
         </div>
-        <div id="anomaly-table-container">
+        <div id="anomaly-table-container" class="table-responsive" style="font-size: 0.8em;">
             <!-- Tabel data anomali akan dimuat di sini -->
         </div>
         <div id="anomaly-error-message" class="alert alert-danger d-none"></div>
@@ -110,7 +111,7 @@
             return '<div class="alert alert-info">Tidak ada data anomali yang ditemukan untuk filter ini.</div>';
         }
 
-        let tableHtml = '<table class="table table-striped table-bordered table-sm">';
+        let tableHtml = '<table class="table table-striped table-bordered table-sm" style="font-size: 0.9em;">';
         
         // Header
         tableHtml += '<thead><tr>';
@@ -166,8 +167,8 @@
                 datasets: [{
                     label: 'Kubikasi Terbaru (m³)',
                     data: kubikData,
-                    backgroundColor: 'rgba(23, 162, 184, 0.8)',
-                    borderColor: 'rgba(23, 162, 184, 1)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.7)', /* Warna merah muda dinamis */
+                    borderColor: 'rgba(255, 99, 132, 1)',
                     borderWidth: 1
                 }]
             },
@@ -176,18 +177,33 @@
                 maintainAspectRatio: false,
                 title: {
                     display: true,
-                    text: 'Top 10 Anomali Berdasarkan Kubikasi Terbaru'
+                    text: 'Top 10 Anomali Berdasarkan Kubikasi Terbaru',
+                    fontSize: 12 /* Font size judul */
                 },
                 scales: {
+                    xAxes: [{
+                        ticks: {
+                            fontSize: 10, /* Font size label x */
+                            maxRotation: 45,
+                            minRotation: 45
+                        }
+                    }],
                     yAxes: [{
                         ticks: {
-                            beginAtZero: true
+                            beginAtZero: true,
+                            fontSize: 10 /* Font size label y */
                         },
                         scaleLabel: {
                             display: true,
-                            labelString: 'Kubikasi (m³)'
+                            labelString: 'Kubikasi (m³)',
+                            fontSize: 10
                         }
                     }]
+                },
+                legend: {
+                    labels: {
+                        fontSize: 11
+                    }
                 }
             }
         });
