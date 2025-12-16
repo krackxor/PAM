@@ -11,11 +11,58 @@ def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated or not current_user.is_admin:
-            # Karena ini di Blueprint, redirect ke rute core index
             flash('Anda tidak memiliki izin (Admin) untuk mengakses halaman ini.', 'danger')
             return redirect(url_for('index'))
         return f(*args, **kwargs)
     return decorated_function
+
+# --- HELPER INTERNAL UNTUK DISTRIBUSI (HANYA DIGUNAKAN DI SINI, BUKAN API ENDPOINT) ---
+def _get_distribution_report(group_fields, collection_mc):
+    """Menghitung distribusi metrik Piutang dan Kubikasi berdasarkan field grouping."""
+    db_status = get_db_status()
+    if db_status['status'] == 'error':
+        return [], "N/A (Koneksi DB Gagal)"
+        
+    if isinstance(group_fields, str):
+        group_fields = [group_fields]
+
+    latest_mc_month_doc = collection_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
+    latest_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
+    
+    if not latest_month:
+        return [], "N/A (Tidak Ada Data MC)"
+
+    pipeline = [
+        {"$match": {"BULAN_TAGIHAN": latest_month}},
+        {"$project": {
+            **{field: f"${field}" for field in group_fields},
+            "NOMEN": 1,
+            "NOMINAL": {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}, 
+            "KUBIK": {"$toDouble": {'$cond': [{'$ne': ['$KUBIK', None]}, '$KUBIK', 0]}},
+        }},
+        {"$group": {
+            "_id": {field: f"${field}" for field in group_fields},
+            "total_nomen_set": {"$addToSet": "$NOMEN"},
+            "total_piutang": {"$sum": "$NOMINAL"},
+            "total_kubikasi": {"$sum": "$KUBIK"}
+        }},
+        {"$project": {
+            **{field: f"$_id.{field}" for field in group_fields},
+            "_id": 0,
+            "total_nomen": {"$size": "$total_nomen_set"},
+            "total_piutang": 1,
+            "total_kubikasi": 1
+        }},
+        {"$sort": {"total_piutang": -1}}
+    ]
+
+    try:
+        results = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
+    except Exception as e:
+        print(f"Error during distribution aggregation: {e}")
+        return [], latest_month
+
+    return results, latest_month
     
 # --- RUTE VIEW FRONTEND (Konsisten UI) ---
 
@@ -70,55 +117,6 @@ def analysis_dod_comparison():
                             is_admin=current_user.is_admin,
                             api_endpoint=url_for("bp_collection.dod_comparison_report_api"))
 
-# --- HELPER INTERNAL UNTUK DISTRIBUSI ---
-def _get_distribution_report(group_fields, collection_mc):
-    """Menghitung distribusi metrik Piutang dan Kubikasi berdasarkan field grouping."""
-    db_status = get_db_status()
-    if db_status['status'] == 'error':
-        return [], "N/A (Koneksi DB Gagal)"
-        
-    if isinstance(group_fields, str):
-        group_fields = [group_fields]
-
-    latest_mc_month_doc = collection_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
-    latest_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
-    
-    if not latest_month:
-        return [], "N/A (Tidak Ada Data MC)"
-
-    pipeline = [
-        {"$match": {"BULAN_TAGIHAN": latest_month}},
-        {"$project": {
-            **{field: f"${field}" for field in group_fields},
-            "NOMEN": 1,
-            "NOMINAL": {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}, 
-            "KUBIK": {"$toDouble": {'$cond': [{'$ne': ['$KUBIK', None]}, '$KUBIK', 0]}},
-        }},
-        {"$group": {
-            "_id": {field: f"${field}" for field in group_fields},
-            "total_nomen_set": {"$addToSet": "$NOMEN"},
-            "total_piutang": {"$sum": "$NOMINAL"},
-            "total_kubikasi": {"$sum": "$KUBIK"}
-        }},
-        {"$project": {
-            **{field: f"$_id.{field}" for field in group_fields},
-            "_id": 0,
-            "total_nomen": {"$size": "$total_nomen_set"},
-            "total_piutang": 1,
-            "total_kubikasi": 1
-        }},
-        {"$sort": {"total_piutang": -1}}
-    ]
-
-    try:
-        # Menggunakan koneksi dari utils
-        results = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
-    except Exception as e:
-        print(f"Error during distribution aggregation: {e}")
-        return [], latest_month
-
-    return results, latest_month
-    
 # --- API REPORTING (DISTRIBUSI) ---
 
 @bp_collection.route("/api/distribution/rayon_report")
@@ -254,7 +252,8 @@ def mom_comparison_report_api():
 
         pipeline_mc = [
             {'$match': {'BULAN_TAGIHAN': {'$in': [M_month, M_minus_1_month]}}},
-            {'$project': {'NOMEN': 1, 'RAYON': 1, 'PCEZ': 1, 'TARIF': 1, 'BULAN_TAGIHAN': 1,
+            {'$project': {
+                'NOMEN': 1, 'RAYON': 1, 'PCEZ': 1, 'TARIF': 1, 'BULAN_TAGIHAN': 1,
                 'NOMINAL': {'$toDouble': {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}},
                 'KUBIK': {'$toDouble': {'$cond': [{'$ne': ['$KUBIK', None]}, '$KUBIK', 0]}}, 'STATUS': 1
             }},
@@ -391,7 +390,8 @@ def dod_comparison_report_api():
             }},
             {'$project': {
                 '_id': 0, 'AB_SUNTER': '$_id.AB_SUNTER', 'RAYON': '$_id.RAYON', 'PCEZ': '$_id.PCEZ', 
-                'TARIF': '$_id.TARIF', 'MERK': '$_id.MERK', 'CYCLE': '$_id.CYCLE', 'LKS_BAYAR': '$_id.LKS_BAYAR',
+                'TARIF': '$_id.TARIF', 'MERK': '$_id.MERK', 'CYCLE': '$_id.CYCLE',
+                'LKS_BAYAR': '$_id.LKS_BAYAR',
                 'TGL_BAYAR': '$_id.TGL_BAYAR', 'TotalKoleksi': {'$round': ['$TotalKoleksi', 0]}, 'JumlahTransaksi': '$JumlahTransaksi',
             }},
             {'$group': {
@@ -402,7 +402,8 @@ def dod_comparison_report_api():
                 f'Transaksi_D_1': {'$sum': {'$cond': [{'$eq': ['$TGL_BAYAR', D_minus_1_date]}, '$JumlahTransaksi', 0]}},
             }},
             {'$project': {
-                '_id': 0, 'AB_SUNTER': '$_id.AB_SUNTER', 'RAYON': '$_id.RAYON', 'PCEZ': '$_id.PCEZ', 
+                '_id': 0,
+                'AB_SUNTER': '$_id.AB_SUNTER', 'RAYON': '$_id.RAYON', 'PCEZ': '$_id.PCEZ', 
                 'TARIF': '$_id.TARIF', 'MERK': '$_id.MERK', 'CYCLE': '$_id.CYCLE', 'LKS_BAYAR': '$_id.LKS_BAYAR',
                 f'Koleksi_{D_date}': '$Koleksi_D', f'Koleksi_{D_minus_1_date}': '$Koleksi_D_1',
                 f'Transaksi_{D_date}': '$Transaksi_D', f'Transaksi_{D_minus_1_date}': '$Transaksi_D_1',
@@ -460,53 +461,7 @@ def dod_comparison_report_api():
         print(f"Error saat membuat laporan DoD Comparison: {e}")
         return jsonify({"status": 'error', "message": f"Gagal mengambil laporan DoD: {e}"}), 500
 
-# API Distribution (Dipindah dari app.py)
-def _get_distribution_report(group_fields, collection_mc):
-    db_status = get_db_status()
-    if db_status['status'] == 'error':
-        return [], "N/A (Koneksi DB Gagal)"
-        
-    if isinstance(group_fields, str):
-        group_fields = [group_fields]
-
-    latest_mc_month_doc = collection_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
-    latest_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
-    
-    if not latest_month:
-        return [], "N/A (Tidak Ada Data MC)"
-
-    pipeline = [
-        {"$match": {"BULAN_TAGIHAN": latest_month}},
-        {"$project": {
-            **{field: f"${field}" for field in group_fields},
-            "NOMEN": 1,
-            "NOMINAL": {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}, 
-            "KUBIK": {"$toDouble": {'$cond': [{'$ne': ['$KUBIK', None]}, '$KUBIK', 0]}},
-        }},
-        {"$group": {
-            "_id": {field: f"${field}" for field in group_fields},
-            "total_nomen_set": {"$addToSet": "$NOMEN"},
-            "total_piutang": {"$sum": "$NOMINAL"},
-            "total_kubikasi": {"$sum": "$KUBIK"}
-        }},
-        {"$project": {
-            **{field: f"$_id.{field}" for field in group_fields},
-            "_id": 0,
-            "total_nomen": {"$size": "$total_nomen_set"},
-            "total_piutang": 1,
-            "total_kubikasi": 1
-        }},
-        {"$sort": {"total_piutang": -1}}
-    ]
-
-    try:
-        results = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
-    except Exception as e:
-        print(f"Error during distribution aggregation: {e}")
-        return [], latest_month
-
-    return results, latest_month
-    
+# API Distribution (Helper function _get_distribution_report didefinisikan di atas)
 @bp_collection.route("/api/distribution/rayon_report")
 @login_required
 def rayon_distribution_report():
