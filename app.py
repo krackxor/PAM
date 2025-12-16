@@ -347,7 +347,6 @@ def search_nomen():
         tunggakan_nominal_total = sum(item.get('JUMLAH', 0) for item in ardebt_results)
         
         # 4. RIWAYAT PEMBAYARAN TERAKHIR (MB)
-        # FIX KRITIS: Menggunakan TGL_BAYAR yang sudah dinormalisasi
         mb_last_payment_cursor = collection_mb.find({'NOMEN': cleaned_nomen}).sort('TGL_BAYAR', -1).limit(1)
         last_payment = list(mb_last_payment_cursor)[0] if list(mb_last_payment_cursor) else None
         
@@ -403,7 +402,7 @@ def search_nomen():
         mc_latest_data = mc_latest if mc_latest else {}
 
         # SBRS Data Terbaru (Untuk Pencatat/PENCATET)
-        sbrs_latest_data = sbrs_latest
+        sbrs_latest_data = sbrs_history[0] if sbrs_history else {}
         
         # Profil Pelanggan Terpadu
         profile_pelanggan = {
@@ -844,7 +843,6 @@ def _aggregate_mb_sunter_detail(collection_mb):
 
     # M = latest_mc_month (e.g., 122025) -> UNDUE (Aging 0)
     M_MINUS_1_REK = _get_previous_month_year(latest_mc_month) # M-1 (e.g., 112025) -> CURRENT (Aging 1)
-    M_MINUS_2_REK = _get_previous_month_year(M_MINUS_1_REK) # M-2 (e.g., 102025)
     
     # Collection Period (TGL_BAYAR) is in Month M (Asumsi koleksi dilakukan di bulan tagihan terbaru)
     COLLECTION_MONTH_START, COLLECTION_MONTH_END = _get_month_date_range(latest_mc_month)
@@ -867,9 +865,9 @@ def _aggregate_mb_sunter_detail(collection_mb):
             # Current (Aging 1): BULAN_REK = M-1
             base_match['BULAN_REK'] = M_MINUS_1_REK
         elif bulan_rek_filter_type == 'AGING':
-            # Tunggakan (Aging >= 2): BULAN_REK <= M-2
-            # Perbaikan Logika Aging: Semuanya yang lebih lama dari M-1 (yaitu M-2 dan sebelumnya)
-            base_match['BULAN_REK'] = {'$lte': M_MINUS_2_REK} 
+            # Tunggakan (Aging >= 2): BULAN_REK < M-1 (i.e., M-2 atau lebih lama)
+            # Ini adalah filter untuk semua tagihan yang terbit DUA bulan atau lebih yang lalu.
+            base_match['BULAN_REK'] = {'$lt': M_MINUS_1_REK} 
             
         pipeline = [
             {'$match': base_match},
@@ -1047,9 +1045,8 @@ def collection_report_api():
     
     initial_project = {
         '$project': {
-            # FIX: Ambil PCEZ dari MC. Rayon di MC adalah PCEZ ZONA_NOVAK
             'RAYON': { '$ifNull': [ '$RAYON', 'N/A' ] }, 
-            'PCEZ': { '$ifNull': [ '$PCEZ', 'N/A' ] }, # Ambil PCEZ dari MC
+            'PCEZ': { '$ifNull': [ '$PCEZ', 'N/A' ] }, 
             'NOMEN': 1,
             'NOMINAL': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}, 
             'KUBIK': {'$toDouble': {'$ifNull': ['$KUBIK', 0]}}, # NEW: Include KUBIK for billed volume
@@ -1104,20 +1101,44 @@ def collection_report_api():
            'as': 'customer_info'
         }},
         {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+        # FIX KRITIS BARU: Menggunakan $cond untuk fallback yang lebih kuat terhadap "N/A" dan ""
         { '$project': {
-             # Prioritas 1: CID PCEZ, Prioritas 2: MB PCEZ (Jika ada), Prioritas 3: N/A
+             'CID_PCEZ': {'$toUpper': {'$ifNull': ['$customer_info.PCEZ', '']}},
+             'MB_PCEZ_RAW': {'$toUpper': {'$ifNull': ['$PCEZ_MB', '']}}, # Gunakan _RAW untuk PCEZ dari MB
+             'CID_RAYON': {'$toUpper': {'$ifNull': ['$customer_info.RAYON', '']}},
+             'MB_RAYON_RAW': {'$toUpper': {'$ifNull': ['$RAYON_MB', '']}}, # Gunakan _RAW untuk RAYON dari MB
+             'NOMEN': 1,
+             'NOMINAL': 1,
+             'KUBIKBAYAR': 1
+        }},
+        { '$project': {
+             # Prioritas PCEZ: 1. CID (Jika bukan N/A atau ""), 2. MB (Jika bukan N/A atau ""), 3. N/A
              'PCEZ': {
-                 '$ifNull': [
-                     {'$ifNull': ['$customer_info.PCEZ', '$PCEZ_MB']},
-                     'N/A'
-                 ]
+                 '$cond': {
+                     'if': { '$and': [{'$ne': ['$CID_PCEZ', 'N/A']}, {'$ne': ['$CID_PCEZ', '']}] },
+                     'then': '$CID_PCEZ',
+                     'else': {
+                         '$cond': {
+                             'if': { '$and': [{'$ne': ['$MB_PCEZ_RAW', 'N/A']}, {'$ne': ['$MB_PCEZ_RAW', '']}] },
+                             'then': '$MB_PCEZ_RAW',
+                             'else': 'N/A'
+                         }
+                     }
+                 }
              },
-             # Prioritas 1: CID RAYON, Prioritas 2: MB RAYON (Jika ada), Prioritas 3: N/A
+             # Prioritas RAYON: 1. CID, 2. MB, 3. N/A
              'RAYON': {
-                 '$ifNull': [
-                     {'$ifNull': ['$customer_info.RAYON', '$RAYON_MB']},
-                     'N/A'
-                 ]
+                 '$cond': {
+                     'if': { '$and': [{'$ne': ['$CID_RAYON', 'N/A']}, {'$ne': ['$CID_RAYON', '']}] },
+                     'then': '$CID_RAYON',
+                     'else': {
+                         '$cond': {
+                             'if': { '$and': [{'$ne': ['$MB_RAYON_RAW', 'N/A']}, {'$ne': ['$MB_RAYON_RAW', '']}] },
+                             'then': '$MB_RAYON_RAW',
+                             'else': 'N/A'
+                         }
+                     }
+                 }
              },
              'NOMEN': 1,
              'NOMINAL': 1,
@@ -1287,7 +1308,6 @@ def collection_detail_api():
             bulan_rek = doc.get('BULAN_REK', 'N/A')
             
             # Perbandingan IS_UNDUE menggunakan BULAN_REK MB dan BULAN_TAGIHAN MC terbaru
-            # UNDUE adalah jika BULAN_REK = BULAN_TAGIHAN MC Terbaru (M)
             is_undue = bulan_rek == latest_mc_month
             
             cleaned_results.append({
@@ -1736,7 +1756,7 @@ def analyze_mc_tarif_breakdown_api():
 def collection_monitoring_api():
     """
     Menghasilkan data harian, kumulatif, dan persentase koleksi berdasarkan Rayon (34 & 35).
-    Metrik Koleksi (Rp1): Total Nominal Per Hari dengan filter BULAN_REK bulan lalu (Aging 1/Current).
+    Metrik Koleksi (Rp1): Total Nominal Per Hari dengan filter BULAN_REK bulan lalu.
     Persentase: (Rp1 Kumulatif + Total Undue Bulan Sebelumnya) / Total Piutang MC.
     """
     if client is None:
@@ -1753,7 +1773,7 @@ def collection_monitoring_api():
              return jsonify({'monitoring_data': {'R34': [], 'R35': []}, 'summary_top': empty_summary}), 200
 
         # Tentukan Bulan Tagihan MC Sebelumnya (Untuk Koleksi CURRENT dan Total UNDUE Bulan Lalu)
-        previous_mc_month = _get_previous_month_year(latest_mc_month) # M-1
+        previous_mc_month = _get_previous_month_year(latest_mc_month)
         
         # 1. Hitung Total Piutang MC (Denominator) dari bulan tagihan terbaru
         # Menggunakan helper baru untuk mendapatkan total piutang yang difilter (REG 34/35)
@@ -1765,8 +1785,6 @@ def collection_monitoring_api():
         total_undue_prev_nominal = 0.0
         
         if previous_mc_month:
-            # FIX KRITIS: UNDUE Bulan Sebelumnya (Aging 0 periode lalu)
-            # Koleksi MB untuk BULAN_REK = M-1 (Piutang bulan lalu) yang dibayar di bulan M-1.
             prev_month_start_date, prev_month_end_date = _get_month_date_range(previous_mc_month)
 
             pipeline_undue_prev = [
@@ -1786,18 +1804,18 @@ def collection_monitoring_api():
 
         # 3. Ambil Data Transaksi MB (Koleksi) Harian (Rp1 - Current Aging 1)
         
-        # Koleksi Rp1 (CURRENT) Dihitung dari transaksi MB yang TGL_BAYAR nya bulan ini (M), 
-        # TAPI BULAN_REK-nya adalah bulan lalu (M-1)
+        # Koleksi Rp1 (CURRENT) Dihitung dari transaksi MB yang TGL_BAYAR nya bulan ini, 
+        # TAPI BULAN_REK-nya adalah bulan lalu (Piutang Lama)
         now = datetime.now()
-        # Mendapatkan TGL_BAYAR range bulan ini (M)
         this_month_start = now.strftime('%Y-%m-01')
+        # Hitung tanggal satu hari setelah bulan ini
         next_month_start = (now.replace(day=1) + timedelta(days=32)).replace(day=1).strftime('%Y-%m-%d')
         
         # NOTE: Mengganti $project dan $addFields kompleks dengan $project sederhana
         pipeline_mb_daily = [
             {'$match': {
-                'TGL_BAYAR': {'$gte': this_month_start, '$lt': next_month_start}, # Filter A: TGL_BAYAR di bulan ini (M)
-                'BULAN_REK': previous_mc_month, # Filter B: BULAN_REK bulan lalu (M-1)
+                'TGL_BAYAR': {'$gte': this_month_start, '$lt': next_month_start}, # Filter A: TGL_BAYAR di bulan ini
+                'BULAN_REK': previous_mc_month, # Filter B: BULAN_REK bulan lalu (Aging 1)
                 'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
             }}, 
             {'$project': {
@@ -1809,33 +1827,59 @@ def collection_monitoring_api():
             }},
             {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}}, 
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
+            # FIX KRITIS BARU: Agregasi Fallback PCEZ/Rayon
             {'$project': {
                  'TGL_BAYAR': 1,
                  'NOMINAL': 1,
                  'NOMEN': 1,
-                 # FIX: Logika Fallback untuk Rayon (CID -> MB)
-                 'CLEAN_RAYON': {'$toUpper': {
-                     '$ifNull': [
-                         {'$ifNull': ['$customer_info.RAYON', '$RAYON_MB']},
-                         'N/A'
-                     ]
-                 }},
-                 # FIX: Logika Fallback untuk PCEZ (CID -> MB)
-                 'CLEAN_PCEZ': {'$toUpper': {
-                     '$ifNull': [
-                         {'$ifNull': ['$customer_info.PCEZ', '$PCEZ_MB']},
-                         'N/A'
-                     ]
-                 }}
+                 # Field untuk PCEZ dan RAYON dari CID dan MB (dibersihkan)
+                 'CID_PCEZ': {'$toUpper': {'$ifNull': ['$customer_info.PCEZ', '']}},
+                 'MB_PCEZ_RAW': {'$toUpper': {'$ifNull': ['$PCEZ_MB', '']}},
+                 'CID_RAYON': {'$toUpper': {'$ifNull': ['$customer_info.RAYON', '']}},
+                 'MB_RAYON_RAW': {'$toUpper': {'$ifNull': ['$RAYON_MB', '']}},
             }},
+            {'$project': {
+                 'TGL_BAYAR': 1,
+                 'NOMINAL': 1,
+                 'NOMEN': 1,
+                 # Final CLEAN_PCEZ logic using $cond
+                 'CLEAN_PCEZ': {
+                     '$cond': {
+                         'if': { '$and': [{'$ne': ['$CID_PCEZ', 'N/A']}, {'$ne': ['$CID_PCEZ', '']}] },
+                         'then': '$CID_PCEZ',
+                         'else': {
+                             '$cond': {
+                                 'if': { '$and': [{'$ne': ['$MB_PCEZ_RAW', 'N/A']}, {'$ne': ['$MB_PCEZ_RAW', '']}] },
+                                 'then': '$MB_PCEZ_RAW',
+                                 'else': 'N/A'
+                             }
+                         }
+                     }
+                 },
+                 # Final CLEAN_RAYON logic using $cond
+                 'CLEAN_RAYON': {
+                     '$cond': {
+                         'if': { '$and': [{'$ne': ['$CID_RAYON', 'N/A']}, {'$ne': ['$CID_RAYON', '']}] },
+                         'then': '$CID_RAYON',
+                         'else': {
+                             '$cond': {
+                                 'if': { '$and': [{'$ne': ['$MB_RAYON_RAW', 'N/A']}, {'$ne': ['$MB_RAYON_RAW', '']}] },
+                                 'then': '$MB_RAYON_RAW',
+                                 'else': 'N/A'
+                             }
+                         }
+                     }
+                 }
+            }},
+            # Filter hanya yang Rayon 34 dan 35
             {'$match': {'CLEAN_RAYON': {'$in': ['34', '35']}}},
             {'$group': {
-                # FIX: Grouping berdasarkan Rayon dan PCEZ untuk detail (meskipun output saat ini tidak menggunakannya)
-                '_id': {'date': '$TGL_BAYAR', 'rayon': '$CLEAN_RAYON', 'pcez': '$CLEAN_PCEZ'},
+                # Grouping berdasarkan Rayon saja untuk output monitoring
+                '_id': {'date': '$TGL_BAYAR', 'rayon': '$CLEAN_RAYON'},
                 'DailyNominal': {'$sum': '$NOMINAL'},
                 'DailyCustCount': {'$addToSet': '$NOMEN'}
             }},
-            # FIX: Proyeksi kembali ke format lama, tetapi output akan menggunakan Rayon saja
+            # Proyeksi kembali ke format lama
             {'$project': { 
                 '_id': 0,
                 'TGL': '$_id.date',
@@ -1853,7 +1897,7 @@ def collection_monitoring_api():
 
         if df_monitoring.empty:
              # Jika data monitoring kosong, gunakan ringkasan Piutang MC dan Undue Prev
-             empty_summary = {'R34': {'MC1125': total_mc_34, 'CURRENT': 0}, 'R35': {'MC1125': 0, 'CURRENT': 0}, 'GLOBAL': {'TotalPiutangMC': total_mc_nominal_all, 'TotalUnduePrev': total_undue_prev_nominal, 'CurrentKoleksiTotal': 0, 'TotalKoleksiPersen': 0}}
+             empty_summary = {'R34': {'MC1125': total_mc_34, 'CURRENT': 0}, 'R35': {'MC1125': total_mc_35, 'CURRENT': 0}, 'GLOBAL': {'TotalPiutangMC': total_mc_nominal_all, 'TotalUnduePrev': total_undue_prev_nominal, 'CurrentKoleksiTotal': 0, 'TotalKoleksiPersen': 0}}
              return jsonify({'monitoring_data': {'R34': [], 'R35': []}, 'summary_top': empty_summary}), 200
 
         # Pastikan kolom TGL adalah datetime
@@ -1893,8 +1937,8 @@ def collection_monitoring_api():
             # Isi NaN pertama (hari pertama) dengan nilai kumulatifnya
             for rayon in df_monitoring['RAYON'].unique():
                 is_first = (df_monitoring['RAYON'] == rayon) & (df_monitoring['COLL_VAR'].isna())
-                if is_first.any():
-                    df_monitoring.loc[is_first, 'COLL_VAR'] = df_monitoring.loc[is_first, 'COLL_Kumulatif_Persen']
+                    # Gunakan .loc untuk menghindari SettingWithCopyWarning
+                df_monitoring.loc[is_first, 'COLL_VAR'] = df_monitoring.loc[is_first, 'COLL_Kumulatif_Persen']
             df_monitoring['COLL_VAR'] = df_monitoring['COLL_VAR'].fillna(0)
         else:
             df_monitoring['COLL_Kumulatif_Persen'] = 0
@@ -2378,7 +2422,6 @@ def report_top_lists_api():
         
         # 4. Konsumen Belum Bayar (MC Status Unpaid - Limit 500)
         unpaid_pipeline = [
-            # FIX KRITIS: Filter NOMINAL > 0
             {'$match': {'BULAN_TAGIHAN': latest_mc_month, 'STATUS': {'$ne': 'PAYMENT'}, 'NOMINAL': {'$gt': 0}}} if latest_mc_month else {'$match': {'STATUS': {'$ne': 'PAYMENT'}, 'NOMINAL': {'$gt': 0}}},
             {'$limit': 500}, 
             {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'cid'}},
@@ -2483,7 +2526,7 @@ def basic_volume_report_api():
         total_row = pd.Series(pivot_kubik.sum(axis=0), name='TOTAL')
         pivot_kubik = pd.concat([pivot_kubik, total_row.to_frame().T])
         
-        pivot_kubik = pivot_kub.reset_index().rename(columns={'index': 'RAYON'})
+        pivot_kubik = pivot_kubik.reset_index().rename(columns={'index': 'RAYON'})
 
         return jsonify({
             'status': 'success',
@@ -2519,10 +2562,8 @@ def aging_report_api():
         # Pipeline untuk mencari semua tagihan yang BUKAN bulan terbaru, BERSTATUS belum BAYAR, dan NOMINAL > 0
         pipeline = [
             {'$match': {
-                # Piutang Lama: BULAN_TAGIHAN TIDAK SAMA dengan M (bulan terbaru) DAN TIDAK SAMA dengan M-1 (Current)
-                # Piutang Lama adalah M-2 atau lebih lama (semua yang <= M-2)
-                # Alternatif: Semua yang < M-1
-                'BULAN_TAGIHAN': {'$lt': m_minus_1}, # Filter: Semua yang lebih lama dari M-1
+                # Piutang Lama: BULAN_TAGIHAN < M-1 (semua yang M-2 dan sebelumnya)
+                'BULAN_TAGIHAN': {'$lt': m_minus_1},
                 'STATUS': {'$ne': 'PAYMENT'}, # Filter status yang belum bayar
                 'NOMINAL': {'$gt': 0}
             }},
@@ -2653,7 +2694,6 @@ def analyze_data():
     
     return jsonify({
         "status": "success",
-        ""
         "summary": data_summary,
         "stats": descriptive_stats,
         "head": merged_df.head().to_html(classes='table table-striped') 
@@ -2811,22 +2851,15 @@ def upload_mb_data():
         df.columns = [col.strip().upper() for col in df.columns]
         
         # >>> START PERBAIKAN: MAPPING HEADER KRITIS UNTUK MB (Sesuai Permintaan) <<<
-        # 1. NOTAG/NOTAGIHAN
-        if 'NOTAG' in df.columns and 'NOTAGIHAN' not in df.columns:
-            df = df.rename(columns={'NOTAG': 'NOTAGIHAN'}, errors='ignore')
-        
-        # 2. TGL_BAYAR/PAY_DT
-        if 'PAY_DT' in df.columns and 'TGL_BAYAR' not in df.columns:
-            df = df.rename(columns={'PAY_DT': 'TGL_BAYAR'}, errors='ignore')
-        
-        # 3. Kunci Pelanggan (Handle kasus jika NOMEN hilang tapi ada MC VOL OKT 25_NOMEN)
-        if 'MC VOL OKT 25_NOMEN' in df.columns and 'NOMEN' not in df.columns:
-             df = df.rename(columns={'MC VOL OKT 25_NOMEN': 'NOMEN'}, errors='ignore')
-             
-        # 4. BULAN REK (Handle kasus jika BILL_PERIOD hilang tapi ada BULAN_REK)
-        if 'BILL_PERIOD' in df.columns and 'BULAN_REK' not in df.columns:
-             df = df.rename(columns={'BILL_PERIOD': 'BULAN_REK'}, errors='ignore')
-             
+        rename_map = {
+            # #1: NOTAG/NOTAGIHAN
+            'NOTAG': 'NOTAGIHAN', 
+            # #2: TGL_BAYAR/PAY_DT
+            'PAY_DT': 'TGL_BAYAR', 
+            'BILL_PERIOD': 'BULAN_REK',
+            'MC VOL OKT 25_NOMEN': 'NOMEN' 
+        }
+        df = df.rename(columns=lambda x: rename_map.get(x, x), errors='ignore')
         # >>> END PERBAIKAN: MAPPING HEADER KRITIS UNTUK MB <<<
         
         # >>> START PERBAIKAN: INJECT MISSING KRITICAL COLUMNS <<<
@@ -2870,7 +2903,6 @@ def upload_mb_data():
             )
             
             # 5. Konversi objek datetime ke string YYYY-MM-DD yang seragam
-            # FIX: TGL_BAYAR harus menjadi YYYY-MM-DD (format ISO untuk konsistensi DB)
             df['TGL_BAYAR'] = df['TGL_BAYAR_OBJ'].dt.strftime('%Y-%m-%d').fillna('N/A')
             df = df.drop(columns=['TGL_BAYAR_OBJ'], errors='ignore')
             
@@ -2888,7 +2920,7 @@ def upload_mb_data():
                 df[col] = df[col].astype(str).str.strip().str.upper()
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
 
-            if col in ['NOMINAL', 'SUBNOMINAL', 'BEATETAP', 'BEA_SEWA', 'DENDA', 'PPN', 'REK_AIR', 'KUBIKBAYAR']: 
+            if col in ['NOMINAL', 'SUBNOMINAL', 'BEATETAP', 'BEA_SEWA']: 
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
         data_to_insert = df.to_dict('records')
@@ -2897,7 +2929,6 @@ def upload_mb_data():
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
         # --- START: OPERASI BULK WRITE TEROPTIMASI ---
-        # Kunci unik: NOTAGIHAN + TGL_BAYAR + NOMINAL (untuk cek duplikasi transaksi)
         UNIQUE_KEYS = ['NOTAGIHAN', 'TGL_BAYAR', 'NOMINAL'] 
         
         if not all(key in df.columns for key in UNIQUE_KEYS):
@@ -2967,7 +2998,7 @@ def upload_cid_data():
         df.columns = [col.strip().upper() for col in df.columns]
 
         # >>> PERBAIKAN KRITIS CID: NORMALISASI DATA PANDAS <<<
-        columns_to_normalize = ['MERK', 'READ_METHOD', 'TIPEPLGGN', 'RAYON', 'NOMEN', 'TARIFF']
+        columns_to_normalize = ['MERK', 'READ_METHOD', 'TIPEPLGGN', 'RAYON', 'NOMEN', 'TARIFF', 'PCEZ'] # Tambah PCEZ
         
         for col in df.columns:
             if df[col].dtype == 'object' or col in columns_to_normalize:
@@ -2992,7 +3023,6 @@ def upload_cid_data():
         total_rows = len(data_to_insert)
 
         # CID menggunakan insert_many biasa, karena TANGGAL_UPLOAD_CID membuat data unik
-        # Kita bungkus dalam try/except untuk menangani potential BulkWriteError
         try:
             result = collection_cid.insert_many(data_to_insert, ordered=False)
             inserted_count = len(result.inserted_ids)
@@ -3344,7 +3374,7 @@ def dashboard_summary_api():
         # 7. TOP 5 RAYON DENGAN PIUTANG TERTINGGI (Bulan Tagihan Terbaru)
         pipeline_top_rayon = [
             # FIX: Hanya ambil NOMINAL > 0
-            {'$match': {'BULAN_TAGIHAN': latest_mc_month, 'NOMINAL': {'$gt': 0}}} if latest_mc_month else {'$match': {'NOMINAL': {'$gt': 0}}},
+            {'$match': {'BULAN_TAGIHAN': latest_mc_month, 'NOMINAL': {'$gt': 0}}},
             {'$group': {
                 '_id': '$RAYON',
                 'total_piutang': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}},
