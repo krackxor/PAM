@@ -91,11 +91,11 @@ def get_db_status():
 # --- HELPER LOGIC WAKTU ---
 
 def _get_previous_month_year(bulan_tagihan):
-    if not bulan_tagihan or len(bulan_tagihan) != 6:
+    if not bulan_tagihan or len(str(bulan_tagihan)) != 6:
         return None
     try:
-        month = int(bulan_tagihan[:2])
-        year = int(bulan_tagihan[2:])
+        month = int(str(bulan_tagihan)[:2])
+        year = int(str(bulan_tagihan)[2:])
         target_date = datetime(year, month, 1) - timedelta(days=1)
         prev_month = target_date.month
         prev_year = target_date.year
@@ -278,7 +278,7 @@ def _generate_distribution_schema(group_fields):
     
     return schema
 
-# --- NEW: DASHBOARD STATISTICS FUNCTIONS (DITAMBAHKAN) ---
+# --- NEW: DASHBOARD STATISTICS FUNCTIONS (DITAMBAHKAN UNTUK MELENGKAPI KODE ANDA) ---
 
 def _aggregate_category(collection, money_field, usage_field, period, date_field=None):
     """
@@ -300,8 +300,8 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
             {'$group': {
                 '_id': None,
                 'count': {'$sum': 1},
-                'total_usage': {'$sum': {'$ifNull': [f'${usage_field}', 0]}},
-                'total_nominal': {'$sum': {'$ifNull': [f'${money_field}', 0]}}
+                'total_usage': {'$sum': {'$toDouble': {'$ifNull': [f'${usage_field}', 0]}}},
+                'total_nominal': {'$sum': {'$toDouble': {'$ifNull': [f'${money_field}', 0]}}}
             }}
         ]
         totals_res = list(collection.aggregate(totals_pipeline))
@@ -310,18 +310,15 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
         print(f"Error aggregating totals: {e}")
         base = {'count': 0, 'total_usage': 0, 'total_nominal': 0}
 
-    # Helper untuk mencari kontributor terbesar
+    # 2. Largest Contributors (Rayon, PC, PCEZ)
     def get_largest(group_field):
-        # Coba field 'RAYON' atau 'KODERAYON' karena penamaan di DB bisa beragam
-        # Gunakan $ifNull untuk fallback jika field tidak ada
         target_field = f'${group_field}'
-        
         try:
             res = list(collection.aggregate([
                 {'$match': match_stage},
                 {'$group': {
                     '_id': target_field,
-                    'total': {'$sum': {'$ifNull': [f'${money_field}', 0]}}
+                    'total': {'$sum': {'$toDouble': {'$ifNull': [f'${money_field}', 0]}}}
                 }},
                 {'$sort': {'total': -1}},
                 {'$limit': 1}
@@ -330,38 +327,45 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
         except Exception:
             return {'_id': '-', 'total': 0}
 
-    # Mencari Rayon, PC, PCEZ terbesar
-    # Note: Sesuaikan nama field dengan schema DB Anda (RAYON vs KODERAYON)
-    # Di sini kita mencoba field standard 'RAYON', 'PC', 'PCEZ'
+    # Field yang digunakan
     largest = {
         'rayon': get_largest('RAYON'),
-        'pc': get_largest('PC'),
+        'pc': get_largest('PC') if 'PC' in str(collection) else get_largest('PC_ZONA'),
         'pcez': get_largest('PCEZ')
     }
 
-    # 3. Breakdowns (Tarif & Merek)
-    def get_distribution(group_field, rayon_filter=None):
+    # 3. Breakdowns (Tarif & Merek) dengan Safe Fallback
+    def get_distribution_safe(group_field_candidates, rayon_filter=None):
         match = match_stage.copy()
         if rayon_filter:
             match['RAYON'] = rayon_filter # Filter rayon
         
+        # Buat expression $ifNull: ["$FIELD1", "$FIELD2", ..., "N/A"]
+        # Ini akan mencoba field pertama, jika null coba kedua, dst.
+        if_null_expr = [f"${f}" for f in group_field_candidates]
+        if_null_expr.append("N/A")
+        
         try:
             return list(collection.aggregate([
                 {'$match': match},
-                {'$group': {'_id': f'${group_field}', 'val': {'$sum': 1}}},
+                {'$group': {'_id': { '$ifNull': if_null_expr }, 'val': {'$sum': 1}}},
                 {'$sort': {'val': -1}},
                 {'$limit': 10}
             ]))
         except Exception:
             return []
 
+    # Daftar field kandidat untuk mengatasi perbedaan nama di DB
+    tarif_candidates = ['TARIF', 'KODETARIF', 'GOLONGAN']
+    merek_candidates = ['MERK', 'KODEMEREK', 'MEREKMETER', 'METER_MAKE']
+
     breakdowns = {
-        'tarif_all': get_distribution('TARIF'),
-        'tarif_34': get_distribution('TARIF', '34'),
-        'tarif_35': get_distribution('TARIF', '35'),
-        'merek_all': get_distribution('MERK'),
-        'merek_34': get_distribution('MERK', '34'),
-        'merek_35': get_distribution('MERK', '35'),
+        'tarif_all': get_distribution_safe(tarif_candidates),
+        'tarif_34': get_distribution_safe(tarif_candidates, '34'),
+        'tarif_35': get_distribution_safe(tarif_candidates, '35'),
+        'merek_all': get_distribution_safe(merek_candidates),
+        'merek_34': get_distribution_safe(merek_candidates, '34'),
+        'merek_35': get_distribution_safe(merek_candidates, '35'),
     }
 
     # 4. Top 500 Lists
@@ -369,16 +373,24 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
         match = match_stage.copy()
         match['RAYON'] = rayon
         
+        # Projection khusus
         projection = {
             'NOMEN': 1, 'NAMA': 1, '_id': 0,
             money_field: 1
         }
-        # Only project usage if it's not a dummy field
-        if usage_field:
-            projection[usage_field] = 1
-
+        
         try:
-            return list(collection.find(match, projection).sort(money_field, -1).limit(500))
+            # Menggunakan $toDouble untuk sorting yang benar jika tipe data string
+            pipeline = [
+                {'$match': match},
+                {'$project': {
+                    'NOMEN': 1, 'NAMA': 1, 
+                    money_field: {'$toDouble': {'$ifNull': [f'${money_field}', 0]}}
+                }},
+                {'$sort': {money_field: -1}},
+                {'$limit': 500}
+            ]
+            return list(collection.aggregate(pipeline))
         except Exception:
             return []
 
@@ -408,21 +420,21 @@ def get_comprehensive_stats(period=None):
             money_field="NOMINAL", # Sesuai header MC: NOMINAL
             usage_field="KUBIK",   # Sesuai header MC: KUBIK
             period=period, 
-            date_field="PERIODE"   # MC field: PERIODE (Format MMYYYY biasanya)
+            date_field="BULAN_TAGIHAN" # Field MC: BULAN_TAGIHAN
         ),
         'tunggakan': _aggregate_category(
             collections.get('ardebt'), 
             money_field="JUMLAH", 
             usage_field="PEMAKAIAN", # Mungkin 0 di ARDEBT
-            period=period, 
-            date_field=None # ARDEBT biasanya snapshot, tidak difilter periode
+            period=None, # ARDEBT biasanya snapshot, tidak difilter periode
+            date_field=None 
         ),
         'collection': _aggregate_category(
             collections.get('mb'), 
             money_field="NOMINAL", 
             usage_field="KUBIKBAYAR", # Sesuai header MB
             period=period, 
-            date_field="BULAN_REK" # atau TGL_BAYAR. BULAN_REK (Format MMYYYY)
+            date_field="BULAN_REK" # atau TGL_BAYAR.
         )
     }
     return stats
