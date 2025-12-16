@@ -14,7 +14,8 @@ from datetime import datetime, timedelta
 from pymongo.errors import BulkWriteError
 
 # Import modul yang sudah dipecah
-from utils import get_db_status, _parse_zona_novak, _get_sbrs_anomalies, _get_day_n_ago, _get_previous_month_year
+# FIX: Menambahkan init_db ke daftar import dari utils
+from utils import init_db, get_db_status, _parse_zona_novak, _get_sbrs_anomalies, _get_day_n_ago, _get_previous_month_year
 from routes_collection import bp_collection
 from routes_meter_reading import bp_meter_reading
 
