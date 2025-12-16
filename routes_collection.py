@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, url_for, flash, 
 from flask_login import login_required, current_user
 from functools import wraps
 from datetime import datetime
-# Pastikan get_comprehensive_stats diimport dari utils untuk dashboard utama
+# Import get_comprehensive_stats untuk dashboard utama
 from utils import get_db_status, _get_previous_month_year, _get_day_n_ago, _generate_distribution_schema, get_comprehensive_stats
 
 # Definisikan Blueprint dengan nama 'bp_collection'
@@ -72,20 +72,33 @@ def _get_distribution_report(group_fields, collection_mc):
 @bp_collection.route('/laporan', methods=['GET'])
 @login_required 
 def collection_laporan_view():
-    # Ambil periode dari request atau default ke bulan saat ini
-    # Format input month HTML biasanya 'YYYY-MM', utils butuh 'YYYYMM' atau regex
-    current_period = datetime.now().strftime('%Y%m')
-    raw_period = request.args.get('period', current_period) # Misal: 2025-12
-    period = raw_period.replace('-', '') # Misal: 202512
+    # 1. Tentukan Periode Default (Bulan Saat Ini)
+    current_date = datetime.now()
+    default_html_period = current_date.strftime('%Y-%m') # Format HTML Input: YYYY-MM
+    
+    # 2. Ambil Periode dari Request (jika ada filter)
+    raw_period = request.args.get('period', default_html_period)
+    
+    # 3. Konversi Format Tanggal untuk Database
+    # Database biasanya menyimpan MMYYYY (misal: 112025)
+    # Input HTML mengirim YYYY-MM (misal: 2025-11)
+    try:
+        if '-' in raw_period:
+            year, month = raw_period.split('-')
+            formatted_period = f"{month}{year}" # 2025-11 -> 112025
+        else:
+            formatted_period = raw_period # Fallback jika format beda
+    except ValueError:
+        formatted_period = raw_period.replace('-', '')
 
-    # Ambil statistik lengkap dari utils (Server-Side Rendering untuk performa cepat)
-    stats = get_comprehensive_stats(period)
+    # 4. Ambil Statistik Lengkap dari Utils (Server-Side Rendering)
+    stats = get_comprehensive_stats(formatted_period)
 
     return render_template('collection_summary.html', 
                            title="Laporan Piutang & Koleksi",
                            description="Ringkasan Kinerja Piutang, Koleksi, dan Analisis Rayon Terbaru.",
-                           stats=stats,       # Variable penting: Data untuk KPI, Grafik, Tabel
-                           period=raw_period, # Variable penting: Untuk nilai input filter
+                           stats=stats,       # Data KPI, Grafik, Tabel dikirim langsung
+                           period=raw_period, # Nilai untuk input date (YYYY-MM)
                            is_admin=current_user.is_admin)
 
 # Menu 2: Analisis Piutang & Koleksi (Halaman Menu Analisis)
