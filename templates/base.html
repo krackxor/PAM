@@ -1,182 +1,254 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PAM - Dashboard</title>
-    <!-- Include Bootstrap CSS -->
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <!-- Include Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
-    <style>
-        body {
-            display: flex;
-            min-height: 100vh;
-            background-color: #f8f9fa;
-        }
-        #sidebar {
-            min-width: 250px;
-            max-width: 250px;
-            background: #2c3e50;
-            color: #ecf0f1;
-            transition: all 0.3s;
-            position: sticky;
-            top: 0;
-            height: 100vh;
-            overflow-y: auto;
-        }
-        #sidebar .sidebar-header {
-            padding: 20px;
-            background: #1c2a35;
-            text-align: center;
-        }
-        #sidebar ul.components {
-            padding: 20px 0;
-        }
-        #sidebar ul li a {
-            padding: 10px;
-            font-size: 1.1em;
-            display: block;
-            color: #ecf0f1;
-            transition: 0.3s;
-        }
-        #sidebar ul li a:hover {
-            color: #2c3e50;
-            background: #ecf0f1;
-            text-decoration: none;
-        }
-        #content {
-            width: 100%;
-            padding: 20px;
-            min-height: 100vh;
-            transition: all 0.3s;
-        }
-        .navbar {
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,.08);
-            border-radius: 8px;
-        }
-        .card {
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,.1);
-        }
-        /* Custom styles for charts/reports */
-        .chart-container {
-            position: relative;
-            height: 400px;
-            width: 100%;
-        }
-        .report-summary-box {
-            padding: 15px;
-            margin-bottom: 20px;
-            border-left: 5px solid #3498db;
-            background-color: #f4f9fd;
-            border-radius: 5px;
-        }
-    </style>
-</head>
-<body>
+{% extends "base.html" %}
 
-    <nav id="sidebar">
-        <div class="sidebar-header">
-            <h3>PAM Analytic</h3>
-        </div>
+{% block content %}
+<h1 class="mb-4">{{ title }}</h1>
+<p class="lead">{{ description }}</p>
 
-        <ul class="list-unstyled components">
-            <li>
-                <a href="{{ url_for('index') }}"><i class="fas fa-home"></i> Home</a>
-            </li>
-            <li>
-                <a href="{{ url_for('analytics_dashboard') }}"><i class="fas fa-chart-line"></i> Dashboard Analitik</a>
-            </li>
-            
-            <p class="text-white px-3 mb-1 mt-3 small font-weight-bold">Piutang & Koleksi</p>
-            <li>
-                <a href="{{ url_for('bp_collection.collection_laporan_view') }}"><i class="fas fa-file-invoice-dollar"></i> Laporan Piutang</a>
-            </li>
-            <li>
-                <a href="{{ url_for('bp_collection.collection_analisis_view') }}"><i class="fas fa-chart-bar"></i> Distribusi & MoM</a>
-            </li>
-            <li>
-                <a href="{{ url_for('bp_collection.collection_top_view') }}"><i class="fas fa-sort-amount-up-alt"></i> Top List Piutang</a>
-            </li>
-            <li>
-                <a href="{{ url_for('bp_collection.collection_riwayat_view') }}"><i class="fas fa-history"></i> Riwayat MoM</a>
-            </li>
-            <li>
-                <a href="{{ url_for('bp_collection.analysis_dod_comparison') }}"><i class="fas fa-exchange-alt"></i> Koleksi DoD</a>
-            </li>
-            
-            <p class="text-white px-3 mb-1 mt-3 small font-weight-bold">Baca Meter & Anomali</p>
-            <li>
-                <a href="{{ url_for('bp_meter_reading.meter_reading_report_view') }}"><i class="fas fa-tachometer-alt"></i> Laporan Baca Meter</a>
-            </li>
-            <li>
-                <a href="{{ url_for('bp_meter_reading.meter_reading_analysis_view') }}"><i class="fas fa-cogs"></i> Analisis Anomali</a>
-            </li>
+<!-- Peringatan Koneksi DB (diambil dari status global) -->
+<div id="db-warning" class="alert alert-danger d-none" role="alert">
+    <strong>Koneksi Database Gagal:</strong> Fitur analisis data ini membutuhkan koneksi MongoDB aktif. Mohon cek status koneksi di halaman utama.
+</div>
 
-            {% if current_user.is_admin %}
-            <p class="text-white px-3 mb-1 mt-3 small font-weight-bold">Admin</p>
-            <li>
-                <a href="{{ url_for('upload_admin_unified') }}" class="nav-link"><i class="fas fa-cloud-upload-alt"></i> Upload Data</a>
-            </li>
-            {% endif %}
-
-        </ul>
-    </nav>
-
-    <div id="content">
-        <nav class="navbar navbar-expand-lg navbar-light bg-light">
-            <div class="container-fluid">
-                <button type="button" id="sidebarCollapse" class="btn btn-info">
-                    <i class="fas fa-align-left"></i>
-                    <span>Toggle Sidebar</span>
-                </button>
-                <div class="d-flex align-items-center">
-                    {% if current_user.is_authenticated %}
-                        <span class="navbar-text mr-3">
-                            Selamat datang, **{{ current_user.username }}** ({% if current_user.is_admin %}Admin{% else %}User{% endif %})
-                        </span>
-                        <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-danger">
-                            <i class="fas fa-sign-out-alt"></i> Keluar
-                        </a>
-                    {% else %}
-                         <a href="{{ url_for('login') }}" class="btn btn-sm btn-outline-primary">Masuk</a>
-                    {% endif %}
-                </div>
+<div class="row mb-4">
+    <div class="col-md-6 mb-3">
+        <div class="card shadow h-100">
+            <div class="card-header bg-primary text-white">
+                <h6><i class="fas fa-chart-pie"></i> Navigasi Laporan Baca Meter</h6>
             </div>
-        </nav>
-
-        <!-- START: Flash Message Block for displaying Python errors or Flask messages -->
-        <div class="container-fluid">
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ category }}" role="alert">
-                            {{ message }}
-                        </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
+            <div class="card-body">
+                <p>Pindah ke halaman laporan utama untuk melihat tren dan ringkasan bulanan SBRS.</p>
+                <a href="{{ url_for('bp_meter_reading.meter_reading_report_view') }}" class="btn" style="background-color: #28a745; color: white; display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
+                    <i class="fas fa-tachometer-alt"></i> Lihat Laporan Utama
+                </a>
+            </div>
         </div>
-        <!-- END: Flash Message Block -->
-
-        {% block content %}{% endblock %}
     </div>
+    
+    <div class="col-md-6 mb-3">
+        <div class="card shadow h-100">
+            <div class="card-header bg-danger text-white">
+                <h6><i class="fas fa-exclamation-triangle"></i> Filter Anomali</h6>
+            </div>
+            <div class="card-body">
+                <form id="anomaly-filter-form">
+                    <div class="form-group">
+                        <label for="filter-status">Filter Status Anomali:</label>
+                        <select id="filter-status" class="form-control">
+                            <option value="">Semua Anomali</option>
+                            <option value="EKSTRIM">Kubikasi Ekstrim (>150 m³)</option>
+                            <option value="NAIK">Naik Signifikan (>=10%)</option>
+                            <option value="TURUN">Turun Signifikan (<= -10%)</option>
+                            <option value="ZERO">Zero / Nol</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-danger btn-block"><i class="fas fa-filter"></i> Terapkan Filter</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 
-    <!-- Include Bootstrap JS and dependencies -->
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<!-- Container Laporan Anomali -->
+<div class="card shadow mb-4">
+    <div class="card-header bg-info text-white">
+        <h6><i class="fas fa-list-alt"></i> Detail Hasil Anomali SBRS (<span id="anomaly-count">0</span> Data)</h6>
+    </div>
+    <div class="card-body">
+        <div id="anomaly-loading" class="text-center d-none">
+            <div class="spinner-border text-info" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+            <p class="mt-2">Memuat data anomali terbaru...</p>
+        </div>
+        <div id="anomaly-chart-container" class="chart-container mb-4">
+            <canvas id="anomalyChart"></canvas>
+        </div>
+        <div id="anomaly-table-container">
+            <!-- Tabel data anomali akan dimuat di sini -->
+        </div>
+        <div id="anomaly-error-message" class="alert alert-danger d-none"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/Chart.min.js"></script>
+
+<script>
+    const API_ENDPOINT = "{{ url_for('bp_meter_reading.get_anomalies_api') }}";
+    const ANOMALY_LOADING = document.getElementById('anomaly-loading');
+    const ANOMALY_TABLE_CONTAINER = document.getElementById('anomaly-table-container');
+    const ANOMALY_ERROR_MESSAGE = document.getElementById('anomaly-error-message');
+    const ANOMALY_COUNT = document.getElementById('anomaly-count');
+    const ANOMALY_FILTER_FORM = document.getElementById('anomaly-filter-form');
+    const FILTER_STATUS = document.getElementById('filter-status');
+    const CHART_CONTEXT = document.getElementById('anomalyChart').getContext('2d');
+    const DB_WARNING = document.getElementById('db-warning');
     
-    <script>
-        $(document).ready(function () {
-            $('#sidebarCollapse').on('click', function () {
-                $('#sidebar').toggleClass('active');
-            });
+    let allAnomalies = [];
+    let chartInstance = null;
+
+    // Helper untuk memformat angka mata uang Rupiah
+    const formatCurrency = (amount) => {
+        if (typeof amount !== 'number') return 'N/A';
+        return new Intl.NumberFormat('id-ID', {
+            style: 'currency',
+            currency: 'IDR',
+            minimumFractionDigits: 0
+        }).format(amount);
+    };
+
+    // Helper untuk memformat angka dengan pemisah ribuan
+    const formatNumber = (num) => {
+        if (typeof num !== 'number') return 'N/A';
+        return new Intl.NumberFormat('id-ID').format(num);
+    };
+    
+    // Fungsi untuk membuat tabel HTML dari data JSON
+    function createDataTable(data, schema) {
+        if (!data || data.length === 0 || !schema) {
+            return '<div class="alert alert-info">Tidak ada data anomali yang ditemukan untuk filter ini.</div>';
+        }
+
+        let tableHtml = '<table class="table table-striped table-bordered table-sm">';
+        
+        // Header
+        tableHtml += '<thead><tr>';
+        schema.forEach(col => {
+            tableHtml += `<th>${col.label}</th>`;
         });
-    </script>
-    
-    {% block scripts %}{% endblock %}
-</body>
-</html>
+        tableHtml += '</tr></thead>';
+
+        // Body
+        tableHtml += '<tbody>';
+        data.forEach(row => {
+            tableHtml += '<tr>';
+            schema.forEach(col => {
+                let cellValue = row[col.key];
+                if (col.type === 'currency' && typeof cellValue === 'number') {
+                    cellValue = formatCurrency(cellValue);
+                } else if (col.type === 'integer' && typeof cellValue === 'number') {
+                    cellValue = formatNumber(cellValue);
+                } else if (col.type === 'percent' && typeof cellValue === 'number') {
+                    cellValue = `${formatNumber(cellValue)}%`;
+                } else if (col.key === 'STATUS_PEMAKAIAN') {
+                    let badgeClass = 'secondary';
+                    if (cellValue.includes('EKSTRIM') || cellValue.includes('ZERO')) badgeClass = 'danger';
+                    else if (cellValue.includes('NAIK') || cellValue.includes('TURUN')) badgeClass = 'warning';
+                    else badgeClass = 'success';
+                    cellValue = `<span class="badge badge-${badgeClass}">${cellValue}</span>`;
+                }
+                
+                tableHtml += `<td>${cellValue !== undefined && cellValue !== null ? cellValue : 'N/A'}</td>`;
+            });
+            tableHtml += '</tr>';
+        });
+        tableHtml += '</tbody>';
+        tableHtml += '</table>';
+
+        return tableHtml;
+    }
+
+    // Fungsi untuk membuat Chart Bar
+    function createChart(data) {
+        if (chartInstance) {
+            chartInstance.destroy();
+        }
+
+        const top10Data = data.slice(0, 10);
+        const labels = top10Data.map(d => d.chart_label);
+        const kubikData = top10Data.map(d => d.chart_data_kubik);
+        
+        chartInstance = new Chart(CHART_CONTEXT, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Kubikasi Terbaru (m³)',
+                    data: kubikData,
+                    backgroundColor: 'rgba(23, 162, 184, 0.8)',
+                    borderColor: 'rgba(23, 162, 184, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                title: {
+                    display: true,
+                    text: 'Top 10 Anomali Berdasarkan Kubikasi Terbaru'
+                },
+                scales: {
+                    yAxes: [{
+                        ticks: {
+                            beginAtZero: true
+                        },
+                        scaleLabel: {
+                            display: true,
+                            labelString: 'Kubikasi (m³)'
+                        }
+                    }]
+                }
+            }
+        });
+    }
+
+    // Fungsi utama untuk memuat dan menampilkan data
+    async function loadAnomalyData(filter = '') {
+        ANOMALY_LOADING.classList.remove('d-none');
+        ANOMALY_ERROR_MESSAGE.classList.add('d-none');
+        ANOMALY_TABLE_CONTAINER.innerHTML = '';
+        
+        try {
+            const response = await fetch(API_ENDPOINT);
+            const apiData = await response.json();
+
+            if (apiData.status === 'error') {
+                DB_WARNING.classList.remove('d-none');
+                ANOMALY_ERROR_MESSAGE.textContent = apiData.message;
+                ANOMALY_ERROR_MESSAGE.classList.remove('d-none');
+                return;
+            }
+            
+            DB_WARNING.classList.add('d-none');
+            allAnomalies = apiData.data || [];
+            const schema = apiData.schema || [];
+            
+            // Terapkan filter
+            let filteredData = allAnomalies;
+            if (filter) {
+                filteredData = allAnomalies.filter(item => item.STATUS_PEMAKAIAN && item.STATUS_PEMAKAIAN.includes(filter.toUpperCase()));
+            }
+
+            // Tampilkan jumlah data
+            ANOMALY_COUNT.textContent = filteredData.length;
+
+            // Sortir data (misalnya berdasarkan Kubikasi Terbaru)
+            filteredData.sort((a, b) => (b.KUBIK_TERBARU || 0) - (a.KUBIK_TERBARU || 0));
+
+            // Tampilkan tabel
+            ANOMALY_TABLE_CONTAINER.innerHTML = createDataTable(filteredData, schema);
+
+            // Tampilkan chart
+            createChart(filteredData);
+            
+        } catch (error) {
+            console.error('Error loading anomalies:', error);
+            ANOMALY_ERROR_MESSAGE.textContent = 'Gagal memuat data anomali dari server API.';
+            ANOMALY_ERROR_MESSAGE.classList.remove('d-none');
+        } finally {
+            ANOMALY_LOADING.classList.add('d-none');
+        }
+    }
+
+    // Event listener untuk filter form
+    ANOMALY_FILTER_FORM.addEventListener('submit', function(e) {
+        e.preventDefault();
+        loadAnomalyData(FILTER_STATUS.value);
+    });
+
+    // Muat data saat DOM siap
+    document.addEventListener('DOMContentLoaded', () => loadAnomalyData());
+
+</script>
+{% endblock %}
