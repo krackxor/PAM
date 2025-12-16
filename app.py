@@ -39,8 +39,8 @@ collection_ardebt = None
 
 try:
     # PERBAIKAN KRITIS UNTUK BULK WRITE/SBRS: Meningkatkan batas waktu koneksi dan socket.
-    # Peningkatan timeout membantu mencegah hang pada query besar
-    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=60000, socketTimeoutMS=300000)
+    # socketTimeoutMS ditingkatkan menjadi 900,000 ms (15 menit) untuk bulk upload yang besar.
+    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=120000, socketTimeoutMS=900000, connectTimeoutMS=30000)
     client.admin.command('ping') 
     db = client[DB_NAME]
     
@@ -144,7 +144,8 @@ def _get_sbrs_anomalies(collection_sbrs, collection_cid):
             '_id': '$CMR_ACCOUNT',
             'history': {
                 '$push': {
-                    'kubik': {'$toDouble': {'$ifNull': ['$CMR_KUBIK', 0]}}, 
+                    # FIX: Ganti $ifNull ke $cond
+                    'kubik': {'$toDouble': {'$cond': [{'$ne': ['$CMR_KUBIK', None]}, '$CMR_KUBIK', 0]}}, 
                     'tanggal': '$CMR_RD_DATE'
                 }
             }
@@ -204,9 +205,10 @@ def _get_sbrs_anomalies(collection_sbrs, collection_cid):
         {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
         {'$project': {
             'NOMEN': 1,
-            'NAMA': {'$ifNull': ['$customer_info.NAMA', 'N/A']},
-            'ALAMAT': {'$ifNull': ['$customer_info.ALAMAT', 'N/A']}, # Tambah ALAMAT untuk konteks
-            'RAYON': {'$ifNull': ['$customer_info.RAYON', 'N/A']},
+            # FIX: Ganti $ifNull ke $cond
+            'NAMA': {'$cond': [{'$ne': ['$customer_info.NAMA', None]}, '$customer_info.NAMA', 'N/A']},
+            'ALAMAT': {'$cond': [{'$ne': ['$customer_info.ALAMAT', None]}, '$customer_info.ALAMAT', 'N/A']}, 
+            'RAYON': {'$cond': [{'$ne': ['$customer_info.RAYON', None]}, '$customer_info.RAYON', 'N/A']},
             'KUBIK_TERBARU': 1,
             'KUBIK_SEBELUMNYA': 1,
             'SELISIH_KUBIK': 1,
@@ -639,9 +641,9 @@ def _get_distribution_report(group_fields, collection_mc):
         {"$project": {
             **{field: f"${field}" for field in group_fields},
             "NOMEN": 1,
-            # Perbaikan: Menggunakan $ifNull di dalam $toDouble
-            "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, 
-            "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}},
+            # FIX: Ganti $ifNull ke $cond
+            "NOMINAL": {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}, 
+            "KUBIK": {"$toDouble": {'$cond': [{'$ne': ['$KUBIK', None]}, '$KUBIK', 0]}},
         }},
         # 3. Grouping berdasarkan field yang diminta
         {"$group": {
@@ -872,10 +874,10 @@ def _aggregate_mb_sunter_detail(collection_mb):
         pipeline = [
             {'$match': base_match},
             {'$project': {
-                'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, # FIX
+                # FIX: Ganti $ifNull ke $cond
+                'NOMINAL': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}, 
                 'NOMEN': 1,
-                # FIX: Hapus $toUpper untuk kompatibilitas MongoDB < 4.0
-                'RAYON': {'$ifNull': ['$RAYON', 'N/A']}
+                'RAYON': {'$cond': [{'$ne': ['$RAYON', None]}, '$RAYON', 'N/A']}
             }},
             {'$match': {'RAYON': {'$in': RAYON_KEYS}}}
         ]
@@ -918,13 +920,12 @@ def _aggregate_mb_sunter_detail(collection_mb):
                 'BILL_REASON': 'BIAYA PEMAKAIAN AIR',
                 # Filter TGL_BAYAR: Bulan M (sesuai COLLECTION_MONTH_START/END)
                 'TGL_BAYAR': {'$gte': COLLECTION_MONTH_START, '$lt': COLLECTION_MONTH_END}, 
-                # FIX: Hapus $toUpper untuk kompatibilitas MongoDB < 4.0
-                'RAYON': {'$ifNull': ['$RAYON', 'N/A']}
+                'RAYON': {'$cond': [{'$ne': ['$RAYON', None]}, '$RAYON', 'N/A']}
             }},
             {'$match': {'RAYON': rayon_key}},
             {'$project': {
                 'TGL_BAYAR': 1,
-                'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, # FIX
+                'NOMINAL': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}, 
                 'NOMEN': 1
             }},
             {'$group': {
@@ -998,8 +999,10 @@ def _get_mc_piutang_denominator(latest_mc_month, collection_mc, collection_cid):
     pipeline = [
         {'$match': {'BULAN_TAGIHAN': latest_mc_month}},
         {"$project": {
-            "NOMEN": 1, "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
-            "CLEAN_ZONA": {"$ifNull": ["$ZONA_NOVAK", ""]},
+            "NOMEN": 1, 
+            # FIX: Ganti $ifNull ke $cond
+            "NOMINAL": {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}},
+            "CLEAN_ZONA": {'$cond': [{'$ne': ['$ZONA_NOVAK', None]}, '$ZONA_NOVAK', ""]},
             "CUST_TYPE_MC": "$CUST_TYPE",
             "RAYON_MC": "$RAYON"
         }},
@@ -1008,8 +1011,9 @@ def _get_mc_piutang_denominator(latest_mc_month, collection_mc, collection_cid):
         # Menggunakan logika fallback yang kompatibel: Hapus $toUpper
         {'$project': {
             'NOMINAL': 1,
-            'CLEAN_RAYON': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MC']}, 
-            'CLEAN_TIPEPLGGN': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']},
+            # FIX: Ganti $ifNull ke $cond
+            'CLEAN_RAYON': {'$cond': [{'$ne': ['$customer_info.RAYON', None]}, '$customer_info.RAYON', '$RAYON_MC']}, 
+            'CLEAN_TIPEPLGGN': {'$cond': [{'$ne': ['$customer_info.TIPEPLGGN', None]}, '$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']},
         }},
         {'$match': {'CLEAN_RAYON': {'$in': ['34', '35']}, 'CLEAN_TIPEPLGGN': 'REG', 'NOMINAL': {'$gt': 0}}},
         {'$group': {'_id': '$CLEAN_RAYON', 'TotalPiutang': {'$sum': '$NOMINAL'}}}
@@ -1046,11 +1050,12 @@ def collection_report_api():
     
     initial_project = {
         '$project': {
-            'RAYON': { '$ifNull': [ '$RAYON', 'N/A' ] }, 
-            'PCEZ': { '$ifNull': [ '$PCEZ', 'N/A' ] }, 
+            # FIX: Ganti $ifNull ke $cond
+            'RAYON': {'$cond': [{'$ne': ['$RAYON', None]}, '$RAYON', 'N/A']}, 
+            'PCEZ': {'$cond': [{'$ne': ['$PCEZ', None]}, '$PCEZ', 'N/A']}, 
             'NOMEN': 1,
-            'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, 
-            'KUBIK': {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}, # NEW: Include KUBIK for billed volume
+            'NOMINAL': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}, 
+            'KUBIK': {"$toDouble": {'$cond': [{'$ne': ['$KUBIK', None]}, '$KUBIK', 0]}}, # NEW: Include KUBIK for billed volume
             'STATUS': 1
         }
     }
@@ -1091,10 +1096,11 @@ def collection_report_api():
         { '$project': {
             # **NORMALISASI NOMEN SEBELUM LOOKUP**
             'NOMEN': {'$toString': '$NOMEN'}, 
-            'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, 
-            'KUBIKBAYAR': {"$toDouble": {"$ifNull": ["$KUBIKBAYAR", 0]}}, 
-            'RAYON_MB': { '$ifNull': [ '$RAYON', 'N/A' ] },
-            'PCEZ_MB': { '$ifNull': [ '$PCEZ', 'N/A' ] },
+            # FIX: Ganti $ifNull ke $cond
+            'NOMINAL': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}},
+            'KUBIKBAYAR': {"$toDouble": {'$cond': [{'$ne': ['$KUBIKBAYAR', None]}, '$KUBIKBAYAR', 0]}}, 
+            'RAYON_MB': {'$cond': [{'$ne': ['$RAYON', None]}, '$RAYON', 'N/A']},
+            'PCEZ_MB': {'$cond': [{'$ne': ['$PCEZ', None]}, '$PCEZ', 'N/A']},
         }},
         {'$lookup': { 
            'from': 'CustomerData', 
@@ -1107,10 +1113,11 @@ def collection_report_api():
         # FIX KRITIS BARU: Menggunakan $cond untuk fallback yang lebih kuat terhadap "N/A" dan "" (Hapus $toUpper)
         { '$project': {
              # Field untuk PCEZ dan RAYON dari CID dan MB (dibersihkan)
-             'CID_PCEZ': {'$ifNull': ['$customer_info.PCEZ', '']},
-             'MB_PCEZ_RAW': {'$ifNull': ['$PCEZ_MB', '']}, 
-             'CID_RAYON': {'$ifNull': ['$customer_info.RAYON', '']},
-             'MB_RAYON_RAW': {'$ifNull': ['$RAYON_MB', '']},
+             # FIX: Ganti $ifNull ke $cond
+             'CID_PCEZ': {'$cond': [{'$ne': ['$customer_info.PCEZ', None]}, '$customer_info.PCEZ', '']},
+             'MB_PCEZ_RAW': {'$cond': [{'$ne': ['$PCEZ_MB', None]}, '$PCEZ_MB', '']}, 
+             'CID_RAYON': {'$cond': [{'$ne': ['$customer_info.RAYON', None]}, '$customer_info.RAYON', '']},
+             'MB_RAYON_RAW': {'$cond': [{'$ne': ['$RAYON_MB', None]}, '$RAYON_MB', '']},
              'NOMEN': 1,
              'NOMINAL': 1,
              'KUBIKBAYAR': 1
@@ -1166,7 +1173,8 @@ def collection_report_api():
         }},
         { '$group': {
             '_id': None,
-            'mb_undue_prev_nominal': { '$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}} },
+            # FIX: Ganti $ifNull ke $cond
+            'mb_undue_prev_nominal': { '$sum': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}} },
         }}
     ]
     mb_undue_prev_result = list(collection_mb.aggregate(pipeline_mb_undue_prev))
@@ -1476,8 +1484,9 @@ def _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, r
         {"$project": {
             # Kolom Piutang/Kubik
             "NOMEN": "$NOMEN",
-            "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
-            "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}},
+            # FIX: Ganti $ifNull ke $cond
+            "NOMINAL": {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}},
+            "KUBIK": {"$toDouble": {'$cond': [{'$ne': ['$KUBIK', None]}, '$KUBIK', 0]}},
             "CUST_TYPE_MC": "$CUST_TYPE", # <-- DITAMBAHKAN: Field CUST_TYPE dari MC
             "RAYON_MC": "$RAYON", # Menggunakan field RAYON yang sudah ada di MC
             "ZONA_NOVAK": "$ZONA_NOVAK"
@@ -1487,12 +1496,12 @@ def _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, r
         {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}}, 
         {'$project': {
             'NOMEN': 1, 'NOMINAL': 1, 'KUBIK': 1,
-            # Menggunakan $ifNull sederhana untuk kompatibilitas (Hapus $toUpper)
-            'CLEAN_TIPEPLGGN': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}, 
-            'CLEAN_RAYON': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MC']}, 
-            'TARIF_CID': {'$ifNull': ['$customer_info.TARIF', 'N/A']}, 
-            'MERK_CID': {'$ifNull': ['$customer_info.MERK', 'N/A']},
-            'READ_METHOD': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']},
+            # FIX: Ganti $ifNull ke $cond
+            'CLEAN_TIPEPLGGN': {'$cond': [{'$ne': ['$customer_info.TIPEPLGGN', None]}, '$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}, 
+            'CLEAN_RAYON': {'$cond': [{'$ne': ['$customer_info.RAYON', None]}, '$customer_info.RAYON', '$RAYON_MC']}, 
+            'TARIF_CID': {'$cond': [{'$ne': ['$customer_info.TARIF', None]}, '$customer_info.TARIF', 'N/A']}, 
+            'MERK_CID': {'$cond': [{'$ne': ['$customer_info.MERK', None]}, '$customer_info.MERK', 'N/A']},
+            'READ_METHOD': {'$cond': [{'$ne': ['$customer_info.READ_METHOD', None]}, '$customer_info.READ_METHOD', 'N/A']},
         }},
         {'$match': {'CLEAN_TIPEPLGGN': 'REG'}} # Always filter to REG
     ]
@@ -1621,8 +1630,9 @@ def analyze_mc_grouping_summary_api():
              {"$project": {
                 # Kolom Piutang/Kubik
                 "NOMEN": "$NOMEN",
-                "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, # FIXED
-                "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}, # FIXED
+                # FIX: Ganti $ifNull ke $cond
+                "NOMINAL": {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}},
+                "KUBIK": {"$toDouble": {'$cond': [{'$ne': ['$KUBIK', None]}, '$KUBIK', 0]}},
                 "CUST_TYPE_MC": "$CUST_TYPE", # <-- DITAMBAHKAN
                 "RAYON_MC": "$RAYON"
             }},
@@ -1638,8 +1648,9 @@ def analyze_mc_grouping_summary_api():
             # --- NORMALISASI DATA UNTUK FILTER (Hapus $toUpper) ---
             {'$project': {
                 'NOMINAL': 1, 'KUBIK': 1, 'NOMEN': 1,
-                'CLEAN_TIPEPLGGN': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}, 
-                'CLEAN_RAYON': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MC']}, 
+                # FIX: Ganti $ifNull ke $cond
+                'CLEAN_TIPEPLGGN': {'$cond': [{'$ne': ['$customer_info.TIPEPLGGN', None]}, '$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}, 
+                'CLEAN_RAYON': {'$cond': [{'$ne': ['$customer_info.RAYON', None]}, '$customer_info.RAYON', '$RAYON_MC']}, 
             }},
             # --- END NORMALISASI ---
             
@@ -1649,8 +1660,9 @@ def analyze_mc_grouping_summary_api():
             }},
             {'$group': {
                 '_id': None,
-                'SumOfKUBIK': {'$sum': {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}}, # FIXED
-                'SumOfNOMINAL': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}}, # FIXED
+                # FIX: Ganti $ifNull ke $cond
+                'SumOfKUBIK': {'$sum': {"$toDouble": {'$cond': [{'$ne': ['$KUBIK', None]}, '$KUBIK', 0]}}},
+                'SumOfNOMINAL': {'$sum': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}},
                 'CountOfNOMEN': {'$addToSet': '$NOMEN'}
             }},
             {'$project': {
@@ -1711,8 +1723,9 @@ def analyze_mc_tarif_breakdown_api():
             {'$project': {
                 'NOMEN': 1, 
                 'TARIF': 1,
-                'CLEAN_TIPEPLGGN': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}, 
-                'CLEAN_RAYON': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MC']}, 
+                # FIX: Ganti $ifNull ke $cond
+                'CLEAN_TIPEPLGGN': {'$cond': [{'$ne': ['$customer_info.TIPEPLGGN', None]}, '$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}, 
+                'CLEAN_RAYON': {'$cond': [{'$ne': ['$customer_info.RAYON', None]}, '$customer_info.RAYON', '$RAYON_MC']}, 
             }},
             # --- END NORMALISASI ---
             
@@ -1775,7 +1788,7 @@ def collection_monitoring_api():
         if not latest_mc_month:
              # Default fallback jika tidak ada data MC sama sekali
              empty_summary = {'R34': {'MC1125': 0, 'CURRENT': 0}, 'R35': {'MC1125': 0, 'CURRENT': 0}, 'GLOBAL': {'TotalPiutangMC': 0, 'TotalUnduePrev': 0, 'CurrentKoleksiTotal': 0, 'TotalKoleksiPersen': 0}}
-             return jsonify({'monitoring_data': {'R34': [], 'R35': []}, 'summary_top': empty_summary}), 200
+             return jsonify({'monitoring_data': {'R34': [], 'R35': []}, 'summary_top': empty_summary, 'pcez_detail': []}), 200
 
         # Tentukan Bulan Tagihan MC Sebelumnya (M-1)
         previous_mc_month = _get_previous_month_year(latest_mc_month)
@@ -1801,7 +1814,8 @@ def collection_monitoring_api():
                 }},
                 { '$group': {
                     '_id': None,
-                    'TotalUnduePrev': { '$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}} },
+                    # FIX: Ganti $ifNull ke $cond
+                    'TotalUnduePrev': { '$sum': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}} },
                 }}
             ]
             undue_prev_result = list(collection_mb.aggregate(pipeline_undue_prev))
@@ -1825,9 +1839,10 @@ def collection_monitoring_api():
                 # **NORMALISASI NOMEN SEBELUM LOOKUP**
                 'NOMEN': {'$toString': '$NOMEN'}, 
                 'TGL_BAYAR': 1,
-                'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, 
-                'RAYON_MB': { '$ifNull': [ '$RAYON', 'N/A' ] },
-                'PCEZ_MB': { '$ifNull': [ '$PCEZ', 'N/A' ] }, 
+                # FIX: Ganti $ifNull ke $cond
+                'NOMINAL': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}, 
+                'RAYON_MB': {'$cond': [{'$ne': ['$RAYON', None]}, '$RAYON', 'N/A']},
+                'PCEZ_MB': {'$cond': [{'$ne': ['$PCEZ', None]}, '$PCEZ', 'N/A']}, 
             }},
             {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}}, 
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
@@ -1837,10 +1852,11 @@ def collection_monitoring_api():
                  'TGL_BAYAR': 1,
                  'NOMINAL': 1,
                  'NOMEN': 1,
-                 'CID_PCEZ': {'$ifNull': ['$customer_info.PCEZ', '']},
-                 'MB_PCEZ_RAW': {'$ifNull': ['$PCEZ_MB', '']},
-                 'CID_RAYON': {'$ifNull': ['$customer_info.RAYON', '']},
-                 'MB_RAYON_RAW': {'$ifNull': ['$RAYON_MB', '']},
+                 # FIX: Ganti $ifNull ke $cond
+                 'CID_PCEZ': {'$cond': [{'$ne': ['$customer_info.PCEZ', None]}, '$customer_info.PCEZ', '']},
+                 'MB_PCEZ_RAW': {'$cond': [{'$ne': ['$PCEZ_MB', None]}, '$PCEZ_MB', '']},
+                 'CID_RAYON': {'$cond': [{'$ne': ['$customer_info.RAYON', None]}, '$customer_info.RAYON', '']},
+                 'MB_RAYON_RAW': {'$cond': [{'$ne': ['$RAYON_MB', None]}, '$RAYON_MB', '']},
             }},
             {'$project': {
                  'TGL_BAYAR': 1,
@@ -2062,7 +2078,8 @@ def mom_report_api():
                 'BILL_REASON': 'BIAYA PEMAKAIAN AIR' 
             }},
             {'$project': {
-                'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
+                # FIX: Ganti $ifNull ke $cond
+                'NOMINAL': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}},
                 'NOMEN': 1,
                 'Periode': {'$substr': ['$TGL_BAYAR', 0, 7]} 
             }},
@@ -2160,7 +2177,8 @@ def doh_comparison_report_api():
                 'BILL_REASON': 'BIAYA PEMAKAIAN AIR' 
             }},
             {'$project': {
-                'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
+                # FIX: Ganti $ifNull ke $cond
+                'NOMINAL': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}},
                 'RAYON': 1,
                 # Ekstrak Hari (DD) dan Periode (YYYY-MM)
                 'Day': {'$substr': ['$TGL_BAYAR', 8, 2]},
@@ -2171,7 +2189,7 @@ def doh_comparison_report_api():
                 'NOMINAL': 1,
                 'Day': 1,
                 'Periode': 1,
-                'CLEAN_RAYON': {'$ifNull': ['$RAYON', 'N/A']},
+                'CLEAN_RAYON': {'$cond': [{'$ne': ['$RAYON', None]}, '$RAYON', 'N/A']},
             }},
             # Filter hanya Rayon 34 dan 35
             {'$match': {'CLEAN_RAYON': {'$in': ['34', '35']}}},
@@ -2248,7 +2266,8 @@ def _aggregate_tariff_changes(collection_cid):
             '_id': '$NOMEN',
             'history': {
                 '$push': {
-                    'tanggal': {'$ifNull': ['$TANGGAL_UPLOAD_CID', '1900-01-01 00:00:00']},
+                    # FIX: Ganti $ifNull ke $cond
+                    'tanggal': {'$cond': [{'$ne': ['$TANGGAL_UPLOAD_CID', None]}, '$TANGGAL_UPLOAD_CID', '1900-01-01 00:00:00']},
                     'tarif': '$TARIF'
                 }
             }
@@ -2320,9 +2339,10 @@ def _aggregate_top_debt(collection_mc, collection_ardebt, collection_cid):
         # END PERBAIKAN
         {'$group': {
             '_id': '$NOMEN',
-            'NAMA': {'$first': '$NAMA'},
-            'RAYON': {'$first': '$RAYON'},
-            'TARIF': {'$first': '$TARIF'},
+            # FIX: Ganti $ifNull ke $cond
+            'NAMA': {'$cond': [{'$ne': ['$NAMA', None]}, '$NAMA', 'N/A']},
+            'RAYON': {'$cond': [{'$ne': ['$RAYON', None]}, '$RAYON', 'N/A']},
+            'TARIF': {'$cond': [{'$ne': ['$TARIF', None]}, '$TARIF', 'N/A']},
         }},
         {'$project': {'_id': 0, 'NOMEN': '$_id', 'NAMA': 1, 'RAYON': 1, 'TARIF': 1}}
     ], allowDiskUse=True)}
@@ -2332,7 +2352,8 @@ def _aggregate_top_debt(collection_mc, collection_ardebt, collection_cid):
     pipeline_ardebt_total = [
         {'$group': {
             '_id': '$NOMEN',
-            'TotalARDEBT': {'$sum': {"$toDouble": {"$ifNull": ["$JUMLAH", 0]}}},
+            # FIX: Ganti $ifNull ke $cond
+            'TotalARDEBT': {'$sum': {"$toDouble": {'$cond': [{'$ne': ['$JUMLAH', None]}, '$JUMLAH', 0]}}},
             'TotalPeriodeTunggakan': {'$sum': 1}
         }}
     ]
@@ -2343,7 +2364,8 @@ def _aggregate_top_debt(collection_mc, collection_ardebt, collection_cid):
         {'$match': {'BULAN_TAGIHAN': latest_mc_month}} if latest_mc_month else {'$match': {'NOMEN': {'$exists': True}}}, 
         {'$group': {
             '_id': '$NOMEN',
-            'MC_Piutang': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}}
+            # FIX: Ganti $ifNull ke $cond
+            'MC_Piutang': {'$sum': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}}
         }}
     ]
     mc_piutang = {doc['_id']: doc['MC_Piutang'] for doc in collection_mc.aggregate(pipeline_mc_piutang, allowDiskUse=True)}
@@ -2389,8 +2411,9 @@ def _aggregate_top_premium(collection_mc, collection_cid):
         {'$match': {'KUBIK': {'$gt': 0}}}, 
         {'$group': {
             '_id': '$NOMEN',
-            'TotalKubik': {'$sum': {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}},
-            'TotalNominal': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}}
+            # FIX: Ganti $ifNull ke $cond
+            'TotalKubik': {'$sum': {"$toDouble": {'$cond': [{'$ne': ['$KUBIK', None]}, '$KUBIK', 0]}}},
+            'TotalNominal': {'$sum': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}}
         }},
         {'$sort': {'TotalKubik': -1}}, 
         {'$limit': 500},
@@ -2399,9 +2422,10 @@ def _aggregate_top_premium(collection_mc, collection_cid):
         {'$project': {
             '_id': 0,
             'NOMEN': '$_id',
-            'NAMA': {'$ifNull': ['$customer_info.NAMA', 'N/A']},
-            'RAYON': {'$ifNull': ['$customer_info.RAYON', 'N/A']},
-            'TARIF': {'$ifNull': ['$customer_info.TARIF', 'N/A']},
+            # FIX: Ganti $ifNull ke $cond
+            'NAMA': {'$cond': [{'$ne': ['$customer_info.NAMA', None]}, '$customer_info.NAMA', 'N/A']},
+            'RAYON': {'$cond': [{'$ne': ['$customer_info.RAYON', None]}, '$customer_info.RAYON', 'N/A']},
+            'TARIF': {'$cond': [{'$ne': ['$customer_info.TARIF', None]}, '$customer_info.TARIF', 'N/A']},
             'TOTAL_KUBIK_MC': {'$round': ['$TotalKubik', 0]},
             'TOTAL_NOMINAL_MC': {'$round': ['$TotalNominal', 0]},
             'STATUS': 'MC PIUTANG'
@@ -2434,10 +2458,12 @@ def report_top_lists_api():
             {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'cid'}},
             {'$unwind': {'path': '$cid', 'preserveNullAndEmptyArrays': True}},
             {'$project': {
-                '_id': 0, 'NOMEN': 1, 'NAMA': {'$ifNull': ['$cid.NAMA', 'N/A']},
-                'RAYON': {'$ifNull': ['$cid.RAYON', 'N/A']},
-                'NOMINAL_MC': {'$round': [{"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, 0]},
-                'KUBIK_MC': {'$round': [{"$toDouble": {"$ifNull": ["$KUBIK", 0]}}, 0]},
+                '_id': 0, 'NOMEN': 1, 
+                # FIX: Ganti $ifNull ke $cond
+                'NAMA': {'$cond': [{'$ne': ['$cid.NAMA', None]}, '$cid.NAMA', 'N/A']},
+                'RAYON': {'$cond': [{'$ne': ['$cid.RAYON', None]}, '$cid.RAYON', 'N/A']},
+                'NOMINAL_MC': {'$round': [{"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}, 0]},
+                'KUBIK_MC': {'$round': [{"$toDouble": {'$cond': [{'$ne': ['$KUBIK', None]}, '$KUBIK', 0]}}, 0]},
                 'STATUS': 1
             }}
         ]
@@ -2450,10 +2476,12 @@ def report_top_lists_api():
             {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'cid'}},
             {'$unwind': {'path': '$cid', 'preserveNullAndEmptyArrays': True}},
             {'$project': {
-                '_id': 0, 'NOMEN': 1, 'NAMA': {'$ifNull': ['$cid.NAMA', 'N/A']},
-                'RAYON': {'$ifNull': ['$cid.RAYON', 'N/A']},
-                'NOMINAL_MC': {'$round': [{"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, 0]},
-                'KUBIK_MC': {'$round': [{"$toDouble": {"$ifNull": ["$KUBIK", 0]}}, 0]},
+                '_id': 0, 'NOMEN': 1, 
+                # FIX: Ganti $ifNull ke $cond
+                'NAMA': {'$cond': [{'$ne': ['$cid.NAMA', None]}, '$cid.NAMA', 'N/A']},
+                'RAYON': {'$cond': [{'$ne': ['$cid.RAYON', None]}, '$cid.RAYON', 'N/A']},
+                'NOMINAL_MC': {'$round': [{"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}, 0]},
+                'KUBIK_MC': {'$round': [{"$toDouble": {'$cond': [{'$ne': ['$KUBIK', None]}, '$KUBIK', 0]}}, 0]},
                 'STATUS': 1
             }}
         ]
@@ -2490,7 +2518,8 @@ def basic_volume_report_api():
         pipeline_basic_volume = [
             {'$project': {
                 'NOMEN': 1,
-                'KUBIK': {"$toDouble": {"$ifNull": ["$KUBIK", 0]}},
+                # FIX: Ganti $ifNull ke $cond
+                'KUBIK': {"$toDouble": {'$cond': [{'$ne': ['$KUBIK', None]}, '$KUBIK', 0]}},
                 'RAYON': 1,
                 'BULAN_TAGIHAN': 1 # Kunci pembeda historis
             }},
@@ -2593,7 +2622,8 @@ def aging_report_api():
             {'$project': {
                 'NOMEN': 1,
                 'RAYON': 1,
-                'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}},
+                # FIX: Ganti $ifNull ke $cond
+                'NOMINAL': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}},
                 'BULAN_TAGIHAN': 1
             }},
             # Grouping berdasarkan NOMEN, menjumlahkan total nominal piutang lama
@@ -2614,8 +2644,9 @@ def aging_report_api():
             {'$project': {
                 '_id': 0,
                 'NOMEN': '$_id',
-                'NAMA': {'$ifNull': ['$customer_info.NAMA', 'N/A']},
-                'RAYON': {'$ifNull': ['$customer_info.RAYON', '$RayonMC']},
+                # FIX: Ganti $ifNull ke $cond
+                'NAMA': {'$cond': [{'$ne': ['$customer_info.NAMA', None]}, '$customer_info.NAMA', 'N/A']},
+                'RAYON': {'$cond': [{'$ne': ['$customer_info.RAYON', None]}, '$customer_info.RAYON', '$RayonMC']},
                 'PiutangLama': {'$round': ['$TotalPiutangLama', 0]},
                 'Bulan_Tagihan_Terlama': '$Bulan_Tagihan_Terlama',
             }},
@@ -3309,7 +3340,8 @@ def dashboard_summary_api():
             {'$match': {'BULAN_TAGIHAN': latest_mc_month, 'NOMINAL': {'$gt': 0}}} if latest_mc_month else {'$match': {'NOMINAL': {'$gt': 0}}},
             {'$group': {
                 '_id': None,
-                'total_piutang': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
+                # FIX: Ganti $ifNull ke $cond
+                'total_piutang': {'$sum': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}},
                 'jumlah_tagihan': {'$sum': 1}
             }}
         ]
@@ -3322,7 +3354,8 @@ def dashboard_summary_api():
             {'$match': {'JUMLAH': {'$gt': 0}}},
             {'$group': {
                 '_id': None,
-                'total_tunggakan': {'$sum': {"$toDouble": {"$ifNull": ["$JUMLAH", 0]}}},
+                # FIX: Ganti $ifNull ke $cond
+                'total_tunggakan': {'$sum': {"$toDouble": {'$cond': [{'$ne': ['$JUMLAH', None]}, '$JUMLAH', 0]}}},
                 'jumlah_tunggakan': {'$sum': 1}
             }}
         ]
@@ -3339,7 +3372,8 @@ def dashboard_summary_api():
             }}, 
             {'$group': {
                 '_id': None,
-                'koleksi_hari_ini': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
+                # FIX: Ganti $ifNull ke $cond
+                'koleksi_hari_ini': {'$sum': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}},
                 'transaksi_hari_ini': {'$sum': 1}
             }}
         ]
@@ -3356,7 +3390,8 @@ def dashboard_summary_api():
             }},
             {'$group': {
                 '_id': None,
-                'koleksi_bulan_ini': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
+                # FIX: Ganti $ifNull ke $cond
+                'koleksi_bulan_ini': {'$sum': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}},
                 'transaksi_bulan_ini': {'$sum': 1}
             }}
         ]
@@ -3400,7 +3435,8 @@ def dashboard_summary_api():
             {'$match': {'BULAN_TAGIHAN': latest_mc_month, 'NOMINAL': {'$gt': 0}}} if latest_mc_month else {'$match': {'NOMINAL': {'$gt': 0}}},
             {'$group': {
                 '_id': '$RAYON',
-                'total_piutang': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
+                # FIX: Ganti $ifNull ke $cond
+                'total_piutang': {'$sum': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}},
                 'total_pelanggan': {'$addToSet': '$NOMEN'}
             }},
             {'$project': {
@@ -3430,7 +3466,8 @@ def dashboard_summary_api():
                                  'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}}, 
                 {'$group': {
                     '_id': None,
-                    'total': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
+                    # FIX: Ganti $ifNull ke $cond
+                    'total': {'$sum': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}},
                     'count': {'$sum': 1}
                 }}
             ]
@@ -3471,7 +3508,8 @@ def rayon_analysis_api():
             {'$match': {'BULAN_TAGIHAN': latest_mc_month, 'NOMINAL': {'$gt': 0}}} if latest_mc_month else {'$match': {'NOMINAL': {'$gt': 0}}}, 
             {'$group': {
                 '_id': '$RAYON',
-                'total_piutang': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
+                # FIX: Ganti $ifNull ke $cond
+                'total_piutang': {'$sum': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}},
                 'total_pelanggan': {'$addToSet': '$NOMEN'}
             }},
             {'$project': {
@@ -3494,7 +3532,8 @@ def rayon_analysis_api():
             }},
             {'$group': {
                 '_id': '$RAYON',
-                'total_koleksi': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
+                # FIX: Ganti $ifNull ke $cond
+                'total_koleksi': {'$sum': {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}}},
             }},
         ]
         koleksi_result = list(collection_mb.aggregate(pipeline_koleksi_rayon))
@@ -3587,7 +3626,8 @@ def critical_alerts_api():
             {'$group': {
                 '_id': '$NOMEN',
                 'months': {'$sum': 1}, # Hitung jumlah baris tunggakan
-                'amount': {'$sum': {"$toDouble": {"$ifNull": ["$JUMLAH", 0]}}}
+                # FIX: Ganti $ifNull ke $cond
+                'amount': {'$sum': {"$toDouble": {'$cond': [{'$ne': ['$JUMLAH', None]}, '$JUMLAH', 0]}}}
             }},
             {'$match': {'months': {'$gte': 5}}}, # Nomen dengan 5 periode tunggakan atau lebih
             {'$limit': 20}
