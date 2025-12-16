@@ -203,6 +203,7 @@ def _get_sbrs_anomalies(collection_sbrs, collection_cid):
         {'$project': {
             'NOMEN': 1,
             'NAMA': {'$ifNull': ['$customer_info.NAMA', 'N/A']},
+            'ALAMAT': {'$ifNull': ['$customer_info.ALAMAT', 'N/A']}, # Tambah ALAMAT untuk konteks
             'RAYON': {'$ifNull': ['$customer_info.RAYON', 'N/A']},
             'KUBIK_TERBARU': 1,
             'KUBIK_SEBELUMNYA': 1,
@@ -346,6 +347,7 @@ def search_nomen():
         tunggakan_nominal_total = sum(item.get('JUMLAH', 0) for item in ardebt_results)
         
         # 4. RIWAYAT PEMBAYARAN TERAKHIR (MB)
+        # FIX KRITIS: Menggunakan TGL_BAYAR yang sudah dinormalisasi
         mb_last_payment_cursor = collection_mb.find({'NOMEN': cleaned_nomen}).sort('TGL_BAYAR', -1).limit(1)
         last_payment = list(mb_last_payment_cursor)[0] if list(mb_last_payment_cursor) else None
         
@@ -842,6 +844,7 @@ def _aggregate_mb_sunter_detail(collection_mb):
 
     # M = latest_mc_month (e.g., 122025) -> UNDUE (Aging 0)
     M_MINUS_1_REK = _get_previous_month_year(latest_mc_month) # M-1 (e.g., 112025) -> CURRENT (Aging 1)
+    M_MINUS_2_REK = _get_previous_month_year(M_MINUS_1_REK) # M-2 (e.g., 102025)
     
     # Collection Period (TGL_BAYAR) is in Month M (Asumsi koleksi dilakukan di bulan tagihan terbaru)
     COLLECTION_MONTH_START, COLLECTION_MONTH_END = _get_month_date_range(latest_mc_month)
@@ -864,9 +867,9 @@ def _aggregate_mb_sunter_detail(collection_mb):
             # Current (Aging 1): BULAN_REK = M-1
             base_match['BULAN_REK'] = M_MINUS_1_REK
         elif bulan_rek_filter_type == 'AGING':
-            # Tunggakan (Aging >= 2): BULAN_REK < M-1 (i.e., M-2 atau lebih lama)
-            # Ini adalah filter untuk semua tagihan yang terbit DUA bulan atau lebih yang lalu.
-            base_match['BULAN_REK'] = {'$lt': M_MINUS_1_REK} 
+            # Tunggakan (Aging >= 2): BULAN_REK <= M-2
+            # Perbaikan Logika Aging: Semuanya yang lebih lama dari M-1 (yaitu M-2 dan sebelumnya)
+            base_match['BULAN_REK'] = {'$lte': M_MINUS_2_REK} 
             
         pipeline = [
             {'$match': base_match},
@@ -1272,6 +1275,7 @@ def collection_detail_api():
             bulan_rek = doc.get('BULAN_REK', 'N/A')
             
             # Perbandingan IS_UNDUE menggunakan BULAN_REK MB dan BULAN_TAGIHAN MC terbaru
+            # UNDUE adalah jika BULAN_REK = BULAN_TAGIHAN MC Terbaru (M)
             is_undue = bulan_rek == latest_mc_month
             
             cleaned_results.append({
@@ -1398,7 +1402,7 @@ def analyze_reduced_usage():
 def analyze_zero_usage():
     return render_template('analyze_report_template.html', 
                              title="Tidak Ada Pemakaian (Zero)", 
-                             description="Menampilkan pelanggan dengan konsumsi air nol (Zero) di periode tagihan terakhir.",
+                             description="Menampilkan pelanggan dengan pemakaian air nol (Zero) di periode tagihan terakhir.",
                              report_type="ZERO_USAGE",
                              is_admin=current_user.is_admin)
 
@@ -1720,7 +1724,7 @@ def analyze_mc_tarif_breakdown_api():
 def collection_monitoring_api():
     """
     Menghasilkan data harian, kumulatif, dan persentase koleksi berdasarkan Rayon (34 & 35).
-    Metrik Koleksi (Rp1): Total Nominal Per Hari dengan filter BULAN_REK bulan lalu.
+    Metrik Koleksi (Rp1): Total Nominal Per Hari dengan filter BULAN_REK bulan lalu (Aging 1/Current).
     Persentase: (Rp1 Kumulatif + Total Undue Bulan Sebelumnya) / Total Piutang MC.
     """
     if client is None:
@@ -1737,7 +1741,7 @@ def collection_monitoring_api():
              return jsonify({'monitoring_data': {'R34': [], 'R35': []}, 'summary_top': empty_summary}), 200
 
         # Tentukan Bulan Tagihan MC Sebelumnya (Untuk Koleksi CURRENT dan Total UNDUE Bulan Lalu)
-        previous_mc_month = _get_previous_month_year(latest_mc_month)
+        previous_mc_month = _get_previous_month_year(latest_mc_month) # M-1
         
         # 1. Hitung Total Piutang MC (Denominator) dari bulan tagihan terbaru
         # Menggunakan helper baru untuk mendapatkan total piutang yang difilter (REG 34/35)
@@ -1749,6 +1753,8 @@ def collection_monitoring_api():
         total_undue_prev_nominal = 0.0
         
         if previous_mc_month:
+            # FIX KRITIS: UNDUE Bulan Sebelumnya (Aging 0 periode lalu)
+            # Koleksi MB untuk BULAN_REK = M-1 (Piutang bulan lalu) yang dibayar di bulan M-1.
             prev_month_start_date, prev_month_end_date = _get_month_date_range(previous_mc_month)
 
             pipeline_undue_prev = [
@@ -1768,18 +1774,18 @@ def collection_monitoring_api():
 
         # 3. Ambil Data Transaksi MB (Koleksi) Harian (Rp1 - Current Aging 1)
         
-        # Koleksi Rp1 (CURRENT) Dihitung dari transaksi MB yang TGL_BAYAR nya bulan ini, 
-        # TAPI BULAN_REK-nya adalah bulan lalu (Piutang Lama)
+        # Koleksi Rp1 (CURRENT) Dihitung dari transaksi MB yang TGL_BAYAR nya bulan ini (M), 
+        # TAPI BULAN_REK-nya adalah bulan lalu (M-1)
         now = datetime.now()
+        # Mendapatkan TGL_BAYAR range bulan ini (M)
         this_month_start = now.strftime('%Y-%m-01')
-        # Hitung tanggal satu hari setelah bulan ini
         next_month_start = (now.replace(day=1) + timedelta(days=32)).replace(day=1).strftime('%Y-%m-%d')
         
         # NOTE: Mengganti $project dan $addFields kompleks dengan $project sederhana
         pipeline_mb_daily = [
             {'$match': {
-                'TGL_BAYAR': {'$gte': this_month_start, '$lt': next_month_start}, # Filter A: TGL_BAYAR di bulan ini
-                'BULAN_REK': previous_mc_month, # Filter B: BULAN_REK bulan lalu (Aging 1)
+                'TGL_BAYAR': {'$gte': this_month_start, '$lt': next_month_start}, # Filter A: TGL_BAYAR di bulan ini (M)
+                'BULAN_REK': previous_mc_month, # Filter B: BULAN_REK bulan lalu (M-1)
                 'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
             }}, 
             {'$project': {
@@ -2344,6 +2350,7 @@ def report_top_lists_api():
         
         # 4. Konsumen Belum Bayar (MC Status Unpaid - Limit 500)
         unpaid_pipeline = [
+            # FIX KRITIS: Filter NOMINAL > 0
             {'$match': {'BULAN_TAGIHAN': latest_mc_month, 'STATUS': {'$ne': 'PAYMENT'}, 'NOMINAL': {'$gt': 0}}} if latest_mc_month else {'$match': {'STATUS': {'$ne': 'PAYMENT'}, 'NOMINAL': {'$gt': 0}}},
             {'$limit': 500}, 
             {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'cid'}},
@@ -2448,7 +2455,7 @@ def basic_volume_report_api():
         total_row = pd.Series(pivot_kubik.sum(axis=0), name='TOTAL')
         pivot_kubik = pd.concat([pivot_kubik, total_row.to_frame().T])
         
-        pivot_kubik = pivot_kubik.reset_index().rename(columns={'index': 'RAYON'})
+        pivot_kubik = pivot_kub.reset_index().rename(columns={'index': 'RAYON'})
 
         return jsonify({
             'status': 'success',
@@ -2478,10 +2485,16 @@ def aging_report_api():
         if not latest_mc_month:
             return jsonify({'status': 'error', 'message': 'Tidak ada data MC historis ditemukan.'}), 404
 
+        # KONSISTENSI KRITIS: Tentukan M-1 (Current)
+        m_minus_1 = _get_previous_month_year(latest_mc_month)
+
         # Pipeline untuk mencari semua tagihan yang BUKAN bulan terbaru, BERSTATUS belum BAYAR, dan NOMINAL > 0
         pipeline = [
             {'$match': {
-                'BULAN_TAGIHAN': {'$ne': latest_mc_month},
+                # Piutang Lama: BULAN_TAGIHAN TIDAK SAMA dengan M (bulan terbaru) DAN TIDAK SAMA dengan M-1 (Current)
+                # Piutang Lama adalah M-2 atau lebih lama (semua yang <= M-2)
+                # Alternatif: Semua yang < M-1
+                'BULAN_TAGIHAN': {'$lt': m_minus_1}, # Filter: Semua yang lebih lama dari M-1
                 'STATUS': {'$ne': 'PAYMENT'}, # Filter status yang belum bayar
                 'NOMINAL': {'$gt': 0}
             }},
@@ -2769,15 +2782,22 @@ def upload_mb_data():
         df.columns = [col.strip().upper() for col in df.columns]
         
         # >>> START PERBAIKAN: MAPPING HEADER KRITIS UNTUK MB (Sesuai Permintaan) <<<
-        rename_map = {
-            # #1: NOTAG/NOTAGIHAN
-            'NOTAG': 'NOTAGIHAN', 
-            # #2: TGL_BAYAR/PAY_DT
-            'PAY_DT': 'TGL_BAYAR', 
-            'BILL_PERIOD': 'BULAN_REK',
-            'MC VOL OKT 25_NOMEN': 'NOMEN' 
-        }
-        df = df.rename(columns=lambda x: rename_map.get(x, x), errors='ignore')
+        # 1. NOTAG/NOTAGIHAN
+        if 'NOTAG' in df.columns and 'NOTAGIHAN' not in df.columns:
+            df = df.rename(columns={'NOTAG': 'NOTAGIHAN'}, errors='ignore')
+        
+        # 2. TGL_BAYAR/PAY_DT
+        if 'PAY_DT' in df.columns and 'TGL_BAYAR' not in df.columns:
+            df = df.rename(columns={'PAY_DT': 'TGL_BAYAR'}, errors='ignore')
+        
+        # 3. Kunci Pelanggan (Handle kasus jika NOMEN hilang tapi ada MC VOL OKT 25_NOMEN)
+        if 'MC VOL OKT 25_NOMEN' in df.columns and 'NOMEN' not in df.columns:
+             df = df.rename(columns={'MC VOL OKT 25_NOMEN': 'NOMEN'}, errors='ignore')
+             
+        # 4. BULAN REK (Handle kasus jika BILL_PERIOD hilang tapi ada BULAN_REK)
+        if 'BILL_PERIOD' in df.columns and 'BULAN_REK' not in df.columns:
+             df = df.rename(columns={'BILL_PERIOD': 'BULAN_REK'}, errors='ignore')
+             
         # >>> END PERBAIKAN: MAPPING HEADER KRITIS UNTUK MB <<<
         
         # >>> START PERBAIKAN: INJECT MISSING KRITICAL COLUMNS <<<
@@ -2821,6 +2841,7 @@ def upload_mb_data():
             )
             
             # 5. Konversi objek datetime ke string YYYY-MM-DD yang seragam
+            # FIX: TGL_BAYAR harus menjadi YYYY-MM-DD (format ISO untuk konsistensi DB)
             df['TGL_BAYAR'] = df['TGL_BAYAR_OBJ'].dt.strftime('%Y-%m-%d').fillna('N/A')
             df = df.drop(columns=['TGL_BAYAR_OBJ'], errors='ignore')
             
@@ -2838,7 +2859,7 @@ def upload_mb_data():
                 df[col] = df[col].astype(str).str.strip().str.upper()
                 df[col] = df[col].replace(['NAN', 'NONE', '', ' '], 'N/A')
 
-            if col in ['NOMINAL', 'SUBNOMINAL', 'BEATETAP', 'BEA_SEWA']: 
+            if col in ['NOMINAL', 'SUBNOMINAL', 'BEATETAP', 'BEA_SEWA', 'DENDA', 'PPN', 'REK_AIR', 'KUBIKBAYAR']: 
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
         data_to_insert = df.to_dict('records')
@@ -2847,6 +2868,7 @@ def upload_mb_data():
             return jsonify({"message": "File kosong, tidak ada data yang dimasukkan."}), 200
         
         # --- START: OPERASI BULK WRITE TEROPTIMASI ---
+        # Kunci unik: NOTAGIHAN + TGL_BAYAR + NOMINAL (untuk cek duplikasi transaksi)
         UNIQUE_KEYS = ['NOTAGIHAN', 'TGL_BAYAR', 'NOMINAL'] 
         
         if not all(key in df.columns for key in UNIQUE_KEYS):
@@ -3293,7 +3315,7 @@ def dashboard_summary_api():
         # 7. TOP 5 RAYON DENGAN PIUTANG TERTINGGI (Bulan Tagihan Terbaru)
         pipeline_top_rayon = [
             # FIX: Hanya ambil NOMINAL > 0
-            {'$match': {'BULAN_TAGIHAN': latest_mc_month, 'NOMINAL': {'$gt': 0}}},
+            {'$match': {'BULAN_TAGIHAN': latest_mc_month, 'NOMINAL': {'$gt': 0}}} if latest_mc_month else {'$match': {'NOMINAL': {'$gt': 0}}},
             {'$group': {
                 '_id': '$RAYON',
                 'total_piutang': {'$sum': {'$toDouble': {'$ifNull': ['$NOMINAL', 0]}}},
