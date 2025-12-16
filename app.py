@@ -216,8 +216,8 @@ def _get_sbrs_anomalies(collection_sbrs, collection_cid):
             'STATUS_PEMAKAIAN': 1
         }},
         {'$match': { 
-           '$or': [ # Filter hanya yang anomali
-               {'STATUS_PEMAKAIAN': {'$ne': 'STABIL / NORMAL'}},
+            '$or': [ # Filter hanya yang anomali
+                {'STATUS_PEMAKAIAN': {'$ne': 'STABIL / NORMAL'}},
            ]
         }},
         {'$limit': 100} # Batasi output untuk performa
@@ -1002,7 +1002,7 @@ def _get_mc_piutang_denominator(latest_mc_month, collection_mc, collection_cid):
             "NOMEN": 1, 
             # FIX: Ganti $ifNull ke $cond
             "NOMINAL": {"$toDouble": {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}},
-            "CLEAN_ZONA": {'$cond': [{'$ne': ['$ZONA_NOVAK', None]}, '$ZONA_NOVAK', ""]},
+            "CLEAN_ZONA": {'$cond': [{'$ne': ['$ZONA_NOVAK', None]}, '$ZONA_NOVAK', ""],},
             "CUST_TYPE_MC": "$CUST_TYPE",
             "RAYON_MC": "$RAYON"
         }},
@@ -2334,9 +2334,7 @@ def _aggregate_top_debt(collection_mc, collection_ardebt, collection_cid):
     
     # Pre-fetch semua data CID terbaru (untuk JOIN cepat)
     cid_data_map = {doc['NOMEN']: doc for doc in collection_cid.aggregate([
-        # 🚨 PERBAIKAN SINTAKSIS KRITIS DI BARIS 2317
         {'$sort': {'NOMEN': 1, 'TANGGAL_UPLOAD_CID': -1}},
-        # END PERBAIKAN
         {'$group': {
             '_id': '$NOMEN',
             # FIX: Ganti $ifNull ke $cond
@@ -3206,7 +3204,7 @@ def upload_ardebt_data():
     """Mode HISTORIS: Untuk data Detail Tunggakan (ARDEBT). (DIOPTIMASI & ROBUST KEY CHECK)"""
     if client is None:
         return jsonify({"message": "Server tidak terhubung ke Database."}), 500
-    
+        
     if 'file' not in request.files:
         return jsonify({"message": "Tidak ada file di permintaan"}), 400
 
@@ -3236,7 +3234,7 @@ def upload_ardebt_data():
         if found_monetary_key and found_monetary_key != 'JUMLAH':
              df = df.rename(columns={found_monetary_key: 'JUMLAH'})
         elif 'JUMLAH' not in df.columns:
-             return jsonify({"message": "Gagal Append: Kolom kunci JUMLAH (atau AMOUNT/TOTAL/NOMINAL) untuk nominal tunggakan tidak ditemukan di file Anda."}), 400
+            return jsonify({"message": "Gagal Append: Kolom kunci JUMLAH (atau AMOUNT/TOTAL/NOMINAL) untuk nominal tunggakan tidak ditemukan di file Anda."}), 400
 
         # Get Month and Year from the request form data (sent from JS)
         upload_month = request.form.get('month')
