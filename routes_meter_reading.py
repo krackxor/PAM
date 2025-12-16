@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, render_template, url_for, flash, redirect
 from flask_login import login_required, current_user
 from functools import wraps
-from utils import get_db_status, _get_previous_month_year, _get_day_n_ago, _generate_distribution_schema, _get_sbrs_anomalies
+from utils import get_db_status, _get_sbrs_anomalies
 
 # Definisikan Blueprint
 bp_meter_reading = Blueprint('bp_meter_reading', __name__, url_prefix='/meter_reading')
@@ -11,209 +11,98 @@ def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated or not current_user.is_admin:
-            # Karena ini di Blueprint, redirect ke rute core index
             flash('Anda tidak memiliki izin (Admin) untuk mengakses halaman ini.', 'danger')
             return redirect(url_for('index'))
         return f(*args, **kwargs)
     return decorated_function
 
-# --- RUTE VIEW FRONTEND (Konsisten UI) ---
+# --- RUTE VIEW FRONTEND ---
 
-# Menu 1: Laporan Pembacaan Meter (Ringkasan KPI)
 @bp_meter_reading.route('/laporan', methods=['GET'])
-@login_required
-def meter_reading_laporan_view():
+@login_required 
+def meter_reading_report_view():
+    """Menampilkan halaman utama Laporan Baca Meter."""
     return render_template('meter_reading_report.html', 
-                           title="Laporan Pembacaan Meter",
-                           description="Ringkasan status pembacaan meter, total anomali, dan distribusi metode baca.",
+                           title="Laporan Baca Meter SBRS",
+                           description="Ringkasan data SBRS, Tren Baca Meter, dan Ringkasan Anomali.",
                            is_admin=current_user.is_admin)
 
-# Menu 2: Analisis Meter Reading (Volume Dasar & Metode Baca)
 @bp_meter_reading.route('/analisis', methods=['GET'])
 @login_required 
-def meter_reading_analisis_view():
+def meter_reading_analysis_view():
+    """Menampilkan halaman Analisis Anomali Baca Meter."""
     return render_template('meter_reading_analysis.html', 
-                           title="Analisis Meter Reading",
-                           description="Pilih laporan analisis Volume Dasar dan Distribusi Metode Baca berdasarkan dimensi pelanggan.",
+                           title="Analisis Anomali SBRS",
+                           description="Laporan detail anomali pemakaian air (Naik Ekstrim, Turun Drastis, Zero Usage) berdasarkan data SBRS terbaru.",
                            is_admin=current_user.is_admin)
-
-# Menu 3: Top List Anomali (Anomali Komprehensif)
-@bp_meter_reading.route('/top', methods=['GET'])
-@login_required 
-def meter_reading_top_view():
-    return render_template('analysis_report_template.html', 
-                            title="Top List Anomali Pemakaian",
-                            description="Daftar 100 pelanggan dengan anomali pemakaian (Ekstrim/Zero) yang diperkaya data pelanggan lengkap.",
-                            report_type="ANOMALY_COMPREHENSIVE",
-                            is_admin=current_user.is_admin,
-                            api_endpoint=url_for("bp_meter_reading.anomaly_comprehensive_api"))
-
-# Menu 4: Riwayat Volume (Historis)
-@bp_meter_reading.route('/riwayat', methods=['GET'])
-@login_required 
-def meter_reading_riwayat_view():
-    return render_template('analysis_report_template.html', 
-                            title="Riwayat Volume Dasar Historis",
-                            description="Riwayat volume KUBIK bulanan agregat berdasarkan Rayon dari seluruh data Master Cetak (MC).",
-                            report_type="BASIC_VOLUME",
-                            is_admin=current_user.is_admin,
-                            api_endpoint=url_for("bp_meter_reading.volume_historis_api"))
 
 # --- API REPORTING ---
 
-# API Report: Anomaly Comprehensive
-@bp_meter_reading.route("/api/anomaly_comprehensive")
+@bp_meter_reading.route("/api/anomalies", methods=['GET'])
 @login_required
-def anomaly_comprehensive_api():
+def get_anomalies_api():
     db_status = get_db_status()
-    if db_status['status'] == 'error':
-        return jsonify({"message": db_status['message']}), 500
-        
+    if db_status['status'] == 'error': return jsonify({"message": db_status['message']}), 500
     collections = db_status['collections']
-    collection_sbrs = collections['sbrs']
-    collection_cid = collections['cid']
 
     try:
-        # Mengambil data anomali menggunakan helper function dari utils
-        anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
+        anomalies_data = _get_sbrs_anomalies(collections['sbrs'], collections['cid'])
         
-        # Mendefinisikan skema dinamis
+        # Tambahkan skema untuk tampilan tabel
         anomaly_schema = [
             {'key': 'NOMEN', 'label': 'No. Pelanggan', 'type': 'string', 'is_main_key': True},
-            {'key': 'NAMA', 'label': 'Nama Pelanggan', 'type': 'string'},
-            {'key': 'STATUS_PEMAKAIAN', 'label': 'Status Anomali', 'type': 'string'},
-            {'key': 'KUBIK_TERBARU', 'label': 'Kubik Terakhir (m³)', 'type': 'integer', 'unit': 'm³'},
-            {'key': 'KUBIK_SEBELUMNYA', 'label': 'Kubik Sebelumnya (m³)', 'type': 'integer', 'unit': 'm³'},
-            {'key': 'PERSEN_SELISIH', 'label': 'Selisih (%)', 'type': 'percent'},
+            {'key': 'NAMA', 'label': 'Nama', 'type': 'string'},
             {'key': 'RAYON', 'label': 'Rayon', 'type': 'string'},
-            {'key': 'PCEZ', 'label': 'PCEZ', 'type': 'string'},
             {'key': 'TARIF', 'label': 'Tarif', 'type': 'string'},
-            {'key': 'MERK', 'label': 'Merek Meter', 'type': 'string'},
-            {'key': 'CYCLE', 'label': 'Cycle/Bookwalk', 'type': 'string'},
+            {'key': 'KUBIK_TERBARU', 'label': 'Kubik Baru (m³)', 'type': 'integer', 'unit': 'm³'},
+            {'key': 'KUBIK_SEBELUMNYA', 'label': 'Kubik Lama (m³)', 'type': 'integer', 'unit': 'm³'},
+            {'key': 'PERSEN_SELISIH', 'label': 'Persen Selisih (%)', 'type': 'percent'},
+            {'key': 'STATUS_PEMAKAIAN', 'label': 'Status Anomali', 'type': 'string'},
             {'key': 'AB_SUNTER', 'label': 'AB Sunter', 'type': 'string'},
         ]
         
-        for item in anomalies:
-            item['chart_label'] = item['NOMEN']
-            # Menggunakan KUBIK_TERBARU sebagai metrik untuk chart (Top List)
-            item['chart_data_piutang'] = item['KUBIK_TERBARU']
-            
-        return jsonify({
-            'status': 'success',
-            'data': anomalies,
-            'schema': anomaly_schema,
-            'title': "Top Anomali Pemakaian Air",
-            'subtitle': f"Menampilkan {len(anomalies)} Anomali Terbesar (Ekstrim dan Zero)."
-        }), 200
+        # Tambahkan label chart untuk visualisasi
+        for item in anomalies_data:
+            item['chart_label'] = f"R:{item['RAYON']} - {item['NOMEN']}"
+            item['chart_data_kubik'] = item['KUBIK_TERBARU']
+
+        return jsonify({'status': 'success', 'data': anomalies_data, 'schema': anomaly_schema, 'title': "Detail Anomali Pemakaian Air", 'subtitle': f"Data anomali SBRS terbaru"}), 200
 
     except Exception as e:
-        print(f"Error saat mengambil anomali komprehensif: {e}")
+        print(f"Error saat mengambil data anomali: {e}")
         return jsonify({"status": 'error', "message": f"Gagal mengambil laporan anomali: {e}"}), 500
 
-# API Report: Volume Historis
-@bp_meter_reading.route("/api/volume_historis")
+@bp_meter_reading.route("/api/monthly_read_trend", methods=['GET'])
 @login_required
-def volume_historis_api():
+def get_monthly_read_trend_api():
     db_status = get_db_status()
-    if db_status['status'] == 'error':
-        return jsonify({"message": db_status['message']}), 500
-        
-    collection_mc = db_status['collections']['mc']
-
-    try:
-        pipeline = [
-            {'$project': {
-                'BULAN_TAGIHAN': 1,
-                'RAYON': 1,
-                'KUBIK': {'$toDouble': {'$cond': [{'$ne': ['$KUBIK', None]}, '$KUBIK', 0]}}, 
-            }},
-            {'$group': {
-                '_id': {'bulan': '$BULAN_TAGIHAN', 'rayon': '$RAYON'},
-                'TotalKubikasi': {'$sum': '$KUBIK'}
-            }},
-            {'$project': {
-                '_id': 0,
-                'BULAN_TAGIHAN': '$_id.bulan',
-                'RAYON': '$_id.rayon',
-                'TotalKubikasi': {'$round': ['$TotalKubikasi', 0]}
-            }},
-            {'$sort': {'BULAN_TAGIHAN': -1, 'RAYON': 1}},
-            {'$limit': 500}
-        ]
-        
-        results = list(collection_mc.aggregate(pipeline))
-        
-        historis_schema = [
-            {'key': 'BULAN_TAGIHAN', 'label': 'Periode Tagihan', 'type': 'string', 'is_main_key': True},
-            {'key': 'RAYON', 'label': 'Rayon', 'type': 'string'},
-            {'key': 'TotalKubikasi', 'label': 'Total Kubikasi (m³)', 'type': 'integer', 'unit': 'm³', 'chart_key': 'TotalKubikasi'},
-        ]
-        
-        # Tambahkan chart label
-        for item in results:
-            item['chart_label'] = f"R:{item['RAYON']} ({item['BULAN_TAGIHAN']})"
-        
-        return jsonify({
-            'status': 'success',
-            'data': results,
-            'schema': historis_schema,
-            'title': "Riwayat Volume Kubikasi Bulanan per Rayon",
-        }), 200
-
-    except Exception as e:
-        print(f"Error saat mengambil volume historis: {e}")
-        return jsonify({"status": 'error', "message": f"Gagal mengambil laporan volume historis: {e}"}), 500
-
-# API Report: Distribusi Metode Baca 
-@bp_meter_reading.route("/api/read_method_distribution")
-@login_required
-def read_method_distribution_report():
-    db_status = get_db_status()
-    if db_status['status'] == 'error':
-        return jsonify({"message": db_status['message']}), 500
+    if db_status['status'] == 'error': return jsonify({"message": db_status['message']}), 500
+    collection_sbrs = db_status['collections']['sbrs']
     
-    collection_cid = db_status['collections']['cid']
-
     try:
-        total_nomen = len(collection_cid.distinct('NOMEN'))
-        
         pipeline = [
-            {'$group': {
-                '_id': '$READ_METHOD',
-                'total_nomen': {'$sum': 1}
-            }},
             {'$project': {
                 '_id': 0,
-                'READ_METHOD': '$_id',
-                'total_nomen': 1,
-                'persentase': {'$multiply': [{'$divide': ['$total_nomen', total_nomen]}, 100]}
+                'CMR_RD_DATE': 1,
+                'READ_MONTH': {'$substr': ['$CMR_RD_DATE', 0, 7]} # Ambil YYYY-MM
             }},
-            {'$sort': {'total_nomen': -1}}
+            {'$group': {
+                '_id': '$READ_MONTH',
+                'TotalReads': {'$sum': 1}
+            }},
+            {'$sort': {'_id': 1}}
         ]
         
-        results = list(collection_cid.aggregate(pipeline))
+        trend_data = list(collection_sbrs.aggregate(pipeline))
         
-        if total_nomen == 0:
-             results = []
-             
-        read_method_schema = [
-            {'key': 'READ_METHOD', 'label': 'Metode Baca', 'type': 'string', 'is_main_key': True},
-            {'key': 'total_nomen', 'label': 'Jumlah Pelanggan', 'type': 'integer', 'chart_key': 'total_nomen'},
-            {'key': 'persentase', 'label': 'Persentase Total', 'type': 'percent'},
-        ]
+        # Format output untuk Chart
+        for item in trend_data:
+            item['bulan'] = item['_id']
+            item['jumlah'] = item['TotalReads']
+            item.pop('_id')
+            
+        return jsonify({'status': 'success', 'data': trend_data, 'title': "Tren Jumlah Baca Meter Bulanan", 'metric_label': "Jumlah Pembacaan"}), 200
         
-        for item in results:
-            item['chart_label'] = item.get("READ_METHOD", "N/A")
-            item['chart_data_piutang'] = item['total_nomen']
-            item['persentase'] = round(item['persentase'], 2)
-
-        return jsonify({
-            "data": results,
-            "schema": read_method_schema,
-            "title": f"Distribusi Metode Pembacaan Meter",
-            "subtitle": f"Berdasarkan {total_nomen} pelanggan terakhir di Master Data.",
-        }), 200
-
     except Exception as e:
-        print(f"Error saat membuat laporan distribusi metode baca: {e}")
-        return jsonify({"status": 'error', "message": f"Gagal mengambil laporan distribusi metode baca: {e}"}), 500
+        print(f"Error fetching monthly read trend: {e}")
+        return jsonify({'status': 'error', 'message': f"Gagal mengambil tren baca meter: {e}"}), 500
