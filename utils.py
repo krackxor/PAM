@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 
 # --- KONFIGURASI DAN KONEKSI GLOBAL ---
+# Variabel lingkungan dimuat secara otomatis oleh app.py (melalui python-dotenv)
 MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = os.getenv("MONGO_DB_NAME")
 
@@ -17,6 +18,7 @@ def init_db(app):
     global client, db, collections
     
     if client:
+        # Sudah terinisialisasi
         return
         
     try:
@@ -25,23 +27,29 @@ def init_db(app):
         client.admin.command('ping') 
         db = client[DB_NAME]
         
-        # Inisialisasi Koleksi
+        # Inisialisasi Koleksi (Mapping)
         collections['mc'] = db['MasterCetak']
         collections['mb'] = db['MasterBayar']
         collections['cid'] = db['CustomerData']
         collections['sbrs'] = db['MeterReading']
         collections['ardebt'] = db['AccountReceivable']
         
+        # ==========================================================
         # === OPTIMASI: INDEXING KRITIS ===
+        # ==========================================================
+        
+        # CID (CustomerData)
         collections['cid'].create_index([('NOMEN', 1), ('TANGGAL_UPLOAD_CID', -1)], name='idx_cid_nomen_hist')
         collections['cid'].create_index([('RAYON', 1), ('TIPEPLGGN', 1)], name='idx_cid_rayon_tipe')
         collections['cid'].create_index([('PCEZ', 1)], name='idx_cid_pcez') 
 
+        # MC (MasterCetak)
         collections['mc'].create_index([('NOMEN', 1), ('BULAN_TAGIHAN', -1)], name='idx_mc_nomen_hist')
         collections['mc'].create_index([('RAYON', 1), ('PCEZ', 1)], name='idx_mc_rayon_pcez') 
         collections['mc'].create_index([('STATUS', 1)], name='idx_mc_status')
         collections['mc'].create_index([('TARIF', 1), ('KUBIK', 1), ('NOMINAL', 1)], name='idx_mc_tarif_volume')
 
+        # MB (MasterBayar)
         try:
             collections['mb'].drop_index('idx_mb_unique_transaction')
         except Exception:
@@ -51,6 +59,7 @@ def init_db(app):
         collections['mb'].create_index([('NOMEN', 1)], name='idx_mb_nomen')
         collections['mb'].create_index([('RAYON', 1), ('PCEZ', 1), ('TGL_BAYAR', -1)], name='idx_mb_rayon_pcez_date')
 
+        # SBRS (MeterReading)
         try:
             collections['sbrs'].create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', 1)], name='idx_sbrs_unique_read', unique=True)
         except OperationFailure:
@@ -59,6 +68,7 @@ def init_db(app):
             
         collections['sbrs'].create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', -1)], name='idx_sbrs_history')
         
+        # ARDEBT (AccountReceivable)
         collections['ardebt'].create_index([('NOMEN', 1), ('PERIODE_BILL', -1), ('JUMLAH', 1)], name='idx_ardebt_nomen_hist')
         
         print("Koneksi MongoDB berhasil dan index dikonfigurasi!")
@@ -67,7 +77,7 @@ def init_db(app):
         client = None
 
 def get_db_status():
-    """Mengembalikan status koneksi database dan koleksi."""
+    """Mengembalikan status koneksi database dan koleksi yang aktif."""
     if client is None:
         return {'status': 'error', 'message': 'Server tidak terhubung ke Database.'}
     return {'status': 'ok', 'collections': collections}
