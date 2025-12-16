@@ -118,7 +118,6 @@
             {% if current_user.is_admin %}
             <p class="text-white px-3 mb-1 mt-3 small font-weight-bold">Admin</p>
             <li>
-                <!-- FIX: Endpoint 'upload_admin_unified' sudah didefinisikan di app.py -->
                 <a href="{{ url_for('upload_admin_unified') }}" class="nav-link"><i class="fas fa-cloud-upload-alt"></i> Upload Data</a>
             </li>
             {% endif %}
