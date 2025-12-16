@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Analisis Meter Reading{% endblock %}
+
+{% block content %}
+<div class="report-container" style="max-width: 90%; margin: 20px auto; text-align: center;">
+    <h1 style="color: var(--primary-color); margin-bottom: 20px;">
+        <i class="fas fa-chart-pie"></i> Analisis Meter Reading
+    </h1>
+    
+    <p style="font-size: 1.1rem; color: var(--secondary-color); margin-bottom: 30px;">
+        Pilih laporan analisis Volume Dasar dan Distribusi Metode Baca. Laporan sudah mencakup dimensi lengkap **AB Sunter, Rayon, PCEZ, Tarif, Merek, dan Cycle**.
+    </p>
+
+    <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 20px;">
+
+        <!-- CARD: Riwayat Volume (Menu 4) -->
+        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
+            <i class="fas fa-chart-area fa-2x" style="color: #28a745; margin-bottom: 10px;"></i>
+            <h4 style="margin-top: 0;">4. Riwayat Volume (Historis)</h4>
+            <p style="font-size: 0.9rem;">Riwayat volume KUBIK bulanan agregat berdasarkan Rayon dari seluruh data Master Cetak (MC).</p>
+            <a href="{{ url_for('bp_meter_reading.meter_reading_riwayat_view') }}" class="btn" style="background-color: #28a745; color: white; display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
+                Lihat Laporan <i class="fas fa-arrow-right"></i>
+            </a>
+        </div>
+        
+        <!-- CARD: Distribusi Metode Baca -->
+        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
+            <i class="fas fa-clipboard-list fa-2x" style="color: #17a2b8; margin-bottom: 10px;"></i>
+            <h4 style="margin-top: 0;">Distribusi Metode Baca</h4>
+            <p style="font-size: 0.9rem;">Persentase pelanggan berdasarkan Metode Pembacaan (Manual, Self Entry) di Master Data.</p>
+            <a href="{{ url_for('bp_meter_reading.analysis_read_method') }}" class="btn" style="background-color: #17a2b8; color: white; display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
+                Lihat Laporan <i class="fas fa-arrow-right"></i>
+            </a>
+        </div>
+        
+        <!-- CARD: Distribusi Jenis Meter (Menggunakan API dari Collection karena data ada di MC/CID) -->
+        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
+            <i class="fas fa-wrench fa-2x" style="color: #ffc107; margin-bottom: 10px;"></i>
+            <h4 style="margin-top: 0;">Distribusi Jenis Meter</h4>
+            <p style="font-size: 0.9rem;">Distribusi pelanggan, piutang, dan kubikasi yang dikelompokkan berdasarkan Rayon dan Jenis/Merk Meter.</p>
+            <a href="{{ url_for('bp_collection.rayon_meter_distribution_report') }}" class="btn" style="background-color: #ffc107; color: var(--text-color); display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
+                Lihat Laporan <i class="fas fa-arrow-right"></i>
+            </a>
+        </div>
+
+        <!-- CARD: Top List Anomali (Menu 3) -->
+        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
+            <i class="fas fa-bug fa-2x" style="color: #dc3545; margin-bottom: 10px;"></i>
+            <h4 style="margin-top: 0;">3. Top List Anomali</h4>
+            <p style="font-size: 0.9rem;">Daftar pelanggan dengan anomali pemakaian (Ekstrim/Zero) yang diperkaya data pelanggan lengkap.</p>
+            <a href="{{ url_for('bp_meter_reading.meter_reading_top_view') }}" class="btn" style="background-color: #dc3545; color: white; display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
+                Lihat Laporan <i class="fas fa-arrow-right"></i>
+            </a>
+        </div>
+
+    </div>
+</div>
+
+<style>
+    .card {
+        transition: all 0.3s ease;
+        min-height: 230px; 
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    }
+    .btn {
+        margin-top: auto; 
+    }
+</style>
+{% endblock %}
