@@ -1,405 +1,309 @@
 {% extends "base.html" %}
 
-{% block title %}Pencarian Pelanggan Terintegrasi{% endblock %}
-
-{% block custom_styles %}
-/* Custom styles for the search page */
-.search-container {
-    padding: 20px;
-    max-width: 1000px;
-    margin: 20px auto;
-    background-color: var(--background-color-light);
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow-medium);
-}
-.search-form {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 30px;
-}
-.search-input {
-    flex-grow: 1;
-    padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: var(--border-radius);
-    font-size: 1rem;
-}
-.search-button {
-    background-color: var(--primary-color);
-    color: white;
-    padding: 10px 20px;
-    border: none;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-.search-button:hover {
-    background-color: #0056b3;
-}
-.loading-message {
-    text-align: center;
-    color: var(--secondary-color);
-    padding: 20px;
-}
-.result-section {
-    margin-top: 25px;
-    border-top: 1px solid #eee;
-    padding-top: 25px;
-}
-.result-header {
-    color: var(--primary-color);
-    margin-bottom: 15px;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 5px;
-    font-size: 1.2rem;
-    font-weight: 600;
-}
-.info-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 15px;
-    margin-bottom: 20px;
-}
-.info-item {
-    background-color: #f8f9fa;
-    padding: 15px;
-    border-radius: var(--border-radius);
-    border-left: 4px solid var(--primary-color);
-}
-.info-item label {
-    font-size: 0.85rem;
-    color: var(--secondary-color);
-    display: block;
-    margin-bottom: 2px;
-}
-.info-item p {
-    font-weight: 600;
-    margin: 0;
-    color: var(--text-color);
-    word-wrap: break-word; /* Memastikan teks panjang pecah */
-}
-.alert-card {
-    padding: 15px;
-    border-radius: var(--border-radius);
-    font-weight: 700;
-    margin-bottom: 20px;
-}
-.alert-success {
-    background-color: #d1e7dd;
-    color: #0f5132;
-    border-left: 5px solid #0f5132;
-}
-.alert-danger {
-    background-color: #f8d7da;
-    color: #842029;
-    border-left: 5px solid #842029;
-}
-
-/* Tabel Riwayat */
-.history-table-wrapper {
-    overflow-x: auto;
-    margin-top: 15px;
-    box-shadow: var(--shadow-light);
-    border-radius: var(--border-radius);
-    overflow: hidden;
-}
-.history-table {
-    width: 100%;
-    border-collapse: collapse;
-    min-width: 700px;
-    font-size: 0.85rem;
-}
-.history-table th, .history-table td {
-    padding: 10px;
-    border: 1px solid #eee;
-    text-align: left;
-}
-.history-table th {
-    background-color: #f1f1f1;
-    font-weight: 600;
-}
-.history-table tr:nth-child(even) {
-    background-color: #fafafa;
-}
-
-/* Mobile adjustments */
-@media (max-width: 600px) {
-    .search-container {
-        padding: 15px;
-        margin: 10px;
-    }
-    .search-form {
-        flex-direction: column;
-    }
-    .info-grid {
-        grid-template-columns: 1fr;
-    }
-}
-{% endblock %}
-
 {% block content %}
-<div class="search-container">
-    <h2 style="color: var(--primary-color); margin-bottom: 20px;">
-        <i class="fas fa-search"></i> Pencarian Pelanggan Terintegrasi
-    </h2>
+<h1 class="mb-4">Dashboard Utama & Pencarian Pelanggan</h1>
+<p class="lead">Gunakan fitur pencarian terintegrasi di bawah ini untuk melihat profil lengkap, riwayat piutang, dan status anomali pemakaian air dari NOMEN pelanggan tertentu.</p>
 
-    <form id="searchForm" class="search-form">
-        <input type="text" id="nomenInput" class="search-input" placeholder="Masukkan NOMEN (Nomor Pelanggan)" required>
-        <button type="submit" class="search-button" id="searchButton">
-            Cari <i class="fas fa-arrow-right"></i>
-        </button>
-    </form>
-
-    <div id="searchStatus" class="loading-message" style="display: none;">
-        <i class="fas fa-spinner fa-spin"></i> Memuat data, mohon tunggu...
-    </div>
-
-    <div id="searchResults" style="display: none;">
-        <!-- Ringkasan Kesehatan -->
-        <div class="result-section">
-            <h3 class="result-header">Ringkasan Kesehatan Pelanggan <span id="nomenDisplay"></span></h3>
-            <div id="healthSummary" class="alert-card alert-success"></div>
-            
-            <div class="info-grid">
-                <div class="info-item" style="border-left-color: #dc3545;">
-                    <label>Status Keuangan</label>
-                    <p id="statusFinansial"></p>
-                </div>
-                <div class="info-item" style="border-left-color: #ffc107;">
-                    <label>Total Kewajiban (Piutang + Tunggakan)</label>
-                    <p id="totalKewajiban"></p>
-                </div>
-                <div class="info-item" style="border-left-color: #17a2b8;">
-                    <label>Status Pemakaian Meter</label>
-                    <p id="statusPemakaian"></p>
-                </div>
-                <div class="info-item" style="border-left-color: #28a745;">
-                    <label>Pembayaran Terakhir</label>
-                    <p id="pembayaranTerakhir"></p>
-                </div>
+<!-- Bagian Status DB -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div id="db-status-alert" class="alert alert-secondary d-flex align-items-center" role="alert">
+            <div id="db-status-icon" class="spinner-border spinner-border-sm text-primary mr-3" role="status">
+                <span class="sr-only">Loading...</span>
             </div>
-        </div>
-
-        <!-- Detail Profil Pelanggan -->
-        <div class="result-section">
-            <h3 class="result-header">Detail Profil Pelanggan</h3>
-            <div class="info-grid" id="profileDetails">
-                <!-- Detail Profil akan diisi di sini -->
-            </div>
-        </div>
-
-        <!-- Riwayat Piutang (MC) -->
-        <div class="result-section">
-            <h3 class="result-header">Riwayat Piutang Master Cetak (MC)</h3>
-            <div id="mcHistory" class="history-table-wrapper">
-                <!-- Data MC akan diisi di sini -->
-                <p class="loading-message">Tidak ada data MC.</p>
-            </div>
-        </div>
-        
-        <!-- Riwayat Baca Meter (SBRS) -->
-        <div class="result-section">
-            <h3 class="result-header">Riwayat Baca Meter (SBRS)</h3>
-            <div id="sbrsHistory" class="history-table-wrapper">
-                <!-- Data SBRS akan diisi di sini -->
-                <p class="loading-message">Tidak ada data SBRS.</p>
-            </div>
+            <span id="db-status-message">Memeriksa status koneksi database...</span>
         </div>
     </div>
 </div>
 
+<!-- Bagian Pencarian NOMEN -->
+<div class="card shadow mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5><i class="fas fa-search"></i> Cari Pelanggan Berdasarkan NOMEN</h5>
+    </div>
+    <div class="card-body">
+        <form id="search-form">
+            <div class="input-group mb-3">
+                <input type="text" id="nomen-input" class="form-control form-control-lg" placeholder="Masukkan NOMEN Pelanggan (Contoh: 01000001)" required>
+                <div class="input-group-append">
+                    <button class="btn btn-primary btn-lg" type="submit" id="search-button">
+                        <i class="fas fa-search"></i> Cari
+                    </button>
+                </div>
+            </div>
+        </form>
+        <div id="search-loading" class="text-center mt-3 d-none">
+            <div class="spinner-border text-primary" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+            <p class="mt-2">Mencari data terintegrasi...</p>
+        </div>
+        <div id="search-results" class="mt-4">
+            <!-- Hasil pencarian akan ditampilkan di sini -->
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
 <script>
-    const searchForm = document.getElementById('searchForm');
-    const nomenInput = document.getElementById('nomenInput');
-    const searchStatus = document.getElementById('searchStatus');
-    const searchResults = document.getElementById('searchResults');
-    const nomenDisplay = document.getElementById('nomenDisplay');
-    const healthSummary = document.getElementById('healthSummary');
-    const profileDetails = document.getElementById('profileDetails');
-    const mcHistoryDiv = document.getElementById('mcHistory');
-    const sbrsHistoryDiv = document.getElementById('sbrsHistory');
+    const NOMEN_INPUT = document.getElementById('nomen-input');
+    const SEARCH_FORM = document.getElementById('search-form');
+    const SEARCH_LOADING = document.getElementById('search-loading');
+    const SEARCH_RESULTS = document.getElementById('search-results');
+    const DB_STATUS_ALERT = document.getElementById('db-status-alert');
+    const DB_STATUS_ICON = document.getElementById('db-status-icon');
+    const DB_STATUS_MESSAGE = document.getElementById('db-status-message');
 
-    // --- Utility Formatting ---
-    function formatRupiah(number) {
-        // Memastikan input adalah angka dan memformat sebagai Rupiah
-        return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
-    }
-    function formatNumber(number) {
-         return (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
-    }
-    function formatText(text) {
-        return (text === null || text === undefined || String(text).trim() === '' || String(text).toUpperCase() === 'N/A') ? 'N/A' : String(text);
-    }
-    
-    // --- Render Functions ---
-    
-    // Render Ringkasan Kesehatan
-    function renderHealthSummary(summary) {
-        document.getElementById('statusFinansial').innerText = formatText(summary.STATUS_FINANSIAL);
-        document.getElementById('totalKewajiban').innerText = formatRupiah(summary.TOTAL_KEWAJIBAN_NOMINAL);
-        document.getElementById('statusPemakaian').innerText = formatText(summary.STATUS_PEMAKAIAN);
-        document.getElementById('pembayaranTerakhir').innerText = formatText(summary.PEMBAYARAN_TERAKHIR);
+    // Helper untuk memformat angka mata uang Rupiah
+    const formatCurrency = (amount) => {
+        if (typeof amount !== 'number') return 'N/A';
+        return new Intl.NumberFormat('id-ID', {
+            style: 'currency',
+            currency: 'IDR',
+            minimumFractionDigits: 0
+        }).format(amount);
+    };
 
-        let statusClass = 'alert-success';
-        if (summary.STATUS_FINANSIAL.includes('TUNGGAKAN') || summary.STATUS_PEMAKAIAN.includes('EKSTRIM') || summary.STATUS_PEMAKAIAN.includes('ZERO')) {
-            statusClass = 'alert-danger';
+    // Helper untuk memformat angka dengan pemisah ribuan
+    const formatNumber = (num) => {
+        if (typeof num !== 'number') return 'N/A';
+        return new Intl.NumberFormat('id-ID').format(num);
+    };
+
+    // Fungsi untuk mendapatkan status DB
+    async function checkDbStatus() {
+        try {
+            const response = await fetch('/api/dashboard/summary');
+            const data = await response.json();
+
+            if (data.message && data.message.includes('Server tidak terhubung ke Database')) {
+                DB_STATUS_ALERT.classList.remove('alert-secondary', 'alert-success');
+                DB_STATUS_ALERT.classList.add('alert-danger');
+                DB_STATUS_ICON.classList.remove('spinner-border', 'text-primary', 'd-none');
+                DB_STATUS_ICON.classList.add('fas', 'fa-times-circle');
+                DB_STATUS_MESSAGE.textContent = 'KRITIS: Koneksi MongoDB Gagal. Fitur analitik tidak dapat diakses.';
+            } else {
+                DB_STATUS_ALERT.classList.remove('alert-secondary', 'alert-danger');
+                DB_STATUS_ALERT.classList.add('alert-success');
+                DB_STATUS_ICON.classList.remove('spinner-border', 'text-primary');
+                DB_STATUS_ICON.classList.add('fas', 'fa-check-circle');
+                DB_STATUS_MESSAGE.textContent = 'Koneksi Database Berhasil. Data analitik siap diakses.';
+            }
+        } catch (error) {
+            console.error("Failed to fetch DB status:", error);
+            DB_STATUS_ALERT.classList.remove('alert-secondary', 'alert-success');
+            DB_STATUS_ALERT.classList.add('alert-warning');
+            DB_STATUS_ICON.classList.remove('spinner-border', 'text-primary');
+            DB_STATUS_ICON.classList.add('fas', 'fa-exclamation-triangle');
+            DB_STATUS_MESSAGE.textContent = 'Peringatan: Gagal memverifikasi status DB API. Coba muat ulang halaman.';
         }
-
-        healthSummary.className = `alert-card ${statusClass}`;
-        healthSummary.innerHTML = `<strong>Status Global:</strong> ${statusClass.includes('danger') ? '⚠️ PERHATIAN KRITIS' : '✅ NORMAL'}`;
     }
 
-    // Render Detail Profil
-    function renderProfileDetails(profile) {
-        profileDetails.innerHTML = ''; // Clear previous content
 
-        const fields = [
-            { label: 'Nama Pelanggan', key: 'NAMA_PEL' },
-            { label: 'Alamat', key: 'ALAMAT' },
-            { label: 'Rayon / PCEZ', key: 'RAYON', subKey: 'PCEZ' },
-            { label: 'Tarif', key: 'TARIF' },
-            { label: 'Tipe Pelanggan', key: 'TIPEPLGGN' },
-            { label: 'Merk Meter / Serial', key: 'MERK', subKey: 'SERIAL' },
-            { label: 'Kubikasi Tagihan Terakhir (m³)', key: 'KUBIK', format: 'number', unit: 'm³' },
-            { label: 'Nominal Tagihan Terakhir', key: 'NOMINAL_MC', format: 'currency' },
-            { label: 'Stand Terakhir di CID', key: 'STAND', format: 'text' },
-            { label: 'Metode Baca', key: 'READ_METHOD', format: 'text' },
-            { label: 'Pencatat / Hari Baca', key: 'PENCATET', subKey: 'HARI' }
-        ];
+    // Fungsi untuk menampilkan hasil pencarian NOMEN
+    function displayResults(data) {
+        SEARCH_RESULTS.innerHTML = '';
 
-        fields.forEach(field => {
-            const div = document.createElement('div');
-            div.className = 'info-item';
-            
-            let value = formatText(profile[field.key]);
-            
-            if (field.subKey && profile[field.subKey] !== 'N/A') {
-                value += ` (${formatText(profile[field.subKey])})`;
-            }
-
-            if (field.format === 'currency') {
-                value = formatRupiah(profile[field.key]);
-            } else if (field.format === 'number') {
-                value = formatNumber(profile[field.key]) + (field.unit ? ` ${field.unit}` : '');
-            }
-
-            div.innerHTML = `<label>${field.label}</label><p>${value}</p>`;
-            profileDetails.appendChild(div);
-        });
-    }
-
-    // Render Riwayat dalam format Tabel
-    function renderHistoryTable(data, containerDiv, columns) {
-        if (!data || data.length === 0) {
-            containerDiv.innerHTML = '<p class="loading-message">Tidak ada data riwayat ditemukan.</p>';
+        if (data.status === 'not_found' || data.status === 'fail') {
+            SEARCH_RESULTS.innerHTML = `
+                <div class="alert alert-warning">${data.message}</div>
+            `;
             return;
         }
 
-        let tableHTML = '<table class="history-table"><thead><tr>';
-        columns.forEach(col => {
-            tableHTML += `<th>${col.label}</th>`;
-        });
-        tableHTML += '</tr></thead><tbody>';
+        const summary = data.summary;
+        const profile = data.profile_pelanggan;
+        const mcData = data.mc_data;
+        const ardebtData = data.ardebt_data;
+        const sbrsData = data.sbrs_data;
 
-        data.forEach(item => {
-            tableHTML += '<tr>';
-            columns.forEach(col => {
-                let value = formatText(item[col.key]);
-                if (col.format === 'currency') {
-                    value = formatRupiah(item[col.key]);
-                } else if (col.format === 'number') {
-                     value = formatNumber(item[col.key]) + (col.unit ? ` ${col.unit}` : '');
-                } else if (col.format === 'percent') {
-                     value = (parseFloat(item[col.key]) || 0).toFixed(2) + '%';
-                }
-                tableHTML += `<td>${value}</td>`;
-            });
-            tableHTML += '</tr>';
-        });
+        // --- Kartu Ringkasan (Summary Card) ---
+        let summaryHtml = `
+            <div class="card shadow-lg mb-4 bg-light">
+                <div class="card-body">
+                    <h4 class="card-title text-primary"><i class="fas fa-user-check"></i> Ringkasan Status Pelanggan: ${summary.NAMA}</h4>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <span class="font-weight-bold">Status Finansial:</span> 
+                            <span class="badge badge-${summary.STATUS_FINANSIAL.includes('TUNGGAKAN') ? 'danger' : summary.TOTAL_KEWAJIBAN_NOMINAL > 0 ? 'warning' : 'success'}">${summary.STATUS_FINANSIAL}</span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <span class="font-weight-bold">Total Kewajiban:</span> 
+                            <span class="text-danger font-weight-bold">${formatCurrency(summary.TOTAL_KEWAJIBAN_NOMINAL)}</span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <span class="font-weight-bold">Status Pemakaian:</span> 
+                            <span class="badge badge-${summary.STATUS_PEMAKAIAN.includes('EKSTRIM') || summary.STATUS_PEMAKAIAN.includes('ZERO') ? 'danger' : summary.STATUS_PEMAKAIAN.includes('TURUN') ? 'warning' : 'info'}">${summary.STATUS_PEMAKAIAN}</span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <span class="font-weight-bold">Pembayaran Terakhir:</span> 
+                            <span class="text-muted">${summary.PEMBAYARAN_TERAKHIR}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
 
-        tableHTML += '</tbody></table>';
-        containerDiv.innerHTML = tableHTML;
+        // --- Detail Profil ---
+        let profileHtml = `
+            <div class="card shadow mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h6><i class="fas fa-id-card"></i> Detail Profil Pelanggan</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6"><p><strong>NOMEN:</strong> ${profile.NOMEN}</p></div>
+                        <div class="col-md-6"><p><strong>NAMA:</strong> ${profile.NAMA_PEL}</p></div>
+                        <div class="col-md-6"><p><strong>ALAMAT:</strong> ${profile.ALAMAT}</p></div>
+                        <div class="col-md-6"><p><strong>RAYON:</strong> ${profile.RAYON}</p></div>
+                        <div class="col-md-6"><p><strong>TARIF:</strong> ${profile.TARIF}</p></div>
+                        <div class="col-md-6"><p><strong>MERK/SERIAL METER:</strong> ${profile.MERK} / ${profile.SERIAL}</p></div>
+                        <div class="col-md-6"><p><strong>METODE BACA:</strong> ${profile.READ_METHOD}</p></div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // --- Riwayat Baca Meter (SBRS) ---
+        let sbrsHtml = `
+            <div class="card shadow mb-4">
+                <div class="card-header bg-info text-white">
+                    <h6><i class="fas fa-history"></i> Riwayat Baca Meter (SBRS) Terakhir</h6>
+                </div>
+                <div class="card-body">
+                    ${sbrsData.length > 0 ? `
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Tgl Baca</th>
+                                    <th>Kubikasi Baru (m³)</th>
+                                    <th>Kubikasi Lama (m³)</th>
+                                    <th>Selisih (m³)</th>
+                                    <th>Status Anomali</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${sbrsData.map(d => `
+                                    <tr>
+                                        <td>${d.CMR_RD_DATE || 'N/A'}</td>
+                                        <td>${formatNumber(d.KUBIK_TERBARU)}</td>
+                                        <td>${formatNumber(d.KUBIK_SEBELUMNYA)}</td>
+                                        <td>${formatNumber(d.SELISIH_KUBIK)}</td>
+                                        <td><span class="badge badge-${d.STATUS_PEMAKAIAN.includes('EKSTRIM') || d.STATUS_PEMAKAIAN.includes('ZERO') ? 'danger' : d.STATUS_PEMAKAIAN.includes('NAIK') || d.STATUS_PEMAKAIAN.includes('TURUN') ? 'warning' : 'success'}">${d.STATUS_PEMAKAIAN}</span></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    ` : '<div class="alert alert-secondary">Tidak ada riwayat baca meter (SBRS) yang ditemukan.</div>'}
+                </div>
+            </div>
+        `;
+
+        // --- Riwayat Piutang (MC) ---
+        let mcHtml = `
+            <div class="card shadow mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <h6><i class="fas fa-file-alt"></i> Riwayat Tagihan & Piutang (MC)</h6>
+                </div>
+                <div class="card-body">
+                    ${mcData.length > 0 ? `
+                        <p class="text-info font-weight-bold">Total Piutang Aktif (termasuk bulan berjalan): ${formatCurrency(mcData.reduce((sum, item) => sum + (item.NOMINAL || 0), 0))}</p>
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Bulan Tagihan</th>
+                                    <th>Nominal (Rp)</th>
+                                    <th>Kubikasi (m³)</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${mcData.slice(0, 10).map(d => `
+                                    <tr>
+                                        <td>${d.BULAN_TAGIHAN || 'N/A'}</td>
+                                        <td>${formatCurrency(d.NOMINAL)}</td>
+                                        <td>${formatNumber(d.KUBIK)}</td>
+                                        <td><span class="badge badge-${d.STATUS === 'PAYMENT' ? 'success' : 'danger'}">${d.STATUS || 'N/A'}</span></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        <small class="text-muted">Menampilkan 10 data tagihan terakhir.</small>
+                    ` : '<div class="alert alert-secondary">Tidak ada riwayat tagihan (MC) yang ditemukan.</div>'}
+                </div>
+            </div>
+        `;
+
+        // --- Riwayat Tunggakan Detail (ARDEBT) ---
+        let ardebtHtml = `
+            <div class="card shadow mb-4">
+                <div class="card-header bg-danger text-white">
+                    <h6><i class="fas fa-exclamation-circle"></i> Riwayat Tunggakan Detail (ARDEBT)</h6>
+                </div>
+                <div class="card-body">
+                    ${ardebtData.length > 0 ? `
+                        <p class="text-warning font-weight-bold">Total Tunggakan: ${formatCurrency(ardebtData.reduce((sum, item) => sum + (item.JUMLAH || 0), 0))}</p>
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Periode Bill</th>
+                                    <th>Nominal Tunggakan (Rp)</th>
+                                    <th>Rayon</th>
+                                    <th>Status Pelanggan</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${ardebtData.slice(0, 10).map(d => `
+                                    <tr>
+                                        <td>${d.PERIODE_BILL || 'N/A'}</td>
+                                        <td>${formatCurrency(d.JUMLAH)}</td>
+                                        <td>${d.RAYON || 'N/A'}</td>
+                                        <td>${d.STATUS_PELANGGAN || 'N/A'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        <small class="text-muted">Menampilkan 10 data tunggakan terakhir.</small>
+                    ` : '<div class="alert alert-secondary">Tidak ada riwayat tunggakan (ARDEBT) yang ditemukan.</div>'}
+                </div>
+            </div>
+        `;
+
+        SEARCH_RESULTS.innerHTML = summaryHtml + profileHtml + sbrsHtml + mcHtml + ardebtHtml;
     }
 
+    // Event Listener untuk form submission
+    SEARCH_FORM.addEventListener('submit', async function(event) {
+        event.preventDefault();
+        const nomen = NOMEN_INPUT.value.trim();
+        if (!nomen) {
+            SEARCH_RESULTS.innerHTML = '<div class="alert alert-danger">Harap masukkan NOMEN pelanggan.</div>';
+            return;
+        }
 
-    // --- Main Fetch Logic ---
-    searchForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const nomen = nomenInput.value.trim();
-
-        if (!nomen) return;
-
-        searchStatus.style.display = 'block';
-        searchResults.style.display = 'none';
-
+        SEARCH_LOADING.classList.remove('d-none');
+        SEARCH_RESULTS.innerHTML = '';
+        
         try {
             const response = await fetch(`/api/search?nomen=${nomen}`);
-            const result = await response.json();
-
-            searchStatus.style.display = 'none';
-
-            if (result.status === 'not_found' || result.status === 'fail') {
-                searchResults.style.display = 'block';
-                searchResults.innerHTML = `<div class="alert-card alert-danger">
-                    <i class="fas fa-times-circle"></i> ${result.message}
-                </div>`;
-                return;
+            const data = await response.json();
+            
+            if (response.status === 200) {
+                displayResults(data);
+            } else {
+                displayResults(data);
             }
-
-            // 1. Update NOMEN Display
-            nomenDisplay.innerText = nomen;
-            
-            // 2. Render Ringkasan Kesehatan
-            renderHealthSummary(result.summary);
-
-            // 3. Render Detail Profil
-            renderProfileDetails(result.profile_pelanggan);
-            
-            // 4. Render Riwayat MC
-            const mcColumns = [
-                { label: 'Bulan Tagihan', key: 'BULAN_TAGIHAN', format: 'text' },
-                { label: 'Nominal', key: 'NOMINAL', format: 'currency' },
-                { label: 'Kubikasi (m³)', key: 'KUBIK', format: 'number', unit: 'm³' },
-                { label: 'Status', key: 'STATUS', format: 'text' },
-                { label: 'Rayon', key: 'RAYON', format: 'text' },
-                { label: 'Tarif', key: 'TARIF', format: 'text' },
-            ];
-            renderHistoryTable(result.mc_data, mcHistoryDiv, mcColumns);
-
-            // 5. Render Riwayat SBRS (Pencatatan)
-            const sbrsColumns = [
-                { label: 'Status Anomali', key: 'STATUS_PEMAKAIAN', format: 'text' },
-                { label: 'Kubik Sekarang (m³)', key: 'KUBIK_TERBARU', format: 'number', unit: 'm³' },
-                { label: 'Kubik Sebelumnya (m³)', key: 'KUBIK_SEBELUMNYA', format: 'number', unit: 'm³' },
-                { label: 'Selisih (%)', key: 'PERSEN_SELISIH', format: 'percent' },
-                { label: 'Rayon', key: 'RAYON', format: 'text' },
-                { label: 'Tarif', key: 'TARIF', format: 'text' },
-                { label: 'Merek', key: 'MERK', format: 'text' },
-            ];
-            // Mengambil SBRS data dari respons (diambil dari sub-field yang kaya data SBRS)
-            // NOTE: Karena API search tidak mengembalikan SBRS data secara utuh, kita akan menggunakan SBRS history yang mungkin sudah diperkaya data.
-            renderHistoryTable(result.sbrs_data, sbrsHistoryDiv, sbrsColumns);
-
-
-            searchResults.style.display = 'block';
-
         } catch (error) {
-            searchStatus.style.display = 'none';
-            searchResults.style.display = 'block';
-            searchResults.innerHTML = `<div class="alert-card alert-danger">
-                <i class="fas fa-exclamation-triangle"></i> Terjadi kesalahan saat berkomunikasi dengan server.
-            </div>`;
-            console.error('Fetch error:', error);
+            SEARCH_RESULTS.innerHTML = `<div class="alert alert-danger">Terjadi kesalahan saat berkomunikasi dengan server API.</div>`;
+            console.error('Error during search:', error);
+        } finally {
+            SEARCH_LOADING.classList.add('d-none');
         }
     });
 
-    // Panggil fungsi sekali saat load untuk memberi status awal jika perlu
-    document.addEventListener('DOMContentLoaded', () => {
-        if (nomenInput.value.trim() !== '') {
-             // Jika ada nilai di input, coba cari otomatis (misal setelah refresh)
-        }
-        document.getElementById('searchStatus').innerHTML = 'Masukkan Nomor Pelanggan (NOMEN) di atas untuk memulai pencarian.';
-        document.getElementById('searchStatus').style.display = 'block';
-    });
+    // Panggil fungsi status DB saat halaman dimuat
+    document.addEventListener('DOMContentLoaded', checkDbStatus);
+
 </script>
 {% endblock %}
