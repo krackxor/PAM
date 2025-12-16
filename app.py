@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from pymongo.errors import BulkWriteError
 
 # Import modul yang sudah dipecah
-from utils import init_db, get_db_status, _parse_zona_novak, _get_sbrs_anomalies, _get_day_n_ago, _get_previous_month_year
+from utils import get_db_status, _parse_zona_novak, _get_sbrs_anomalies, _get_day_n_ago, _get_previous_month_year
 from routes_collection import bp_collection
 from routes_meter_reading import bp_meter_reading
 
@@ -122,6 +122,16 @@ def index():
 @login_required
 def analytics_dashboard():
     return render_template('dashboard_analytics.html', is_admin=current_user.is_admin)
+    
+# --- ROUTE UNIFIED UPLOAD VIEW (DIPERLUKAN UNTUK MEMPERBAIKI BuildError) ---
+@app.route('/upload', methods=['GET'])
+@login_required 
+@admin_required 
+def upload_admin_unified():
+    """Renders the unified admin upload page (required by base.html link)."""
+    return render_template('upload_admin_unified.html', 
+                           title="Upload Master Data",
+                           is_admin=current_user.is_admin)
 
 # --- ROUTE UPLOAD (TETAP DI CORE KARENA PERLU MENGAKSES FS) ---
 
@@ -317,7 +327,8 @@ def upload_cid_data():
         total_rows = len(data_to_insert)
 
         try:
-            result = collections['cid'].insert_many(data_to_insert, ordered=False)
+            # FIX: Menggunakan collection_cid yang diambil dari db_status di awal fungsi
+            result = collection_cid.insert_many(data_to_insert, ordered=False)
             inserted_count = len(result.inserted_ids)
         except BulkWriteError as bwe:
             inserted_count = bwe.details.get('nInserted', 0)
