@@ -3,8 +3,10 @@
 {% block title %}Laporan Piutang & Koleksi{% endblock %}
 
 {% block custom_styles %}
-/* Custom styles from your request */
+/* Custom styles */
 .summary-container { padding: 20px; }
+
+/* KPI Cards */
 .kpi-card {
     background-color: #fff;
     padding: 20px;
@@ -14,13 +16,16 @@
     text-align: center;
     height: 100%;
     border: 1px solid #e3e6f0;
+    transition: transform 0.2s;
 }
+.kpi-card:hover { transform: translateY(-3px); }
 .kpi-card h4 {
     color: #5a5c69;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: 700;
     text-transform: uppercase;
     margin-bottom: 10px;
+    letter-spacing: 0.5px;
 }
 .kpi-card p {
     font-size: 1.5rem;
@@ -28,49 +33,58 @@
     color: #5a5c69;
     margin-bottom: 0;
 }
+
+/* Grid Layout */
 .grid-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 20px;
-    margin-bottom: 40px;
+    margin-bottom: 30px;
 }
+
+/* Charts & Tables */
 .chart-wrapper {
     background-color: #fff;
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
     height: 100%;
+    border: 1px solid #e3e6f0;
 }
 .section-title {
     color: #4e73df;
-    border-bottom: 2px solid #eee;
     padding-bottom: 10px;
     margin-bottom: 20px;
-    font-weight: bold;
+    font-weight: 800;
 }
+
 /* Tabs Styling */
-.nav-pills .nav-link.active { background-color: #4e73df; }
-.nav-pills .nav-link { color: #5a5c69; font-weight: bold; margin-right: 5px; }
+.nav-pills .nav-link.active { background-color: #4e73df; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.nav-pills .nav-link { color: #5a5c69; font-weight: bold; margin-right: 5px; border-radius: 5px; }
+
+/* Scrollable Table */
 .table-responsive::-webkit-scrollbar { width: 6px; height: 6px; }
 .table-responsive::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+.sticky-header th { position: sticky; top: 0; background-color: #f8f9fc; z-index: 5; box-shadow: 0 1px 1px rgba(0,0,0,0.05); }
 {% endblock %}
 
 {% block content %}
 <div class="summary-container">
     <!-- Header with Filter -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
         <h2 class="section-title mb-0 border-0">
-            <i class="fas fa-file-invoice-dollar mr-2"></i> Laporan Piutang & Koleksi
+            <i class="fas fa-chart-line mr-2"></i> Laporan Piutang & Koleksi
         </h2>
-        <form class="form-inline" method="get" action="{{ url_for('routes_collection.collection_summary') }}">
-            <label class="mr-2 font-weight-bold">Periode:</label>
-            <input type="month" class="form-control form-control-sm mr-2" name="period" value="{{ period[:4] }}-{{ period[4:] }}">
-            <button type="submit" class="btn btn-sm btn-primary shadow-sm"><i class="fas fa-filter"></i> Filter</button>
+        <!-- Form Filter Periode -->
+        <form class="form-inline mt-2 mt-md-0" method="get" action="{{ url_for('bp_collection.collection_laporan_view') }}">
+            <label class="mr-2 font-weight-bold text-gray-700">Periode:</label>
+            <input type="month" class="form-control form-control-sm mr-2 shadow-sm" name="period" value="{{ period[:4] }}-{{ period[4:] if period|length > 4 else '' }}">
+            <button type="submit" class="btn btn-sm btn-primary shadow-sm px-3"><i class="fas fa-filter mr-1"></i> Tampilkan</button>
         </form>
     </div>
 
     <!-- Navigation Tabs -->
-    <ul class="nav nav-pills mb-4" id="pills-tab" role="tablist">
+    <ul class="nav nav-pills mb-4 bg-white p-2 rounded shadow-sm border" id="pills-tab" role="tablist">
         <li class="nav-item">
             <a class="nav-link active" id="pills-piutang-tab" data-toggle="pill" href="#pills-piutang" role="tab">
                 <i class="fas fa-file-invoice mr-1"></i> Piutang (MC)
@@ -78,7 +92,7 @@
         </li>
         <li class="nav-item">
             <a class="nav-link" id="pills-tunggakan-tab" data-toggle="pill" href="#pills-tunggakan" role="tab">
-                <i class="fas fa-history mr-1"></i> Tunggakan (ARDEBT)
+                <i class="fas fa-exclamation-circle mr-1"></i> Tunggakan (ARDEBT)
             </a>
         </li>
         <li class="nav-item">
@@ -89,162 +103,182 @@
     </ul>
 
     <div class="tab-content" id="pills-tabContent">
-        {% for category, label, money_key, usage_key in [
-            ('piutang', 'Piutang', 'BIAYA', 'PEMAKAIAN'), 
-            ('tunggakan', 'Tunggakan', 'JUMLAH', 'PEMAKAIAN'), 
-            ('collection', 'Collection', 'NOMINAL', 'KUBIKBAYAR')
-        ] %}
-        
-        <div class="tab-pane fade {% if category == 'piutang' %}show active{% endif %}" id="pills-{{ category }}" role="tabpanel">
-            {% set data = stats[category] %}
+        {% if stats %}
+            {% for category, label, money_key, usage_key in [
+                ('piutang', 'Piutang', 'NOMINAL', 'KUBIK'), 
+                ('tunggakan', 'Tunggakan', 'JUMLAH', 'PEMAKAIAN'), 
+                ('collection', 'Collection', 'NOMINAL', 'KUBIKBAYAR')
+            ] %}
             
-            <!-- KPI Cards -->
-            <div class="grid-container">
-                <div class="kpi-card" style="border-left: 4px solid #4e73df;">
-                    <h4>Jumlah Nomen</h4>
-                    <p>{{ "{:,.0f}".format(data.totals.count) }}</p>
-                    <small class="text-muted">Pelanggan</small>
-                </div>
-                <div class="kpi-card" style="border-left: 4px solid #1cc88a;">
-                    <h4>Total Pemakaian</h4>
-                    <p>{{ "{:,.0f}".format(data.totals.total_usage) }} m³</p>
-                    <small class="text-muted">Volume Air</small>
-                </div>
-                <div class="kpi-card" style="border-left: 4px solid #f6c23e;">
-                    <h4>Total Nominal</h4>
-                    <p class="text-warning">Rp {{ "{:,.0f}".format(data.totals.total_nominal) }}</p>
-                    <small class="text-muted">Rupiah</small>
-                </div>
-                <div class="kpi-card" style="border-left: 4px solid #e74a3b;">
-                    <h4>Kontributor Terbesar</h4>
-                    <div class="text-left mt-2" style="font-size: 0.85rem;">
-                        <div><strong>Rayon:</strong> {{ data.largest.rayon._id }} <span class="float-right">{{ "{:,.0f}".format(data.largest.rayon.total) }}</span></div>
-                        <div><strong>PC:</strong> {{ data.largest.pc._id }} <span class="float-right">{{ "{:,.0f}".format(data.largest.pc.total) }}</span></div>
+            <div class="tab-pane fade {% if category == 'piutang' %}show active{% endif %}" id="pills-{{ category }}" role="tabpanel">
+                {% set data = stats[category] %}
+                
+                <!-- 1. KPI Cards Row -->
+                <div class="grid-container">
+                    <div class="kpi-card" style="border-left: 4px solid #4e73df;">
+                        <h4>Jumlah Nomen</h4>
+                        <p class="text-primary">{{ "{:,.0f}".format(data.totals.count) }}</p>
+                        <small class="text-muted">Total Pelanggan</small>
                     </div>
+                    <div class="kpi-card" style="border-left: 4px solid #1cc88a;">
+                        <h4>Total Pemakaian</h4>
+                        <p class="text-success">{{ "{:,.0f}".format(data.totals.total_usage) }} m³</p>
+                        <small class="text-muted">Volume Air</small>
+                    </div>
+                    <div class="kpi-card" style="border-left: 4px solid #f6c23e;">
+                        <h4>Total Nominal</h4>
+                        <p class="text-warning">Rp {{ "{:,.0f}".format(data.totals.total_nominal) }}</p>
+                        <small class="text-muted">Nilai Rupiah</small>
+                    </div>
+                    <div class="kpi-card" style="border-left: 4px solid #e74a3b; text-align: left; padding-left: 25px;">
+                        <h4 class="text-center mb-3">Kontributor Terbesar</h4>
+                        <div style="font-size: 0.85rem; line-height: 1.6;">
+                            <div class="d-flex justify-content-between border-bottom pb-1 mb-1">
+                                <span>Rayon {{ data.largest.rayon._id }}:</span>
+                                <span class="font-weight-bold">{{ "{:,.0f}".format(data.largest.rayon.total) }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>PC {{ data.largest.pc._id }}:</span>
+                                <span class="font-weight-bold">{{ "{:,.0f}".format(data.largest.pc.total) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Charts Row (Tarif & Merek) -->
+                <div class="row">
+                    <div class="col-lg-6 mb-4">
+                        <div class="chart-wrapper">
+                            <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+                                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-chart-pie mr-1"></i> Distribusi Tarif</h6>
+                                <div class="btn-group btn-group-sm btn-group-toggle" data-toggle="buttons">
+                                    <label class="btn btn-outline-secondary active" onclick="updateChart('tarifChart{{ category }}', {{ data.charts.tarif_all | tojson }})">
+                                        <input type="radio" checked> All
+                                    </label>
+                                    <label class="btn btn-outline-secondary" onclick="updateChart('tarifChart{{ category }}', {{ data.charts.tarif_34 | tojson }})">
+                                        <input type="radio"> 34
+                                    </label>
+                                    <label class="btn btn-outline-secondary" onclick="updateChart('tarifChart{{ category }}', {{ data.charts.tarif_35 | tojson }})">
+                                        <input type="radio"> 35
+                                    </label>
+                                </div>
+                            </div>
+                            <div style="height: 280px;">
+                                <canvas id="tarifChart{{ category }}"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6 mb-4">
+                        <div class="chart-wrapper">
+                            <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+                                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-chart-bar mr-1"></i> Distribusi Merek</h6>
+                                <div class="btn-group btn-group-sm btn-group-toggle" data-toggle="buttons">
+                                    <label class="btn btn-outline-secondary active" onclick="updateChart('merekChart{{ category }}', {{ data.charts.merek_all | tojson }})">
+                                        <input type="radio" checked> All
+                                    </label>
+                                    <label class="btn btn-outline-secondary" onclick="updateChart('merekChart{{ category }}', {{ data.charts.merek_34 | tojson }})">
+                                        <input type="radio"> 34
+                                    </label>
+                                    <label class="btn btn-outline-secondary" onclick="updateChart('merekChart{{ category }}', {{ data.charts.merek_35 | tojson }})">
+                                        <input type="radio"> 35
+                                    </label>
+                                </div>
+                            </div>
+                            <div style="height: 280px;">
+                                <canvas id="merekChart{{ category }}"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Top 500 Tables Row -->
+                <div class="row">
+                    <div class="col-lg-6 mb-4">
+                        <div class="card shadow border-0">
+                            <div class="card-header py-2 bg-gradient-dark bg-dark text-white d-flex justify-content-between align-items-center">
+                                <h6 class="m-0 font-weight-bold text-uppercase">Top 500 - Rayon 34</h6>
+                                <span class="badge badge-light text-dark">Highest {{ money_key }}</span>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive" style="height: 350px; overflow-y: auto;">
+                                    <table class="table table-striped table-hover mb-0 table-sm">
+                                        <thead class="thead-light sticky-header">
+                                            <tr>
+                                                <th>Nomen</th>
+                                                <th>Nama</th>
+                                                <th class="text-right">Nominal (Rp)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for row in data.lists.top_34 %}
+                                            <tr>
+                                                <td class="font-weight-bold text-primary">{{ row.NOMEN }}</td>
+                                                <td><small>{{ row.NAMA if row.NAMA else '-' }}</small></td>
+                                                <td class="text-right font-weight-bold">{{ "{:,.0f}".format(row[money_key] if row[money_key] else 0) }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6 mb-4">
+                        <div class="card shadow border-0">
+                            <div class="card-header py-2 bg-gradient-dark bg-dark text-white d-flex justify-content-between align-items-center">
+                                <h6 class="m-0 font-weight-bold text-uppercase">Top 500 - Rayon 35</h6>
+                                <span class="badge badge-light text-dark">Highest {{ money_key }}</span>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive" style="height: 350px; overflow-y: auto;">
+                                    <table class="table table-striped table-hover mb-0 table-sm">
+                                        <thead class="thead-light sticky-header">
+                                            <tr>
+                                                <th>Nomen</th>
+                                                <th>Nama</th>
+                                                <th class="text-right">Nominal (Rp)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for row in data.lists.top_35 %}
+                                            <tr>
+                                                <td class="font-weight-bold text-primary">{{ row.NOMEN }}</td>
+                                                <td><small>{{ row.NAMA if row.NAMA else '-' }}</small></td>
+                                                <td class="text-right font-weight-bold">{{ "{:,.0f}".format(row[money_key] if row[money_key] else 0) }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="col-12 mt-5">
+                <div class="alert alert-warning text-center shadow-sm p-5">
+                    <h4 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> Data Tidak Ditemukan</h4>
+                    <p>Tidak ada data statistik untuk periode <strong>{{ period }}</strong>.</p>
+                    <hr>
+                    <p class="mb-0">Pastikan database (MongoDB) terhubung dan data Master Cetak (MC), Master Bayar (MB), atau ARDEBT sudah diupload.</p>
                 </div>
             </div>
-
-            <!-- Charts & Lists -->
-            <div class="row">
-                <!-- Charts -->
-                <div class="col-lg-6 mb-4">
-                    <div class="chart-wrapper">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h5 class="m-0 font-weight-bold text-primary">Distribusi Tarif</h5>
-                            <div class="btn-group btn-group-sm btn-group-toggle" data-toggle="buttons">
-                                <label class="btn btn-outline-secondary active" onclick="updateChart('tarifChart{{ category }}', {{ data.charts.tarif_all | tojson }})">
-                                    <input type="radio" checked> All
-                                </label>
-                                <label class="btn btn-outline-secondary" onclick="updateChart('tarifChart{{ category }}', {{ data.charts.tarif_34 | tojson }})">
-                                    <input type="radio"> 34
-                                </label>
-                                <label class="btn btn-outline-secondary" onclick="updateChart('tarifChart{{ category }}', {{ data.charts.tarif_35 | tojson }})">
-                                    <input type="radio"> 35
-                                </label>
-                            </div>
-                        </div>
-                        <div style="height: 300px;">
-                            <canvas id="tarifChart{{ category }}"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-lg-6 mb-4">
-                    <div class="chart-wrapper">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h5 class="m-0 font-weight-bold text-primary">Distribusi Merek</h5>
-                            <div class="btn-group btn-group-sm btn-group-toggle" data-toggle="buttons">
-                                <label class="btn btn-outline-secondary active" onclick="updateChart('merekChart{{ category }}', {{ data.charts.merek_all | tojson }})">
-                                    <input type="radio" checked> All
-                                </label>
-                                <label class="btn btn-outline-secondary" onclick="updateChart('merekChart{{ category }}', {{ data.charts.merek_34 | tojson }})">
-                                    <input type="radio"> 34
-                                </label>
-                                <label class="btn btn-outline-secondary" onclick="updateChart('merekChart{{ category }}', {{ data.charts.merek_35 | tojson }})">
-                                    <input type="radio"> 35
-                                </label>
-                            </div>
-                        </div>
-                        <div style="height: 300px;">
-                            <canvas id="merekChart{{ category }}"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Top 500 Tables -->
-            <div class="row">
-                <div class="col-lg-6 mb-4">
-                    <div class="card shadow border-0">
-                        <div class="card-header py-3 bg-dark text-white">
-                            <h6 class="m-0 font-weight-bold">Top 500 - Rayon 34</h6>
-                        </div>
-                        <div class="card-body p-0">
-                            <div class="table-responsive" style="height: 400px; overflow-y: auto;">
-                                <table class="table table-striped table-hover mb-0">
-                                    <thead class="thead-light" style="position: sticky; top: 0; z-index: 1;">
-                                        <tr>
-                                            <th>Nomen</th>
-                                            <th>Nama</th>
-                                            <th class="text-right">Nominal</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for row in data.lists.top_34 %}
-                                        <tr>
-                                            <td class="font-weight-bold">{{ row.NOMEN }}</td>
-                                            <td><small>{{ row.NAMA if row.NAMA else '-' }}</small></td>
-                                            <td class="text-right">{{ "{:,.0f}".format(row[money_key] if row[money_key] else 0) }}</td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-6 mb-4">
-                    <div class="card shadow border-0">
-                        <div class="card-header py-3 bg-dark text-white">
-                            <h6 class="m-0 font-weight-bold">Top 500 - Rayon 35</h6>
-                        </div>
-                        <div class="card-body p-0">
-                            <div class="table-responsive" style="height: 400px; overflow-y: auto;">
-                                <table class="table table-striped table-hover mb-0">
-                                    <thead class="thead-light" style="position: sticky; top: 0; z-index: 1;">
-                                        <tr>
-                                            <th>Nomen</th>
-                                            <th>Nama</th>
-                                            <th class="text-right">Nominal</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for row in data.lists.top_35 %}
-                                        <tr>
-                                            <td class="font-weight-bold">{{ row.NOMEN }}</td>
-                                            <td><small>{{ row.NAMA if row.NAMA else '-' }}</small></td>
-                                            <td class="text-right">{{ "{:,.0f}".format(row[money_key] if row[money_key] else 0) }}</td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-        {% endfor %}
+        {% endif %}
     </div>
 </div>
 
-<!-- Chart.js -->
+<!-- Chart.js Library -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/Chart.min.js"></script>
 <script>
+    // Menyimpan instance chart agar bisa di-destroy sebelum update
     const chartInstances = {};
-    const chartColors = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796'];
+    const chartColors = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796', '#5a5c69', '#2c9faf'];
 
+    // Fungsi Inisialisasi Chart
     function initChart(canvasId, type, label, dataObj) {
         const ctx = document.getElementById(canvasId).getContext('2d');
         const labels = dataObj.map(x => x._id || 'N/A');
@@ -262,18 +296,34 @@
                     label: label,
                     data: values,
                     backgroundColor: chartColors.slice(0, values.length),
-                    borderWidth: 1
+                    borderWidth: 1,
+                    borderColor: '#fff'
                 }]
             },
             options: {
                 maintainAspectRatio: false,
-                legend: { position: 'right', labels: { boxWidth: 10, fontSize: 10 } },
+                legend: { 
+                    position: 'right', 
+                    labels: { boxWidth: 12, fontSize: 11, fontColor: '#858796' } 
+                },
+                scales: type === 'bar' ? {
+                    yAxes: [{ ticks: { beginAtZero: true, maxTicksLimit: 5 } }],
+                    xAxes: [{ gridLines: { display: false } }]
+                } : {},
                 tooltips: {
+                    backgroundColor: "rgb(255,255,255)",
+                    bodyFontColor: "#858796",
+                    borderColor: '#dddfeb',
+                    borderWidth: 1,
+                    xPadding: 15,
+                    yPadding: 15,
+                    displayColors: true,
+                    caretPadding: 10,
                     callbacks: {
                         label: function(tooltipItem, data) {
                             var label = data.labels[tooltipItem.index] || '';
                             var val = data.datasets[0].data[tooltipItem.index];
-                            return label + ': ' + val;
+                            return label + ': ' + new Intl.NumberFormat('id-ID').format(val);
                         }
                     }
                 }
@@ -281,17 +331,34 @@
         });
     }
 
+    // Fungsi Global Update Chart (dipanggil tombol filter)
     window.updateChart = function(canvasId, newData) {
         const type = canvasId.includes('merek') ? 'bar' : 'doughnut';
-        const label = canvasId.includes('merek') ? 'Jumlah' : 'Distribusi';
+        const label = canvasId.includes('merek') ? 'Jumlah Unit' : 'Jumlah Pelanggan';
         initChart(canvasId, type, label, newData);
     };
 
+    // Inisialisasi Chart Saat Halaman Dimuat
     document.addEventListener("DOMContentLoaded", function() {
-        {% for category in ['piutang', 'tunggakan', 'collection'] %}
-            initChart('tarifChart{{ category }}', 'doughnut', 'Tarif', {{ stats[category].charts.tarif_all | tojson }});
-            initChart('merekChart{{ category }}', 'bar', 'Merek', {{ stats[category].charts.merek_all | tojson }});
-        {% endfor %}
+        {% if stats %}
+            {% for category in ['piutang', 'tunggakan', 'collection'] %}
+                // Init Tarif Chart (Default: All)
+                initChart(
+                    'tarifChart{{ category }}', 
+                    'doughnut', 
+                    'Jumlah Pelanggan', 
+                    {{ stats[category].charts.tarif_all | tojson }}
+                );
+                
+                // Init Merek Chart (Default: All)
+                initChart(
+                    'merekChart{{ category }}', 
+                    'bar', 
+                    'Jumlah Unit', 
+                    {{ stats[category].charts.merek_all | tojson }}
+                );
+            {% endfor %}
+        {% endif %}
     });
 </script>
 {% endblock %}
