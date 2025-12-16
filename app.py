@@ -161,7 +161,7 @@ def _get_sbrs_anomalies(collection_sbrs, collection_cid):
             'latest.kubik': {'$ne': None},
             'previous.kubik': {'$ne': None}
         }},
-        {'$project': {
+        {'$project': { 
             'NOMEN': 1,
             'KUBIK_TERBARU': '$latest.kubik',
             'KUBIK_SEBELUMNYA': '$previous.kubik',
@@ -1090,9 +1090,10 @@ def collection_report_api():
             'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
         }},
         { '$project': {
-            'NOMEN': 1,
-            'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, # FIX
-            'KUBIKBAYAR': {"$toDouble": {"$ifNull": ["$KUBIKBAYAR", 0]}}, # FIX
+            # **NORMALISASI NOMEN SEBELUM LOOKUP**
+            'NOMEN': {'$toString': '$NOMEN'}, 
+            'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, 
+            'KUBIKBAYAR': {"$toDouble": {"$ifNull": ["$KUBIKBAYAR", 0]}}, 
             'RAYON_MB': { '$ifNull': [ '$RAYON', 'N/A' ] },
             'PCEZ_MB': { '$ifNull': [ '$PCEZ', 'N/A' ] },
         }},
@@ -1103,25 +1104,13 @@ def collection_report_api():
            'as': 'customer_info'
         }},
         {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
-        # **NEW LOOKUP (Fallback PCEZ ke MC)**
-        {'$lookup': { 
-           'from': 'MasterCetak', 
-           'localField': 'NOMEN',
-           'foreignField': 'NOMEN',
-           'pipeline': [
-                {'$match': {'BULAN_TAGIHAN': latest_mc_month}}, # Ambil PCEZ dari MC terbaru
-                {'$project': {'PCEZ_MC': {'$toUpper': {'$ifNull': ['$PCEZ', '']}}, '_id': 0}}
-            ],
-           'as': 'mc_latest_info'
-        }},
-        {'$unwind': {'path': '$mc_latest_info', 'preserveNullAndEmptyArrays': True}},
+        # **MENGHILANGKAN LOOKUP MC KARENA PCEZ ADA DI CID**
         
         # FIX KRITIS BARU: Menggunakan $cond untuk fallback yang lebih kuat terhadap "N/A" dan ""
         { '$project': {
              # Field untuk PCEZ dan RAYON dari CID dan MB (dibersihkan)
              'CID_PCEZ': {'$toUpper': {'$ifNull': ['$customer_info.PCEZ', '']}},
              'MB_PCEZ_RAW': {'$toUpper': {'$ifNull': ['$PCEZ_MB', '']}}, 
-             'MC_PCEZ_RAW': {'$ifNull': ['$mc_latest_info.PCEZ_MC', '']}, # Ambil PCEZ dari MC terbaru
              'CID_RAYON': {'$toUpper': {'$ifNull': ['$customer_info.RAYON', '']}},
              'MB_RAYON_RAW': {'$toUpper': {'$ifNull': ['$RAYON_MB', '']}},
              'NOMEN': 1,
@@ -1129,7 +1118,7 @@ def collection_report_api():
              'KUBIKBAYAR': 1
         }},
         { '$project': {
-             # Prioritas PCEZ: 1. CID (Valid) 2. MB (Valid) 3. MC (Valid) 4. N/A
+             # Prioritas PCEZ: 1. CID (Valid) 2. MB (Valid) 3. N/A
              'PCEZ': {
                  '$cond': {
                      'if': { '$and': [{'$ne': ['$CID_PCEZ', 'N/A']}, {'$ne': ['$CID_PCEZ', '']}] },
@@ -1138,13 +1127,7 @@ def collection_report_api():
                          '$cond': {
                              'if': { '$and': [{'$ne': ['$MB_PCEZ_RAW', 'N/A']}, {'$ne': ['$MB_PCEZ_RAW', '']}] },
                              'then': '$MB_PCEZ_RAW',
-                             'else': {
-                                 '$cond': {
-                                     'if': { '$and': [{'$ne': ['$MC_PCEZ_RAW', 'N/A']}, {'$ne': ['$MC_PCEZ_RAW', '']}] },
-                                     'then': '$MC_PCEZ_RAW',
-                                     'else': 'N/A'
-                                 }
-                             }
+                             'else': 'N/A'
                          }
                      }
                  }
@@ -1640,8 +1623,8 @@ def analyze_mc_grouping_summary_api():
              {"$project": {
                 # Kolom Piutang/Kubik
                 "NOMEN": "$NOMEN",
-                "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, # FIXED: Used " for $ifNull
-                "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}, # FIXED: Used " for $ifNull
+                "NOMINAL": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, # FIXED
+                "KUBIK": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}, # FIXED
                 "CUST_TYPE_MC": "$CUST_TYPE", # <-- DITAMBAHKAN
                 "RAYON_MC": "$RAYON"
             }},
@@ -1668,8 +1651,8 @@ def analyze_mc_grouping_summary_api():
             }},
             {'$group': {
                 '_id': None,
-                'SumOfKUBIK': {'$sum': {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}}, # FIXED: Used " for $ifNull
-                'SumOfNOMINAL': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}}, # FIXED: Used " for $ifNull
+                'SumOfKUBIK': {'$sum': {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}}, # FIXED
+                'SumOfNOMINAL': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}}, # FIXED
                 'CountOfNOMEN': {'$addToSet': '$NOMEN'}
             }},
             {'$project': {
@@ -1842,9 +1825,10 @@ def collection_monitoring_api():
                 'BILL_REASON': 'BIAYA PEMAKAIAN AIR'
             }}, 
             {'$project': {
+                # **NORMALISASI NOMEN SEBELUM LOOKUP**
+                'NOMEN': {'$toString': '$NOMEN'}, 
                 'TGL_BAYAR': 1,
                 'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, # FIX
-                'NOMEN': 1,
                 'RAYON_MB': { '$ifNull': [ '$RAYON', 'N/A' ] },
                 'PCEZ_MB': { '$ifNull': [ '$PCEZ', 'N/A' ] }, # Tambahkan PCEZ dari MB
             }},
