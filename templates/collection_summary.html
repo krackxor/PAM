@@ -3,27 +3,30 @@
 {% block title %}Laporan Piutang & Koleksi{% endblock %}
 
 {% block custom_styles %}
-/* Custom styles for KPI cards and charts */
-.summary-container {
-    padding: 20px;
-}
+/* Custom styles from your request */
+.summary-container { padding: 20px; }
 .kpi-card {
-    background-color: var(--card-bg);
+    background-color: #fff;
     padding: 20px;
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow-light);
+    border-radius: 8px;
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
     margin-bottom: 20px;
     text-align: center;
+    height: 100%;
+    border: 1px solid #e3e6f0;
 }
 .kpi-card h4 {
-    color: var(--secondary-color);
-    font-size: 1rem;
-    margin-bottom: 5px;
+    color: #5a5c69;
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 10px;
 }
 .kpi-card p {
-    font-size: 2rem;
+    font-size: 1.5rem;
     font-weight: 700;
-    color: var(--text-color);
+    color: #5a5c69;
+    margin-bottom: 0;
 }
 .grid-container {
     display: grid;
@@ -32,214 +35,245 @@
     margin-bottom: 40px;
 }
 .chart-wrapper {
-    background-color: var(--card-bg);
+    background-color: #fff;
     padding: 20px;
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow-medium);
+    border-radius: 8px;
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+    height: 100%;
 }
 .section-title {
-    color: var(--primary-color);
+    color: #4e73df;
     border-bottom: 2px solid #eee;
     padding-bottom: 10px;
     margin-bottom: 20px;
-    margin-top: 40px;
+    font-weight: bold;
 }
-.trend-chart-container {
-    height: 350px;
-}
-.rayon-card-list {
-    text-align: left;
-}
-.rayon-item {
-    padding: 8px 0;
-    border-bottom: 1px dashed #eee;
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.95rem;
-}
-.rayon-item:last-child {
-    border-bottom: none;
-}
-/* Responsive adjustment for chart grid */
-@media (max-width: 992px) {
-    .main-grid {
-        grid-template-columns: 1fr;
-    }
-}
+/* Tabs Styling */
+.nav-pills .nav-link.active { background-color: #4e73df; }
+.nav-pills .nav-link { color: #5a5c69; font-weight: bold; margin-right: 5px; }
+.table-responsive::-webkit-scrollbar { width: 6px; height: 6px; }
+.table-responsive::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
 {% endblock %}
 
 {% block content %}
 <div class="summary-container">
-    <h2 class="section-title">
-        <i class="fas fa-file-invoice-dollar"></i> Laporan Piutang & Koleksi
-    </h2>
-    
-    <div id="loadingStatus" style="text-align: center; padding: 30px; color: #6c757d;">
-        <i class="fas fa-spinner fa-spin"></i> Memuat Ringkasan KPI dan Data...
+    <!-- Header with Filter -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="section-title mb-0 border-0">
+            <i class="fas fa-file-invoice-dollar mr-2"></i> Laporan Piutang & Koleksi
+        </h2>
+        <form class="form-inline" method="get" action="{{ url_for('routes_collection.collection_summary') }}">
+            <label class="mr-2 font-weight-bold">Periode:</label>
+            <input type="month" class="form-control form-control-sm mr-2" name="period" value="{{ period[:4] }}-{{ period[4:] }}">
+            <button type="submit" class="btn btn-sm btn-primary shadow-sm"><i class="fas fa-filter"></i> Filter</button>
+        </form>
     </div>
 
-    <div id="dashboardContent" style="display: none;">
-        <!-- KPI Cards -->
-        <div class="grid-container">
-            <div class="kpi-card" style="border-left: 4px solid #dc3545;">
-                <h4>Total Piutang (MC Aktif)</h4>
-                <p id="total_piutang">Rp 0</p>
-                <small id="piutang_status" style="color: var(--secondary-color);"></small>
-            </div>
-            <div class="kpi-card" style="border-left: 4px solid #ffc107;">
-                <h4>Total Tunggakan (ARDEBT)</h4>
-                <p id="total_tunggakan">Rp 0</p>
-                <small id="tunggakan_status" style="color: #842029;">0 Pelanggan</small>
-            </div>
-            <div class="kpi-card" style="background-color: #d1e7dd; border-left: 4px solid #0f5132;">
-                <h4>Koleksi Nominal Bulan Ini</h4>
-                <p id="koleksi_bulan_ini" style="color: #0f5132;">Rp 0</p>
-                <small id="koleksi_persentase" style="color: #0f5132; font-weight: bold;">0.00% dari Piutang</small>
-            </div>
-            <div class="kpi-card" style="border-left: 4px solid #007bff;">
-                <h4>Total Pelanggan Aktif</h4>
-                <p id="total_pelanggan">0</p>
-                <small>Total Nomen di Master Data</small>
-            </div>
-        </div>
+    <!-- Navigation Tabs -->
+    <ul class="nav nav-pills mb-4" id="pills-tab" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link active" id="pills-piutang-tab" data-toggle="pill" href="#pills-piutang" role="tab">
+                <i class="fas fa-file-invoice mr-1"></i> Piutang (MC)
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="pills-tunggakan-tab" data-toggle="pill" href="#pills-tunggakan" role="tab">
+                <i class="fas fa-history mr-1"></i> Tunggakan (ARDEBT)
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="pills-collection-tab" data-toggle="pill" href="#pills-collection" role="tab">
+                <i class="fas fa-hand-holding-usd mr-1"></i> Collection (MB)
+            </a>
+        </li>
+    </ul>
 
-        <!-- Charts and Lists -->
-        <div class="grid-container main-grid" style="grid-template-columns: 2fr 1fr;">
-            <!-- 1. Koleksi Trend Chart -->
-            <div class="chart-wrapper">
-                <h3 style="margin-top: 0;">Tren Koleksi 7 Hari Terakhir</h3>
-                <div class="trend-chart-container">
-                    <canvas id="collectionTrendChart"></canvas>
-                </div>
-            </div>
+    <div class="tab-content" id="pills-tabContent">
+        {% for category, label, money_key, usage_key in [
+            ('piutang', 'Piutang', 'BIAYA', 'PEMAKAIAN'), 
+            ('tunggakan', 'Tunggakan', 'JUMLAH', 'PEMAKAIAN'), 
+            ('collection', 'Collection', 'NOMINAL', 'KUBIKBAYAR')
+        ] %}
+        
+        <div class="tab-pane fade {% if category == 'piutang' %}show active{% endif %}" id="pills-{{ category }}" role="tabpanel">
+            {% set data = stats[category] %}
             
-            <!-- 2. Top Rayon Piutang -->
-            <div class="chart-wrapper">
-                <h3 style="margin-top: 0;">Top 5 Rayon Piutang Terbesar</h3>
-                <div class="rayon-card-list" id="topRayonList">
-                    <!-- Data akan dimasukkan di sini -->
-                    <p style="text-align: center; color: var(--secondary-color);">Memuat data...</p>
+            <!-- KPI Cards -->
+            <div class="grid-container">
+                <div class="kpi-card" style="border-left: 4px solid #4e73df;">
+                    <h4>Jumlah Nomen</h4>
+                    <p>{{ "{:,.0f}".format(data.totals.count) }}</p>
+                    <small class="text-muted">Pelanggan</small>
+                </div>
+                <div class="kpi-card" style="border-left: 4px solid #1cc88a;">
+                    <h4>Total Pemakaian</h4>
+                    <p>{{ "{:,.0f}".format(data.totals.total_usage) }} m³</p>
+                    <small class="text-muted">Volume Air</small>
+                </div>
+                <div class="kpi-card" style="border-left: 4px solid #f6c23e;">
+                    <h4>Total Nominal</h4>
+                    <p class="text-warning">Rp {{ "{:,.0f}".format(data.totals.total_nominal) }}</p>
+                    <small class="text-muted">Rupiah</small>
+                </div>
+                <div class="kpi-card" style="border-left: 4px solid #e74a3b;">
+                    <h4>Kontributor Terbesar</h4>
+                    <div class="text-left mt-2" style="font-size: 0.85rem;">
+                        <div><strong>Rayon:</strong> {{ data.largest.rayon._id }} <span class="float-right">{{ "{:,.0f}".format(data.largest.rayon.total) }}</span></div>
+                        <div><strong>PC:</strong> {{ data.largest.pc._id }} <span class="float-right">{{ "{:,.0f}".format(data.largest.pc.total) }}</span></div>
+                    </div>
                 </div>
             </div>
-        </div>
 
+            <!-- Charts & Lists -->
+            <div class="row">
+                <!-- Charts -->
+                <div class="col-lg-6 mb-4">
+                    <div class="chart-wrapper">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="m-0 font-weight-bold text-primary">Distribusi Tarif</h5>
+                            <div class="btn-group btn-group-sm btn-group-toggle" data-toggle="buttons">
+                                <label class="btn btn-outline-secondary active" onclick="updateChart('tarifChart{{ category }}', {{ data.charts.tarif_all | tojson }})">
+                                    <input type="radio" checked> All
+                                </label>
+                                <label class="btn btn-outline-secondary" onclick="updateChart('tarifChart{{ category }}', {{ data.charts.tarif_34 | tojson }})">
+                                    <input type="radio"> 34
+                                </label>
+                                <label class="btn btn-outline-secondary" onclick="updateChart('tarifChart{{ category }}', {{ data.charts.tarif_35 | tojson }})">
+                                    <input type="radio"> 35
+                                </label>
+                            </div>
+                        </div>
+                        <div style="height: 300px;">
+                            <canvas id="tarifChart{{ category }}"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6 mb-4">
+                    <div class="chart-wrapper">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="m-0 font-weight-bold text-primary">Distribusi Merek</h5>
+                            <div class="btn-group btn-group-sm btn-group-toggle" data-toggle="buttons">
+                                <label class="btn btn-outline-secondary active" onclick="updateChart('merekChart{{ category }}', {{ data.charts.merek_all | tojson }})">
+                                    <input type="radio" checked> All
+                                </label>
+                                <label class="btn btn-outline-secondary" onclick="updateChart('merekChart{{ category }}', {{ data.charts.merek_34 | tojson }})">
+                                    <input type="radio"> 34
+                                </label>
+                                <label class="btn btn-outline-secondary" onclick="updateChart('merekChart{{ category }}', {{ data.charts.merek_35 | tojson }})">
+                                    <input type="radio"> 35
+                                </label>
+                            </div>
+                        </div>
+                        <div style="height: 300px;">
+                            <canvas id="merekChart{{ category }}"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top 500 Tables -->
+            <div class="row">
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow border-0">
+                        <div class="card-header py-3 bg-dark text-white">
+                            <h6 class="m-0 font-weight-bold">Top 500 - Rayon 34</h6>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="height: 400px; overflow-y: auto;">
+                                <table class="table table-striped table-hover mb-0">
+                                    <thead class="thead-light" style="position: sticky; top: 0; z-index: 1;">
+                                        <tr>
+                                            <th>Nomen</th>
+                                            <th>Nama</th>
+                                            <th class="text-right">Nominal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for row in data.lists.top_34 %}
+                                        <tr>
+                                            <td class="font-weight-bold">{{ row.NOMEN }}</td>
+                                            <td><small>{{ row.NAMA if row.NAMA else '-' }}</small></td>
+                                            <td class="text-right">{{ "{:,.0f}".format(row[money_key] if row[money_key] else 0) }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow border-0">
+                        <div class="card-header py-3 bg-dark text-white">
+                            <h6 class="m-0 font-weight-bold">Top 500 - Rayon 35</h6>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="height: 400px; overflow-y: auto;">
+                                <table class="table table-striped table-hover mb-0">
+                                    <thead class="thead-light" style="position: sticky; top: 0; z-index: 1;">
+                                        <tr>
+                                            <th>Nomen</th>
+                                            <th>Nama</th>
+                                            <th class="text-right">Nominal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for row in data.lists.top_35 %}
+                                        <tr>
+                                            <td class="font-weight-bold">{{ row.NOMEN }}</td>
+                                            <td><small>{{ row.NAMA if row.NAMA else '-' }}</small></td>
+                                            <td class="text-right">{{ "{:,.0f}".format(row[money_key] if row[money_key] else 0) }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        {% endfor %}
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/Chart.min.js"></script>
 <script>
-    // Menggunakan url_for yang sesuai dengan Blueprint
-    const API_SUMMARY = "{{ url_for('dashboard_summary_api') }}";
-    const API_RAYON_ANALYSIS = "{{ url_for('rayon_analysis_api') }}"; 
-    
-    // --- Utility Formatting ---
-    function formatRupiah(number) {
-        return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
-    }
-    function formatNumber(number) {
-         return (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
-    }
-    
-    // Fungsi Utama untuk Fetch Data
-    async function fetchSummaryData() {
-        try {
-            const [summaryResponse, rayonResponse] = await Promise.all([
-                fetch(API_SUMMARY),
-                fetch(API_RAYON_ANALYSIS)
-            ]);
+    const chartInstances = {};
+    const chartColors = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796'];
 
-            const summaryData = await summaryResponse.json();
-            const rayonData = await rayonResponse.json();
+    function initChart(canvasId, type, label, dataObj) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        const labels = dataObj.map(x => x._id || 'N/A');
+        const values = dataObj.map(x => x.val);
 
-            if (summaryData.message && summaryData.message.includes('Gagal')) {
-                document.getElementById('loadingStatus').innerHTML = `<p class="alert danger">❌ Error Summary: ${summaryData.message}</p>`;
-                return;
-            }
-
-            // 1. Update KPI Cards
-            document.getElementById('total_piutang').innerText = formatRupiah(summaryData.total_piutang);
-            document.getElementById('piutang_status').innerText = `Dari ${formatNumber(summaryData.jumlah_tagihan)} Tagihan MC`;
-            
-            document.getElementById('total_tunggakan').innerText = formatRupiah(summaryData.total_tunggakan);
-            document.getElementById('tunggakan_status').innerText = `${formatNumber(summaryData.pelanggan_dengan_tunggakan)} Pelanggan Tunggakan`;
-
-            document.getElementById('koleksi_bulan_ini').innerText = formatRupiah(summaryData.koleksi_bulan_ini);
-            document.getElementById('koleksi_persentase').innerText = `${summaryData.persentase_koleksi.toFixed(2)}% dari Piutang`;
-
-            document.getElementById('total_pelanggan').innerText = formatNumber(summaryData.total_pelanggan);
-
-
-            // 2. Render Tren Koleksi Chart
-            renderCollectionTrend(summaryData.tren_koleksi_7_hari);
-
-            // 3. Render Top Rayon List
-            // Menggunakan data rayon yang sudah dianalisis (rayonData)
-            renderTopRayonList(rayonData.sort((a, b) => b.total_piutang - a.total_piutang).slice(0, 5));
-
-            document.getElementById('loadingStatus').style.display = 'none';
-            document.getElementById('dashboardContent').style.display = 'block';
-
-        } catch (error) {
-            document.getElementById('loadingStatus').innerHTML = `<p class="alert danger">❌ Gagal memuat data dari server atau koneksi terputus.</p>`;
-            console.error('Fetch Error:', error);
-        }
-    }
-
-    // Fungsi untuk membuat Chart Tren Koleksi
-    function renderCollectionTrend(trendData) {
-        const ctx = document.getElementById('collectionTrendChart').getContext('2d');
-        
-        const sortedData = trendData.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
-
-        const labels = sortedData.map(item => {
-            const date = new Date(item.tanggal);
-            return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-        });
-        
-        const nominalData = sortedData.map(item => item.total);
-
-        // Hancurkan instance chart yang ada (jika ada)
-        const existingChart = Chart.getChart(ctx);
-        if (existingChart) {
-            existingChart.destroy();
+        if(chartInstances[canvasId]) {
+            chartInstances[canvasId].destroy();
         }
 
-        new Chart(ctx, {
-            type: 'line',
+        chartInstances[canvasId] = new Chart(ctx, {
+            type: type,
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'Koleksi Nominal (Rp)',
-                    data: nominalData,
-                    borderColor: 'var(--primary-color)',
-                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
-                    borderWidth: 2,
-                    tension: 0.4,
-                    fill: true,
-                    pointRadius: 5
+                    label: label,
+                    data: values,
+                    backgroundColor: chartColors.slice(0, values.length),
+                    borderWidth: 1
                 }]
             },
             options: {
-                responsive: true,
                 maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: (context) => 'Koleksi: ' + formatRupiah(context.parsed.y)
-                        }
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: function(value, index, ticks) {
-                                if (Math.abs(value) >= 1000000) {
-                                    return (value / 1000000).toFixed(1) + ' Jt';
-                                }
-                                return formatRupiah(value);
-                            }
+                legend: { position: 'right', labels: { boxWidth: 10, fontSize: 10 } },
+                tooltips: {
+                    callbacks: {
+                        label: function(tooltipItem, data) {
+                            var label = data.labels[tooltipItem.index] || '';
+                            var val = data.datasets[0].data[tooltipItem.index];
+                            return label + ': ' + val;
                         }
                     }
                 }
@@ -247,22 +281,17 @@
         });
     }
 
-    // Fungsi untuk menampilkan Top Rayon
-    function renderTopRayonList(rayonData) {
-        const listContainer = document.getElementById('topRayonList');
-        if (!rayonData || rayonData.length === 0) {
-            listContainer.innerHTML = '<p style="text-align: center; color: var(--secondary-color);">Tidak ada data Rayon.</p>';
-            return;
-        }
+    window.updateChart = function(canvasId, newData) {
+        const type = canvasId.includes('merek') ? 'bar' : 'doughnut';
+        const label = canvasId.includes('merek') ? 'Jumlah' : 'Distribusi';
+        initChart(canvasId, type, label, newData);
+    };
 
-        listContainer.innerHTML = rayonData.map((item, index) => `
-            <div class="rayon-item">
-                <span style="font-weight: 700;">${index + 1}. Rayon ${item.RAYON}</span>
-                <span>${formatRupiah(item.total_piutang)}</span>
-            </div>
-        `).join('');
-    }
-
-    document.addEventListener('DOMContentLoaded', fetchSummaryData);
+    document.addEventListener("DOMContentLoaded", function() {
+        {% for category in ['piutang', 'tunggakan', 'collection'] %}
+            initChart('tarifChart{{ category }}', 'doughnut', 'Tarif', {{ stats[category].charts.tarif_all | tojson }});
+            initChart('merekChart{{ category }}', 'bar', 'Merek', {{ stats[category].charts.merek_all | tojson }});
+        {% endfor %}
+    });
 </script>
 {% endblock %}
