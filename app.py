@@ -874,8 +874,8 @@ def _aggregate_mb_sunter_detail(collection_mb):
             {'$project': {
                 'NOMINAL': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}, # FIX
                 'NOMEN': 1,
-                # Menggunakan $ifNull sederhana karena $trim ditemukan sebagai argument yang tidak dikenal
-                'RAYON': {'$toUpper': {'$ifNull': ['$RAYON', 'N/A']}}
+                # FIX: Hapus $toUpper untuk kompatibilitas MongoDB < 4.0
+                'RAYON': {'$ifNull': ['$RAYON', 'N/A']}
             }},
             {'$match': {'RAYON': {'$in': RAYON_KEYS}}}
         ]
@@ -918,7 +918,8 @@ def _aggregate_mb_sunter_detail(collection_mb):
                 'BILL_REASON': 'BIAYA PEMAKAIAN AIR',
                 # Filter TGL_BAYAR: Bulan M (sesuai COLLECTION_MONTH_START/END)
                 'TGL_BAYAR': {'$gte': COLLECTION_MONTH_START, '$lt': COLLECTION_MONTH_END}, 
-                'RAYON': {'$toUpper': {'$ifNull': ['$RAYON', 'N/A']}}
+                # FIX: Hapus $toUpper untuk kompatibilitas MongoDB < 4.0
+                'RAYON': {'$ifNull': ['$RAYON', 'N/A']}
             }},
             {'$match': {'RAYON': rayon_key}},
             {'$project': {
@@ -1004,11 +1005,11 @@ def _get_mc_piutang_denominator(latest_mc_month, collection_mc, collection_cid):
         }},
         {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}},
         {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
-        # Menggunakan logika fallback yang kompatibel: $ifNull dan $toUpper
+        # Menggunakan logika fallback yang kompatibel: Hapus $toUpper
         {'$project': {
             'NOMINAL': 1,
-            'CLEAN_RAYON': {'$toUpper': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MC']}}, 
-            'CLEAN_TIPEPLGGN': {'$toUpper': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}},
+            'CLEAN_RAYON': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MC']}, 
+            'CLEAN_TIPEPLGGN': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']},
         }},
         {'$match': {'CLEAN_RAYON': {'$in': ['34', '35']}, 'CLEAN_TIPEPLGGN': 'REG', 'NOMINAL': {'$gt': 0}}},
         {'$group': {'_id': '$CLEAN_RAYON', 'TotalPiutang': {'$sum': '$NOMINAL'}}}
@@ -1103,13 +1104,13 @@ def collection_report_api():
         }},
         {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
         
-        # FIX KRITIS BARU: Menggunakan $cond untuk fallback yang lebih kuat terhadap "N/A" dan ""
+        # FIX KRITIS BARU: Menggunakan $cond untuk fallback yang lebih kuat terhadap "N/A" dan "" (Hapus $toUpper)
         { '$project': {
              # Field untuk PCEZ dan RAYON dari CID dan MB (dibersihkan)
-             'CID_PCEZ': {'$toUpper': {'$ifNull': ['$customer_info.PCEZ', '']}},
-             'MB_PCEZ_RAW': {'$toUpper': {'$ifNull': ['$PCEZ_MB', '']}}, 
-             'CID_RAYON': {'$toUpper': {'$ifNull': ['$customer_info.RAYON', '']}},
-             'MB_RAYON_RAW': {'$toUpper': {'$ifNull': ['$RAYON_MB', '']}},
+             'CID_PCEZ': {'$ifNull': ['$customer_info.PCEZ', '']},
+             'MB_PCEZ_RAW': {'$ifNull': ['$PCEZ_MB', '']}, 
+             'CID_RAYON': {'$ifNull': ['$customer_info.RAYON', '']},
+             'MB_RAYON_RAW': {'$ifNull': ['$RAYON_MB', '']},
              'NOMEN': 1,
              'NOMINAL': 1,
              'KUBIKBAYAR': 1
@@ -1486,12 +1487,12 @@ def _aggregate_custom_mc_report(collection_mc, collection_cid, dimension=None, r
         {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}}, 
         {'$project': {
             'NOMEN': 1, 'NOMINAL': 1, 'KUBIK': 1,
-            # Menggunakan $ifNull sederhana untuk kompatibilitas
-            'CLEAN_TIPEPLGGN': {'$toUpper': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}}, 
-            'CLEAN_RAYON': {'$toUpper': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MC']}}, 
-            'TARIF_CID': {'$toUpper': {'$ifNull': ['$customer_info.TARIF', 'N/A']}}, 
-            'MERK_CID': {'$toUpper': {'$ifNull': ['$customer_info.MERK', 'N/A']}},
-            'READ_METHOD': {'$toUpper': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']}},
+            # Menggunakan $ifNull sederhana untuk kompatibilitas (Hapus $toUpper)
+            'CLEAN_TIPEPLGGN': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}, 
+            'CLEAN_RAYON': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MC']}, 
+            'TARIF_CID': {'$ifNull': ['$customer_info.TARIF', 'N/A']}, 
+            'MERK_CID': {'$ifNull': ['$customer_info.MERK', 'N/A']},
+            'READ_METHOD': {'$ifNull': ['$customer_info.READ_METHOD', 'N/A']},
         }},
         {'$match': {'CLEAN_TIPEPLGGN': 'REG'}} # Always filter to REG
     ]
@@ -1634,11 +1635,11 @@ def analyze_mc_grouping_summary_api():
             # PERBAIKAN KRITIS: preserveNullAndEmptyArrays=True
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
             
-            # --- NORMALISASI DATA UNTUK FILTER (Mengganti $trim dengan $ifNull) ---
+            # --- NORMALISASI DATA UNTUK FILTER (Hapus $toUpper) ---
             {'$project': {
                 'NOMINAL': 1, 'KUBIK': 1, 'NOMEN': 1,
-                'CLEAN_TIPEPLGGN': {'$toUpper': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}}, 
-                'CLEAN_RAYON': {'$toUpper': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MC']}}, 
+                'CLEAN_TIPEPLGGN': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}, 
+                'CLEAN_RAYON': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MC']}, 
             }},
             # --- END NORMALISASI ---
             
@@ -1706,12 +1707,12 @@ def analyze_mc_tarif_breakdown_api():
             }},
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}}, 
             
-            # --- NORMALISASI DATA UNTUK FILTER (Mengganti $trim dengan $ifNull) ---
+            # --- NORMALISASI DATA UNTUK FILTER (Hapus $toUpper) ---
             {'$project': {
                 'NOMEN': 1, 
                 'TARIF': 1,
-                'CLEAN_TIPEPLGGN': {'$toUpper': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}}, 
-                'CLEAN_RAYON': {'$toUpper': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MC']}}, 
+                'CLEAN_TIPEPLGGN': {'$ifNull': ['$customer_info.TIPEPLGGN', '$CUST_TYPE_MC']}, 
+                'CLEAN_RAYON': {'$ifNull': ['$customer_info.RAYON', '$RAYON_MC']}, 
             }},
             # --- END NORMALISASI ---
             
@@ -1831,15 +1832,15 @@ def collection_monitoring_api():
             {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'customer_info'}}, 
             {'$unwind': {'path': '$customer_info', 'preserveNullAndEmptyArrays': True}},
             
-            # FIX KRITIS BARU: Agregasi Fallback PCEZ/Rayon
+            # FIX KRITIS BARU: Agregasi Fallback PCEZ/Rayon (Hapus $toUpper)
             {'$project': {
                  'TGL_BAYAR': 1,
                  'NOMINAL': 1,
                  'NOMEN': 1,
-                 'CID_PCEZ': {'$toUpper': {'$ifNull': ['$customer_info.PCEZ', '']}},
-                 'MB_PCEZ_RAW': {'$toUpper': {'$ifNull': ['$PCEZ_MB', '']}},
-                 'CID_RAYON': {'$toUpper': {'$ifNull': ['$customer_info.RAYON', '']}},
-                 'MB_RAYON_RAW': {'$toUpper': {'$ifNull': ['$RAYON_MB', '']}},
+                 'CID_PCEZ': {'$ifNull': ['$customer_info.PCEZ', '']},
+                 'MB_PCEZ_RAW': {'$ifNull': ['$PCEZ_MB', '']},
+                 'CID_RAYON': {'$ifNull': ['$customer_info.RAYON', '']},
+                 'MB_RAYON_RAW': {'$ifNull': ['$RAYON_MB', '']},
             }},
             {'$project': {
                  'TGL_BAYAR': 1,
@@ -2165,12 +2166,12 @@ def doh_comparison_report_api():
                 'Day': {'$substr': ['$TGL_BAYAR', 8, 2]},
                 'Periode': {'$substr': ['$TGL_BAYAR', 0, 7]}
             }},
-            # FIX: Normalisasi RAYON dari MB yang mungkin tidak seragam
+            # FIX: Normalisasi RAYON dari MB yang mungkin tidak seragam (Hapus $toUpper)
             {'$project': { # Menggunakan $project sederhana
                 'NOMINAL': 1,
                 'Day': 1,
                 'Periode': 1,
-                'CLEAN_RAYON': {'$toUpper': {'$ifNull': ['$RAYON', 'N/A']}},
+                'CLEAN_RAYON': {'$ifNull': ['$RAYON', 'N/A']},
             }},
             # Filter hanya Rayon 34 dan 35
             {'$match': {'CLEAN_RAYON': {'$in': ['34', '35']}}},
