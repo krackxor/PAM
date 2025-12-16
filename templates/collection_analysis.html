@@ -1,174 +1,91 @@
 {% extends "base.html" %}
 
-{% block title %}Analisis Agregasi Piutang & Koleksi{% endblock %}
-
-{% block custom_styles %}
-/* Custom CSS yang relevan untuk hub menu (Dinamis & Responsif) */
-.report-grid-menu {
-    display: grid;
-    /* Grid akan memiliki minimal 250px per kolom, akan menumpuk di mobile */
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
-    gap: 20px;
-    margin-top: 20px;
-    margin-bottom: 30px; 
-    animation: fadeIn 0.5s ease-out; /* Animasi saat grid muncul */
-}
-
-.report-card-link {
-    text-decoration: none;
-    color: inherit;
-}
-
-.report-card-aggr {
-    background-color: var(--card-bg);
-    border: 1px solid #e0e0e0; 
-    border-radius: var(--border-radius);
-    padding: 25px 20px; 
-    box-shadow: var(--shadow-light);
-    transition: all 0.3s ease; /* Transisi untuk semua properti */
-    text-align: center;
-    min-height: 150px; 
-    cursor: pointer;
-    border-left: 5px solid; /* Aksen warna dari style inline */
-}
-
-.report-card-aggr:hover {
-    transform: translateY(-5px); /* Efek angkat/lift yang lebih kentara */
-    box-shadow: 0 10px 25px rgba(0, 123, 255, 0.25); 
-}
-.report-card-aggr:active {
-    transform: translateY(-2px); /* Efek tekan */
-}
-
-.report-card-aggr i {
-    font-size: 3em; 
-    color: var(--primary-color);
-    margin-bottom: 10px;
-    transition: color 0.3s, transform 0.3s;
-}
-
-/* Menambahkan efek warna ikon saat hover */
-.report-card-link:hover .report-card-aggr i {
-    filter: brightness(1.2);
-    transform: scale(1.05);
-}
-
-
-.report-card-aggr h3 {
-    margin: 10px 0 5px 0;
-    color: var(--text-color);
-    font-size: 1.1em;
-}
-
-.report-card-aggr p {
-    font-size: 0.9em;
-    color: #6c757d; 
-}
-
-/* --- MEDIA QUERY UNTUK LAYAR HP --- */
-@media screen and (max-width: 600px) {
-    .report-grid-menu {
-        grid-template-columns: 1fr; /* Menumpuk menjadi 1 kolom di HP */
-        gap: 15px; /* Kurangi jarak antar kartu */
-    }
-    .report-card-aggr {
-        transform: none; /* Nonaktifkan efek angkat di HP */
-        padding: 20px 15px;
-    }
-}
-{% endblock %}
+{% block title %}Analisis Piutang & Koleksi{% endblock %}
 
 {% block content %}
-    <h2 style="text-align: left; border-bottom: none; margin-bottom: 20px; color: var(--primary-color);">
-        <i class="fas fa-layer-group" style="margin-right: 10px;"></i> Analisis Agregasi & Daftar Khusus
-    </h2>
-
-    <p style="margin-bottom: 30px; color: #6c757d;">
-        Pilih salah satu laporan analisis mendalam di bawah ini. Laporan akan dimuat di halaman terpisah.
+<div class="report-container" style="max-width: 90%; margin: 20px auto; text-align: center;">
+    <h1 style="color: var(--primary-color); margin-bottom: 20px;">
+        <i class="fas fa-chart-line"></i> Analisis Piutang & Koleksi
+    </h1>
+    
+    <p style="font-size: 1.1rem; color: var(--secondary-color); margin-bottom: 30px;">
+        Pilih laporan analisis Piutang, Kubikasi, dan perbandingan MoM berdasarkan dimensi pelanggan.
     </p>
-    
-    <div class="report-grid-menu">
-        
-        <a href="{{ url_for('analysis_mb_sunter_detail') }}" class="report-card-link">
-            <div class="report-card-aggr" style="border-left-color: #28a745;">
-                <i class="fas fa-chart-bar" style="color: #28a745;"></i>
-                <h3>Grouping MB: AB Sunter Detail</h3>
-                <p>Agregasi koleksi (Undue, Current, Aging) dan detail harian untuk Rayon 34/35.</p>
-            </div>
-        </a>
-        
-        <a href="{{ url_for('rayon_distribution_view') }}" class="report-card-link">
-            <div class="report-card-aggr" style="border-left-color: #007bff;">
-                <i class="fas fa-city" style="color: #007bff;"></i>
-                <h3>Distribusi Rayon Pelanggan</h3>
-                <p>Nomen, Piutang, dan Kubikasi per Rayon.</p>
-            </div>
-        </a>
 
-        <a href="{{ url_for('pcez_distribution_view') }}" class="report-card-link">
-            <div class="report-card-aggr" style="border-left-color: #6f42c1;">
-                <i class="fas fa-map-marked-alt" style="color: #6f42c1;"></i>
-                <h3>Distribusi PCEZ Pelanggan</h3>
-                <p>Nomen, Piutang, dan Kubikasi per PCEZ.</p>
-            </div>
-        </a>
+    <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 20px;">
+        
+        <!-- NEW CARD: MoM Comparison (Menu Riwayat yang diletakkan di Analisis) -->
+        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
+            <i class="fas fa-calendar-alt fa-2x" style="color: #6f42c1; margin-bottom: 10px;"></i>
+            <h4 style="margin-top: 0;">4. Riwayat Piutang (MoM)</h4>
+            <p style="font-size: 0.9rem;">Analisis detil perbandingan Piutang dan Kubikasi (M vs M-1) berdasarkan kriteria AB Sunter, Rayon, Tarif, Merek, Cycle, dan PCEZ.</p>
+            <a href="{{ url_for('bp_collection.collection_riwayat_view') }}" class="btn" style="background-color: #6f42c1; color: white; display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
+                Lihat Laporan <i class="fas fa-arrow-right"></i>
+            </a>
+        </div>
 
-        <a href="{{ url_for('rayon_tarif_distribution_view') }}" class="report-card-link">
-            <div class="report-card-aggr" style="border-left-color: #ffc107;">
-                <i class="fas fa-tag" style="color: #ffc107;"></i>
-                <h3>Distribusi Rayon/Tarif</h3>
-                <p>Nomen, Piutang, dan Kubikasi per Rayon dan Tarif.</p>
-            </div>
-        </a>
+        <!-- Kartu Laporan Distribusi Utama -->
+        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
+            <i class="fas fa-sitemap fa-2x" style="color: #28a745; margin-bottom: 10px;"></i>
+            <h4 style="margin-top: 0;">Distribusi Rayon</h4>
+            <p style="font-size: 0.9rem;">Distribusi jumlah pelanggan, piutang, dan kubikasi per Rayon/Area Layanan.</p>
+            <a href="{{ url_for('bp_collection.rayon_distribution_report') }}" class="btn" style="background-color: #28a745; color: white; display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
+                Lihat Laporan <i class="fas fa-arrow-right"></i>
+            </a>
+        </div>
+        
+        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
+            <i class="fas fa-user-tag fa-2x" style="color: #ffc107; margin-bottom: 10px;"></i>
+            <h4 style="margin-top: 0;">Distribusi Rayon & Tarif</h4>
+            <p style="font-size: 0.9rem;">Detail piutang dan kubikasi yang dikelompokkan berdasarkan Rayon dan Kode Tarif.</p>
+            <a href="{{ url_for('bp_collection.rayon_tarif_distribution_report') }}" class="btn" style="background-color: #ffc107; color: var(--text-color); display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
+                Lihat Laporan <i class="fas fa-arrow-right"></i>
+            </a>
+        </div>
+        
+        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
+            <i class="fas fa-compass fa-2x" style="color: #17a2b8; margin-bottom: 10px;"></i>
+            <h4 style="margin-top: 0;">Distribusi PCEZ</h4>
+            <p style="font-size: 0.9rem;">Distribusi piutang berdasarkan Petugas Catat dan Zona (PCEZ).</p>
+            <a href="{{ url_for('bp_collection.pcez_distribution_report') }}" class="btn" style="background-color: #17a2b8; color: white; display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
+                Lihat Laporan <i class="fas fa-arrow-right"></i>
+            </a>
+        </div>
+        
+        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
+            <i class="fas fa-wrench fa-2x" style="color: #6c757d; margin-bottom: 10px;"></i>
+            <h4 style="margin-top: 0;">Distribusi Jenis Meter</h4>
+            <p style="font-size: 0.9rem;">Analisis piutang yang dikelompokkan berdasarkan Rayon dan Jenis/Merk Meter.</p>
+            <a href="{{ url_for('bp_collection.rayon_meter_distribution_report') }}" class="btn" style="background-color: #6c757d; color: white; display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
+                Lihat Laporan <i class="fas fa-arrow-right"></i>
+            </a>
+        </div>
 
-        <a href="{{ url_for('rayon_meter_distribution_view') }}" class="report-card-link">
-            <div class="report-card-aggr" style="border-left-color: #17a2b8;">
-                <i class="fas fa-tachometer-alt" style="color: #17a2b8;"></i>
-                <h3>Distribusi Rayon/Jenis Meter</h3>
-                <p>Nomen, Piutang, dan Kubikasi per Rayon dan Jenis Meter.</p>
-            </div>
-        </a>
-        
-        <a href="{{ url_for('analysis_tarif_breakdown') }}" class="report-card-link">
-            <div class="report-card-aggr" style="border-left-color: #17a2b8;">
-                <i class="fas fa-list-ol" style="color: #17a2b8;"></i>
-                <h3>Distribusi Tarif Pelanggan (LAMA)</h3>
-                <p>Melihat Pie Chart dan detail tabel jumlah nomen berdasarkan jenis tarif (R34/R35 Reguler).</p>
-            </div>
-        </a>
-
-        <a href="{{ url_for('analysis_grouping_sunter') }}" class="report-card-link">
-            <div class="report-card-aggr" style="border-left-color: #dc3545;">
-                <i class="fas fa-layer-group" style="color: #dc3545;"></i>
-                <h3>Grouping MC: AB Sunter Detail</h3>
-                <p>Agregasi Nomen, Kubik, dan Nominal berdasarkan Tarif, Merek, dan Metode Baca untuk R34/R35.</p>
-            </div>
-        </a>
-        
-        <a href="{{ url_for('analysis_volume_dasar') }}" class="report-card-link">
-            <div class="report-card-aggr" style="border-left-color: var(--secondary-color);">
-                <i class="fas fa-water" style="color: var(--secondary-color);"></i>
-                <h3>Laporan Volume Dasar</h3>
-                <p>Riwayat volume KUBIK bulanan dari seluruh data Master Cetak (MC) secara historis.</p>
-            </div>
-        </a>
-        
-        <a href="{{ url_for('analysis_top_lists') }}" class="report-card-link">
-            <div class="report-card-aggr" style="border-left-color: var(--primary-color);">
-                <i class="fas fa-medal" style="color: var(--primary-color);"></i>
-                <h3>Daftar Konsumen Top & Status Bayar</h3>
-                <p>Top 500 Tunggakan, Top 500 Premium, serta Daftar Lunas dan Belum Bayar (Snapshot Terbaru).</p>
-            </div>
-        </a>
-        
-        <a href="{{ url_for('analysis_aging_report') }}" class="report-card-link">
-            <div class="report-card-aggr" style="border-left-color: var(--accent-color);">
-                <i class="fas fa-clock" style="color: var(--accent-color);"></i>
-                <h3>Analisis Umur Piutang (Aging)</h3>
-                <p>Melihat daftar piutang lama (> 1 bulan) yang masih aktif berdasarkan data Master Cetak.</p>
-            </div>
-        </a>
-        
+        <div class="card" style="width: 300px; padding: 20px; box-shadow: var(--shadow-medium); border-radius: var(--border-radius); text-align: left;">
+            <i class="fas fa-hand-holding-usd fa-2x" style="color: var(--primary-color); margin-bottom: 10px;"></i>
+            <h4 style="margin-top: 0;">3. Top List Piutang Terbesar</h4>
+            <p style="font-size: 0.9rem;">Daftar pelanggan dengan total nominal piutang aktif terbesar (belum lunas) di sistem.</p>
+            <a href="{{ url_for('bp_collection.collection_top_view') }}" class="btn" style="background-color: var(--primary-color); color: white; display: block; text-align: center; padding: 8px; border-radius: 5px; text-decoration: none;">
+                Lihat Laporan <i class="fas fa-arrow-right"></i>
+            </a>
+        </div>
     </div>
-    
+</div>
+
+<style>
+    .card {
+        transition: all 0.3s ease;
+        min-height: 230px; /* Menjaga tinggi kartu konsisten */
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    }
+    .btn {
+        margin-top: auto; /* Memastikan tombol di bawah */
+    }
+</style>
 {% endblock %}
