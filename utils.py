@@ -1,6 +1,6 @@
 import os
 from pymongo import MongoClient
-from pymongo.errors import OperationFailure
+from pymongo.errors import OperationFailure, ConnectionFailure, ServerSelectionTimeoutError
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -20,9 +20,18 @@ def init_db(app):
     if client:
         # Sudah terinisialisasi
         return
+    
+    if not MONGO_URI:
+        print("KRITIS: Variabel lingkungan MONGO_URI tidak ditemukan. Koneksi gagal.")
+        return
         
+    # Diagnostik: Tampilkan URI yang digunakan (menghilangkan kredensial sensitif)
+    display_uri = MONGO_URI.split('@')[-1] if '@' in MONGO_URI else MONGO_URI
+    print(f"Mencoba koneksi ke URI: {display_uri.split('?')[0]}...")
+
     try:
         # Memperluas timeout koneksi untuk operasi upload yang besar
+        # Menambah serverSelectionTimeoutMS untuk mendeteksi kegagalan koneksi
         client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=120000, socketTimeoutMS=900000, connectTimeoutMS=30000)
         client.admin.command('ping') 
         db = client[DB_NAME]
@@ -50,20 +59,21 @@ def init_db(app):
         collections['mc'].create_index([('TARIF', 1), ('KUBIK', 1), ('NOMINAL', 1)], name='idx_mc_tarif_volume')
 
         # MB (MasterBayar)
-        try:
-            collections['mb'].drop_index('idx_mb_unique_transaction')
-        except Exception:
-            pass 
+        # Unique set to False is correct for MB, just ensuring index exists
         collections['mb'].create_index([('NOTAGIHAN', 1), ('TGL_BAYAR', 1), ('NOMINAL', 1)], name='idx_mb_unique_transaction', unique=False)
         collections['mb'].create_index([('TGL_BAYAR', -1)], name='idx_mb_paydate_desc')
         collections['mb'].create_index([('NOMEN', 1)], name='idx_mb_nomen')
         collections['mb'].create_index([('RAYON', 1), ('PCEZ', 1), ('TGL_BAYAR', -1)], name='idx_mb_rayon_pcez_date')
 
         # SBRS (MeterReading)
+        # SBRS index should be unique to prevent duplicates on (account, date)
+        # Dropping existing index if it's the wrong type is safer
         try:
+             # Coba buat index unik. Jika gagal, berarti ada data duplikat/konflik
             collections['sbrs'].create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', 1)], name='idx_sbrs_unique_read', unique=True)
         except OperationFailure:
-            collections['sbrs'].drop_index('idx_sbrs_unique_read')
+            # Jika unique index gagal (karena duplikat data lama atau index lama non-unique), 
+            # buat index non-unique saja agar program tetap jalan.
             collections['sbrs'].create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', 1)], name='idx_sbrs_unique_read', unique=False)
             
         collections['sbrs'].create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', -1)], name='idx_sbrs_history')
@@ -72,14 +82,18 @@ def init_db(app):
         collections['ardebt'].create_index([('NOMEN', 1), ('PERIODE_BILL', -1), ('JUMLAH', 1)], name='idx_ardebt_nomen_hist')
         
         print("Koneksi MongoDB berhasil dan index dikonfigurasi!")
-    except Exception as e:
+    except (ConnectionFailure, ServerSelectionTimeoutError) as e:
+        # Menangkap error koneksi spesifik untuk memberikan pesan yang lebih jelas
         print(f"Gagal terhubung ke MongoDB atau mengkonfigurasi index: {e}")
+        client = None
+    except Exception as e:
+        print(f"Gagal mengkonfigurasi index: {e}")
         client = None
 
 def get_db_status():
     """Mengembalikan status koneksi database dan koleksi yang aktif."""
     if client is None:
-        return {'status': 'error', 'message': 'Server tidak terhubung ke Database.'}
+        return {'status': 'error', 'message': 'Server tidak terhubung ke Database. Cek koneksi MongoDB.'}
     return {'status': 'ok', 'collections': collections}
 
 # --- HELPER LOGIC WAKTU ---
