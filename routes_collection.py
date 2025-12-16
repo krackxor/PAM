@@ -379,7 +379,7 @@ def dod_comparison_report_api():
                 'TARIF': {'$cond': [{'$ne': ['$customer_info.TARIF', None]}, '$customer_info.TARIF', 'N/A']},
                 'MERK': {'$cond': [{'$ne': ['$customer_info.MERK', None]}, '$customer_info.MERK', 'N/A']},
                 'CYCLE': {'$cond': [{'$ne': ['$customer_info.BOOKWALK', None]}, '$customer_info.BOOKWALK', 'N/A']},
-                'AB_SUNTER': {'$cond': [{'$in': ['$customer_info.RAYON', ['34', '35']]}, 'AB SUNTER', 'LUAR AB SUNTER']}, 
+                'AB_SUNTER': {'$cond': [{'$in': ['$RAYON', ['34', '35']]}, 'AB SUNTER', 'LUAR AB SUNTER']}, 
                 'NOMINAL': {'$toDouble': {'$cond': [{'$ne': ['$NOMINAL', None]}, '$NOMINAL', 0]}},
                 'TRANSAKSI': 1
             }},
@@ -460,52 +460,3 @@ def dod_comparison_report_api():
     except Exception as e:
         print(f"Error saat membuat laporan DoD Comparison: {e}")
         return jsonify({"status": 'error', "message": f"Gagal mengambil laporan DoD: {e}"}), 500
-
-# API Distribution (Helper function _get_distribution_report didefinisikan di atas)
-@bp_collection.route("/api/distribution/rayon_report")
-@login_required
-def rayon_distribution_report():
-    db_status = get_db_status()
-    if db_status['status'] == 'error': return jsonify({"message": db_status['message']}), 500
-    collection_mc = db_status['collections']['mc']
-    group_fields = ["RAYON"]
-    results, latest_month = _get_distribution_report(group_fields=group_fields, collection_mc=collection_mc)
-    schema = _generate_distribution_schema(group_fields)
-    for item in results: item['chart_label'] = item.get("RAYON", "N/A"); item['chart_data_piutang'] = round(item['total_piutang'], 2)
-    return jsonify({"data": results, "schema": schema, "title": f"Distribusi Pelanggan per Rayon", "subtitle": f"Data Piutang & Kubikasi per Bulan Tagihan Terbaru: {latest_month}"})
-
-@bp_collection.route("/api/distribution/pcez_report")
-@login_required
-def pcez_distribution_report():
-    db_status = get_db_status()
-    if db_status['status'] == 'error': return jsonify({"message": db_status['message']}), 500
-    collection_mc = db_status['collections']['mc']
-    group_fields = ["PCEZ"]
-    results, latest_month = _get_distribution_report(group_fields=group_fields, collection_mc=collection_mc)
-    schema = _generate_distribution_schema(group_fields)
-    for item in results: item['chart_label'] = item.get("PCEZ", "N/A"); item['chart_data_piutang'] = round(item['total_piutang'], 2)
-    return jsonify({"data": results, "schema": schema, "title": f"Distribusi Pelanggan per PCEZ", "subtitle": f"Data Piutang & Kubikasi per Bulan Tagihan Terbaru: {latest_month}"})
-
-@bp_collection.route("/api/distribution/rayon_tarif_report")
-@login_required
-def rayon_tarif_distribution_report():
-    db_status = get_db_status()
-    if db_status['status'] == 'error': return jsonify({"message": db_status['message']}), 500
-    collection_mc = db_status['collections']['mc']
-    group_fields = ["RAYON", "TARIF"]
-    results, latest_month = _get_distribution_report(group_fields=group_fields, collection_mc=collection_mc)
-    schema = _generate_distribution_schema(group_fields)
-    for item in results: item['chart_label'] = f"{item.get('RAYON', 'N/A')} - {item.get('TARIF', 'N/A')}"; item['chart_data_piutang'] = round(item['total_piutang'], 2)
-    return jsonify({"data": results, "schema": schema, "title": f"Distribusi Pelanggan per Rayon / Tarif", "subtitle": f"Data Piutang & Kubikasi per Bulan Tagihan Terbaru: {latest_month}"})
-
-@bp_collection.route("/api/distribution/rayon_meter_report")
-@login_required
-def rayon_meter_distribution_report():
-    db_status = get_db_status()
-    if db_status['status'] == 'error': return jsonify({"message": db_status['message']}), 500
-    collection_mc = db_status['collections']['mc']
-    group_fields = ["RAYON", "JENIS_METER"]
-    results, latest_month = _get_distribution_report(group_fields=group_fields, collection_mc=collection_mc)
-    schema = _generate_distribution_schema(group_fields)
-    for item in results: item['chart_label'] = f"{item.get('RAYON', 'N/A')} - {item.get('JENIS_METER', 'N/A')}"; item['chart_data_piutang'] = round(item['total_piutang'], 2)
-    return jsonify({"data": results, "schema": schema, "title": f"Distribusi Pelanggan per Rayon / Jenis Meter", "subtitle": f"Data Piutang & Kubikasi per Bulan Tagihan Terbaru: {latest_month}"})
