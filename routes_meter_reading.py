@@ -1,22 +1,17 @@
-from flask import Blueprint, request, jsonify, render_template, url_for, flash, current_app, make_response
+from flask import Blueprint, request, jsonify, render_template, url_for, flash, redirect
 from flask_login import login_required, current_user
-from werkzeug.security import check_password_hash
 from functools import wraps
-from pymongo.errors import BulkWriteError
-import pandas as pd
-import io
-import re
-from datetime import datetime, timedelta
-from utils import get_db_status, _get_previous_month_year, _get_day_n_ago, _parse_zona_novak, _generate_distribution_schema, _get_sbrs_anomalies
+from utils import get_db_status, _get_previous_month_year, _get_day_n_ago, _generate_distribution_schema, _get_sbrs_anomalies
 
 # Definisikan Blueprint
 bp_meter_reading = Blueprint('bp_meter_reading', __name__, url_prefix='/meter_reading')
 
-# --- Middleware Dekorator untuk Cek Admin ---
+# --- Middleware Dekorator untuk Cek Admin (Wajib di Blueprint) ---
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated or not current_user.is_admin:
+            # Karena ini di Blueprint, redirect ke rute core index
             flash('Anda tidak memiliki izin (Admin) untuk mengakses halaman ini.', 'danger')
             return redirect(url_for('index'))
         return f(*args, **kwargs)
@@ -74,12 +69,15 @@ def anomaly_comprehensive_api():
     if db_status['status'] == 'error':
         return jsonify({"message": db_status['message']}), 500
         
-    collection_sbrs = db_status['collections']['sbrs']
-    collection_cid = db_status['collections']['cid']
+    collections = db_status['collections']
+    collection_sbrs = collections['sbrs']
+    collection_cid = collections['cid']
 
     try:
+        # Mengambil data anomali menggunakan helper function dari utils
         anomalies = _get_sbrs_anomalies(collection_sbrs, collection_cid)
         
+        # Mendefinisikan skema dinamis
         anomaly_schema = [
             {'key': 'NOMEN', 'label': 'No. Pelanggan', 'type': 'string', 'is_main_key': True},
             {'key': 'NAMA', 'label': 'Nama Pelanggan', 'type': 'string'},
@@ -97,6 +95,7 @@ def anomaly_comprehensive_api():
         
         for item in anomalies:
             item['chart_label'] = item['NOMEN']
+            # Menggunakan KUBIK_TERBARU sebagai metrik untuk chart (Top List)
             item['chart_data_piutang'] = item['KUBIK_TERBARU']
             
         return jsonify({
@@ -147,8 +146,12 @@ def volume_historis_api():
         historis_schema = [
             {'key': 'BULAN_TAGIHAN', 'label': 'Periode Tagihan', 'type': 'string', 'is_main_key': True},
             {'key': 'RAYON', 'label': 'Rayon', 'type': 'string'},
-            {'key': 'TotalKubikasi', 'label': 'Total Kubikasi (m³)', 'type': 'integer', 'unit': 'm³'},
+            {'key': 'TotalKubikasi', 'label': 'Total Kubikasi (m³)', 'type': 'integer', 'unit': 'm³', 'chart_key': 'TotalKubikasi'},
         ]
+        
+        # Tambahkan chart label
+        for item in results:
+            item['chart_label'] = f"R:{item['RAYON']} ({item['BULAN_TAGIHAN']})"
         
         return jsonify({
             'status': 'success',
@@ -161,7 +164,7 @@ def volume_historis_api():
         print(f"Error saat mengambil volume historis: {e}")
         return jsonify({"status": 'error', "message": f"Gagal mengambil laporan volume historis: {e}"}), 500
 
-# API Report: Distribusi Metode Baca (dipindahkan dari app.py)
+# API Report: Distribusi Metode Baca 
 @bp_meter_reading.route("/api/read_method_distribution")
 @login_required
 def read_method_distribution_report():
@@ -195,7 +198,7 @@ def read_method_distribution_report():
              
         read_method_schema = [
             {'key': 'READ_METHOD', 'label': 'Metode Baca', 'type': 'string', 'is_main_key': True},
-            {'key': 'total_nomen', 'label': 'Jumlah Pelanggan', 'type': 'integer', 'chart_key': 'chart_data_nomen'},
+            {'key': 'total_nomen', 'label': 'Jumlah Pelanggan', 'type': 'integer', 'chart_key': 'total_nomen'},
             {'key': 'persentase', 'label': 'Persentase Total', 'type': 'percent'},
         ]
         
@@ -209,7 +212,7 @@ def read_method_distribution_report():
             "schema": read_method_schema,
             "title": f"Distribusi Metode Pembacaan Meter",
             "subtitle": f"Berdasarkan {total_nomen} pelanggan terakhir di Master Data.",
-        })
+        }), 200
 
     except Exception as e:
         print(f"Error saat membuat laporan distribusi metode baca: {e}")
