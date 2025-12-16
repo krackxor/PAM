@@ -3,246 +3,163 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Akses Data Area Service AB Sunter Analytics</title>
+    <title>PAM Analytics - Login</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    
     <style>
-        /* --- VARIABLE & FONT (Sinkronisasi dengan base.html) --- */
         :root {
-            --primary-color: #007bff;
-            --secondary-color: #2c3e50; /* Biru tua untuk header/footer */
-            --bg-color: #f4f7f9;
+            --primary-color: #007bff; /* Blue */
+            --background-color: #f4f7f9; /* Light gray background */
             --card-bg: #ffffff;
-            --shadow-light: 0 1px 3px rgba(0, 0, 0, 0.08);
-            --shadow-medium: 0 4px 12px rgba(0, 0, 0, 0.15);
-            --shadow: 0 10px 30px rgba(0, 0, 0, 0.15); /* Shadow lebih kuat */
-            --border-radius: 8px; /* Menggunakan radius yang sama dengan base.html */
-        }
-        
-        /* --- ANIMASI KEYFRAMES --- */
-        @keyframes backgroundShift {
-            0% { background-position: 0% 50%; }
-            100% { background-position: 100% 50%; }
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(15px); }
-            to { opacity: 1; transform: translateY(0); }
+            --text-color: #343a40;
+            --shadow-medium: 0 4px 12px rgba(0,0,0,0.1);
+            --border-radius: 8px;
         }
 
         body {
-            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: #343a40;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background-color);
             display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             margin: 0;
-            overflow-x: hidden;
-            position: relative; 
-            background: linear-gradient(135deg, var(--bg-color) 0%, #e9ecef 100%);
-            animation: backgroundShift 30s infinite alternate; 
-        }
-        
-        /* --- HEADER & FOOTER FIXED --- */
-        header, footer {
-            width: 100%;
-            position: fixed;
-            z-index: 100;
-            padding: 10px 0;
-            color: white;
-            text-align: center;
-            transition: all 0.3s ease;
+            color: var(--text-color);
         }
 
-        header {
-            top: 0;
-            background-color: var(--secondary-color);
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-            font-size: 1.1em;
-            font-weight: 500;
-        }
-
-        footer {
-            bottom: 0;
-            background-color: var(--secondary-color);
-            font-size: 0.85em;
-            opacity: 0.8;
-        }
-
-        /* --- LOGIN CARD (Dinamis dan Responsif) --- */
         .login-container {
-            width: 90%; /* Lebih responsif di mobile */
+            width: 100%;
             max-width: 400px;
+            padding: 30px;
             background-color: var(--card-bg);
-            padding: 40px 30px; /* Kurangi padding horizontal */
             border-radius: var(--border-radius);
-            box-shadow: var(--shadow);
+            box-shadow: var(--shadow-medium);
             text-align: center;
-            z-index: 10;
-            /* Tambah Animasi Fade-In untuk card */
-            animation: fadeIn 0.8s ease-out;
-            transition: all 0.3s ease;
-        }
-        
-        .login-container:hover {
-            transform: scale(1.005); /* Sedikit efek angkat saat hover */
-            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.2);
         }
 
-        h2 {
-            color: var(--secondary-color);
-            margin-bottom: 30px;
+        .login-header {
+            margin-bottom: 25px;
+        }
+
+        .login-header h2 {
+            color: var(--primary-color);
             font-weight: 700;
-            font-size: 1.8em;
+            margin: 5px 0 10px 0;
         }
         
-        .logo-text {
-            display: block;
-            font-size: 0.9em;
-            color: #6c757d;
-            margin-top: -20px;
-            margin-bottom: 30px;
+        .login-header i {
+            font-size: 2.5rem;
+            color: var(--primary-color);
         }
 
+        /* Form Styling */
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             text-align: left;
         }
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-            color: var(--secondary-color);
-        }
+
         .form-control {
             width: 100%;
-            padding: 12px;
+            padding: 10px;
             border: 1px solid #ced4da;
-            border-radius: 6px;
+            border-radius: var(--border-radius);
             box-sizing: border-box;
-            transition: all 0.3s;
-        }
-        .form-control:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-            outline: none;
-            background-color: #f8f9fa; /* Efek highlight saat fokus */
+            font-size: 1rem;
         }
 
-        /* --- BUTTON (Sinkronisasi dengan base.html) --- */
         .btn-primary {
             background-color: var(--primary-color);
             color: white;
+            padding: 10px 15px;
             border: none;
-            padding: 14px;
-            border-radius: 6px;
+            border-radius: var(--border-radius);
             cursor: pointer;
             width: 100%;
-            font-size: 1.1em;
-            font-weight: 700;
-            transition: all 0.3s ease; /* Transisi lebih halus */
-            box-shadow: 0 4px 10px rgba(0, 123, 255, 0.3);
-            position: relative;
-        }
-        .btn-primary:hover {
-            background-color: #0056b3;
-            transform: translateY(-2px); /* Efek angkat lebih jelas */
-            box-shadow: 0 8px 20px rgba(0, 123, 255, 0.4);
-        }
-        .btn-primary:active {
-            transform: translateY(1px); /* Efek tekan */
-            box-shadow: 0 2px 5px rgba(0, 123, 255, 0.2);
-        }
-        
-        /* Flash Messages (Dinamis) */
-        .alert {
-            padding: 10px;
-            margin-bottom: 15px;
-            border-radius: 4px;
-            text-align: left;
             font-weight: 600;
-            opacity: 0; /* Mulai tersembunyi */
-            animation: fadeIn 0.5s ease-out 0.2s forwards;
-        }
-        .alert-danger {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+            transition: background-color 0.2s;
         }
 
-        /* --- MEDIA QUERY UNTUK LAYAR HP --- */
-        @media (max-width: 480px) {
-            .login-container {
-                width: 95%; /* Ambil lebih banyak lebar layar */
-                padding: 30px 20px; /* Kurangi padding di HP */
-                box-shadow: none; /* Hapus shadow di HP agar lebih 'native app' */
-            }
-            header {
-                font-size: 1.0em;
-            }
-            footer {
-                font-size: 0.8em;
-            }
-            h2 {
-                font-size: 1.6em;
-            }
+        .btn-primary:hover {
+            background-color: #0056b3;
         }
+        
+        /* Flash Messages (Alerts) */
+        .flash-messages {
+            margin-bottom: 15px;
+        }
+        
+        .alert {
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+
+        .alert.info {
+            background-color: #cff4fc;
+            color: #055160;
+        }
+
+        .alert.danger {
+            background-color: #f8d7da;
+            color: #842029;
+        }
+        
+        /* Label for WTForms */
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+            color: var(--secondary-color);
+        }
+        
     </style>
 </head>
 <body>
-    
-    <header>
-        PAM Internal Analytics - Service AB Sunter
-    </header>
-
     <div class="login-container">
-        <h2>Selamat Datang</h2>
-        <span class="logo-text">Area Service AB Sunter Analytics - Silakan Masuk</span>
         
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+        <div class="login-header">
+            <i class="fas fa-lock"></i>
+            <h2>PAM Analytics Login</h2>
+            <small class="text-muted">Akses Sistem Monitoring dan Analisis</small>
+        </div>
+
+        <div class="flash-messages">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert {{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
 
         <form method="POST" action="{{ url_for('login') }}">
+            <!-- Menggunakan form.hidden_tag() dari Flask-WTF untuk CSRF token -->
             {{ form.hidden_tag() }} 
 
             <div class="form-group">
-                {{ form.username.label(class="form-label") }}
+                <!-- Username Field -->
+                {{ form.username.label }}
                 {{ form.username(class="form-control", placeholder="Masukkan Username Anda") }}
             </div>
 
             <div class="form-group">
-                {{ form.password.label(class="form-label") }}
-                {{ form.password(class="form-control", placeholder="Masukkan Kata Sandi Anda") }}
+                <!-- Password Field -->
+                {{ form.password.label }}
+                {{ form.password(class="form-control", placeholder="Masukkan Password Anda") }}
             </div>
 
-            {{ form.submit(class="btn-primary") }} 
+            <div class="form-group">
+                <!-- Submit Button -->
+                <button type="submit" class="btn-primary">
+                    {{ form.submit.label.text }} <i class="fas fa-sign-in-alt"></i>
+                </button>
+            </div>
         </form>
-    </div>
 
-    <footer>
-        &copy; 2024 Khirul Anwar. All rights reserved.
-    </footer>
-    
-    <script>
-        // Fungsi sederhana untuk mendapatkan tahun saat ini (tetap dipertahankan)
-        function updateFooterYear() {
-            const footer = document.querySelector('footer');
-            if (footer) {
-                const currentYear = new Date().getFullYear();
-                // Mengganti placeholder tahun (2024) di footer dengan tahun aktual
-                footer.innerHTML = `&copy; ${currentYear} Khoirul Anwar. All rights reserved.`; 
-            }
-        }
-        document.addEventListener('DOMContentLoaded', () => {
-             updateFooterYear();
-             // Fokuskan input pertama saat halaman dimuat
-             document.getElementById('username').focus(); 
-        });
-    </script>
+    </div>
 </body>
 </html>
