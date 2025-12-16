@@ -174,7 +174,7 @@
                 <div class="card-body">
                     ${sbrsData.length > 0 ? `
                         <div class="table-responsive">
-                            <table class="table table-sm table-striped">
+                            <table class="table table-sm table-striped" style="font-size: 0.8em;">
                                 <thead>
                                     <tr>
                                         <th>Tgl Baca</th>
@@ -212,7 +212,7 @@
                     ${mcData.length > 0 ? `
                         <p class="text-info font-weight-bold">Total Piutang Aktif (termasuk bulan berjalan): ${formatCurrency(mcData.reduce((sum, item) => sum + (item.NOMINAL || 0), 0))}</p>
                         <div class="table-responsive">
-                            <table class="table table-sm table-striped">
+                            <table class="table table-sm table-striped" style="font-size: 0.8em;">
                                 <thead>
                                     <tr>
                                         <th>Bulan Tagihan</th>
@@ -249,7 +249,7 @@
                     ${ardebtData.length > 0 ? `
                         <p class="text-warning font-weight-bold">Total Tunggakan: ${formatCurrency(ardebtData.reduce((sum, item) => sum + (item.JUMLAH || 0), 0))}</p>
                         <div class="table-responsive">
-                            <table class="table table-sm table-striped">
+                            <table class="table table-sm table-striped" style="font-size: 0.8em;">
                                 <thead>
                                     <tr>
                                         <th>Periode Bill</th>
