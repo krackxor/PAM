@@ -1846,7 +1846,7 @@ def collection_monitoring_api():
                  'NOMINAL': 1,
                  'NOMEN': 1,
                  # Final CLEAN_PCEZ logic using $cond
-                 'CLEAN_PCEZ': {
+                 'PCEZ': {
                      '$cond': {
                          'if': { '$and': [{'$ne': ['$CID_PCEZ', 'N/A']}, {'$ne': ['$CID_PCEZ', '']}] },
                          'then': '$CID_PCEZ',
@@ -1860,7 +1860,7 @@ def collection_monitoring_api():
                      }
                  },
                  # Final CLEAN_RAYON logic using $cond
-                 'CLEAN_RAYON': {
+                 'RAYON': {
                      '$cond': {
                          'if': { '$and': [{'$ne': ['$CID_RAYON', 'N/A']}, {'$ne': ['$CID_RAYON', '']}] },
                          'then': '$CID_RAYON',
@@ -1875,9 +1875,9 @@ def collection_monitoring_api():
                  }
             }},
             # Filter hanya yang Rayon 34 dan 35
-            {'$match': {'CLEAN_RAYON': {'$in': ['34', '35']}}},
+            {'$match': {'RAYON': {'$in': ['34', '35']}}},
             {'$group': {
-                '_id': {'date': '$TGL_BAYAR', 'rayon': '$CLEAN_RAYON', 'pcez': '$CLEAN_PCEZ'}, # Tambahkan PCEZ ke grouping key
+                '_id': {'date': '$TGL_BAYAR', 'rayon': '$RAYON', 'pcez': '$PCEZ'}, # Tambahkan PCEZ ke grouping key
                 'DailyNominal': {'$sum': '$NOMINAL'},
                 'DailyCustCount': {'$addToSet': '$NOMEN'}
             }},
@@ -2314,7 +2314,9 @@ def _aggregate_top_debt(collection_mc, collection_ardebt, collection_cid):
     
     # Pre-fetch semua data CID terbaru (untuk JOIN cepat)
     cid_data_map = {doc['NOMEN']: doc for doc in collection_cid.aggregate([
-        {'$sort': {'NOMEN': 1, 'TANGGAL_UPLOAD_CID', -1}},
+        # 🚨 PERBAIKAN SINTAKSIS KRITIS DI BARIS 2317
+        {'$sort': {'NOMEN': 1, 'TANGGAL_UPLOAD_CID': -1}},
+        # END PERBAIKAN
         {'$group': {
             '_id': '$NOMEN',
             'NAMA': {'$first': '$NAMA'},
@@ -2546,7 +2548,7 @@ def basic_volume_report_api():
         total_row = pd.Series(pivot_kubik.sum(axis=0), name='TOTAL')
         pivot_kubik = pd.concat([pivot_kubik, total_row.to_frame().T])
         
-        pivot_kubik = pivot_kubik.reset_index().rename(columns={'index': 'RAYON'})
+        pivot_kubik = pivot_kub.reset_index().rename(columns={'index': 'RAYON'})
 
         return jsonify({
             'status': 'success',
@@ -3394,7 +3396,7 @@ def dashboard_summary_api():
         # 7. TOP 5 RAYON DENGAN PIUTANG TERTINGGI (Bulan Tagihan Terbaru)
         pipeline_top_rayon = [
             # FIX: Hanya ambil NOMINAL > 0
-            {'$match': {'BULAN_TAGIHAN': latest_mc_month, 'NOMINAL': {'$gt': 0}}},
+            {'$match': {'BULAN_TAGIHAN': latest_mc_month, 'NOMINAL': {'$gt': 0}}} if latest_mc_month else {'$match': {'NOMINAL': {'$gt': 0}}},
             {'$group': {
                 '_id': '$RAYON',
                 'total_piutang': {'$sum': {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
@@ -3663,7 +3665,7 @@ def export_anomalies_data():
             return jsonify({"message": "Tidak ada data anomali untuk diekspor."}), 404
             
         df_anomalies = pd.DataFrame(all_anomalies)
-        
+            
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df_anomalies.to_excel(writer, sheet_name='Anomali Pemakaian Air', index=False)
