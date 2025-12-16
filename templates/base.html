@@ -1,403 +1,183 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PAM - {% block title %}{% endblock %}</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-    
+    <title>PAM - Dashboard</title>
+    <!-- Include Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <!-- Include Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
     <style>
-        :root {
-            --primary-color: #007bff; /* Blue */
-            --secondary-color: #6c757d; /* Gray */
-            --background-color: #f4f7f9; /* Light background */
-            --background-color-light: #ffffff;
-            --text-color: #343a40; /* Dark text */
-            --shadow-light: 0 2px 4px rgba(0,0,0,0.05);
-            --shadow-medium: 0 4px 12px rgba(0,0,0,0.1);
-            --border-radius: 8px;
-            --card-bg: #ffffff;
-        }
-
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--background-color);
-            margin: 0;
-            color: var(--text-color);
-        }
-
-        .wrapper {
             display: flex;
             min-height: 100vh;
+            background-color: #f8f9fa;
         }
-
-        /* --- SIDEBAR --- */
-        .sidebar {
-            width: 250px;
-            background-color: var(--card-bg);
-            color: var(--text-color);
-            padding: 20px;
-            box-shadow: var(--shadow-medium);
-            position: fixed;
-            height: 100%;
+        #sidebar {
+            min-width: 250px;
+            max-width: 250px;
+            background: #2c3e50;
+            color: #ecf0f1;
+            transition: all 0.3s;
+            position: sticky;
+            top: 0;
+            height: 100vh;
             overflow-y: auto;
-            transition: transform 0.3s ease;
-            z-index: 1000;
         }
-        
-        .sidebar-header {
-            text-align: center;
-            padding-bottom: 20px;
-            margin-bottom: 20px;
-            border-bottom: 1px solid #e9ecef;
-        }
-
-        .sidebar-header h3 {
-            margin: 0;
-            color: var(--primary-color);
-            font-weight: 700;
-        }
-
-        .nav-link {
-            display: block;
-            padding: 10px 15px;
-            margin-bottom: 5px;
-            color: var(--text-color);
-            text-decoration: none;
-            border-radius: var(--border-radius);
-            transition: background-color 0.2s, color 0.2s;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-        }
-
-        .nav-link i {
-            width: 25px;
-            text-align: center;
-            margin-right: 10px;
-        }
-        
-        /* Gaya untuk Link Aktif */
-        .nav-link.active, .nav-link:hover {
-            background-color: var(--primary-color);
-            color: var(--background-color-light);
-            font-weight: 600;
-        }
-
-        /* Gaya Submenu */
-        .submenu-container {
-            margin-left: 10px;
-            padding-left: 10px;
-            border-left: 2px solid #e9ecef;
-            display: none; /* Default hidden */
-        }
-        
-        .nav-link.expanded + .submenu-container {
-            display: block;
-        }
-        
-        .submenu-container a {
-            padding: 8px 15px 8px 35px;
-            font-size: 13px;
-        }
-
-        /* --- CONTENT --- */
-        .content {
-            flex-grow: 1;
+        #sidebar .sidebar-header {
             padding: 20px;
-            margin-left: 250px; /* Offset for sidebar */
-            transition: margin-left 0.3s ease;
+            background: #1c2a35;
+            text-align: center;
         }
-
-        /* --- FLASH MESSAGES --- */
-        .flash-messages {
+        #sidebar ul.components {
+            padding: 20px 0;
+        }
+        #sidebar ul li a {
+            padding: 10px;
+            font-size: 1.1em;
+            display: block;
+            color: #ecf0f1;
+            transition: 0.3s;
+        }
+        #sidebar ul li a:hover {
+            color: #2c3e50;
+            background: #ecf0f1;
+            text-decoration: none;
+        }
+        #content {
+            width: 100%;
+            padding: 20px;
+            min-height: 100vh;
+            transition: all 0.3s;
+        }
+        .navbar {
             margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,.08);
+            border-radius: 8px;
         }
-
-        .alert {
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,.1);
+        }
+        /* Custom styles for charts/reports */
+        .chart-container {
+            position: relative;
+            height: 400px;
+            width: 100%;
+        }
+        .report-summary-box {
             padding: 15px;
-            margin-bottom: 1rem;
-            border: 1px solid transparent;
-            border-radius: var(--border-radius);
-            font-weight: 600;
-        }
-
-        .alert.success {
-            color: #0f5132;
-            background-color: #d1e7dd;
-            border-color: #badbcc;
-        }
-
-        .alert.danger {
-            color: #842029;
-            background-color: #f8d7da;
-            border-color: #f5c2c7;
-        }
-        
-        .alert.info {
-            color: #055160;
-            background-color: #cff4fc;
-            border-color: #b6effb;
-        }
-
-        /* --- Mobile Toggle --- */
-        .sidebar-toggle {
-            position: fixed;
-            top: 15px;
-            left: 15px;
-            z-index: 1001;
-            display: none; 
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow-medium);
-        }
-
-        @media (max-width: 768px) {
-            .sidebar {
-                transform: translateX(-100%);
-            }
-            .sidebar.active {
-                transform: translateX(0);
-            }
-            .sidebar-toggle {
-                display: block;
-            }
-            .content {
-                margin-left: 0;
-            }
+            margin-bottom: 20px;
+            border-left: 5px solid #3498db;
+            background-color: #f4f9fd;
+            border-radius: 5px;
         }
     </style>
-    {% block custom_styles %}{% endblock %}
 </head>
 <body>
-    <div class="wrapper">
-        <button class="sidebar-toggle" onclick="toggleSidebar()">
-            <i class="fas fa-bars"></i>
-        </button>
 
-        <!-- Sidebar / Menu Utama -->
-        <nav id="sidebar" class="sidebar">
-            <div class="sidebar-header">
-                <h3>PAM Analytics</h3>
-                <small>{{ current_user.username }} ({{ 'Admin' if current_user.is_admin else 'User' }})</small>
+    <nav id="sidebar">
+        <div class="sidebar-header">
+            <h3>PAM Analytic</h3>
+        </div>
+
+        <ul class="list-unstyled components">
+            <li>
+                <a href="{{ url_for('index') }}"><i class="fas fa-home"></i> Home</a>
+            </li>
+            <li>
+                <a href="{{ url_for('analytics_dashboard') }}"><i class="fas fa-chart-line"></i> Dashboard Analitik</a>
+            </li>
+            
+            <p class="text-white px-3 mb-1 mt-3 small font-weight-bold">Piutang & Koleksi</p>
+            <li>
+                <a href="{{ url_for('bp_collection.collection_laporan_view') }}"><i class="fas fa-file-invoice-dollar"></i> Laporan Piutang</a>
+            </li>
+            <li>
+                <a href="{{ url_for('bp_collection.collection_analisis_view') }}"><i class="fas fa-chart-bar"></i> Distribusi & MoM</a>
+            </li>
+            <li>
+                <a href="{{ url_for('bp_collection.collection_top_view') }}"><i class="fas fa-sort-amount-up-alt"></i> Top List Piutang</a>
+            </li>
+            <li>
+                <a href="{{ url_for('bp_collection.collection_riwayat_view') }}"><i class="fas fa-history"></i> Riwayat MoM</a>
+            </li>
+            <li>
+                <a href="{{ url_for('bp_collection.analysis_dod_comparison') }}"><i class="fas fa-exchange-alt"></i> Koleksi DoD</a>
+            </li>
+            
+            <p class="text-white px-3 mb-1 mt-3 small font-weight-bold">Baca Meter & Anomali</p>
+            <li>
+                <a href="{{ url_for('bp_meter_reading.meter_reading_report_view') }}"><i class="fas fa-tachometer-alt"></i> Laporan Baca Meter</a>
+            </li>
+            <li>
+                <a href="{{ url_for('bp_meter_reading.meter_reading_analysis_view') }}"><i class="fas fa-cogs"></i> Analisis Anomali</a>
+            </li>
+
+            {% if current_user.is_admin %}
+            <p class="text-white px-3 mb-1 mt-3 small font-weight-bold">Admin</p>
+            <li>
+                <!-- FIX: Endpoint 'upload_admin_unified' sudah didefinisikan di app.py -->
+                <a href="{{ url_for('upload_admin_unified') }}" class="nav-link"><i class="fas fa-cloud-upload-alt"></i> Upload Data</a>
+            </li>
+            {% endif %}
+
+        </ul>
+    </nav>
+
+    <div id="content">
+        <nav class="navbar navbar-expand-lg navbar-light bg-light">
+            <div class="container-fluid">
+                <button type="button" id="sidebarCollapse" class="btn btn-info">
+                    <i class="fas fa-align-left"></i>
+                    <span>Toggle Sidebar</span>
+                </button>
+                <div class="d-flex align-items-center">
+                    {% if current_user.is_authenticated %}
+                        <span class="navbar-text mr-3">
+                            Selamat datang, **{{ current_user.username }}** ({% if current_user.is_admin %}Admin{% else %}User{% endif %})
+                        </span>
+                        <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-danger">
+                            <i class="fas fa-sign-out-alt"></i> Keluar
+                        </a>
+                    {% else %}
+                         <a href="{{ url_for('login') }}" class="btn btn-sm btn-outline-primary">Masuk</a>
+                    {% endif %}
+                </div>
             </div>
-
-            <ul class="list-unstyled components">
-                <li>
-                    <a href="{{ url_for('index') }}" class="nav-link">
-                        <i class="fas fa-search"></i> Pencarian Pelanggan
-                    </a>
-                </li>
-                
-                <li>
-                    <a href="{{ url_for('analytics_dashboard') }}" class="nav-link">
-                        <i class="fas fa-tachometer-alt"></i> Dashboard Analytics
-                    </a>
-                </li>
-
-                <!-- METER READING MENU (Konsisten) -->
-                <li>
-                    <a href="#meterReadingSubmenu" data-toggle="collapse" aria-expanded="false" class="nav-link dropdown-toggle" onclick="toggleSubmenu(event, 'meterReadingSubmenu')">
-                        <i class="fas fa-tint"></i> Pembacaan Meter (Meter Reading)
-                    </a>
-                    <ul class="submenu-container" id="meterReadingSubmenu">
-                        <li>
-                            <a href="{{ url_for('bp_meter_reading.meter_reading_laporan_view') }}" class="nav-link">
-                                <i class="fas fa-file-alt"></i> 1. Laporan Pembacaan Meter
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ url_for('bp_meter_reading.meter_reading_analisis_view') }}" class="nav-link">
-                                <i class="fas fa-chart-pie"></i> 2. Analisis Meter Reading
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ url_for('bp_meter_reading.meter_reading_top_view') }}" class="nav-link">
-                                <i class="fas fa-bug"></i> 3. Top List Anomali
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ url_for('bp_meter_reading.meter_reading_riwayat_view') }}" class="nav-link">
-                                <i class="fas fa-history"></i> 4. Riwayat Volume (Historis)
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-                
-                <!-- COLLECTION MENU (Konsisten) -->
-                <li>
-                    <a href="#collectionSubmenu" data-toggle="collapse" aria-expanded="false" class="nav-link dropdown-toggle" onclick="toggleSubmenu(event, 'collectionSubmenu')">
-                        <i class="fas fa-coins"></i> Piutang & Koleksi (Collection)
-                    </a>
-                    <ul class="submenu-container" id="collectionSubmenu">
-                        <li>
-                            <a href="{{ url_for('bp_collection.collection_laporan_view') }}" class="nav-link">
-                                <i class="fas fa-file-invoice-dollar"></i> 1. Laporan Piutang & Koleksi
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ url_for('bp_collection.collection_analisis_view') }}" class="nav-link">
-                                <i class="fas fa-chart-bar"></i> 2. Analisis Piutang & Koleksi
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ url_for('bp_collection.collection_top_view') }}" class="nav-link">
-                                <i class="fas fa-trophy"></i> 3. Top List Piutang
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ url_for('bp_collection.collection_riwayat_view') }}" class="nav-link">
-                                <i class="fas fa-calendar-alt"></i> 4. Riwayat Piutang (MoM)
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ url_for('bp_collection.analysis_dod_comparison') }}" class="nav-link">
-                                <i class="fas fa-exchange-alt"></i> 5. Perbandingan Koleksi (DoD)
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-                
-                {% if current_user.is_admin %}
-                <li>
-                    <a href="{{ url_for('upload_admin_unified') }}" class="nav-link">
-                        <i class="fas fa-upload"></i> Admin Upload Data
-                    </a>
-                </li>
-                {% endif %}
-                
-                <li>
-                    <a href="{{ url_for('logout') }}" class="nav-link" style="margin-top: 50px;">
-                        <i class="fas fa-sign-out-alt"></i> Logout
-                    </a>
-                </li>
-            </ul>
         </nav>
 
-        <!-- Konten Utama -->
-        <div id="content" class="content">
-            <div class="flash-messages">
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        {% for category, message in messages %}
-                            <div class="alert {{ category }}">{{ message }}</div>
-                        {% endfor %}
-                    {% endif %}
-                {% endwith %}
-            </div>
-
-            {% block content %}{% endblock %}
+        <!-- START: Flash Message Block for displaying Python errors or Flask messages -->
+        <div class="container-fluid">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}" role="alert">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
         </div>
+        <!-- END: Flash Message Block -->
+
+        {% block content %}{% endblock %}
     </div>
 
+    <!-- Include Bootstrap JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    
     <script>
-        // Fungsi untuk menangani link aktif
-        function setActiveLink() {
-            const currentPath = window.location.pathname;
-            document.querySelectorAll('.nav-link').forEach(link => {
-                // Hapus kelas aktif dari semua link
-                link.classList.remove('active');
-                
-                if (link.href && link.pathname === currentPath) {
-                    link.classList.add('active');
-                    
-                    // Buka submenu jika link aktif adalah bagian dari submenu
-                    let submenu = link.closest('.submenu-container');
-                    if (submenu) {
-                        let parentLink = submenu.previousElementSibling;
-                        if (parentLink && parentLink.classList.contains('dropdown-toggle')) {
-                            parentLink.classList.add('active', 'expanded');
-                            submenu.style.display = 'block';
-                        }
-                    }
-                }
+        $(document).ready(function () {
+            $('#sidebarCollapse').on('click', function () {
+                $('#sidebar').toggleClass('active');
             });
-        }
-        
-        // Fungsi toggle untuk menu utama (dropdown)
-        function toggleSubmenu(event, submenuId) {
-            event.preventDefault();
-            const submenu = document.getElementById(submenuId);
-            const parentLink = event.currentTarget;
-            
-            if (submenu.style.display === 'block') {
-                submenu.style.display = 'none';
-                parentLink.classList.remove('expanded');
-            } else {
-                // Tutup semua submenu lain kecuali yang ini
-                document.querySelectorAll('.submenu-container').forEach(sub => {
-                    if (sub.id !== submenuId) {
-                        sub.style.display = 'none';
-                        if(sub.previousElementSibling) sub.previousElementSibling.classList.remove('expanded');
-                    }
-                });
-                
-                // Buka submenu yang diminta
-                submenu.style.display = 'block';
-                parentLink.classList.add('expanded');
-            }
-        }
-
-        // Fungsi toggle untuk mobile
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const content = document.getElementById('content');
-            
-            if (sidebar.classList.contains('active')) {
-                sidebar.classList.remove('active');
-            } else {
-                sidebar.classList.add('active');
-            }
-        }
-
-        window.onload = setActiveLink;
-        
-        // Atur agar submenu Meter Reading dan Collection terbuka secara default jika sedang di dalamnya
-        document.addEventListener('DOMContentLoaded', () => {
-            setActiveLink(); // Panggil lagi untuk memastikan state yang benar
-
-            const currentPath = window.location.pathname;
-
-            // Logika untuk membuka Meter Reading Submenu
-            if (currentPath.startsWith('/meter_reading')) {
-                const link = document.querySelector('a[href="#meterReadingSubmenu"]');
-                const submenu = document.getElementById('meterReadingSubmenu');
-                if (link && submenu && submenu.style.display !== 'block') {
-                     // Hapus active/expanded dari menu Collection jika ada
-                    const collectionLink = document.querySelector('a[href="#collectionSubmenu"]');
-                    const collectionSub = document.getElementById('collectionSubmenu');
-                    if(collectionLink) collectionLink.classList.remove('expanded');
-                    if(collectionSub) collectionSub.style.display = 'none';
-
-                    // Buka Meter Reading
-                    link.classList.add('expanded');
-                    submenu.style.display = 'block';
-                }
-            }
-            
-            // Logika untuk membuka Collection Submenu
-            if (currentPath.startsWith('/collection') || currentPath.includes('/analysis/dod_comparison') || currentPath.includes('/analysis/mom_comparison')) {
-                 const link = document.querySelector('a[href="#collectionSubmenu"]');
-                const submenu = document.getElementById('collectionSubmenu');
-                if (link && submenu && submenu.style.display !== 'block') {
-                    
-                    // Hapus active/expanded dari menu Meter Reading jika ada
-                    const meterReadingLink = document.querySelector('a[href="#meterReadingSubmenu"]');
-                    const meterReadingSub = document.getElementById('meterReadingSubmenu');
-                    if(meterReadingLink) meterReadingLink.classList.remove('expanded');
-                    if(meterReadingSub) meterReadingSub.style.display = 'none';
-                    
-                    // Buka Collection
-                    link.classList.add('expanded');
-                    submenu.style.display = 'block';
-                }
-            }
         });
-
     </script>
+    
+    {% block scripts %}{% endblock %}
 </body>
 </html>
