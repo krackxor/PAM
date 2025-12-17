@@ -28,7 +28,6 @@ def init_db(app):
 
     try:
         client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=12000, socketTimeoutMS=90000, connectTimeoutMS=30000)
-        # client.admin.command('ping') # Optional check
         db = client[DB_NAME]
         
         # Inisialisasi Koleksi (Mapping)
@@ -244,7 +243,9 @@ def _generate_distribution_schema(group_fields):
 
 def _aggregate_category(collection, money_field, usage_field, period, date_field=None):
     """
-    Fungsi agregasi untuk dashboard Piutang, Tunggakan, dan Collection.
+    Fungsi agregasi yang diperbaiki untuk memastikan Konsistensi Data:
+    1. Menggunakan Unique NOMEN untuk semua perhitungan jumlah pelanggan.
+    2. Memprioritaskan data transaksi (MC/MB) daripada data master (CID).
     """
     if collection is None:
         return {'totals': {'count':0, 'total_usage':0, 'total_nominal':0}, 'largest': {}, 'charts': {}, 'lists': {}}
@@ -252,18 +253,22 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
     # 1. Setup Filter Periode
     match_stage = {}
     if period and date_field:
-        # Regex match untuk support format "MMYYYY" atau variasi string
         match_stage = {date_field: {'$regex': f"{period}"}} 
     
-    # 2. Base Totals
+    # 2. Base Totals (MENGGUNAKAN UNIQUE NOMEN)
     try:
         totals_pipeline = [
             {'$match': match_stage},
             {'$group': {
                 '_id': None,
-                'count': {'$sum': 1},
+                'unique_set': {'$addToSet': '$NOMEN'},
                 'total_usage': {'$sum': {'$toDouble': {'$ifNull': [f'${usage_field}', 0]}}},
                 'total_nominal': {'$sum': {'$toDouble': {'$ifNull': [f'${money_field}', 0]}}}
+            }},
+            {'$project': {
+                'count': {'$size': '$unique_set'},
+                'total_usage': 1,
+                'total_nominal': 1
             }}
         ]
         totals_res = list(collection.aggregate(totals_pipeline))
@@ -272,120 +277,53 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
         print(f"Error aggregating totals: {e}")
         base = {'count': 0, 'total_usage': 0, 'total_nominal': 0}
 
-    # 3. Largest Contributors (Rayon, PC, PCEZ)
-    def get_largest(group_candidates, lookup_cid=False, derive_pc_from_pcez=False):
+    # 3. Distribusi Logic (Smart Mapping & Consistency)
+    def get_distribution_smart(group_candidates, rayon_filter=None, lookup_cid=False, derive_pc_from_pcez=False):
         local_match = match_stage.copy()
+        if rayon_filter:
+            local_match['$or'] = [{'RAYON': rayon_filter}, {'KODERAYON': rayon_filter}]
+
         pipeline = [{'$match': local_match}]
 
-        # Add Lookup if needed
         prefix = ""
         if lookup_cid:
-            project_fields = {c: 1 for c in group_candidates}
-            if derive_pc_from_pcez:
-                project_fields['PCEZ'] = 1 
-            project_fields['_id'] = 0
-
             pipeline.extend([
                 {'$lookup': {
                     'from': 'CustomerData',
                     'localField': 'NOMEN',
                     'foreignField': 'NOMEN',
-                    'pipeline': [{'$project': project_fields}],
                     'as': 'cust_info'
                 }},
                 {'$unwind': {'path': '$cust_info', 'preserveNullAndEmptyArrays': True}}
             ])
             prefix = "$cust_info."
 
-        id_expression = {'$ifNull': []}
+        # C. Konstruksi Field Grouping: Prioritas MC/Transaksi Baru, lalu CID
+        id_candidates = []
         for f in group_candidates:
+            id_candidates.append(f"${f}") # Prioritas 1: Field di MC
             if lookup_cid:
-                id_expression['$ifNull'].append(f"{prefix}{f}")
-            id_expression['$ifNull'].append(f"${f}")
+                id_candidates.append(f"{prefix}{f}") # Prioritas 2: Field di CID
         
+        # Tambahan untuk PC dari PCEZ
         if derive_pc_from_pcez and lookup_cid:
-             id_expression['$ifNull'].append({ '$substr': [ f"{prefix}PCEZ", 0, 3 ] })
+             id_candidates.append({ '$substr': [ f"{prefix}PCEZ", 0, 3 ] })
 
-        id_expression['$ifNull'].append("N/A")
+        id_candidates.append("N/A")
 
+        # D. Grouping (Unique NOMEN Count & Nominal)
         pipeline.extend([
             {'$group': {
-                '_id': id_expression,
-                'total': {'$sum': {'$toDouble': {'$ifNull': [f'${money_field}', 0]}}}
-            }},
-            {'$sort': {'total': -1}},
-            {'$limit': 1}
-        ])
-
-        try:
-            res = list(collection.aggregate(pipeline))
-            return res[0] if res else {'_id': '-', 'total': 0}
-        except Exception as e:
-            print(f"Error largest: {e}")
-            return {'_id': '-', 'total': 0}
-
-    # Definisikan kolom kandidat
-    rayon_cols = ['RAYON', 'KODERAYON', 'RAYON_ZONA']
-    pc_cols = ['PC', 'KODEPC', 'PC_ZONA'] 
-    pcez_cols = ['PCEZ', 'KODEPCEZ', 'PCEZ_ZONA']
-
-    largest = {
-        'rayon': get_largest(rayon_cols),
-        'pc': get_largest(pc_cols, lookup_cid=True, derive_pc_from_pcez=True), 
-        'pcez': get_largest(pcez_cols, lookup_cid=True)
-    }
-
-    # 4. Breakdowns (PC, PCEZ, Tarif, Merek) - FIX: UNLIMITED ROWS
-    def get_distribution_smart(group_candidates, rayon_filter=None, lookup_cid=False, derive_pc_from_pcez=False):
-        # A. Filter Rayon
-        local_match = match_stage.copy()
-        if rayon_filter:
-            # Support nama field RAYON atau KODERAYON
-            local_match['$or'] = [{'RAYON': rayon_filter}, {'KODERAYON': rayon_filter}]
-
-        pipeline = [{'$match': local_match}]
-
-        # B. Lookup ke CustomerData
-        prefix = ""
-        if lookup_cid:
-            project_fields = {c: 1 for c in group_candidates}
-            if derive_pc_from_pcez:
-                project_fields['PCEZ'] = 1
-            project_fields['_id'] = 0
-
-            pipeline.extend([
-                {'$lookup': {
-                    'from': 'CustomerData',
-                    'localField': 'NOMEN',
-                    'foreignField': 'NOMEN',
-                    'pipeline': [{'$project': project_fields}], 
-                    'as': 'cust_info'
-                }},
-                {'$unwind': {'path': '$cust_info', 'preserveNullAndEmptyArrays': True}}
-            ])
-            prefix = "$cust_info." 
-
-        # C. Konstruksi Field Grouping
-        id_expression = {'$ifNull': []}
-        for f in group_candidates:
-            if lookup_cid:
-                id_expression['$ifNull'].append(f"{prefix}{f}")
-            id_expression['$ifNull'].append(f"${f}")
-        
-        if derive_pc_from_pcez and lookup_cid:
-             id_expression['$ifNull'].append({ '$substr': [ f"{prefix}PCEZ", 0, 3 ] })
-
-        id_expression['$ifNull'].append("N/A") 
-
-        # D. Grouping (Count & Nominal)
-        pipeline.extend([
-            {'$group': {
-                '_id': id_expression,
-                'val': {'$sum': 1},
+                '_id': {'$ifNull': id_candidates},
+                'unique_nomen': {'$addToSet': '$NOMEN'},
                 'nominal': {'$sum': {'$toDouble': {'$ifNull': [f'${money_field}', 0]}}}
             }},
-            {'$sort': {'nominal': -1}} # Sort by nominal tertinggi
-            # REMOVED LIMIT(10) to ensure total matches sum of table
+            {'$project': {
+                '_id': 1,
+                'val': {'$size': '$unique_nomen'},
+                'nominal': 1
+            }},
+            {'$sort': {'nominal': -1}}
         ])
 
         try:
@@ -394,39 +332,43 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
             print(f"Error distribution: {e}")
             return []
 
-    # Nama Kolom Kandidat
+    # Mapping Kolom Kandidat
     tarif_cols = ['TARIF', 'KODETARIF', 'GOLONGAN']
     merek_cols = ['MERK', 'KODEMEREK', 'MEREKMETER', 'METER_MAKE']
-    pcez_dist_cols = ['PCEZ', 'KODEPCEZ', 'PCEZ_ZONA']
-    pc_dist_cols = ['PC', 'KODEPC', 'PC_ZONA']
+    pcez_cols = ['PCEZ', 'KODEPCEZ', 'PCEZ_ZONA']
+    pc_cols = ['PC', 'KODEPC', 'PC_ZONA']
 
     breakdowns = {
-        # Distribusi PC 
-        'pc_all': get_distribution_smart(pc_dist_cols, lookup_cid=True, derive_pc_from_pcez=True),
-        'pc_34': get_distribution_smart(pc_dist_cols, '34', lookup_cid=True, derive_pc_from_pcez=True),
-        'pc_35': get_distribution_smart(pc_dist_cols, '35', lookup_cid=True, derive_pc_from_pcez=True),
+        'pc_all': get_distribution_smart(pc_cols, lookup_cid=True, derive_pc_from_pcez=True),
+        'pc_34': get_distribution_smart(pc_cols, '34', lookup_cid=True, derive_pc_from_pcez=True),
+        'pc_35': get_distribution_smart(pc_cols, '35', lookup_cid=True, derive_pc_from_pcez=True),
 
-        # Distribusi PCEZ
-        'pcez_all': get_distribution_smart(pcez_dist_cols, lookup_cid=True),
-        'pcez_34': get_distribution_smart(pcez_dist_cols, '34', lookup_cid=True),
-        'pcez_35': get_distribution_smart(pcez_dist_cols, '35', lookup_cid=True),
+        'pcez_all': get_distribution_smart(pcez_cols, lookup_cid=True),
+        'pcez_34': get_distribution_smart(pcez_cols, '34', lookup_cid=True),
+        'pcez_35': get_distribution_smart(pcez_cols, '35', lookup_cid=True),
 
-        # Distribusi Tarif (Langsung dari MC jika tersedia)
         'tarif_all': get_distribution_smart(tarif_cols),
         'tarif_34': get_distribution_smart(tarif_cols, '34'),
         'tarif_35': get_distribution_smart(tarif_cols, '35'),
         
-        # Distribusi Merek
         'merek_all': get_distribution_smart(merek_cols, lookup_cid=True),
         'merek_34': get_distribution_smart(merek_cols, '34', lookup_cid=True),
         'merek_35': get_distribution_smart(merek_cols, '35', lookup_cid=True),
     }
 
-    # 5. Top 500 Lists
+    # 4. Largest Contributors (Rayon, PC, PCEZ)
+    largest = {
+        'rayon': breakdowns['pc_all'][0] if breakdowns['pc_all'] else {'_id': '-', 'nominal': 0},
+        'pc': breakdowns['pc_all'][0] if breakdowns['pc_all'] else {'_id': '-', 'nominal': 0},
+        'pcez': breakdowns['pcez_all'][0] if breakdowns['pcez_all'] else {'_id': '-', 'nominal': 0}
+    }
+    for k in largest:
+        largest[k]['total'] = largest[k].get('nominal', 0)
+
+    # 5. Top 500 Lists (Opsional, dipertahankan logicnya)
     def get_top_500(rayon):
         match = match_stage.copy()
         match['$or'] = [{'RAYON': rayon}, {'KODERAYON': rayon}]
-        
         pipeline = [
             {'$match': match},
             {'$project': {
@@ -440,7 +382,6 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
                 'from': 'CustomerData',
                 'localField': 'NOMEN',
                 'foreignField': 'NOMEN',
-                'pipeline': [{'$project': {'NAMA': 1, '_id': 0}}],
                 'as': 'cust'
             }},
             {'$unwind': {'path': '$cust', 'preserveNullAndEmptyArrays': True}},
@@ -451,10 +392,9 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
                 '_id': 0
             }}
         ]
-        
         try:
             return list(collection.aggregate(pipeline))
-        except Exception:
+        except:
             return []
 
     top_lists = {
