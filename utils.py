@@ -278,7 +278,7 @@ def _generate_distribution_schema(group_fields):
     
     return schema
 
-# --- NEW: DASHBOARD STATISTICS FUNCTIONS (CORE LOGIC UNTUK DASHBOARD) ---
+# --- CORE DASHBOARD STATISTICS FUNCTIONS (DIPERBARUI) ---
 
 def _aggregate_category(collection, money_field, usage_field, period, date_field=None):
     """
@@ -312,11 +312,12 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
 
     # 3. Largest Contributors (Rayon, PC, PCEZ)
     def get_largest(group_field):
+        target_field = f'${group_field}'
         try:
             res = list(collection.aggregate([
                 {'$match': match_stage},
                 {'$group': {
-                    '_id': f'${group_field}',
+                    '_id': target_field,
                     'total': {'$sum': {'$toDouble': {'$ifNull': [f'${money_field}', 0]}}}
                 }},
                 {'$sort': {'total': -1}},
@@ -328,17 +329,15 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
 
     largest = {
         'rayon': get_largest('RAYON'),
-        'pc': get_largest('PC'),
+        'pc': get_largest('PC') if 'PC' in str(collection) else get_largest('PC_ZONA'),
         'pcez': get_largest('PCEZ')
     }
 
-    # 4. Breakdowns (Tarif & Merek) - SMART VERSION WITH LOOKUP
+    # 4. Breakdowns (Tarif & Merek) - SMART VERSION WITH LOOKUP & NOMINAL
     def get_distribution_smart(group_candidates, rayon_filter=None, lookup_cid=False):
         """
         Agregasi pintar yang bisa lookup ke CustomerData jika field tidak ada di collection utama.
-        group_candidates: list nama field yang mungkin (misal ['MERK', 'KODEMEREK'])
-        rayon_filter: '34', '35', atau None
-        lookup_cid: True jika perlu join ke CustomerData (untuk Merek/Nama)
+        Juga menghitung nominal untuk tabel rincian.
         """
         # A. Filter Rayon
         local_match = match_stage.copy()
