@@ -311,33 +311,61 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
         base = {'count': 0, 'total_usage': 0, 'total_nominal': 0}
 
     # 3. Largest Contributors (Rayon, PC, PCEZ)
-    def get_largest(group_field):
-        try:
-            res = list(collection.aggregate([
-                {'$match': match_stage},
-                {'$group': {
-                    '_id': f'${group_field}',
-                    'total': {'$sum': {'$toDouble': {'$ifNull': [f'${money_field}', 0]}}}
+    def get_largest(group_candidates, lookup_cid=False):
+        local_match = match_stage.copy()
+        pipeline = [{'$match': local_match}]
+
+        # Add Lookup if needed
+        prefix = ""
+        if lookup_cid:
+            pipeline.extend([
+                {'$lookup': {
+                    'from': 'CustomerData',
+                    'localField': 'NOMEN',
+                    'foreignField': 'NOMEN',
+                    'as': 'cust_info'
                 }},
-                {'$sort': {'total': -1}},
-                {'$limit': 1}
-            ]))
+                {'$unwind': {'path': '$cust_info', 'preserveNullAndEmptyArrays': True}}
+            ])
+            prefix = "$cust_info."
+
+        # Construct ID Expression (Fallback logic)
+        id_expression = {'$ifNull': []}
+        for f in group_candidates:
+            if lookup_cid:
+                id_expression['$ifNull'].append(f"{prefix}{f}")
+            id_expression['$ifNull'].append(f"${f}")
+        id_expression['$ifNull'].append("N/A")
+
+        pipeline.extend([
+            {'$group': {
+                '_id': id_expression,
+                'total': {'$sum': {'$toDouble': {'$ifNull': [f'${money_field}', 0]}}}
+            }},
+            {'$sort': {'total': -1}},
+            {'$limit': 1}
+        ])
+
+        try:
+            res = list(collection.aggregate(pipeline))
             return res[0] if res else {'_id': '-', 'total': 0}
-        except Exception:
+        except Exception as e:
+            print(f"Error largest: {e}")
             return {'_id': '-', 'total': 0}
 
+    # Definisikan kolom kandidat
+    rayon_cols = ['RAYON', 'KODERAYON', 'RAYON_ZONA']
+    pc_cols = ['PC', 'KODEPC', 'PC_ZONA']
+    pcez_cols = ['PCEZ', 'KODEPCEZ', 'PCEZ_ZONA']
+
     largest = {
-        'rayon': get_largest('RAYON'),
-        'pc': get_largest('PC'),
-        'pcez': get_largest('PCEZ')
+        'rayon': get_largest(rayon_cols),
+        'pc': get_largest(pc_cols),
+        'pcez': get_largest(pcez_cols, lookup_cid=True) # Aktifkan lookup untuk PCEZ jika tidak ada di MC
     }
 
     # 4. Breakdowns (PCEZ, Tarif, Merek) - SMART VERSION
     def get_distribution_smart(group_candidates, rayon_filter=None, lookup_cid=False):
-        """
-        Agregasi pintar yang bisa lookup ke CustomerData jika field tidak ada di collection utama.
-        Juga menghitung nominal untuk tabel rincian.
-        """
         # A. Filter Rayon
         local_match = match_stage.copy()
         if rayon_filter:
@@ -388,13 +416,13 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
     # Nama Kolom Kandidat
     tarif_cols = ['TARIF', 'KODETARIF', 'GOLONGAN']
     merek_cols = ['MERK', 'KODEMEREK', 'MEREKMETER', 'METER_MAKE']
-    pcez_cols  = ['PCEZ', 'KODEPCEZ', 'PCEZ_ZONA']
+    pcez_dist_cols = ['PCEZ', 'KODEPCEZ', 'PCEZ_ZONA']
 
     breakdowns = {
-        # Distribusi PCEZ
-        'pcez_all': get_distribution_smart(pcez_cols),
-        'pcez_34': get_distribution_smart(pcez_cols, '34'),
-        'pcez_35': get_distribution_smart(pcez_cols, '35'),
+        # Distribusi PCEZ (Aktifkan Lookup karena seringkali PCEZ ada di CID tapi tidak di MC)
+        'pcez_all': get_distribution_smart(pcez_dist_cols, lookup_cid=True),
+        'pcez_34': get_distribution_smart(pcez_dist_cols, '34', lookup_cid=True),
+        'pcez_35': get_distribution_smart(pcez_dist_cols, '35', lookup_cid=True),
 
         # Distribusi Tarif
         'tarif_all': get_distribution_smart(tarif_cols),
@@ -416,11 +444,13 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
             {'$match': match},
             {'$project': {
                 'NOMEN': 1, 
+                # Cek apakah nama ada di lokal
                 'NAMA_TEMP': {'$ifNull': ['$NAMA', '$NAMA_PEL']},
                 'money': {'$toDouble': {'$ifNull': [f'${money_field}', 0]}}
             }},
             {'$sort': {'money': -1}},
             {'$limit': 500},
+            # Lookup Nama dari CustomerData jika di lokal kosong/tidak lengkap
             {'$lookup': {
                 'from': 'CustomerData',
                 'localField': 'NOMEN',
@@ -430,6 +460,7 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
             {'$unwind': {'path': '$cust', 'preserveNullAndEmptyArrays': True}},
             {'$project': {
                 'NOMEN': 1,
+                # Prioritas: Nama Lokal -> Nama dari CID -> N/A
                 'NAMA': {'$ifNull': ['$NAMA_TEMP', '$cust.NAMA', 'N/A']},
                 money_field: '$money',
                 '_id': 0
@@ -457,6 +488,7 @@ def get_comprehensive_stats(period=None):
     """
     Mengambil statistik lengkap untuk Piutang (MC), Tunggakan (ARDEBT), dan Collection (MB).
     """
+    # Pastikan collections sudah terisi (init_db sudah dipanggil)
     if not collections:
         return {}
 
