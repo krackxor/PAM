@@ -50,7 +50,6 @@ def init_db(app):
         # MC (MasterCetak)
         collections['mc'].create_index([('NOMEN', 1), ('BULAN_TAGIHAN', -1)], name='idx_mc_nomen_hist')
         collections['mc'].create_index([('PERIODE', 1)], name='idx_mc_periode')
-        collections['mc'].create_index([('BULAN_TAGIHAN', 1)], name='idx_mc_bulan_tagihan')
         collections['mc'].create_index([('RAYON', 1), ('PCEZ', 1)], name='idx_mc_rayon_pcez') 
         collections['mc'].create_index([('KODERAYON', 1)], name='idx_mc_koderayon')
         collections['mc'].create_index([('STATUS', 1)], name='idx_mc_status')
@@ -235,10 +234,48 @@ def _get_sbrs_anomalies(collection_sbrs, collection_cid):
 
 def _generate_distribution_schema(group_fields):
     schema = []
+    
+    field_labels = {
+        'RAYON': 'Rayon', 
+        'PCEZ': 'PCEZ (Petugas Catat / Zona)', 
+        'TARIF': 'Tarif',
+        'JENIS_METER': 'Jenis Meter',
+        'READ_METHOD': 'Metode Baca',
+        'LKS_BAYAR': 'Lokasi Pembayaran',
+        'AB_SUNTER': 'AB Sunter',
+        'MERK': 'Merek Meter',
+        'CYCLE': 'Cycle/Bookwalk',
+    }
+    
     for field in group_fields:
-        schema.append({'key': field, 'label': field, 'type': 'string', 'is_main_key': True})
-    schema.append({'key': 'total_nomen', 'label': 'Jumlah Pelanggan', 'type': 'integer'})
-    schema.append({'key': 'total_piutang', 'label': 'Total Piutang', 'type': 'currency'})
+        schema.append({
+            'key': field,
+            'label': field_labels.get(field, field.upper()),
+            'type': 'string',
+            'is_main_key': True
+        })
+        
+    schema.extend([
+        {
+            'key': 'total_nomen',
+            'label': 'Jumlah Pelanggan',
+            'type': 'integer',
+            'chart_key': 'chart_data_nomen'
+        },
+        {
+            'key': 'total_piutang',
+            'label': 'Total Piutang (Rp)',
+            'type': 'currency',
+            'chart_key': 'chart_data_piutang'
+        },
+        {
+            'key': 'total_kubikasi',
+            'label': 'Total Kubikasi (m³)',
+            'type': 'integer',
+            'unit': 'm³'
+        }
+    ])
+    
     return schema
 
 # --- CORE DASHBOARD STATISTICS FUNCTIONS ---
