@@ -234,48 +234,10 @@ def _get_sbrs_anomalies(collection_sbrs, collection_cid):
 
 def _generate_distribution_schema(group_fields):
     schema = []
-    
-    field_labels = {
-        'RAYON': 'Rayon', 
-        'PCEZ': 'PCEZ (Petugas Catat / Zona)', 
-        'TARIF': 'Tarif',
-        'JENIS_METER': 'Jenis Meter',
-        'READ_METHOD': 'Metode Baca',
-        'LKS_BAYAR': 'Lokasi Pembayaran',
-        'AB_SUNTER': 'AB Sunter',
-        'MERK': 'Merek Meter',
-        'CYCLE': 'Cycle/Bookwalk',
-    }
-    
     for field in group_fields:
-        schema.append({
-            'key': field,
-            'label': field_labels.get(field, field.upper()),
-            'type': 'string',
-            'is_main_key': True
-        })
-        
-    schema.extend([
-        {
-            'key': 'total_nomen',
-            'label': 'Jumlah Pelanggan',
-            'type': 'integer',
-            'chart_key': 'chart_data_nomen'
-        },
-        {
-            'key': 'total_piutang',
-            'label': 'Total Piutang (Rp)',
-            'type': 'currency',
-            'chart_key': 'chart_data_piutang'
-        },
-        {
-            'key': 'total_kubikasi',
-            'label': 'Total Kubikasi (m³)',
-            'type': 'integer',
-            'unit': 'm³'
-        }
-    ])
-    
+        schema.append({'key': field, 'label': field, 'type': 'string', 'is_main_key': True})
+    schema.append({'key': 'total_nomen', 'label': 'Jml Pelanggan', 'type': 'integer'})
+    schema.append({'key': 'total_piutang', 'label': 'Total Piutang', 'type': 'currency'})
     return schema
 
 # --- CORE DASHBOARD STATISTICS FUNCTIONS ---
@@ -421,7 +383,7 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
     tarif_cols = ['TARIF', 'KODETARIF', 'GOLONGAN']
     merek_cols = ['MERK', 'KODEMEREK', 'MEREKMETER', 'METER_MAKE']
     pcez_dist_cols = ['PCEZ', 'KODEPCEZ', 'PCEZ_ZONA']
-    pc_dist_cols = ['PC', 'KODEPC', 'PC_ZONA']
+    pc_dist_cols = ['PC', 'KODEPC', 'PC_ZONA'] # Ditambahkan untuk PC
 
     breakdowns = {
         # Distribusi PC (BARU)
