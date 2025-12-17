@@ -28,7 +28,7 @@ def init_db(app):
 
     try:
         client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=12000, socketTimeoutMS=90000, connectTimeoutMS=30000)
-        # client.admin.command('ping') # Optional, can slow down startup if connection poor
+        # client.admin.command('ping') # Optional check
         db = client[DB_NAME]
         
         # Inisialisasi Koleksi (Mapping)
@@ -49,16 +49,16 @@ def init_db(app):
 
         # MC (MasterCetak)
         collections['mc'].create_index([('NOMEN', 1), ('BULAN_TAGIHAN', -1)], name='idx_mc_nomen_hist')
-        collections['mc'].create_index([('PERIODE', 1)], name='idx_mc_periode') # Added for dashboard
+        collections['mc'].create_index([('PERIODE', 1)], name='idx_mc_periode')
         collections['mc'].create_index([('RAYON', 1), ('PCEZ', 1)], name='idx_mc_rayon_pcez') 
-        collections['mc'].create_index([('KODERAYON', 1)], name='idx_mc_koderayon') # Alias handling
+        collections['mc'].create_index([('KODERAYON', 1)], name='idx_mc_koderayon')
         collections['mc'].create_index([('STATUS', 1)], name='idx_mc_status')
         collections['mc'].create_index([('TARIF', 1), ('KUBIK', 1), ('NOMINAL', 1)], name='idx_mc_tarif_volume')
 
         # MB (MasterBayar)
         collections['mb'].create_index([('NOTAGIHAN', 1), ('TGL_BAYAR', 1), ('NOMINAL', 1)], name='idx_mb_unique_transaction', unique=False)
         collections['mb'].create_index([('TGL_BAYAR', -1)], name='idx_mb_paydate_desc')
-        collections['mb'].create_index([('BULAN_REK', 1)], name='idx_mb_bulan_rek') # Added for dashboard
+        collections['mb'].create_index([('BULAN_REK', 1)], name='idx_mb_bulan_rek')
         collections['mb'].create_index([('NOMEN', 1)], name='idx_mb_nomen')
         collections['mb'].create_index([('RAYON', 1), ('PCEZ', 1), ('TGL_BAYAR', -1)], name='idx_mb_rayon_pcez_date')
 
@@ -72,7 +72,7 @@ def init_db(app):
         
         # ARDEBT (AccountReceivable)
         collections['ardebt'].create_index([('NOMEN', 1), ('PERIODE_BILL', -1), ('JUMLAH', 1)], name='idx_ardebt_nomen_hist')
-        collections['ardebt'].create_index([('RAYON', 1)], name='idx_ardebt_rayon') # Added for dashboard
+        collections['ardebt'].create_index([('RAYON', 1)], name='idx_ardebt_rayon')
         
         print("Koneksi MongoDB berhasil dan index dikonfigurasi!")
     except (ConnectionFailure, ServerSelectionTimeoutError) as e:
@@ -278,7 +278,7 @@ def _generate_distribution_schema(group_fields):
     
     return schema
 
-# --- NEW: DASHBOARD STATISTICS FUNCTIONS (DITAMBAHKAN UNTUK MELENGKAPI KODE ANDA) ---
+# --- NEW: DASHBOARD STATISTICS FUNCTIONS (CORE LOGIC UNTUK DASHBOARD) ---
 
 def _aggregate_category(collection, money_field, usage_field, period, date_field=None):
     """
@@ -287,13 +287,13 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
     if collection is None:
         return {'totals': {'count':0, 'total_usage':0, 'total_nominal':0}, 'largest': {}, 'charts': {}, 'lists': {}}
 
+    # 1. Setup Filter Periode
     match_stage = {}
     if period and date_field:
-        # Regex match untuk periode (misal: "202311" atau "112023")
-        # Asumsi format di DB konsisten dengan format period yang dikirim
+        # Regex match untuk support format "MMYYYY" atau variasi string
         match_stage = {date_field: {'$regex': f"{period}"}} 
     
-    # 1. Base Totals
+    # 2. Base Totals
     try:
         totals_pipeline = [
             {'$match': match_stage},
@@ -310,14 +310,13 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
         print(f"Error aggregating totals: {e}")
         base = {'count': 0, 'total_usage': 0, 'total_nominal': 0}
 
-    # 2. Largest Contributors (Rayon, PC, PCEZ)
+    # 3. Largest Contributors (Rayon, PC, PCEZ)
     def get_largest(group_field):
-        target_field = f'${group_field}'
         try:
             res = list(collection.aggregate([
                 {'$match': match_stage},
                 {'$group': {
-                    '_id': target_field,
+                    '_id': f'${group_field}',
                     'total': {'$sum': {'$toDouble': {'$ifNull': [f'${money_field}', 0]}}}
                 }},
                 {'$sort': {'total': -1}},
@@ -327,69 +326,116 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
         except Exception:
             return {'_id': '-', 'total': 0}
 
-    # Field yang digunakan
     largest = {
         'rayon': get_largest('RAYON'),
-        'pc': get_largest('PC') if 'PC' in str(collection) else get_largest('PC_ZONA'),
+        'pc': get_largest('PC'),
         'pcez': get_largest('PCEZ')
     }
 
-    # 3. Breakdowns (Tarif & Merek) dengan Safe Fallback
-    def get_distribution_safe(group_field_candidates, rayon_filter=None):
-        match = match_stage.copy()
+    # 4. Breakdowns (Tarif & Merek) - SMART VERSION WITH LOOKUP
+    def get_distribution_smart(group_candidates, rayon_filter=None, lookup_cid=False):
+        """
+        Agregasi pintar yang bisa lookup ke CustomerData jika field tidak ada di collection utama.
+        group_candidates: list nama field yang mungkin (misal ['MERK', 'KODEMEREK'])
+        rayon_filter: '34', '35', atau None
+        lookup_cid: True jika perlu join ke CustomerData (untuk Merek/Nama)
+        """
+        # A. Filter Rayon
+        local_match = match_stage.copy()
         if rayon_filter:
-            match['RAYON'] = rayon_filter # Filter rayon
-        
-        # Buat expression $ifNull: ["$FIELD1", "$FIELD2", ..., "N/A"]
-        # Ini akan mencoba field pertama, jika null coba kedua, dst.
-        if_null_expr = [f"${f}" for f in group_field_candidates]
-        if_null_expr.append("N/A")
-        
+            # Support nama field RAYON atau KODERAYON
+            local_match['$or'] = [{'RAYON': rayon_filter}, {'KODERAYON': rayon_filter}]
+
+        pipeline = [{'$match': local_match}]
+
+        # B. Lookup ke CustomerData (Penting untuk Merek yang tidak ada di MC/MB)
+        prefix = ""
+        if lookup_cid:
+            pipeline.extend([
+                {'$lookup': {
+                    'from': 'CustomerData',
+                    'localField': 'NOMEN',
+                    'foreignField': 'NOMEN',
+                    'as': 'cust_info'
+                }},
+                {'$unwind': {'path': '$cust_info', 'preserveNullAndEmptyArrays': True}}
+            ])
+            prefix = "$cust_info." # Mengarahkan ke field hasil lookup
+
+        # C. Konstruksi Field Grouping
+        # Coba field dari lookup dulu (jika ada), lalu field lokal
+        id_expression = {'$ifNull': []}
+        for f in group_candidates:
+            if lookup_cid:
+                id_expression['$ifNull'].append(f"{prefix}{f}")
+            id_expression['$ifNull'].append(f"${f}")
+        id_expression['$ifNull'].append("N/A") # Fallback terakhir
+
+        # D. Grouping (Count & Nominal)
+        pipeline.extend([
+            {'$group': {
+                '_id': id_expression,
+                'val': {'$sum': 1},
+                'nominal': {'$sum': {'$toDouble': {'$ifNull': [f'${money_field}', 0]}}}
+            }},
+            {'$sort': {'val': -1}},
+            {'$limit': 10}
+        ])
+
         try:
-            return list(collection.aggregate([
-                {'$match': match},
-                {'$group': {'_id': { '$ifNull': if_null_expr }, 'val': {'$sum': 1}}},
-                {'$sort': {'val': -1}},
-                {'$limit': 10}
-            ]))
-        except Exception:
+            return list(collection.aggregate(pipeline))
+        except Exception as e:
+            print(f"Error distribution: {e}")
             return []
 
-    # Daftar field kandidat untuk mengatasi perbedaan nama di DB
-    tarif_candidates = ['TARIF', 'KODETARIF', 'GOLONGAN']
-    merek_candidates = ['MERK', 'KODEMEREK', 'MEREKMETER', 'METER_MAKE']
+    # Konfigurasi Nama Kolom
+    tarif_cols = ['TARIF', 'KODETARIF', 'GOLONGAN']
+    merek_cols = ['MERK', 'KODEMEREK', 'MEREKMETER', 'METER_MAKE']
 
     breakdowns = {
-        'tarif_all': get_distribution_safe(tarif_candidates),
-        'tarif_34': get_distribution_safe(tarif_candidates, '34'),
-        'tarif_35': get_distribution_safe(tarif_candidates, '35'),
-        'merek_all': get_distribution_safe(merek_candidates),
-        'merek_34': get_distribution_safe(merek_candidates, '34'),
-        'merek_35': get_distribution_safe(merek_candidates, '35'),
+        'tarif_all': get_distribution_smart(tarif_cols),
+        'tarif_34': get_distribution_smart(tarif_cols, '34'),
+        'tarif_35': get_distribution_smart(tarif_cols, '35'),
+        # Merek aktifkan lookup=True karena biasanya data ini ada di CID
+        'merek_all': get_distribution_smart(merek_cols, lookup_cid=True),
+        'merek_34': get_distribution_smart(merek_cols, '34', lookup_cid=True),
+        'merek_35': get_distribution_smart(merek_cols, '35', lookup_cid=True),
     }
 
-    # 4. Top 500 Lists
+    # 5. Top 500 Lists - WITH NAME LOOKUP
     def get_top_500(rayon):
         match = match_stage.copy()
-        match['RAYON'] = rayon
+        match['$or'] = [{'RAYON': rayon}, {'KODERAYON': rayon}]
         
-        # Projection khusus
-        projection = {
-            'NOMEN': 1, 'NAMA': 1, '_id': 0,
-            money_field: 1
-        }
+        # Pipeline: Match -> Project (Siapkan data) -> Sort -> Limit -> Lookup (Join Nama)
+        pipeline = [
+            {'$match': match},
+            {'$project': {
+                'NOMEN': 1, 
+                # Cek apakah nama ada di lokal
+                'NAMA_TEMP': {'$ifNull': ['$NAMA', '$NAMA_PEL']},
+                'money': {'$toDouble': {'$ifNull': [f'${money_field}', 0]}}
+            }},
+            {'$sort': {'money': -1}},
+            {'$limit': 500},
+            # Lookup Nama dari CustomerData jika di lokal kosong/tidak lengkap
+            {'$lookup': {
+                'from': 'CustomerData',
+                'localField': 'NOMEN',
+                'foreignField': 'NOMEN',
+                'as': 'cust'
+            }},
+            {'$unwind': {'path': '$cust', 'preserveNullAndEmptyArrays': True}},
+            {'$project': {
+                'NOMEN': 1,
+                # Prioritas: Nama Lokal -> Nama dari CID -> N/A
+                'NAMA': {'$ifNull': ['$NAMA_TEMP', '$cust.NAMA', 'N/A']},
+                money_field: '$money',
+                '_id': 0
+            }}
+        ]
         
         try:
-            # Menggunakan $toDouble untuk sorting yang benar jika tipe data string
-            pipeline = [
-                {'$match': match},
-                {'$project': {
-                    'NOMEN': 1, 'NAMA': 1, 
-                    money_field: {'$toDouble': {'$ifNull': [f'${money_field}', 0]}}
-                }},
-                {'$sort': {money_field: -1}},
-                {'$limit': 500}
-            ]
             return list(collection.aggregate(pipeline))
         except Exception:
             return []
@@ -417,24 +463,24 @@ def get_comprehensive_stats(period=None):
     stats = {
         'piutang': _aggregate_category(
             collections.get('mc'), 
-            money_field="NOMINAL", # Sesuai header MC: NOMINAL
-            usage_field="KUBIK",   # Sesuai header MC: KUBIK
+            money_field="NOMINAL", 
+            usage_field="KUBIK",   
             period=period, 
-            date_field="BULAN_TAGIHAN" # Field MC: BULAN_TAGIHAN
+            date_field="BULAN_TAGIHAN" 
         ),
         'tunggakan': _aggregate_category(
             collections.get('ardebt'), 
             money_field="JUMLAH", 
-            usage_field="PEMAKAIAN", # Mungkin 0 di ARDEBT
-            period=None, # ARDEBT biasanya snapshot, tidak difilter periode
+            usage_field="PEMAKAIAN", 
+            period=None, # ARDEBT snapshot
             date_field=None 
         ),
         'collection': _aggregate_category(
             collections.get('mb'), 
             money_field="NOMINAL", 
-            usage_field="KUBIKBAYAR", # Sesuai header MB
+            usage_field="KUBIKBAYAR",
             period=period, 
-            date_field="BULAN_REK" # atau TGL_BAYAR.
+            date_field="BULAN_REK"
         )
     }
     return stats
