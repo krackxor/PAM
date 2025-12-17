@@ -158,13 +158,14 @@
                             <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
                                 <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-chart-pie mr-1"></i> Distribusi Tarif</h6>
                                 <div class="btn-group btn-group-sm btn-group-toggle" data-toggle="buttons">
-                                    <label class="btn btn-outline-secondary active" onclick="updateChartAndTable('tarifChart{{ category }}', 'tableTarif{{ category }}', {{ data.charts.tarif_all | tojson }})">
+                                    <!-- PERBAIKAN: Menggunakan tanda kutip tunggal (') pada onclick agar tidak bentrok dengan JSON -->
+                                    <label class="btn btn-outline-secondary active" onclick='updateChartAndTable("tarifChart{{ category }}", "tableTarif{{ category }}", {{ data.charts.tarif_all | tojson }})'>
                                         <input type="radio" checked> All
                                     </label>
-                                    <label class="btn btn-outline-secondary" onclick="updateChartAndTable('tarifChart{{ category }}', 'tableTarif{{ category }}', {{ data.charts.tarif_34 | tojson }})">
+                                    <label class="btn btn-outline-secondary" onclick='updateChartAndTable("tarifChart{{ category }}", "tableTarif{{ category }}", {{ data.charts.tarif_34 | tojson }})'>
                                         <input type="radio"> 34
                                     </label>
-                                    <label class="btn btn-outline-secondary" onclick="updateChartAndTable('tarifChart{{ category }}', 'tableTarif{{ category }}', {{ data.charts.tarif_35 | tojson }})">
+                                    <label class="btn btn-outline-secondary" onclick='updateChartAndTable("tarifChart{{ category }}", "tableTarif{{ category }}", {{ data.charts.tarif_35 | tojson }})'>
                                         <input type="radio"> 35
                                     </label>
                                 </div>
@@ -189,13 +190,14 @@
                             <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
                                 <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-chart-bar mr-1"></i> Distribusi Merek</h6>
                                 <div class="btn-group btn-group-sm btn-group-toggle" data-toggle="buttons">
-                                    <label class="btn btn-outline-secondary active" onclick="updateChartAndTable('merekChart{{ category }}', 'tableMerek{{ category }}', {{ data.charts.merek_all | tojson }})">
+                                    <!-- PERBAIKAN: Menggunakan tanda kutip tunggal (') pada onclick agar tidak bentrok dengan JSON -->
+                                    <label class="btn btn-outline-secondary active" onclick='updateChartAndTable("merekChart{{ category }}", "tableMerek{{ category }}", {{ data.charts.merek_all | tojson }})'>
                                         <input type="radio" checked> All
                                     </label>
-                                    <label class="btn btn-outline-secondary" onclick="updateChartAndTable('merekChart{{ category }}', 'tableMerek{{ category }}', {{ data.charts.merek_34 | tojson }})">
+                                    <label class="btn btn-outline-secondary" onclick='updateChartAndTable("merekChart{{ category }}", "tableMerek{{ category }}", {{ data.charts.merek_34 | tojson }})'>
                                         <input type="radio"> 34
                                     </label>
-                                    <label class="btn btn-outline-secondary" onclick="updateChartAndTable('merekChart{{ category }}', 'tableMerek{{ category }}', {{ data.charts.merek_35 | tojson }})">
+                                    <label class="btn btn-outline-secondary" onclick='updateChartAndTable("merekChart{{ category }}", "tableMerek{{ category }}", {{ data.charts.merek_35 | tojson }})'>
                                         <input type="radio"> 35
                                     </label>
                                 </div>
