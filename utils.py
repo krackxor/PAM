@@ -234,48 +234,10 @@ def _get_sbrs_anomalies(collection_sbrs, collection_cid):
 
 def _generate_distribution_schema(group_fields):
     schema = []
-    
-    field_labels = {
-        'RAYON': 'Rayon', 
-        'PCEZ': 'PCEZ (Petugas Catat / Zona)', 
-        'TARIF': 'Tarif',
-        'JENIS_METER': 'Jenis Meter',
-        'READ_METHOD': 'Metode Baca',
-        'LKS_BAYAR': 'Lokasi Pembayaran',
-        'AB_SUNTER': 'AB Sunter',
-        'MERK': 'Merek Meter',
-        'CYCLE': 'Cycle/Bookwalk',
-    }
-    
     for field in group_fields:
-        schema.append({
-            'key': field,
-            'label': field_labels.get(field, field.upper()),
-            'type': 'string',
-            'is_main_key': True
-        })
-        
-    schema.extend([
-        {
-            'key': 'total_nomen',
-            'label': 'Jumlah Pelanggan',
-            'type': 'integer',
-            'chart_key': 'chart_data_nomen'
-        },
-        {
-            'key': 'total_piutang',
-            'label': 'Total Piutang (Rp)',
-            'type': 'currency',
-            'chart_key': 'chart_data_piutang'
-        },
-        {
-            'key': 'total_kubikasi',
-            'label': 'Total Kubikasi (m³)',
-            'type': 'integer',
-            'unit': 'm³'
-        }
-    ])
-    
+        schema.append({'key': field, 'label': field, 'type': 'string', 'is_main_key': True})
+    schema.append({'key': 'total_nomen', 'label': 'Jml Pelanggan', 'type': 'integer'})
+    schema.append({'key': 'total_piutang', 'label': 'Total Piutang', 'type': 'currency'})
     return schema
 
 # --- CORE DASHBOARD STATISTICS FUNCTIONS ---
@@ -311,18 +273,25 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
         base = {'count': 0, 'total_usage': 0, 'total_nominal': 0}
 
     # 3. Largest Contributors (Rayon, PC, PCEZ)
-    def get_largest(group_candidates, lookup_cid=False):
+    def get_largest(group_candidates, lookup_cid=False, derive_pc_from_pcez=False):
         local_match = match_stage.copy()
         pipeline = [{'$match': local_match}]
 
         # Add Lookup if needed
         prefix = ""
         if lookup_cid:
+            # Optimasi: Hanya ambil field yang diperlukan
+            project_fields = {c: 1 for c in group_candidates}
+            if derive_pc_from_pcez:
+                project_fields['PCEZ'] = 1 # Pastikan PCEZ diambil jika mau derive PC
+            project_fields['_id'] = 0
+
             pipeline.extend([
                 {'$lookup': {
                     'from': 'CustomerData',
                     'localField': 'NOMEN',
                     'foreignField': 'NOMEN',
+                    'pipeline': [{'$project': project_fields}],
                     'as': 'cust_info'
                 }},
                 {'$unwind': {'path': '$cust_info', 'preserveNullAndEmptyArrays': True}}
@@ -335,6 +304,11 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
             if lookup_cid:
                 id_expression['$ifNull'].append(f"{prefix}{f}")
             id_expression['$ifNull'].append(f"${f}")
+        
+        # LOGIKA BARU: Jika PC 0/Null, ambil 3 digit kiri dari PCEZ di CustomerData
+        if derive_pc_from_pcez and lookup_cid:
+             id_expression['$ifNull'].append({ '$substr': [ f"{prefix}PCEZ", 0, 3 ] })
+
         id_expression['$ifNull'].append("N/A")
 
         pipeline.extend([
@@ -355,21 +329,18 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
 
     # Definisikan kolom kandidat
     rayon_cols = ['RAYON', 'KODERAYON', 'RAYON_ZONA']
-    pc_cols = ['PC', 'KODEPC', 'PC_ZONA']
+    pc_cols = ['PC', 'KODEPC', 'PC_ZONA'] # PC kandidat
     pcez_cols = ['PCEZ', 'KODEPCEZ', 'PCEZ_ZONA']
 
     largest = {
         'rayon': get_largest(rayon_cols),
-        'pc': get_largest(pc_cols, lookup_cid=True), # Aktifkan lookup untuk PC juga jika di MC kosong
-        'pcez': get_largest(pcez_cols, lookup_cid=True) # Aktifkan lookup untuk PCEZ jika tidak ada di MC
+        # Aktifkan derive_pc_from_pcez=True untuk PC
+        'pc': get_largest(pc_cols, lookup_cid=True, derive_pc_from_pcez=True), 
+        'pcez': get_largest(pcez_cols, lookup_cid=True)
     }
 
     # 4. Breakdowns (PC, PCEZ, Tarif, Merek) - SMART VERSION
-    def get_distribution_smart(group_candidates, rayon_filter=None, lookup_cid=False):
-        """
-        Agregasi pintar yang bisa lookup ke CustomerData jika field tidak ada di collection utama.
-        Juga menghitung nominal untuk tabel rincian.
-        """
+    def get_distribution_smart(group_candidates, rayon_filter=None, lookup_cid=False, derive_pc_from_pcez=False):
         # A. Filter Rayon
         local_match = match_stage.copy()
         if rayon_filter:
@@ -381,16 +352,22 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
         # B. Lookup ke CustomerData
         prefix = ""
         if lookup_cid:
+            project_fields = {c: 1 for c in group_candidates}
+            if derive_pc_from_pcez:
+                project_fields['PCEZ'] = 1
+            project_fields['_id'] = 0
+
             pipeline.extend([
                 {'$lookup': {
                     'from': 'CustomerData',
                     'localField': 'NOMEN',
                     'foreignField': 'NOMEN',
+                    'pipeline': [{'$project': project_fields}], # Optimization
                     'as': 'cust_info'
                 }},
                 {'$unwind': {'path': '$cust_info', 'preserveNullAndEmptyArrays': True}}
             ])
-            prefix = "$cust_info." # Mengarahkan ke field hasil lookup
+            prefix = "$cust_info." 
 
         # C. Konstruksi Field Grouping
         id_expression = {'$ifNull': []}
@@ -398,7 +375,12 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
             if lookup_cid:
                 id_expression['$ifNull'].append(f"{prefix}{f}")
             id_expression['$ifNull'].append(f"${f}")
-        id_expression['$ifNull'].append("N/A") # Fallback terakhir
+        
+        # LOGIKA BARU: Derive PC dari PCEZ (Left 3)
+        if derive_pc_from_pcez and lookup_cid:
+             id_expression['$ifNull'].append({ '$substr': [ f"{prefix}PCEZ", 0, 3 ] })
+
+        id_expression['$ifNull'].append("N/A") 
 
         # D. Grouping (Count & Nominal)
         pipeline.extend([
@@ -424,10 +406,10 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
     pc_dist_cols = ['PC', 'KODEPC', 'PC_ZONA']
 
     breakdowns = {
-        # Distribusi PC (Aktifkan Lookup)
-        'pc_all': get_distribution_smart(pc_dist_cols, lookup_cid=True),
-        'pc_34': get_distribution_smart(pc_dist_cols, '34', lookup_cid=True),
-        'pc_35': get_distribution_smart(pc_dist_cols, '35', lookup_cid=True),
+        # Distribusi PC (Aktifkan Lookup & Derivation)
+        'pc_all': get_distribution_smart(pc_dist_cols, lookup_cid=True, derive_pc_from_pcez=True),
+        'pc_34': get_distribution_smart(pc_dist_cols, '34', lookup_cid=True, derive_pc_from_pcez=True),
+        'pc_35': get_distribution_smart(pc_dist_cols, '35', lookup_cid=True, derive_pc_from_pcez=True),
 
         # Distribusi PCEZ
         'pcez_all': get_distribution_smart(pcez_dist_cols, lookup_cid=True),
@@ -445,7 +427,7 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
         'merek_35': get_distribution_smart(merek_cols, '35', lookup_cid=True),
     }
 
-    # 5. Top 500 Lists - WITH NAME LOOKUP
+    # 5. Top 500 Lists - WITH NAME LOOKUP (OPTIMIZED)
     def get_top_500(rayon):
         match = match_stage.copy()
         match['$or'] = [{'RAYON': rayon}, {'KODERAYON': rayon}]
@@ -465,6 +447,7 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
                 'from': 'CustomerData',
                 'localField': 'NOMEN',
                 'foreignField': 'NOMEN',
+                'pipeline': [{'$project': {'NAMA': 1, '_id': 0}}], # Optimization: Fetch only NAME
                 'as': 'cust'
             }},
             {'$unwind': {'path': '$cust', 'preserveNullAndEmptyArrays': True}},
