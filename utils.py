@@ -39,38 +39,33 @@ def init_db(app):
         collections['ardebt'] = db['AccountReceivable']
         
         # ==========================================================
-        # === OPTIMASI: INDEXING KRITIS ===
+        # === OPTIMASI: INDEXING KRITIS (COMPOUND INDEXES) ===
         # ==========================================================
         
         print("Memeriksa dan membuat index database...")
 
-        # CID (CustomerData)
+        # 1. CID (CustomerData) - Lookup optimization
         collections['cid'].create_index([('NOMEN', 1)], name='idx_cid_nomen')
-        collections['cid'].create_index([('RAYON', 1)], name='idx_cid_rayon')
-        collections['cid'].create_index([('PCEZ', 1)], name='idx_cid_pcez') 
-
-        # MC (MasterCetak)
-        collections['mc'].create_index([('NOMEN', 1), ('BULAN_TAGIHAN', -1)], name='idx_mc_nomen_hist')
-        collections['mc'].create_index([('PERIODE', 1)], name='idx_mc_periode')
-        collections['mc'].create_index([('RAYON', 1), ('PCEZ', 1)], name='idx_mc_rayon_pcez') 
-        collections['mc'].create_index([('KODERAYON', 1)], name='idx_mc_koderayon')
-        collections['mc'].create_index([('STATUS', 1)], name='idx_mc_status')
-        collections['mc'].create_index([('TARIF', 1), ('KUBIK', 1), ('NOMINAL', 1)], name='idx_mc_tarif_volume')
-        # Compound Index untuk Dashboard agar tidak berat
-        collections['mc'].create_index([('BULAN_TAGIHAN', 1), ('RAYON', 1)], name='idx_mc_dash_rayon')
-        collections['mc'].create_index([('BULAN_TAGIHAN', 1), ('TARIF', 1)], name='idx_mc_dash_tarif')
-
-        # MB (MasterBayar)
-        collections['mb'].create_index([('NOTAGIHAN', 1), ('TGL_BAYAR', 1)], name='idx_mb_unique_transaction', unique=False)
-        collections['mb'].create_index([('TGL_BAYAR', -1)], name='idx_mb_paydate_desc')
-        collections['mb'].create_index([('BULAN_REK', 1)], name='idx_mb_bulan_rek')
-        collections['mb'].create_index([('NOMEN', 1)], name='idx_mb_nomen')
-
-        # SBRS (MeterReading)
-        collections['sbrs'].create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', -1)], name='idx_sbrs_history')
         
-        # ARDEBT (AccountReceivable)
-        collections['ardebt'].create_index([('NOMEN', 1), ('PERIODE_BILL', -1), ('JUMLAH', 1)], name='idx_ardebt_nomen_hist')
+        # 2. MC (MasterCetak) - Dashboard aggregation optimization
+        # Index untuk filter periode + grouping field yang sering dipakai
+        collections['mc'].create_index([('BULAN_TAGIHAN', 1), ('RAYON', 1)], name='idx_mc_bulan_rayon')
+        collections['mc'].create_index([('BULAN_TAGIHAN', 1), ('PC', 1)], name='idx_mc_bulan_pc')
+        collections['mc'].create_index([('BULAN_TAGIHAN', 1), ('PCEZ', 1)], name='idx_mc_bulan_pcez')
+        collections['mc'].create_index([('BULAN_TAGIHAN', 1), ('TARIF', 1)], name='idx_mc_bulan_tarif')
+        collections['mc'].create_index([('BULAN_TAGIHAN', 1), ('NOMEN', 1)], name='idx_mc_bulan_nomen')
+        # Index Tunggal
+        collections['mc'].create_index([('NOMEN', 1)], name='idx_mc_nomen')
+        collections['mc'].create_index([('PERIODE', 1)], name='idx_mc_periode')
+
+        # 3. MB (MasterBayar)
+        collections['mb'].create_index([('BULAN_REK', 1), ('RAYON', 1)], name='idx_mb_bulan_rayon')
+        collections['mb'].create_index([('TGL_BAYAR', -1)], name='idx_mb_tgl_bayar')
+        # FIX: Index conflict resolution. Use the existing key structure.
+        collections['mb'].create_index([('NOTAGIHAN', 1), ('TGL_BAYAR', 1), ('NOMINAL', 1)], name='idx_mb_unique_transaction', unique=False)
+        
+        # 4. SBRS
+        collections['sbrs'].create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', -1)], name='idx_sbrs_history')
         
         print("Koneksi MongoDB berhasil dan index dikonfigurasi!")
     except (ConnectionFailure, ServerSelectionTimeoutError) as e:
@@ -78,7 +73,8 @@ def init_db(app):
         client = None
     except Exception as e:
         print(f"Gagal mengkonfigurasi index: {e}")
-        client = None
+        # Log error but don't stop app if index fails
+        # client = None 
 
 def get_db_status():
     """Mengembalikan status koneksi database dan koleksi yang aktif."""
@@ -103,24 +99,6 @@ def _get_previous_month_year(bulan_tagihan):
         
 def _get_day_n_ago(n):
     return (datetime.now() - timedelta(days=n)).strftime('%Y-%m-%d')
-
-
-# --- HELPER LOGIC AGREGASI KHUSUS ---
-
-def _parse_zona_novak(zona_str):
-    return {} # Placeholder
-
-def _get_sbrs_anomalies(collection_sbrs, collection_cid):
-    if collection_sbrs is None: return []
-    return []
-
-def _generate_distribution_schema(group_fields):
-    schema = []
-    for field in group_fields:
-        schema.append({'key': field, 'label': field, 'type': 'string', 'is_main_key': True})
-    schema.append({'key': 'total_nomen', 'label': 'Jml Pelanggan', 'type': 'integer'})
-    schema.append({'key': 'total_piutang', 'label': 'Total Piutang', 'type': 'currency'})
-    return schema
 
 # --- CORE DASHBOARD STATISTICS FUNCTIONS ---
 
@@ -226,7 +204,6 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
         # A. Filter Rayon
         local_match = match_stage.copy()
         if rayon_filter:
-            # Support nama field RAYON atau KODERAYON
             local_match['$or'] = [{'RAYON': rayon_filter}, {'KODERAYON': rayon_filter}]
 
         pipeline = [{'$match': local_match}]
