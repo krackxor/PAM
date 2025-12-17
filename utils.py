@@ -366,6 +366,10 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
 
     # 4. Breakdowns (PCEZ, Tarif, Merek) - SMART VERSION
     def get_distribution_smart(group_candidates, rayon_filter=None, lookup_cid=False):
+        """
+        Agregasi pintar yang bisa lookup ke CustomerData jika field tidak ada di collection utama.
+        Juga menghitung nominal untuk tabel rincian.
+        """
         # A. Filter Rayon
         local_match = match_stage.copy()
         if rayon_filter:
@@ -417,8 +421,14 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
     tarif_cols = ['TARIF', 'KODETARIF', 'GOLONGAN']
     merek_cols = ['MERK', 'KODEMEREK', 'MEREKMETER', 'METER_MAKE']
     pcez_dist_cols = ['PCEZ', 'KODEPCEZ', 'PCEZ_ZONA']
+    pc_dist_cols = ['PC', 'KODEPC', 'PC_ZONA']
 
     breakdowns = {
+        # Distribusi PC
+        'pc_all': get_distribution_smart(pc_dist_cols),
+        'pc_34': get_distribution_smart(pc_dist_cols, '34'),
+        'pc_35': get_distribution_smart(pc_dist_cols, '35'),
+
         # Distribusi PCEZ (Aktifkan Lookup karena seringkali PCEZ ada di CID tapi tidak di MC)
         'pcez_all': get_distribution_smart(pcez_dist_cols, lookup_cid=True),
         'pcez_34': get_distribution_smart(pcez_dist_cols, '34', lookup_cid=True),
