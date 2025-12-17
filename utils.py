@@ -278,7 +278,7 @@ def _generate_distribution_schema(group_fields):
     
     return schema
 
-# --- CORE DASHBOARD STATISTICS FUNCTIONS (DIPERBARUI) ---
+# --- CORE DASHBOARD STATISTICS FUNCTIONS (PERBAIKAN UTAMA) ---
 
 def _aggregate_category(collection, money_field, usage_field, period, date_field=None):
     """
@@ -339,10 +339,9 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
         Agregasi pintar yang bisa lookup ke CustomerData jika field tidak ada di collection utama.
         Juga menghitung nominal untuk tabel rincian.
         """
-        # A. Filter Rayon
+        # A. Filter Rayon (Coba RAYON dan KODERAYON)
         local_match = match_stage.copy()
         if rayon_filter:
-            # Support nama field RAYON atau KODERAYON
             local_match['$or'] = [{'RAYON': rayon_filter}, {'KODERAYON': rayon_filter}]
 
         pipeline = [{'$match': local_match}]
