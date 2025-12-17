@@ -234,10 +234,48 @@ def _get_sbrs_anomalies(collection_sbrs, collection_cid):
 
 def _generate_distribution_schema(group_fields):
     schema = []
+    
+    field_labels = {
+        'RAYON': 'Rayon', 
+        'PCEZ': 'PCEZ (Petugas Catat / Zona)', 
+        'TARIF': 'Tarif',
+        'JENIS_METER': 'Jenis Meter',
+        'READ_METHOD': 'Metode Baca',
+        'LKS_BAYAR': 'Lokasi Pembayaran',
+        'AB_SUNTER': 'AB Sunter',
+        'MERK': 'Merek Meter',
+        'CYCLE': 'Cycle/Bookwalk',
+    }
+    
     for field in group_fields:
-        schema.append({'key': field, 'label': field, 'type': 'string', 'is_main_key': True})
-    schema.append({'key': 'total_nomen', 'label': 'Jml Pelanggan', 'type': 'integer'})
-    schema.append({'key': 'total_piutang', 'label': 'Total Piutang', 'type': 'currency'})
+        schema.append({
+            'key': field,
+            'label': field_labels.get(field, field.upper()),
+            'type': 'string',
+            'is_main_key': True
+        })
+        
+    schema.extend([
+        {
+            'key': 'total_nomen',
+            'label': 'Jumlah Pelanggan',
+            'type': 'integer',
+            'chart_key': 'chart_data_nomen'
+        },
+        {
+            'key': 'total_piutang',
+            'label': 'Total Piutang (Rp)',
+            'type': 'currency',
+            'chart_key': 'chart_data_piutang'
+        },
+        {
+            'key': 'total_kubikasi',
+            'label': 'Total Kubikasi (m³)',
+            'type': 'integer',
+            'unit': 'm³'
+        }
+    ])
+    
     return schema
 
 # --- CORE DASHBOARD STATISTICS FUNCTIONS ---
@@ -322,7 +360,7 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
 
     largest = {
         'rayon': get_largest(rayon_cols),
-        'pc': get_largest(pc_cols),
+        'pc': get_largest(pc_cols, lookup_cid=True), # Aktifkan lookup untuk PC juga jika di MC kosong
         'pcez': get_largest(pcez_cols, lookup_cid=True) # Aktifkan lookup untuk PCEZ jika tidak ada di MC
     }
 
@@ -383,13 +421,13 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
     tarif_cols = ['TARIF', 'KODETARIF', 'GOLONGAN']
     merek_cols = ['MERK', 'KODEMEREK', 'MEREKMETER', 'METER_MAKE']
     pcez_dist_cols = ['PCEZ', 'KODEPCEZ', 'PCEZ_ZONA']
-    pc_dist_cols = ['PC', 'KODEPC', 'PC_ZONA'] # Ditambahkan untuk PC
+    pc_dist_cols = ['PC', 'KODEPC', 'PC_ZONA']
 
     breakdowns = {
-        # Distribusi PC (BARU)
-        'pc_all': get_distribution_smart(pc_dist_cols),
-        'pc_34': get_distribution_smart(pc_dist_cols, '34'),
-        'pc_35': get_distribution_smart(pc_dist_cols, '35'),
+        # Distribusi PC (Aktifkan Lookup)
+        'pc_all': get_distribution_smart(pc_dist_cols, lookup_cid=True),
+        'pc_34': get_distribution_smart(pc_dist_cols, '34', lookup_cid=True),
+        'pc_35': get_distribution_smart(pc_dist_cols, '35', lookup_cid=True),
 
         # Distribusi PCEZ
         'pcez_all': get_distribution_smart(pcez_dist_cols, lookup_cid=True),
