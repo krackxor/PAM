@@ -365,24 +365,37 @@
 
         // --- 2. Update Table (Membuat tabel dinamis di bawah grafik) ---
         const table = document.getElementById(tableId);
-        let tableHTML = `<thead class="thead-light"><tr><th>Kategori (${isBarChart ? 'Merek' : 'Tarif'})</th><th class="text-right">Jumlah</th></tr></thead><tbody>`;
+        let tableHTML = `<thead class="thead-light"><tr><th>Kategori (${isBarChart ? 'Merek' : 'Tarif'})</th><th class="text-right">Jml Pelanggan</th><th class="text-right">Nominal (Rp)</th><th class="text-right">%</th></tr></thead><tbody>`;
         
         if (!newData || newData.length === 0) {
-            tableHTML += '<tr><td colspan="2" class="text-center text-muted py-3">Tidak ada data untuk filter ini</td></tr>';
+            tableHTML += '<tr><td colspan="4" class="text-center text-muted py-3">Tidak ada data untuk filter ini</td></tr>';
         } else {
-            // Hitung total untuk baris footer (opsional)
-            let total = 0;
+            // Hitung total untuk baris footer dan persentase
+            let totalCount = 0;
+            let totalNominal = 0;
+            
             newData.forEach(item => {
-                total += item.val;
+                totalCount += item.val;
+                totalNominal += (item.nominal || 0);
+            });
+
+            newData.forEach(item => {
+                const pct = totalCount > 0 ? (item.val / totalCount * 100).toFixed(1) : 0;
+                const nom = item.nominal ? new Intl.NumberFormat('id-ID').format(item.nominal) : '0';
+                
                 tableHTML += `<tr>
                     <td><span class="font-weight-bold text-dark">${item._id || 'N/A'}</span></td>
-                    <td class="text-right font-weight-bold text-secondary">${new Intl.NumberFormat('id-ID').format(item.val)}</td>
+                    <td class="text-right text-secondary">${new Intl.NumberFormat('id-ID').format(item.val)}</td>
+                    <td class="text-right font-weight-bold">${nom}</td>
+                    <td class="text-right small text-muted">${pct}%</td>
                 </tr>`;
             });
             // Footer Total
             tableHTML += `<tr class="bg-light font-weight-bold">
                 <td>TOTAL</td>
-                <td class="text-right">${new Intl.NumberFormat('id-ID').format(total)}</td>
+                <td class="text-right">${new Intl.NumberFormat('id-ID').format(totalCount)}</td>
+                <td class="text-right">${new Intl.NumberFormat('id-ID').format(totalNominal)}</td>
+                <td class="text-right">100%</td>
             </tr>`;
         }
         tableHTML += '</tbody>';
