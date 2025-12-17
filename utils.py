@@ -59,16 +59,12 @@ def init_db(app):
         # Compound Index untuk Dashboard agar tidak berat
         collections['mc'].create_index([('BULAN_TAGIHAN', 1), ('RAYON', 1)], name='idx_mc_dash_rayon')
         collections['mc'].create_index([('BULAN_TAGIHAN', 1), ('TARIF', 1)], name='idx_mc_dash_tarif')
-        collections['mc'].create_index([('BULAN_TAGIHAN', 1), ('PC', 1)], name='idx_mc_dash_pc')
-        collections['mc'].create_index([('BULAN_TAGIHAN', 1), ('PCEZ', 1)], name='idx_mc_dash_pcez')
-        collections['mc'].create_index([('BULAN_TAGIHAN', 1), ('NOMEN', 1)], name='idx_mc_dash_nomen')
 
         # MB (MasterBayar)
         collections['mb'].create_index([('NOTAGIHAN', 1), ('TGL_BAYAR', 1)], name='idx_mb_unique_transaction', unique=False)
         collections['mb'].create_index([('TGL_BAYAR', -1)], name='idx_mb_paydate_desc')
         collections['mb'].create_index([('BULAN_REK', 1)], name='idx_mb_bulan_rek')
         collections['mb'].create_index([('NOMEN', 1)], name='idx_mb_nomen')
-        collections['mb'].create_index([('BULAN_REK', 1), ('RAYON', 1)], name='idx_mb_dash_rayon')
 
         # SBRS (MeterReading)
         collections['sbrs'].create_index([('CMR_ACCOUNT', 1), ('CMR_RD_DATE', -1)], name='idx_sbrs_history')
