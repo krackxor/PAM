@@ -50,6 +50,7 @@ def init_db(app):
         # MC (MasterCetak)
         collections['mc'].create_index([('NOMEN', 1), ('BULAN_TAGIHAN', -1)], name='idx_mc_nomen_hist')
         collections['mc'].create_index([('PERIODE', 1)], name='idx_mc_periode')
+        collections['mc'].create_index([('BULAN_TAGIHAN', 1)], name='idx_mc_bulan_tagihan')
         collections['mc'].create_index([('RAYON', 1), ('PCEZ', 1)], name='idx_mc_rayon_pcez') 
         collections['mc'].create_index([('KODERAYON', 1)], name='idx_mc_koderayon')
         collections['mc'].create_index([('STATUS', 1)], name='idx_mc_status')
@@ -234,48 +235,10 @@ def _get_sbrs_anomalies(collection_sbrs, collection_cid):
 
 def _generate_distribution_schema(group_fields):
     schema = []
-    
-    field_labels = {
-        'RAYON': 'Rayon', 
-        'PCEZ': 'PCEZ (Petugas Catat / Zona)', 
-        'TARIF': 'Tarif',
-        'JENIS_METER': 'Jenis Meter',
-        'READ_METHOD': 'Metode Baca',
-        'LKS_BAYAR': 'Lokasi Pembayaran',
-        'AB_SUNTER': 'AB Sunter',
-        'MERK': 'Merek Meter',
-        'CYCLE': 'Cycle/Bookwalk',
-    }
-    
     for field in group_fields:
-        schema.append({
-            'key': field,
-            'label': field_labels.get(field, field.upper()),
-            'type': 'string',
-            'is_main_key': True
-        })
-        
-    schema.extend([
-        {
-            'key': 'total_nomen',
-            'label': 'Jumlah Pelanggan',
-            'type': 'integer',
-            'chart_key': 'chart_data_nomen'
-        },
-        {
-            'key': 'total_piutang',
-            'label': 'Total Piutang (Rp)',
-            'type': 'currency',
-            'chart_key': 'chart_data_piutang'
-        },
-        {
-            'key': 'total_kubikasi',
-            'label': 'Total Kubikasi (m³)',
-            'type': 'integer',
-            'unit': 'm³'
-        }
-    ])
-    
+        schema.append({'key': field, 'label': field, 'type': 'string', 'is_main_key': True})
+    schema.append({'key': 'total_nomen', 'label': 'Jumlah Pelanggan', 'type': 'integer'})
+    schema.append({'key': 'total_piutang', 'label': 'Total Piutang', 'type': 'currency'})
     return schema
 
 # --- CORE DASHBOARD STATISTICS FUNCTIONS ---
@@ -364,7 +327,7 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
         'pcez': get_largest(pcez_cols, lookup_cid=True) # Aktifkan lookup untuk PCEZ jika tidak ada di MC
     }
 
-    # 4. Breakdowns (PCEZ, Tarif, Merek) - SMART VERSION
+    # 4. Breakdowns (PC, PCEZ, Tarif, Merek) - SMART VERSION
     def get_distribution_smart(group_candidates, rayon_filter=None, lookup_cid=False):
         """
         Agregasi pintar yang bisa lookup ke CustomerData jika field tidak ada di collection utama.
@@ -424,12 +387,12 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
     pc_dist_cols = ['PC', 'KODEPC', 'PC_ZONA']
 
     breakdowns = {
-        # Distribusi PC
+        # Distribusi PC (BARU)
         'pc_all': get_distribution_smart(pc_dist_cols),
         'pc_34': get_distribution_smart(pc_dist_cols, '34'),
         'pc_35': get_distribution_smart(pc_dist_cols, '35'),
 
-        # Distribusi PCEZ (Aktifkan Lookup karena seringkali PCEZ ada di CID tapi tidak di MC)
+        # Distribusi PCEZ
         'pcez_all': get_distribution_smart(pcez_dist_cols, lookup_cid=True),
         'pcez_34': get_distribution_smart(pcez_dist_cols, '34', lookup_cid=True),
         'pcez_35': get_distribution_smart(pcez_dist_cols, '35', lookup_cid=True),
