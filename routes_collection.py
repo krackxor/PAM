@@ -38,7 +38,6 @@ def _get_distribution_report(group_fields, collection_mc, limit=None):
 
     pipeline = [
         {"$match": {"BULAN_TAGIHAN": latest_month}},
-        # Lookup ke CID untuk data pendukung jika di MC tidak ada
         {'$lookup': {
             'from': 'CustomerData',
             'localField': 'NOMEN',
@@ -47,7 +46,6 @@ def _get_distribution_report(group_fields, collection_mc, limit=None):
         }},
         {'$unwind': {'path': '$cust_info', 'preserveNullAndEmptyArrays': True}},
         {"$project": {
-            # Logika Prioritas: Field MC -> Field CID -> "N/A"
             **{field: {"$ifNull": [f"${field}", f"$cust_info.{field}", "N/A"]} for field in group_fields},
             "NOMEN": 1,
             "NOMINAL": {"$toDouble": {'$ifNull': ['$NOMINAL', 0]}}, 
@@ -69,7 +67,6 @@ def _get_distribution_report(group_fields, collection_mc, limit=None):
         {"$sort": {"total_piutang": -1}}
     ]
 
-    # Tambahkan limit jika didefinisikan (untuk Top 5 di UI)
     if limit:
         pipeline.append({"$limit": limit})
 
@@ -123,42 +120,46 @@ def collection_top_view():
                             is_admin=current_user.is_admin,
                             api_endpoint=url_for("bp_collection.top_debtors_report_api"))
 
+@bp_collection.route('/riwayat', methods=['GET'])
+@login_required 
+def collection_riwayat_view():
+    return render_template('analysis_report_template.html', 
+                            title="Riwayat Piutang Bulanan (MoM)",
+                            report_type="MOM_COMPARISON",
+                            is_admin=current_user.is_admin,
+                            api_endpoint=url_for("bp_collection.mom_comparison_report_api"))
+
+@bp_collection.route('/dod_comparison', methods=['GET'])
+@login_required 
+def analysis_dod_comparison():
+    return render_template('analysis_report_template.html', 
+                            title="Perbandingan Koleksi Harian (DoD)",
+                            report_type="DOD_COMPARISON",
+                            is_admin=current_user.is_admin,
+                            api_endpoint=url_for("bp_collection.dod_comparison_report_api"))
+
 # --- API DISTRIBUTION ENDPOINTS (DENGAN TOP 5 LIMIT) ---
 
 @bp_collection.route("/api/distribution/<category>")
 @login_required
 def category_distribution_api(category):
-    # Mapping kategori ke field database yang sesuai
-    cat_map = {
-        "rayon": "RAYON",
-        "pc": "PC",
-        "pcez": "PCEZ",
-        "tarif": "TARIF",
-        "merk": "MERK_METER"
-    }
+    cat_map = {"rayon": "RAYON", "pc": "PC", "pcez": "PCEZ", "tarif": "TARIF", "merk": "MERK_METER"}
     field = cat_map.get(category.lower())
-    if not field:
-        return jsonify({"message": "Kategori tidak valid"}), 400
+    if not field: return jsonify({"message": "Kategori tidak valid"}), 400
 
     db_status = get_db_status()
     if db_status['status'] == 'error': return jsonify({"message": db_status['message']}), 500
     
-    # Ambil hanya Top 5 untuk performa UI
+    # UI Hanya butuh Top 5 agar cepat
     results, latest_month = _get_distribution_report([field], db_status['collections']['mc'], limit=5)
-    
-    # Tambahkan format untuk Chart jika diperlukan
     for item in results: 
         item['chart_label'] = item.get(field, "N/A")
         item['chart_data_piutang'] = round(item['total_piutang'], 2)
-        
-    return jsonify({
-        "data": results, 
-        "category": field,
-        "title": f"Top 5 Kontributor {field}", 
-        "subtitle": f"Bulan: {latest_month}"
-    })
+        item['nominal'] = item['total_piutang'] 
 
-# --- API DOWNLOAD FULL SUMMARY (SEMUA DATA) ---
+    return jsonify({"data": results, "category": field, "title": f"Top 5 {field}", "subtitle": f"Bulan: {latest_month}"})
+
+# --- API DOWNLOAD FULL SUMMARY (SEMUA DATA TANPA LIMIT) ---
 
 @bp_collection.route("/api/download_summary")
 @login_required
@@ -166,40 +167,28 @@ def download_summary_csv():
     db_status = get_db_status()
     if db_status['status'] == 'error': return "Koneksi Database Gagal", 500
     
-    # Daftar kategori yang akan diekspor
     categories = ["RAYON", "PC", "PCEZ", "TARIF", "MERK_METER"]
     all_rows = []
     latest_month = "N/A"
 
     for field in categories:
-        # Ambil data lengkap (tanpa limit)
         results, month = _get_distribution_report([field], db_status['collections']['mc'])
         latest_month = month
         for row in results:
             all_rows.append({
-                "Kategori": field,
-                "Value": row.get(field, "N/A"),
-                "Jumlah Pelanggan": row.get("total_nomen", 0),
-                "Total Piutang (Rp)": row.get("total_piutang", 0),
-                "Total Pemakaian (m3)": row.get("total_kubikasi", 0),
-                "Periode Data": month
+                "Kategori": field, "Value": row.get(field, "N/A"),
+                "Pelanggan": row.get("total_nomen", 0), "Piutang (Rp)": row.get("total_piutang", 0),
+                "Pemakaian (m3)": row.get("total_kubikasi", 0), "Periode": month
             })
     
-    if not all_rows:
-        return "Tidak ada data untuk diunduh", 404
+    if not all_rows: return "Tidak ada data", 404
 
-    # Buat DataFrame dan konversi ke CSV
     df = pd.DataFrame(all_rows)
     output = io.StringIO()
     df.to_csv(output, index=False)
     
-    filename = f"Summary_Kontributor_{latest_month}_{datetime.now().strftime('%Y%m%d')}.csv"
-    
-    return Response(
-        output.getvalue(),
-        mimetype="text/csv",
-        headers={"Content-disposition": f"attachment; filename={filename}"}
-    )
+    filename = f"Summary_Kontributor_{latest_month}.csv"
+    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-disposition": f"attachment; filename={filename}"})
 
 # --- API TOP LIST & COMPARISON ---
 
@@ -251,15 +240,12 @@ def top_debtors_report_api():
 def mom_comparison_report_api():
     db_status = get_db_status()
     if db_status['status'] == 'error': return jsonify({"message": db_status['message']}), 500
-    
     col_mc = db_status['collections']['mc']
     try:
         latest_doc = col_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
         M = latest_doc.get('BULAN_TAGIHAN') if latest_doc else None
         M_1 = _get_previous_month_year(M)
-        
-        if not M or not M_1: return jsonify({'status': 'error', 'message': 'Data periode tidak lengkap.'}), 404
-
+        if not M or not M_1: return jsonify({'status': 'error', 'message': 'Data tidak lengkap.'}), 404
         pipeline = [
             {'$match': {'BULAN_TAGIHAN': {'$in': [M, M_1]}}},
             {'$lookup': { 'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'c' }},
@@ -292,20 +278,16 @@ def mom_comparison_report_api():
         ]
         res = list(col_mc.aggregate(pipeline))
         return jsonify({'status': 'success', 'data': res, 'title': f'MoM {M} vs {M_1}'})
-    except Exception as e:
-        return jsonify({"status": 'error', "message": str(e)}), 500
+    except Exception as e: return jsonify({"status": 'error', "message": str(e)}), 500
 
 @bp_collection.route('/api/dod_comparison_report', methods=['GET'])
 @login_required
 def dod_comparison_report_api():
     db_status = get_db_status()
     if db_status['status'] == 'error': return jsonify({"message": db_status['message']}), 500
-    
     col_mb = db_status['collections']['mb']
     try:
-        D = _get_day_n_ago(0)
-        D1 = _get_day_n_ago(1)
-        
+        D = _get_day_n_ago(0); D1 = _get_day_n_ago(1)
         pipeline = [
             {'$match': {'TGL_BAYAR': {'$in': [D, D1]}, 'BILL_REASON': 'BIAYA PEMAKAIAN AIR'}},
             {'$lookup': {'from': 'CustomerData', 'localField': 'NOMEN', 'foreignField': 'NOMEN', 'as': 'c'}},
@@ -332,5 +314,4 @@ def dod_comparison_report_api():
         ]
         res = list(col_mb.aggregate(pipeline))
         return jsonify({'status': 'success', 'data': res, 'title': f'DoD {D} vs {D1}'})
-    except Exception as e:
-        return jsonify({"status": 'error', "message": str(e)}), 500
+    except Exception as e: return jsonify({"status": 'error', "message": str(e)}), 500
