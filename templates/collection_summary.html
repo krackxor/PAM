@@ -205,28 +205,53 @@
 
     function renderUI(cat, type, filter) {
         const fullData = rawStore[cat][type] || [];
-        let filtered = (filter === 'ALL') ? fullData : fullData.filter(item => item.rayon_origin === filter);
+        
+        // LOGIK FILTER:
+        // Jika ALL, kita harus melakukan group-sum (karena data mentah dipisah per rayon)
+        let processedData = [];
+        if (filter === 'ALL') {
+            const map = new Map();
+            fullData.forEach(item => {
+                const key = item.id_value || 'N/A';
+                if (!map.has(key)) {
+                    map.set(key, { ...item });
+                } else {
+                    const existing = map.get(key);
+                    existing.total_piutang += item.total_piutang;
+                    existing.total_nomen += item.total_nomen;
+                    existing.total_kubikasi += item.total_kubikasi;
+                    existing.pct_piutang += item.pct_piutang;
+                    existing.pct_nomen += item.pct_nomen;
+                    existing.pct_kubikasi += item.pct_kubikasi;
+                }
+            });
+            processedData = Array.from(map.values());
+        } else {
+            processedData = fullData.filter(item => item.rayon_origin === filter);
+        }
 
+        // 1. Update Tabel
         const tableBody = document.querySelector(`#table-${type}-${cat} tbody`);
-        if(filtered.length === 0) {
+        if(processedData.length === 0) {
             tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">Data Kosong</td></tr>';
         } else {
-            tableBody.innerHTML = filtered.map(item => `
+            tableBody.innerHTML = processedData.map(item => `
                 <tr>
                     <td class="font-weight-bold">#${item.id_value || 'N/A'}</td>
                     <td class="text-right">${formatIDR(item.total_nomen)}</td>
                     <td class="text-right">${formatIDR(item.total_kubikasi)}</td>
-                    <td class="text-right font-weight-bold text-primary">${formatIDR(item.total_piutang)}</td>
+                    <td class="text-right font-weight-bold text-primary">${formatRupiahShort(item.total_piutang)}</td>
                     <td class="text-right text-xs text-info">${(item.pct_piutang || 0).toFixed(1)}%</td>
                 </tr>
             `).join('');
         }
 
+        // 2. Update Grafik (Top 10 sorted by value)
         const ctx = document.getElementById(`chart-${type}-${cat}`).getContext('2d');
         const chartId = `${type}-${cat}`;
         if (chartInstances[chartId]) chartInstances[chartId].destroy();
 
-        const chartData = [...filtered].sort((a,b) => b.total_piutang - a.total_piutang).slice(0, 10);
+        const chartData = [...processedData].sort((a,b) => b.total_piutang - a.total_piutang).slice(0, 10);
         
         chartInstances[chartId] = new Chart(ctx, {
             type: 'bar',
@@ -254,7 +279,13 @@
             }
         });
 
-        generateInsight(cat, type, filter, filtered);
+        generateInsight(cat, type, filter, processedData);
+    }
+
+    function formatRupiahShort(val) {
+        if (val >= 1000000000) return (val/1000000000).toFixed(1) + ' M';
+        if (val >= 1000000) return (val/1000000).toFixed(1) + ' jt';
+        return formatIDR(val);
     }
 
     function generateInsight(cat, type, filter, data) {
