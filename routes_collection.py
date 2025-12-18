@@ -23,8 +23,8 @@ def admin_required(f):
 # --- HELPER INTERNAL UNTUK DISTRIBUSI (DENGAN PERSENTASE & LOOKUP CID) ---
 def _get_distribution_report(group_field, collection_mc, period=None):
     """
-    Menghitung distribusi metrik dengan persentase dan join ke CustomerData (CID)
-    untuk mendapatkan Merk Meter dan Read Method.
+    Menghitung distribusi metrik. 
+    GROUPING: Dilakukan per Kategori DAN per Rayon agar filter 34/35 di frontend berfungsi.
     """
     db_status = get_db_status()
     if db_status['status'] == 'error':
@@ -40,7 +40,7 @@ def _get_distribution_report(group_field, collection_mc, period=None):
     if not target_month:
         return [], "N/A"
 
-    # 1. Hitung Grand Total untuk periode ini (sebagai basis perhitungan %)
+    # 1. Hitung Grand Total (Sebagai basis kalkulasi % kontribusi)
     totals_pipeline = [
         {"$match": {"BULAN_TAGIHAN": target_month}},
         {"$group": {
@@ -50,16 +50,13 @@ def _get_distribution_report(group_field, collection_mc, period=None):
             "unique_nomen": {"$addToSet": "$NOMEN"}
         }},
         {"$project": {
-            "grand_piutang": 1,
-            "grand_kubikasi": 1,
+            "grand_piutang": 1, "grand_kubikasi": 1,
             "grand_nomen": {"$size": "$unique_nomen"}
         }}
     ]
     
     grand_totals = list(collection_mc.aggregate(totals_pipeline))
     g = grand_totals[0] if grand_totals else {"grand_piutang": 1, "grand_kubikasi": 1, "grand_nomen": 1}
-    
-    # Pencegahan pembagian dengan nol
     g_p = g.get('grand_piutang', 1) or 1
     g_k = g.get('grand_kubikasi', 1) or 1
     g_n = g.get('grand_nomen', 1) or 1
@@ -67,14 +64,14 @@ def _get_distribution_report(group_field, collection_mc, period=None):
     # 2. Pipeline Utama
     pipeline = [{"$match": {"BULAN_TAGIHAN": target_month}}]
 
-    # Tambahkan field virtual dari ZONA_NOVAK
+    # Ekstraksi Rayon dari ZONA_NOVAK (2 Digit Pertama)
     pipeline.append({"$addFields": {
         "v_RAYON": {"$substrCP": ["$ZONA_NOVAK", 0, 2]},
         "v_PC": {"$substrCP": ["$ZONA_NOVAK", 2, 3]},
         "v_PCEZ": {"$concat": [{"$substrCP": ["$ZONA_NOVAK", 2, 3]}, "/", {"$substrCP": ["$ZONA_NOVAK", 5, 2]}]}
     }})
 
-    # Mapping field (Join ke CustomerData/CID jika field adalah MERK atau READ_METHOD)
+    # Join ke CustomerData (CID) jika kategori adalah MERK atau READ_METHOD
     if group_field in ["MERK_METER", "READ_METHOD"]:
         pipeline.append({
             "$lookup": {
@@ -85,27 +82,43 @@ def _get_distribution_report(group_field, collection_mc, period=None):
             }
         })
         pipeline.append({"$unwind": {"path": "$cust", "preserveNullAndEmptyArrays": True}})
-        pipeline.append({"$addFields": {"mapped_id": {"$ifNull": [f"$cust.{group_field}", "TIDAK TERDATA"]}}})
+        
+        # Logika Fallback untuk Merk (Mencari di field MERK_METER, MERK, atau MET_BRAND)
+        if group_field == "MERK_METER":
+            pipeline.append({"$addFields": {
+                "mapped_id": {
+                    "$ifNull": [
+                        "$cust.MERK_METER", 
+                        {"$ifNull": ["$cust.MERK", {"$ifNull": ["$cust.MET_BRAND", "TIDAK TERDATA"]}]}
+                    ]
+                }
+            }})
+        else:
+            pipeline.append({"$addFields": {
+                "mapped_id": {"$ifNull": [f"$cust.{group_field}", "TIDAK TERDATA"]}
+            }})
     else:
         # Gunakan field virtual (RAYON, PC, PCEZ) atau field asli (TARIF)
         mapped_field = f"$v_{group_field}" if group_field in ["RAYON", "PC", "PCEZ"] else f"${group_field}"
         pipeline.append({"$addFields": {"mapped_id": mapped_field}})
 
-    # Grouping
+    # GROUPING: Kelompokkan berdasarkan (Kategori Nilai + Rayon Asal)
+    # Ini krusial agar filter 34/35 di UI bisa bekerja
     pipeline.append({
         "$group": {
-            "_id": "$mapped_id",
+            "_id": {"val": "$mapped_id", "rayon": "$v_RAYON"},
             "unique_nomen_set": {"$addToSet": "$NOMEN"},
             "total_piutang": {"$sum": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
             "total_kubikasi": {"$sum": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}}
         }
     })
 
-    # Proyeksi dengan kalkulasi % untuk Nomen, Piutang, dan Kubikasi
+    # PROYEKSI & KALKULASI PERSENTASE
     pipeline.append({
         "$project": {
             "_id": 0,
-            "id_value": "$_id",
+            "id_value": "$_id.val",
+            "rayon_origin": "$_id.rayon",
             "total_nomen": {"$size": "$unique_nomen_set"},
             "total_piutang": 1,
             "total_kubikasi": 1,
@@ -119,30 +132,23 @@ def _get_distribution_report(group_field, collection_mc, period=None):
 
     try:
         results = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
+        return results, target_month
     except Exception as e:
-        print(f"Error Aggregation: {e}")
+        print(f"Aggregation Error: {e}")
         return [], target_month
-
-    return results, target_month
 
 # --- RUTE VIEW FRONTEND ---
 
 @bp_collection.route('/laporan', methods=['GET'])
 @login_required 
 def collection_laporan_view():
-    current_date = datetime.now()
-    raw_period = request.args.get('period', current_date.strftime('%Y-%m'))
-    return render_template('collection_summary.html', 
-                           title="Laporan Piutang & Koleksi", 
-                           period=raw_period, 
-                           is_admin=current_user.is_admin)
+    raw_period = request.args.get('period', datetime.now().strftime('%Y-%m'))
+    return render_template('collection_summary.html', title="Laporan Piutang & Koleksi", period=raw_period, is_admin=current_user.is_admin)
 
 @bp_collection.route('/analisis', methods=['GET'])
 @login_required 
 def collection_analisis_view():
-    return render_template('collection_analysis.html', 
-                           title="Analisis Kontributor", 
-                           is_admin=current_user.is_admin)
+    return render_template('collection_analysis.html', title="Analisis Kontributor", is_admin=current_user.is_admin)
 
 @bp_collection.route('/top_list', methods=['GET'])
 @login_required
@@ -185,7 +191,7 @@ def category_distribution_api(category):
         y, m = raw_period.split('-')
         formatted_period = f"{m}{y}"
 
-    # Mapping kategori (EZ dan BLOCK dihilangkan, MERK dan READ_METHOD ditambahkan)
+    # Mapping Kategori (Tanpa EZ dan Block)
     cat_map = {
         "rayon": "RAYON", 
         "pc": "PC", 
@@ -209,6 +215,22 @@ def category_distribution_api(category):
         "subtitle": f"Bulan Tagihan: {latest_month}"
     })
 
+@bp_collection.route("/api/stats_summary")
+@login_required
+def get_stats_summary_api():
+    raw_period = request.args.get('period', datetime.now().strftime('%Y-%m'))
+    try:
+        if '-' in raw_period:
+            y, m = raw_period.split('-')
+            formatted_period = f"{m}{y}"
+        else:
+            formatted_period = raw_period
+    except:
+        formatted_period = raw_period.replace('-', '')
+    
+    stats = get_comprehensive_stats(formatted_period)
+    return jsonify(stats)
+
 @bp_collection.route("/api/download_summary")
 @login_required
 def download_summary_csv():
@@ -229,12 +251,11 @@ def download_summary_csv():
             all_rows.append({
                 "Kategori": field, 
                 "Nilai": row.get("id_value"), 
+                "Rayon_Asal": row.get("rayon_origin"),
                 "Pelanggan": row.get("total_nomen"), 
                 "Piutang_Rp": row.get("total_piutang"),
                 "Kubikasi": row.get("total_kubikasi"),
-                "%_Piutang": round(row.get("pct_piutang", 0), 2),
-                "%_Pelanggan": round(row.get("pct_nomen", 0), 2),
-                "%_Kubikasi": round(row.get("pct_kubikasi", 0), 2),
+                "%_Kontribusi_Piutang": round(row.get("pct_piutang", 0), 2),
                 "Periode": month
             })
     
@@ -243,9 +264,7 @@ def download_summary_csv():
     df = pd.DataFrame(all_rows)
     output = io.StringIO()
     df.to_csv(output, index=False)
-    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-disposition": "attachment; filename=Analisis_Kontributor.csv"})
-
-# --- API TOP LIST & LAINNYA ---
+    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-disposition": "attachment; filename=Analisis_Kontributor_Novak.csv"})
 
 @bp_collection.route('/api/top_debtors_report', methods=['GET'])
 @login_required 
@@ -299,19 +318,3 @@ def mom_comparison_report_api():
             {'key': 'TOTAL', 'label': 'Total Piutang', 'type': 'currency', 'chart_key': True}
         ]
     })
-
-@bp_collection.route("/api/stats_summary")
-@login_required
-def get_stats_summary_api():
-    raw_period = request.args.get('period', datetime.now().strftime('%Y-%m'))
-    try:
-        if '-' in raw_period:
-            y, m = raw_period.split('-')
-            formatted_period = f"{m}{y}"
-        else:
-            formatted_period = raw_period
-    except:
-        formatted_period = raw_period.replace('-', '')
-    
-    stats = get_comprehensive_stats(formatted_period)
-    return jsonify(stats)
