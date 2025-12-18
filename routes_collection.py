@@ -1,7 +1,9 @@
-from flask import Blueprint, request, jsonify, render_template, url_for, flash, redirect
+from flask import Blueprint, request, jsonify, render_template, url_for, flash, redirect, Response
 from flask_login import login_required, current_user
 from functools import wraps
 from datetime import datetime
+import pandas as pd
+import io
 # Import helpers dari utils
 from utils import get_db_status, _get_previous_month_year, _get_day_n_ago, _generate_distribution_schema, get_comprehensive_stats
 
@@ -18,12 +20,12 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- HELPER INTERNAL UNTUK DISTRIBUSI (Sinkron dengan Logika Utils) ---
-def _get_distribution_report(group_fields, collection_mc):
-    """Menghitung distribusi metrik dengan prioritas data MC dan Unique NOMEN."""
+# --- HELPER INTERNAL UNTUK DISTRIBUSI (Dioptimalkan dengan Limit) ---
+def _get_distribution_report(group_fields, collection_mc, limit=None):
+    """Menghitung distribusi metrik dengan limit opsional untuk performa UI."""
     db_status = get_db_status()
     if db_status['status'] == 'error':
-        return [], "N/A (Koneksi DB Gagal)"
+        return [], "N/A"
         
     if isinstance(group_fields, str):
         group_fields = [group_fields]
@@ -32,7 +34,7 @@ def _get_distribution_report(group_fields, collection_mc):
     latest_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
     
     if not latest_month:
-        return [], "N/A (Tidak Ada Data MC)"
+        return [], "N/A"
 
     pipeline = [
         {"$match": {"BULAN_TAGIHAN": latest_month}},
@@ -66,6 +68,10 @@ def _get_distribution_report(group_fields, collection_mc):
         }},
         {"$sort": {"total_piutang": -1}}
     ]
+
+    # Tambahkan limit jika didefinisikan (untuk Top 5 di UI)
+    if limit:
+        pipeline.append({"$limit": limit})
 
     try:
         results = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
@@ -105,7 +111,7 @@ def collection_laporan_view():
 @login_required 
 def collection_analisis_view():
     return render_template('collection_analysis.html', 
-                           title="Analisis Piutang & Koleksi",
+                           title="Analisis Kontributor Piutang",
                            is_admin=current_user.is_admin)
 
 @bp_collection.route('/top', methods=['GET'])
@@ -117,49 +123,83 @@ def collection_top_view():
                             is_admin=current_user.is_admin,
                             api_endpoint=url_for("bp_collection.top_debtors_report_api"))
 
-@bp_collection.route('/riwayat', methods=['GET'])
-@login_required 
-def collection_riwayat_view():
-    return render_template('analysis_report_template.html', 
-                            title="Riwayat Piutang Bulanan (MoM)",
-                            report_type="MOM_COMPARISON",
-                            is_admin=current_user.is_admin,
-                            api_endpoint=url_for("bp_collection.mom_comparison_report_api"))
+# --- API DISTRIBUTION ENDPOINTS (DENGAN TOP 5 LIMIT) ---
 
-@bp_collection.route('/dod_comparison', methods=['GET'])
-@login_required 
-def analysis_dod_comparison():
-    return render_template('analysis_report_template.html', 
-                            title="Perbandingan Koleksi Harian (DoD)",
-                            report_type="DOD_COMPARISON",
-                            is_admin=current_user.is_admin,
-                            api_endpoint=url_for("bp_collection.dod_comparison_report_api"))
-
-# --- API DISTRIBUTION ENDPOINTS ---
-
-@bp_collection.route("/api/distribution/rayon_report")
+@bp_collection.route("/api/distribution/<category>")
 @login_required
-def rayon_distribution_report():
+def category_distribution_api(category):
+    # Mapping kategori ke field database yang sesuai
+    cat_map = {
+        "rayon": "RAYON",
+        "pc": "PC",
+        "pcez": "PCEZ",
+        "tarif": "TARIF",
+        "merk": "MERK_METER"
+    }
+    field = cat_map.get(category.lower())
+    if not field:
+        return jsonify({"message": "Kategori tidak valid"}), 400
+
     db_status = get_db_status()
     if db_status['status'] == 'error': return jsonify({"message": db_status['message']}), 500
-    results, latest_month = _get_distribution_report(["RAYON"], db_status['collections']['mc'])
-    schema = _generate_distribution_schema(["RAYON"])
+    
+    # Ambil hanya Top 5 untuk performa UI
+    results, latest_month = _get_distribution_report([field], db_status['collections']['mc'], limit=5)
+    
+    # Tambahkan format untuk Chart jika diperlukan
     for item in results: 
-        item['chart_label'] = item.get("RAYON", "N/A")
+        item['chart_label'] = item.get(field, "N/A")
         item['chart_data_piutang'] = round(item['total_piutang'], 2)
-    return jsonify({"data": results, "schema": schema, "title": "Distribusi per Rayon", "subtitle": f"Bulan: {latest_month}"})
+        
+    return jsonify({
+        "data": results, 
+        "category": field,
+        "title": f"Top 5 Kontributor {field}", 
+        "subtitle": f"Bulan: {latest_month}"
+    })
 
-@bp_collection.route("/api/distribution/pcez_report")
+# --- API DOWNLOAD FULL SUMMARY (SEMUA DATA) ---
+
+@bp_collection.route("/api/download_summary")
 @login_required
-def pcez_distribution_report():
+def download_summary_csv():
     db_status = get_db_status()
-    if db_status['status'] == 'error': return jsonify({"message": db_status['message']}), 500
-    results, latest_month = _get_distribution_report(["PCEZ"], db_status['collections']['mc'])
-    schema = _generate_distribution_schema(["PCEZ"])
-    for item in results: 
-        item['chart_label'] = item.get("PCEZ", "N/A")
-        item['chart_data_piutang'] = round(item['total_piutang'], 2)
-    return jsonify({"data": results, "schema": schema, "title": "Distribusi per PCEZ", "subtitle": f"Bulan: {latest_month}"})
+    if db_status['status'] == 'error': return "Koneksi Database Gagal", 500
+    
+    # Daftar kategori yang akan diekspor
+    categories = ["RAYON", "PC", "PCEZ", "TARIF", "MERK_METER"]
+    all_rows = []
+    latest_month = "N/A"
+
+    for field in categories:
+        # Ambil data lengkap (tanpa limit)
+        results, month = _get_distribution_report([field], db_status['collections']['mc'])
+        latest_month = month
+        for row in results:
+            all_rows.append({
+                "Kategori": field,
+                "Value": row.get(field, "N/A"),
+                "Jumlah Pelanggan": row.get("total_nomen", 0),
+                "Total Piutang (Rp)": row.get("total_piutang", 0),
+                "Total Pemakaian (m3)": row.get("total_kubikasi", 0),
+                "Periode Data": month
+            })
+    
+    if not all_rows:
+        return "Tidak ada data untuk diunduh", 404
+
+    # Buat DataFrame dan konversi ke CSV
+    df = pd.DataFrame(all_rows)
+    output = io.StringIO()
+    df.to_csv(output, index=False)
+    
+    filename = f"Summary_Kontributor_{latest_month}_{datetime.now().strftime('%Y%m%d')}.csv"
+    
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-disposition": f"attachment; filename={filename}"}
+    )
 
 # --- API TOP LIST & COMPARISON ---
 
