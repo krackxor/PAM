@@ -3,76 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AB SUNTER - Dashboard</title>
+    <title>{% block title %}Dashboard{% endblock %} - AB SUNTER Analytic</title>
     <!-- Include Bootstrap CSS -->
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <!-- Include Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
     <style>
-        /* Mengatasi Horizontal Scrolling (Mobile App Feel) */
+        :root {
+            --primary-color: #4e73df;
+            --secondary-color: #858796;
+            --bg-light: #f8f9fa;
+        }
+
         html, body {
             overflow-x: hidden;
+            font-family: 'Nunito', sans-serif;
         }
 
         body {
-            display: flex; /* Pertahankan flex untuk layout */
+            display: flex;
             flex-direction: column;
             min-height: 100vh;
-            background-color: #f8f9fa;
-            /* Tambahkan padding di bagian bawah untuk Bottom Nav (hanya di mobile) */
-            padding-bottom: 0;
+            background-color: var(--bg-light);
         }
 
-        /* --- STYLING HEADER & CONTENT --- */
-        #content {
-            width: 100%;
-            padding: 20px;
-            flex-grow: 1; /* Konten tumbuh mengisi ruang yang tersedia */
-            transition: all 0.3s;
-            padding-top: 70px; /* Ruang untuk fixed navbar atas */
-        }
-
+        /* --- HEADER & TOPBAR --- */
         .navbar {
-            box-shadow: 0 2px 4px rgba(0,0,0,.08);
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
             position: fixed;
             width: 100%;
             top: 0;
             left: 0;
-            z-index: 1030;
-            border-radius: 0;
-        }
-        
-        .card {
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,.1);
-        }
-        /* Custom styles for charts/reports */
-        .chart-container {
-            position: relative;
-            height: 400px;
-            width: 100%;
-        }
-        .report-summary-box {
-            padding: 15px;
-            margin-bottom: 20px;
-            border-left: 5px solid #3498db;
-            background-color: #f4f9fd;
-            border-radius: 5px;
+            z-index: 1040;
+            background-color: #fff !important;
+            border-bottom: 1px solid #e3e6f0;
         }
 
-        /* --- BOTTOM NAVIGATION BAR (Hanya di Mobile) --- */
+        .navbar-brand {
+            font-weight: 800;
+            color: var(--primary-color) !important;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        #content {
+            width: 100%;
+            padding: 25px 15px;
+            flex-grow: 1;
+            padding-top: 85px; /* Ruang untuk navbar */
+            transition: all 0.3s;
+        }
+
+        /* --- BOTTOM NAVIGATION (MOBILE) --- */
         #bottom-nav {
             position: fixed;
             bottom: 0;
             width: 100%;
-            height: 60px; /* Tinggi standar Bottom Nav */
+            height: 65px;
             background-color: #ffffff;
-            box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
             display: flex;
             justify-content: space-around;
             align-items: center;
             z-index: 1030;
+            border-top: 1px solid #e3e6f0;
         }
+
         #bottom-nav .nav-item {
             display: flex;
             flex-direction: column;
@@ -80,164 +79,174 @@
             text-align: center;
             flex-grow: 1;
             text-decoration: none;
-            color: #7f8c8d; /* Warna default */
-            font-size: 0.7em;
-            padding: 5px 0;
-            transition: color 0.2s;
-        }
-        #bottom-nav .nav-item i {
-            font-size: 1.2em;
-            margin-bottom: 2px;
-        }
-        #bottom-nav .nav-item:hover,
-        #bottom-nav .nav-item.active {
-            color: #3498db; /* Warna aktif/hover */
+            color: #b7b9cc;
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 8px 0;
+            transition: all 0.2s ease-in-out;
         }
 
-        /* Padding bawah konten agar tidak tertutup Bottom Nav di mobile */
+        #bottom-nav .nav-item i {
+            font-size: 1.4rem;
+            margin-bottom: 3px;
+        }
+
+        #bottom-nav .nav-item.active,
+        #bottom-nav .nav-item:hover {
+            color: var(--primary-color);
+        }
+
+        /* Responsive Visibility */
         @media (max-width: 768px) {
-            #content {
-                padding-bottom: 70px; /* Sama dengan tinggi bottom nav + sedikit margin */
-            }
-            #bottom-nav {
-                display: flex; /* Tampilkan di mobile */
-            }
+            #content { padding-bottom: 80px; }
+            #bottom-nav { display: flex; }
         }
         
-        /* Sembunyikan Bottom Nav di Desktop */
         @media (min-width: 769px) {
-            #bottom-nav {
-                display: none;
-            }
+            #bottom-nav { display: none; }
         }
 
-        /* Styling untuk modal menu (menggantikan sidebar) */
-        .modal-body .list-group-item {
+        /* MODAL MENU */
+        .modal-content {
+            border-radius: 15px;
             border: none;
-            padding: 10px 15px;
         }
-        .modal-body .list-group-item a {
-            color: #34495e;
-            display: block;
-            text-decoration: none;
-            font-size: 1.1em;
+        .modal-header {
+            border-top-left-radius: 15px;
+            border-top-right-radius: 15px;
         }
-
+        .list-group-item {
+            border: none;
+            padding: 12px 20px;
+            font-weight: 600;
+            color: #4e73df;
+            border-radius: 8px !important;
+            margin-bottom: 2px;
+        }
+        .list-group-item:hover {
+            background-color: #f8f9fc;
+            color: #2e59d9;
+        }
+        .list-group-item i {
+            width: 25px;
+            text-align: center;
+            margin-right: 10px;
+        }
+        .menu-section-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            font-weight: 800;
+            color: #b7b9cc;
+            padding: 15px 20px 5px;
+        }
     </style>
+    {% block custom_styles %}{% endblock %}
 </head>
 <body>
 
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <nav class="navbar navbar-expand navbar-light">
         <div class="container-fluid">
-            <!-- PENGGANTIAN NAMA: PAM Analytic menjadi AB SUNTER Analytic -->
-            <span class="navbar-brand mb-0 h1 d-lg-none">AB SUNTER Analytic</span>
-            <span class="navbar-brand mb-0 h1 d-none d-lg-block">AB SUNTER Analytic Dashboard</span>
+            <span class="navbar-brand mb-0 h1 d-lg-none">AB SUNTER</span>
+            <span class="navbar-brand mb-0 h1 d-none d-lg-block">AB SUNTER Analytic</span>
 
-            <div class="d-flex align-items-center">
+            <div class="ml-auto d-flex align-items-center">
                 {% if current_user.is_authenticated %}
-                    <!-- Display on Desktop only -->
-                    <span class="navbar-text mr-3 d-none d-lg-inline">
-                        Selamat datang, **{{ current_user.username }}**
+                    <span class="navbar-text mr-3 d-none d-lg-inline text-gray-600 small">
+                        Hi, <b>{{ current_user.username }}</b>
                     </span>
-                    <!-- Tombol Menu/Dropdown (Desktop & Mobile) -->
-                    <button class="btn btn-info d-lg-none" type="button" data-toggle="modal" data-target="#fullMenuModal">
-                        <i class="fas fa-bars"></i>
+                    <button class="btn btn-link text-primary d-lg-none" type="button" data-toggle="modal" data-target="#fullMenuModal">
+                        <i class="fas fa-bars fa-lg"></i>
                     </button>
-                    <!-- Tombol Logout (Desktop Only) -->
                     <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-danger d-none d-lg-inline ml-2">
-                        <i class="fas fa-sign-out-alt"></i> Keluar
+                        <i class="fas fa-sign-out-alt"></i> Logout
                     </a>
                 {% else %}
-                     <a href="{{ url_for('login') }}" class="btn btn-sm btn-outline-primary">Masuk</a>
+                    <a href="{{ url_for('login') }}" class="btn btn-sm btn-primary px-4 shadow-sm">Masuk</a>
                 {% endif %}
             </div>
         </div>
     </nav>
 
     <div id="content" class="container">
-        <!-- START: Flash Message Block for displaying Python errors or Flask messages -->
+        <!-- Flash Messages -->
         <div class="container-fluid px-0">
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     {% for category, message in messages %}
-                        <div class="alert alert-{{ category }}" role="alert">
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
                             {{ message }}
+                            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
                         </div>
                     {% endfor %}
                 {% endif %}
             {% endwith %}
         </div>
-        <!-- END: Flash Message Block -->
 
         {% block content %}{% endblock %}
     </div>
 
-    <!-- --- BOTTOM NAVIGATION (MOBILE ONLY) --- -->
+    <!-- BOTTOM NAVIGATION (MOBILE ONLY) -->
     {% if current_user.is_authenticated %}
     <nav id="bottom-nav">
-        <!-- Home -->
         <a href="{{ url_for('index') }}" class="nav-item {% if request.endpoint == 'index' %}active{% endif %}">
             <i class="fas fa-home"></i>
             <span>Home</span>
         </a>
-        <!-- Dashboard Analytics -->
         <a href="{{ url_for('analytics_dashboard') }}" class="nav-item {% if request.endpoint == 'analytics_dashboard' %}active{% endif %}">
             <i class="fas fa-chart-line"></i>
             <span>Analitik</span>
         </a>
-        <!-- Laporan Piutang (Contoh Menu Utama) -->
-        <a href="{{ url_for('bp_collection.collection_laporan_view') }}" class="nav-item {% if 'bp_collection' in request.endpoint and 'laporan' in request.endpoint %}active{% endif %}">
+        <a href="{{ url_for('bp_collection.collection_laporan_view') }}" class="nav-item {% if 'bp_collection' in request.endpoint %}active{% endif %}">
             <i class="fas fa-file-invoice-dollar"></i>
             <span>Piutang</span>
         </a>
-        <!-- Laporan Baca Meter (Contoh Menu Utama) -->
-        <a href="{{ url_for('bp_meter_reading.meter_reading_report_view') }}" class="nav-item {% if 'bp_meter_reading' in request.endpoint and 'report' in request.endpoint %}active{% endif %}">
+        <a href="{{ url_for('bp_meter_reading.meter_reading_report_view') }}" class="nav-item {% if 'bp_meter_reading' in request.endpoint %}active{% endif %}">
             <i class="fas fa-tachometer-alt"></i>
             <span>Meter</span>
         </a>
-        <!-- Menu/User (Akan membuka modal menu) -->
         <a href="#" class="nav-item" data-toggle="modal" data-target="#fullMenuModal">
-            <i class="fas fa-bars"></i>
+            <i class="fas fa-th-large"></i>
             <span>Menu</span>
         </a>
     </nav>
     {% endif %}
 
-
-    <!-- --- FULL MENU MODAL (Menggantikan Sidebar di Mobile) --- -->
-    <div class="modal fade" id="fullMenuModal" tabindex="-1" aria-labelledby="fullMenuModalLabel" aria-hidden="true">
+    <!-- FULL MENU MODAL -->
+    <div class="modal fade" id="fullMenuModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
-                <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title" id="fullMenuModalLabel">Navigasi Lengkap AB SUNTER Analytic</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <div class="modal-header bg-primary text-white border-0">
+                    <h5 class="modal-title font-weight-bold">Navigasi Utama</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
                         <span aria-hidden="true">&times;</span>
                     </button>
                 </div>
-                <div class="modal-body">
-                    <div class="list-group">
-                        <a href="{{ url_for('index') }}" class="list-group-item list-group-item-action"><i class="fas fa-home fa-fw"></i> Home</a>
-                        <a href="{{ url_for('analytics_dashboard') }}" class="list-group-item list-group-item-action"><i class="fas fa-chart-line fa-fw"></i> Dashboard Analitik</a>
+                <div class="modal-body p-0">
+                    <div class="list-group list-group-flush">
+                        <a href="{{ url_for('index') }}" class="list-group-item list-group-item-action"><i class="fas fa-home fa-fw"></i> Dashboard Beranda</a>
+                        <a href="{{ url_for('analytics_dashboard') }}" class="list-group-item list-group-item-action"><i class="fas fa-chart-line fa-fw"></i> Ringkasan Analitik</a>
                         
-                        <h6 class="mt-3 mb-1 px-3 text-secondary">Piutang & Koleksi</h6>
+                        <div class="menu-section-label">Piutang & Koleksi</div>
                         <a href="{{ url_for('bp_collection.collection_laporan_view') }}" class="list-group-item list-group-item-action"><i class="fas fa-file-invoice-dollar fa-fw"></i> Laporan Piutang</a>
-                        <a href="{{ url_for('bp_collection.collection_analisis_view') }}" class="list-group-item list-group-item-action"><i class="fas fa-chart-bar fa-fw"></i> Distribusi & MoM</a>
-                        <a href="{{ url_for('bp_collection.collection_top_view') }}" class="list-group-item list-group-item-action"><i class="fas fa-sort-amount-up-alt fa-fw"></i> Top List Piutang</a>
+                        <a href="{{ url_for('bp_collection.collection_analisis_view') }}" class="list-group-item list-group-item-action"><i class="fas fa-chart-bar fa-fw"></i> Analisis Kontributor</a>
+                        <a href="{{ url_for('bp_collection.collection_top_view') }}" class="list-group-item list-group-item-action"><i class="fas fa-sort-amount-up-alt fa-fw"></i> Top 1000 Piutang</a>
                         <a href="{{ url_for('bp_collection.collection_riwayat_view') }}" class="list-group-item list-group-item-action"><i class="fas fa-history fa-fw"></i> Riwayat MoM</a>
                         <a href="{{ url_for('bp_collection.analysis_dod_comparison') }}" class="list-group-item list-group-item-action"><i class="fas fa-exchange-alt fa-fw"></i> Koleksi DoD</a>
 
-                        <h6 class="mt-3 mb-1 px-3 text-secondary">Baca Meter & Anomali</h6>
+                        <div class="menu-section-label">Baca Meter & Anomali</div>
                         <a href="{{ url_for('bp_meter_reading.meter_reading_report_view') }}" class="list-group-item list-group-item-action"><i class="fas fa-tachometer-alt fa-fw"></i> Laporan Baca Meter</a>
-                        <a href="{{ url_for('bp_meter_reading.meter_reading_analysis_view') }}" class="list-group-item list-group-item-action"><i class="fas fa-cogs fa-fw"></i> Analisis Anomali</a>
+                        <a href="{{ url_for('bp_meter_reading.meter_reading_analysis_view') }}" class="list-group-item list-group-item-action"><i class="fas fa-exclamation-triangle fa-fw"></i> Analisis Anomali</a>
 
                         {% if current_user.is_admin %}
-                        <h6 class="mt-3 mb-1 px-3 text-secondary">Admin</h6>
-                        <a href="{{ url_for('upload_admin_unified') }}" class="list-group-item list-group-item-action"><i class="fas fa-cloud-upload-alt fa-fw"></i> Upload Data</a>
+                        <div class="menu-section-label">Administrator</div>
+                        <a href="{{ url_for('upload_admin_unified') }}" class="list-group-item list-group-item-action"><i class="fas fa-cloud-upload-alt fa-fw"></i> Upload Data Baru</a>
                         {% endif %}
 
                         <div class="dropdown-divider"></div>
                         {% if current_user.is_authenticated %}
-                        <a href="{{ url_for('logout') }}" class="list-group-item list-group-item-action text-danger">
+                        <a href="{{ url_for('logout') }}" class="list-group-item list-group-item-action text-danger mb-3">
                             <i class="fas fa-sign-out-alt fa-fw"></i> Keluar ({{ current_user.username }})
                         </a>
                         {% endif %}
@@ -246,19 +255,11 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Include Bootstrap JS and dependencies -->
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-    
-    <script>
-        // Logika untuk menandai menu bawah yang aktif
-        $(document).ready(function () {
-            // Hilangkan semua logika sidebar lama
-            // Tombol Collapse Sidebar tidak ada di layout ini, jadi pastikan tidak ada logic yang error
-        });
-    </script>
     
     {% block scripts %}{% endblock %}
 </body>
