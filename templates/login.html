@@ -3,163 +3,199 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PAM Analytics - Login</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <title>Login - AB SUNTER Analytic</title>
+    <!-- Include Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <!-- Include Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
     
     <style>
         :root {
-            --primary-color: #007bff; /* Blue */
-            --background-color: #f4f7f9; /* Light gray background */
-            --card-bg: #ffffff;
-            --text-color: #343a40;
-            --shadow-medium: 0 4px 12px rgba(0,0,0,0.1);
-            --border-radius: 8px;
+            --primary-color: #4e73df;
+            --bg-gradient: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
         }
 
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--background-color);
+            font-family: 'Nunito', sans-serif;
+            background: var(--bg-gradient);
+            height: 100vh;
             display: flex;
-            justify-content: center;
             align-items: center;
-            min-height: 100vh;
+            justify-content: center;
             margin: 0;
-            color: var(--text-color);
         }
 
-        .login-container {
+        .login-card {
+            background: #ffffff;
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.175);
             width: 100%;
             max-width: 400px;
-            padding: 30px;
-            background-color: var(--card-bg);
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow-medium);
-            text-align: center;
+            padding: 40px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .login-card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background: var(--primary-color);
         }
 
         .login-header {
-            margin-bottom: 25px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .login-header .icon-box {
+            width: 70px;
+            height: 70px;
+            background: #f8f9fc;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            color: var(--primary-color);
+            font-size: 2rem;
+            box-shadow: inset 0 0 10px rgba(78, 115, 223, 0.1);
         }
 
         .login-header h2 {
-            color: var(--primary-color);
-            font-weight: 700;
-            margin: 5px 0 10px 0;
-        }
-        
-        .login-header i {
-            font-size: 2.5rem;
-            color: var(--primary-color);
-        }
-
-        /* Form Styling */
-        .form-group {
-            margin-bottom: 15px;
-            text-align: left;
-        }
-
-        .form-control {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ced4da;
-            border-radius: var(--border-radius);
-            box-sizing: border-box;
-            font-size: 1rem;
-        }
-
-        .btn-primary {
-            background-color: var(--primary-color);
-            color: white;
-            padding: 10px 15px;
-            border: none;
-            border-radius: var(--border-radius);
-            cursor: pointer;
-            width: 100%;
-            font-weight: 600;
-            transition: background-color 0.2s;
-        }
-
-        .btn-primary:hover {
-            background-color: #0056b3;
-        }
-        
-        /* Flash Messages (Alerts) */
-        .flash-messages {
-            margin-bottom: 15px;
-        }
-        
-        .alert {
-            padding: 10px;
-            border-radius: 4px;
-            font-weight: 600;
-            font-size: 0.9rem;
-            margin-bottom: 10px;
-        }
-
-        .alert.info {
-            background-color: #cff4fc;
-            color: #055160;
-        }
-
-        .alert.danger {
-            background-color: #f8d7da;
-            color: #842029;
-        }
-        
-        /* Label for WTForms */
-        .form-group label {
-            display: block;
+            font-weight: 800;
+            color: #3a3b45;
+            font-size: 1.5rem;
             margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .login-header p {
+            color: #858796;
+            font-size: 0.85rem;
+        }
+
+        /* Form Controls */
+        .form-group label {
+            font-weight: 700;
+            color: #4e73df;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .form-control-user {
+            border-radius: 10px;
+            padding: 12px 15px;
+            height: auto;
+            border: 1px solid #d1d3e2;
             font-size: 0.9rem;
-            color: var(--secondary-color);
+        }
+
+        .form-control-user:focus {
+            box-shadow: 0 0 0 0.2rem rgba(78, 115, 223, 0.15);
+            border-color: #bac8f3;
+        }
+
+        .btn-login {
+            background-color: var(--primary-color);
+            border: none;
+            border-radius: 10px;
+            padding: 12px;
+            font-weight: 700;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            width: 100%;
+            margin-top: 10px;
+            box-shadow: 0 4px 10px rgba(78, 115, 223, 0.3);
+            transition: all 0.3s;
+        }
+
+        .btn-login:hover {
+            background-color: #2e59d9;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(78, 115, 223, 0.4);
+        }
+
+        /* Alerts */
+        .alert {
+            font-size: 0.8rem;
+            border-radius: 10px;
+            border: none;
+            font-weight: 600;
+            margin-bottom: 20px;
         }
         
+        .copyright {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.75rem;
+        }
     </style>
 </head>
 <body>
-    <div class="login-container">
-        
+
+    <div class="login-card">
         <div class="login-header">
-            <i class="fas fa-lock"></i>
-            <h2>PAM Analytics Login</h2>
-            <small class="text-muted">Akses Sistem Monitoring dan Analisis</small>
+            <div class="icon-box">
+                <i class="fas fa-shield-alt"></i>
+            </div>
+            <h2>AB SUNTER</h2>
+            <p>Sistem Monitoring & Analisis Data</p>
         </div>
 
-        <div class="flash-messages">
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert {{ category }}">{{ message }}</div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
-        </div>
+        <!-- Flash Messages untuk error login -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'danger' or category == 'error' else 'info' }} shadow-sm">
+                        <i class="fas {{ 'fa-exclamation-circle' if category == 'danger' else 'fa-info-circle' }} mr-1"></i>
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
 
         <form method="POST" action="{{ url_for('login') }}">
-            <!-- Menggunakan form.hidden_tag() dari Flask-WTF untuk CSRF token -->
             {{ form.hidden_tag() }} 
 
             <div class="form-group">
-                <!-- Username Field -->
-                {{ form.username.label }}
-                {{ form.username(class="form-control", placeholder="Masukkan Username Anda") }}
+                <label for="username">Username</label>
+                {{ form.username(class="form-control form-control-user", placeholder="Masukkan Username") }}
             </div>
 
             <div class="form-group">
-                <!-- Password Field -->
-                {{ form.password.label }}
-                {{ form.password(class="form-control", placeholder="Masukkan Password Anda") }}
+                <label for="password">Kata Sandi</label>
+                {{ form.password(class="form-control form-control-user", placeholder="Masukkan Password") }}
             </div>
 
-            <div class="form-group">
-                <!-- Submit Button -->
-                <button type="submit" class="btn-primary">
-                    {{ form.submit.label.text }} <i class="fas fa-sign-in-alt"></i>
-                </button>
-            </div>
+            <button type="submit" class="btn btn-login">
+                Masuk Ke Sistem <i class="fas fa-sign-in-alt ml-2"></i>
+            </button>
         </form>
-
+        
+        <div class="mt-4 text-center">
+            <small class="text-muted">Akses dibatasi hanya untuk personel berwenang.</small>
+        </div>
     </div>
+
+    <div class="copyright">
+        &copy; 2025 AB SUNTER Analytic Team. All Rights Reserved.
+    </div>
+
+    <!-- JS Dependencies -->
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 </body>
 </html>
