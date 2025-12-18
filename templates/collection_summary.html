@@ -63,9 +63,9 @@
     </div>
 
     <ul class="nav nav-pills mb-4 bg-white p-2 rounded shadow-sm border" id="pills-tab" role="tablist">
-        <li class="nav-item"><a class="nav-link active" data-toggle="pill" href="#pills-piutang">Piutang Aktif (MC)</a></li>
-        <li class="nav-item"><a class="nav-link" data-toggle="pill" href="#pills-tunggakan">Tunggakan (AR)</a></li>
-        <li class="nav-item"><a class="nav-link" data-toggle="pill" href="#pills-collection">Pencapaian Koleksi (MB)</a></li>
+        <li class="nav-item"><a class="nav-link active" data-toggle="pill" href="#pills-piutang" onclick="setActiveTab('piutang')">Piutang Aktif (MC)</a></li>
+        <li class="nav-item"><a class="nav-link" data-toggle="pill" href="#pills-tunggakan" onclick="setActiveTab('tunggakan')">Tunggakan (AR)</a></li>
+        <li class="nav-item"><a class="nav-link" data-toggle="pill" href="#pills-collection" onclick="setActiveTab('collection')">Pencapaian Koleksi (MB)</a></li>
     </ul>
 
     <div class="tab-content">
@@ -116,7 +116,7 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr><td colspan="5" class="text-center py-4"><i class="fas fa-spinner fa-spin"></i></td></tr>
+                                        <tr><td colspan="5" class="text-center py-4"><i class="fas fa-spinner fa-spin"></i> Memuat...</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -148,66 +148,58 @@
     const currentPeriod = "{{ period }}";
     const rawStore = {}; 
     const chartInstances = {};
+    let activeTab = 'piutang';
 
     function formatIDR(val) {
         return new Intl.NumberFormat('id-ID').format(val || 0);
     }
 
+    function formatRupiahShort(val) {
+        if (val >= 1000000000) return (val/1000000000).toFixed(1) + ' M';
+        if (val >= 1000000) return (val/1000000).toFixed(1) + ' jt';
+        return formatIDR(val);
+    }
+
+    // Fungsi Load KPI Utama (Nomen, Kubikasi, Nominal di header)
     async function loadKPI() {
         try {
             const res = await fetch("{{ url_for('bp_collection.get_stats_summary_api') }}?period=" + currentPeriod);
             const data = await res.json();
             
-            const mapping = {
-                'piutang': {
-                    count: data.jumlah_tagihan,
-                    usage: data.total_kubikasi_piutang || 0,
-                    nominal: data.total_piutang
-                },
-                'tunggakan': {
-                    count: data.pelanggan_dengan_tunggakan,
-                    usage: data.total_kubikasi_tunggakan || 0,
-                    nominal: data.total_tunggakan
-                },
-                'collection': {
-                    count: data.jumlah_nomen_koleksi || 0,
-                    usage: data.total_kubikasi_koleksi || 0,
-                    nominal: data.koleksi_bulan_ini
-                }
-            };
-
             ['piutang', 'tunggakan', 'collection'].forEach(c => {
-                const s = mapping[c];
+                const s = data[c]; // Backend sekarang mengirim kunci 'piutang', 'collection', 'tunggakan'
                 if (s && s.count > 0) {
                     document.getElementById(`count-${c}`).innerText = formatIDR(s.count);
                     document.getElementById(`usage-${c}`).innerText = formatIDR(s.usage) + ' m³';
                     document.getElementById(`nominal-${c}`).innerText = 'Rp ' + formatIDR(s.nominal);
-                } else if (c === 'piutang' && s.count === 0) {
-                     document.getElementById(`container-data-${c}`).style.display = 'none';
-                     document.getElementById(`empty-${c}`).style.display = 'block';
+                } else {
+                    document.getElementById(`count-${c}`).innerText = '0';
+                    document.getElementById(`usage-${c}`).innerText = '0 m³';
+                    document.getElementById(`nominal-${c}`).innerText = 'Rp 0';
                 }
             });
-        } catch (e) { console.error("KPI Error:", e); }
+        } catch (e) { 
+            console.error("KPI Error:", e);
+        }
     }
 
+    // Fungsi Load Data Distribusi (Grafik & Tabel)
     async function loadData(cat, type) {
         try {
-            const res = await fetch("{{ url_for('bp_collection.category_distribution_api', category='') }}" + type + "?period=" + currentPeriod);
+            // Menambahkan parameter 'type' untuk filter report_type (PIUTANG/TUNGGAKAN/COLLECTION)
+            const res = await fetch("{{ url_for('bp_collection.category_distribution_api', category='') }}" + type + "?period=" + currentPeriod + "&type=" + cat.toUpperCase());
             const json = await res.json();
             
             if(!rawStore[cat]) rawStore[cat] = {};
-            rawStore[cat][type] = json.data;
-            rawStore[cat][`${type}_field`] = json.category;
+            rawStore[cat][type] = json.data || [];
 
             renderUI(cat, type, 'ALL');
         } catch (e) { console.error(`Data Error (${type}):`, e); }
     }
 
     function renderUI(cat, type, filter) {
-        const fullData = rawStore[cat][type] || [];
+        const fullData = (rawStore[cat] && rawStore[cat][type]) ? rawStore[cat][type] : [];
         
-        // LOGIK FILTER:
-        // Jika ALL, kita harus melakukan group-sum (karena data mentah dipisah per rayon)
         let processedData = [];
         if (filter === 'ALL') {
             const map = new Map();
@@ -220,15 +212,23 @@
                     existing.total_piutang += item.total_piutang;
                     existing.total_nomen += item.total_nomen;
                     existing.total_kubikasi += item.total_kubikasi;
-                    existing.pct_piutang += item.pct_piutang;
-                    existing.pct_nomen += item.pct_nomen;
-                    existing.pct_kubikasi += item.pct_kubikasi;
+                    // Persentase dihitung ulang di akhir
                 }
             });
             processedData = Array.from(map.values());
+            
+            // Re-calculate percentages for the ALL group if needed (backend already provides pct per rayon origin)
+            // For simplicity in display, we use the sum of pct provided by backend
+            const totalNominal = processedData.reduce((acc, curr) => acc + curr.total_piutang, 0);
+            processedData.forEach(d => {
+                d.display_pct = (d.total_piutang / (totalNominal || 1)) * 100;
+            });
         } else {
             processedData = fullData.filter(item => item.rayon_origin === filter);
+            processedData.forEach(d => d.display_pct = d.pct_piutang);
         }
+
+        processedData.sort((a, b) => b.total_piutang - a.total_piutang);
 
         // 1. Update Tabel
         const tableBody = document.querySelector(`#table-${type}-${cat} tbody`);
@@ -241,17 +241,17 @@
                     <td class="text-right">${formatIDR(item.total_nomen)}</td>
                     <td class="text-right">${formatIDR(item.total_kubikasi)}</td>
                     <td class="text-right font-weight-bold text-primary">${formatRupiahShort(item.total_piutang)}</td>
-                    <td class="text-right text-xs text-info">${(item.pct_piutang || 0).toFixed(1)}%</td>
+                    <td class="text-right text-xs text-info">${(item.display_pct || 0).toFixed(1)}%</td>
                 </tr>
             `).join('');
         }
 
-        // 2. Update Grafik (Top 10 sorted by value)
+        // 2. Update Grafik
         const ctx = document.getElementById(`chart-${type}-${cat}`).getContext('2d');
         const chartId = `${type}-${cat}`;
         if (chartInstances[chartId]) chartInstances[chartId].destroy();
 
-        const chartData = [...processedData].sort((a,b) => b.total_piutang - a.total_piutang).slice(0, 10);
+        const chartData = processedData.slice(0, 10);
         
         chartInstances[chartId] = new Chart(ctx, {
             type: 'bar',
@@ -272,7 +272,7 @@
                     y: { 
                         beginAtZero: true, 
                         grid: { drawBorder: false, color: '#f2f2f2' },
-                        ticks: { font: { size: 9 }, callback: v => v >= 1000000 ? (v/1000000).toFixed(1) + 'jt' : formatIDR(v) } 
+                        ticks: { font: { size: 9 }, callback: v => formatShort(v) } 
                     },
                     x: { grid: { display: false }, ticks: { font: { size: 9 } } }
                 }
@@ -282,10 +282,9 @@
         generateInsight(cat, type, filter, processedData);
     }
 
-    function formatRupiahShort(val) {
-        if (val >= 1000000000) return (val/1000000000).toFixed(1) + ' M';
-        if (val >= 1000000) return (val/1000000).toFixed(1) + ' jt';
-        return formatIDR(val);
+    function formatShort(v) {
+        if (v >= 1000000) return (v/1000000).toFixed(1) + 'jt';
+        return formatIDR(v);
     }
 
     function generateInsight(cat, type, filter, data) {
@@ -298,7 +297,7 @@
         const top = [...data].sort((a,b) => b.total_piutang - a.total_piutang)[0];
         const context = cat === 'piutang' ? 'Piutang Aktif' : (cat === 'tunggakan' ? 'Resiko Tunggakan' : 'Pencapaian Koleksi');
         
-        let msg = `Kontribusi ${context} tertinggi pada ${type.toUpperCase()} <b>${top.id_value}</b> dengan kontribusi <b>${(top.pct_piutang || 0).toFixed(1)}%</b>.`;
+        let msg = `Kontribusi ${context} tertinggi pada ${type.toUpperCase()} <b>${top.id_value}</b> dengan kontribusi <b>${(top.display_pct || 0).toFixed(1)}%</b>.`;
         let saran = (cat === 'piutang') ? " Fokuskan penagihan pada cluster ini guna meminimalisir penunggakan." : 
                     (cat === 'tunggakan') ? " Diperlukan strategi khusus penyelesaian piutang di zona ini." : 
                     " Efisiensi di zona ini cukup baik, pertahankan performa.";
@@ -312,13 +311,15 @@
         renderUI(cat, type, mode);
     }
 
+    function setActiveTab(tab) {
+        activeTab = tab;
+        const types = ['rayon', 'pcez', 'pc', 'tarif', 'merk', 'read_method'];
+        types.forEach(t => loadData(tab, t));
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         loadKPI();
-        const types = ['rayon', 'pcez', 'pc', 'tarif', 'merk', 'read_method'];
-        const categories = ['piutang', 'tunggakan', 'collection'];
-        categories.forEach(c => {
-            types.forEach(t => loadData(c, t));
-        });
+        setActiveTab('piutang');
     });
 </script>
 {% endblock %}
