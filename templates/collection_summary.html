@@ -17,13 +17,25 @@
     background-color: #fff; padding: 20px; border-radius: 8px;
     box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
     margin-bottom: 30px; border: 1px solid #e3e6f0;
+    display: flex; flex-direction: column;
 }
 .section-title { color: #4e73df; font-weight: 800; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
 
-.chart-container { height: 250px; position: relative; margin-bottom: 15px; }
-.scrollable-table { max-height: 250px; overflow-y: auto; border: 1px solid #eaecf4; border-radius: 5px; }
+.chart-container { height: 200px; position: relative; margin-bottom: 15px; }
+.scrollable-table { max-height: 200px; overflow-y: auto; border: 1px solid #eaecf4; border-radius: 5px; margin-bottom: 15px; }
 .table-details { font-size: 0.8rem; width: 100%; margin-bottom: 0; }
 .table-details th { background-color: #f8f9fc; color: #4e73df; text-transform: uppercase; font-size: 0.7rem; position: sticky; top: 0; z-index: 2; }
+
+.insight-box {
+    background-color: #f8f9fc;
+    border-left: 4px solid #4e73df;
+    padding: 12px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    color: #5a5c69;
+    margin-top: auto;
+}
+.insight-box strong { color: #4e73df; display: block; margin-bottom: 5px; text-transform: uppercase; font-size: 0.7rem; }
 
 .nav-pills .nav-link { font-weight: bold; color: #5a5c69; }
 .nav-pills .nav-link.active { background-color: #4e73df; }
@@ -77,11 +89,10 @@
             </div>
 
             <div id="container-data-{{ cat }}">
-                <!-- Loop Kontributor -->
                 <div class="row">
                     {% for type, label in [('rayon', 'Rayon'), ('pc', 'Petugas (PC)'), ('pcez', 'PCEZ'), ('tarif', 'Tarif'), ('merk', 'Merk Meter')] %}
                     <div class="col-lg-6 col-xl-4 mb-4">
-                        <div class="section-card">
+                        <div class="section-card h-100">
                             <div class="d-flex justify-content-between align-items-center mb-3">
                                 <h6 class="m-0 font-weight-bold text-primary">{{ label }}</h6>
                                 <div class="btn-group btn-group-toggle btn-group-filter" data-toggle="buttons">
@@ -99,6 +110,11 @@
                                     <tbody><tr><td colspan="2" class="text-center py-4"><i class="fas fa-spinner fa-spin"></i></td></tr></tbody>
                                 </table>
                             </div>
+                            <!-- Insight Container -->
+                            <div class="insight-box" id="insight-{{ type }}-{{ cat }}">
+                                <strong><i class="fas fa-lightbulb mr-1"></i> Analisa & Saran</strong>
+                                <span class="insight-text">Menganalisa data...</span>
+                            </div>
                         </div>
                     </div>
                     {% endfor %}
@@ -113,19 +129,17 @@
     </div>
 </div>
 
-<!-- Load Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
 
 <script>
     const period = "{{ period }}";
-    const rawDataStore = {}; // Tempat menyimpan data murni dari API
+    const rawDataStore = {};
     const chartInstances = {};
 
     function formatIDR(val) {
         return new Intl.NumberFormat('id-ID').format(val || 0);
     }
 
-    // Fungsi utama pemuatan data KPI
     async function loadStats() {
         try {
             const res = await fetch(`/collection/api/stats_summary?period=${period}`);
@@ -144,35 +158,24 @@
         } catch (e) { console.error(e); }
     }
 
-    // Fungsi memuat data distribusi dan inisialisasi awal
     async function loadDist(cat, type) {
         try {
             const res = await fetch(`/collection/api/distribution/${type}?period=${period}`);
             const json = await res.json();
-            
-            // Simpan data ke memori agar filter ALL/34/35 cepat (tidak panggil server lagi)
             if(!rawDataStore[cat]) rawDataStore[cat] = {};
             rawDataStore[cat][type] = json.data;
             rawDataStore[cat][`${type}_field`] = json.category;
-
             renderUI(cat, type, 'ALL');
         } catch (e) { console.error(e); }
     }
 
-    // Fungsi Render Chart dan Table berdasarkan filter
     function renderUI(cat, type, filter) {
         const fullData = rawDataStore[cat][type];
         const field = rawDataStore[cat][`${type}_field`];
         
-        // Logika Filter: Jika 34/35, cari yang field Rayon-nya mulai dengan angka tersebut
-        // Catatan: Jika type adalah 'rayon', kita filter langsung. Jika PC/Tarif, kita filter berdasarkan relasi data (asumsi data sudah include Rayon atau field id memiliki prefix)
-        // Karena di aggregation kita hanya group by satu field, filter 34/35 paling akurat diaplikasikan pada category 'rayon' atau jika field-nya mengandung info rayon.
         let filtered = fullData;
         if (filter !== 'ALL') {
-            filtered = fullData.filter(item => {
-                const val = String(item[field] || '');
-                return val.startsWith(filter);
-            });
+            filtered = fullData.filter(item => String(item[field] || '').startsWith(filter));
         }
 
         // 1. Update Table
@@ -191,12 +194,8 @@
         // 2. Update Chart
         const ctx = document.getElementById(`chart-${type}-${cat}`).getContext('2d');
         const chartId = `${type}-${cat}`;
-        
         if (chartInstances[chartId]) chartInstances[chartId].destroy();
-
-        // Ambil Top 10 saja untuk grafik agar tidak sumpek, tapi tabel tetap ALL
         const chartData = filtered.slice(0, 10);
-
         chartInstances[chartId] = new Chart(ctx, {
             type: 'bar',
             data: {
@@ -204,13 +203,12 @@
                 datasets: [{
                     label: 'Nominal Rp',
                     data: chartData.map(d => d.total_piutang),
-                    backgroundColor: '#4e73df',
+                    backgroundColor: filter === '34' ? '#1cc88a' : (filter === '35' ? '#f6c23e' : '#4e73df'),
                     borderRadius: 5
                 }]
             },
             options: {
-                responsive: true,
-                maintainAspectRatio: false,
+                responsive: true, maintainAspectRatio: false,
                 plugins: { legend: { display: false } },
                 scales: {
                     y: { beginAtZero: true, ticks: { callback: v => v >= 1000000 ? (v/1000000).toFixed(1) + 'jt' : formatIDR(v) } },
@@ -218,15 +216,48 @@
                 }
             }
         });
+
+        // 3. Update Insight
+        updateInsight(cat, type, filter, filtered);
     }
 
-    // Fungsi Trigger Tombol Filter
+    function updateInsight(cat, type, filter, data) {
+        const insightContainer = document.querySelector(`#insight-${type}-${cat} .insight-text`);
+        if (!data || data.length === 0) {
+            insightContainer.innerText = "Tidak ada data untuk dianalisa.";
+            return;
+        }
+
+        const totalNominal = data.reduce((a, b) => a + (b.total_piutang || 0), 0);
+        const topItem = data[0];
+        const topName = topItem ? topItem[rawDataStore[cat][`${type}_field`]] : 'N/A';
+        
+        let saran = "";
+        const context = cat === 'piutang' ? 'Tagihan Baru' : (cat === 'tunggakan' ? 'Tunggakan Lama' : 'Koleksi Masuk');
+
+        // Logika Saran berdasarkan Tipe Kontributor
+        if (type === 'rayon') {
+            saran = `Dominasi ${context} ada di Rayon ${topName}. Prioritaskan penagihan intensif di wilayah ini untuk menjaga cashflow.`;
+        } else if (type === 'pc') {
+            saran = `Petugas PC ${topName} memiliki beban ${context} tertinggi. Lakukan monitoring kinerja catat meter atau bantuan penagihan khusus.`;
+        } else if (type === 'pcez') {
+            saran = `Segmen PCEZ ${topName} berkontribusi besar. Pastikan koordinasi dengan tim lapangan untuk edukasi pembayaran tepat waktu.`;
+        } else if (type === 'tarif') {
+            saran = `Golongan Tarif ${topName} penyumbang terbesar. Evaluasi daya beli atau skema insentif pembayaran untuk kategori ini.`;
+        } else {
+            saran = `Gunakan data ${topName} sebagai acuan efisiensi meter. Ganti meter jika terdapat anomali pada pemakaian yang tidak sebanding dengan piutang.`;
+        }
+
+        // Tambahan saran masa depan
+        const futureStep = filter === 'ALL' ? " Lakukan mapping menyeluruh 34 & 35." : ` Fokus pada cluster internal wilayah ${filter}.`;
+        
+        insightContainer.innerHTML = `${saran}<br><br><strong>Rencana ke Depan:</strong> ${futureStep} Tingkatkan sosialisasi digital payment untuk menekan angka penunggakan bulan depan.`;
+    }
+
     function filterData(cat, type, mode, btn) {
-        // Toggle class active pada tombol
         const parent = btn.parentElement;
         parent.querySelectorAll('button').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-
         renderUI(cat, type, mode);
     }
 
@@ -234,7 +265,6 @@
         loadStats();
         const categories = ['piutang', 'tunggakan', 'collection'];
         const types = ['rayon', 'pc', 'pcez', 'tarif', 'merk'];
-        
         categories.forEach(c => {
             types.forEach(t => loadDist(c, t));
         });
