@@ -20,9 +20,13 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- HELPER INTERNAL UNTUK DISTRIBUSI (DIOPTIMALKAN UNTUK DATA BESAR) ---
+# --- HELPER INTERNAL UNTUK DISTRIBUSI (OPTIMASI AGRESSIF - TANPA LIMIT) ---
 def _get_distribution_report(group_fields, collection_mc, limit=None):
-    """Menghitung distribusi metrik tanpa batasan limit default untuk menampilkan semua data."""
+    """
+    Menghitung distribusi metrik. 
+    Menampilkan SEMUA data secara default kecuali limit ditentukan.
+    Optimasi: Grouping sebelum join untuk field yang ada di MC.
+    """
     db_status = get_db_status()
     if db_status['status'] == 'error':
         return [], "N/A"
@@ -36,12 +40,12 @@ def _get_distribution_report(group_fields, collection_mc, limit=None):
     if not latest_month:
         return [], "N/A"
 
-    # Field yang biasanya ada di MC untuk kueri cepat (RAYON, PC, TARIF)
+    # Cek apakah field tujuan ada di MC (RAYON, PC, TARIF) untuk kueri cepat
     fields_in_mc = ["RAYON", "PC", "TARIF"]
     use_simple_pipeline = all(f in fields_in_mc for f in group_fields)
 
     if use_simple_pipeline:
-        # PIPELINE CEPAT: Langsung grouping tanpa join
+        # PIPELINE CEPAT: Langsung grouping di MC (Tanpa Lookup)
         pipeline = [
             {"$match": {"BULAN_TAGIHAN": latest_month}},
             {"$group": {
@@ -60,7 +64,7 @@ def _get_distribution_report(group_fields, collection_mc, limit=None):
             {"$sort": {"total_piutang": -1}}
         ]
     else:
-        # PIPELINE DETAIL: Join ke CustomerData (untuk PCEZ atau MERK)
+        # PIPELINE LENGKAP: Join ke CustomerData (untuk PCEZ atau MERK_METER)
         pipeline = [
             {"$match": {"BULAN_TAGIHAN": latest_month}},
             {'$lookup': {
@@ -90,6 +94,7 @@ def _get_distribution_report(group_fields, collection_mc, limit=None):
         pipeline.append({"$limit": limit})
 
     try:
+        # allowDiskUse=True wajib untuk data besar agar tidak error memori
         results = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
     except Exception as e:
         print(f"Error aggregation: {e}")
@@ -102,11 +107,13 @@ def _get_distribution_report(group_fields, collection_mc, limit=None):
 @bp_collection.route('/laporan', methods=['GET'])
 @login_required 
 def collection_laporan_view():
+    """Halaman Laporan Utama (Mendukung Lazy Loading)"""
     current_date = datetime.now()
     default_html_period = current_date.strftime('%Y-%m')
     raw_period = request.args.get('period', default_html_period)
     
-    # Render template dengan stats=None agar halaman muncul SEKETIKA
+    # Return template kosong agar loding halaman instan.
+    # Data akan ditarik via AJAX ke /api/stats_summary dan /api/distribution/
     return render_template('collection_summary.html', 
                            title="Laporan Piutang & Koleksi",
                            stats=None, 
@@ -117,7 +124,7 @@ def collection_laporan_view():
 @login_required 
 def collection_analisis_view():
     return render_template('collection_analysis.html', 
-                           title="Analisis Kontributor",
+                           title="Analisis Kontributor Lengkap",
                            is_admin=current_user.is_admin)
 
 @bp_collection.route('/top', methods=['GET'])
@@ -147,11 +154,12 @@ def analysis_dod_comparison():
                             is_admin=current_user.is_admin,
                             api_endpoint=url_for("bp_collection.dod_comparison_report_api"))
 
-# --- API ENDPOINTS (MENAMPILKAN SELURUH DATA SECARA ASYNC) ---
+# --- API ENDPOINTS (FOR FAST ASYNC LOADING) ---
 
 @bp_collection.route("/api/stats_summary")
 @login_required
 def get_stats_summary_api():
+    """API untuk mengambil KPI utama (Arus Kas, Tunggakan, Koleksi) secara async"""
     raw_period = request.args.get('period', datetime.now().strftime('%Y-%m'))
     try:
         if '-' in raw_period:
@@ -168,14 +176,21 @@ def get_stats_summary_api():
 @bp_collection.route("/api/distribution/<category>")
 @login_required
 def category_distribution_api(category):
-    cat_map = {"rayon": "RAYON", "pc": "PC", "pcez": "PCEZ", "tarif": "TARIF", "merk": "MERK_METER"}
+    """API untuk mengambil semua data distribusi per kategori (RAYON, PC, dll)"""
+    cat_map = {
+        "rayon": "RAYON", 
+        "pc": "PC", 
+        "pcez": "PCEZ", 
+        "tarif": "TARIF", 
+        "merk": "MERK_METER"
+    }
     field = cat_map.get(category.lower())
     if not field: return jsonify({"message": "Kategori tidak valid"}), 400
 
     db_status = get_db_status()
     if db_status['status'] == 'error': return jsonify({"message": db_status['message']}), 500
     
-    # Ambil ALL DATA (tanpa limit)
+    # Ambil SEMUA DATA (limit=None)
     results, latest_month = _get_distribution_report([field], db_status['collections']['mc'])
     
     for item in results: 
@@ -183,11 +198,17 @@ def category_distribution_api(category):
         item['chart_data_piutang'] = round(item['total_piutang'], 2)
         item['nominal'] = item['total_piutang'] 
 
-    return jsonify({"data": results, "category": field, "title": f"Kontributor {field}", "subtitle": f"Bulan: {latest_month}"})
+    return jsonify({
+        "data": results, 
+        "category": field, 
+        "title": f"Kontributor {field} Lengkap", 
+        "subtitle": f"Bulan: {latest_month}"
+    })
 
 @bp_collection.route("/api/download_summary")
 @login_required
 def download_summary_csv():
+    """Download Ringkasan Semua Kontributor dalam satu file CSV"""
     db_status = get_db_status()
     if db_status['status'] == 'error': return "Koneksi Database Gagal", 500
     
@@ -200,21 +221,28 @@ def download_summary_csv():
         latest_month = month
         for row in results:
             all_rows.append({
-                "Kategori": field, "Value": row.get(field, "N/A"),
-                "Pelanggan": row.get("total_nomen", 0), "Piutang (Rp)": row.get("total_piutang", 0),
-                "Pemakaian (m3)": row.get("total_kubikasi", 0), "Periode": month
+                "Kategori": field, 
+                "Value": row.get(field, "N/A"),
+                "Pelanggan": row.get("total_nomen", 0), 
+                "Piutang (Rp)": row.get("total_piutang", 0),
+                "Pemakaian (m3)": row.get("total_kubikasi", 0), 
+                "Periode": month
             })
     
-    if not all_rows: return "Tidak ada data", 404
+    if not all_rows: return "Tidak ada data untuk diunduh", 404
 
     df = pd.DataFrame(all_rows)
     output = io.StringIO()
     df.to_csv(output, index=False)
     
     filename = f"Summary_Lengkap_Kontributor_{latest_month}.csv"
-    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-disposition": f"attachment; filename={filename}"})
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-disposition": f"attachment; filename={filename}"}
+    )
 
-# --- API TOP LIST (Limit 1000) ---
+# --- API TOP LIST & COMPARISON ---
 
 @bp_collection.route('/api/top_debtors_report', methods=['GET'])
 @login_required 
@@ -244,7 +272,7 @@ def top_debtors_report_api():
                 'TagihanTerbaru': '$TagihanTerbaru'
             }},
             {'$sort': {'TotalPiutang': -1}},
-            {'$limit': 1000} 
+            {'$limit': 1000} # Ambil 1000 penunggak terbesar
         ]
         data = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
         schema = [
