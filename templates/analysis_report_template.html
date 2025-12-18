@@ -3,457 +3,286 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block custom_styles %}
-/* CSS Khusus untuk Laporan Analisis */
-.report-container {
-    padding: 20px;
-    background-color: var(--background-color-light);
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow-medium);
-}
-.report-header { 
-    text-align: left; 
-    margin-bottom: 20px; 
-    border-bottom: 2px solid var(--primary-color);
-    padding-bottom: 10px;
-}
-.report-description {
-    color: #6c757d;
-    margin-bottom: 30px;
-}
-
-/* Tabel Dinamis yang Responsif */
-.report-table-wrapper { 
-    overflow-x: auto; 
-    margin-top: 20px; 
-    box-shadow: var(--shadow-light);
-    border-radius: var(--border-radius);
-    overflow: hidden;
-    border: 1px solid #e0e0e0;
-}
-.dynamic-table { 
-    width: 100%; 
-    border-collapse: collapse; 
-    font-size: 13px; 
-    min-width: 1500px; /* Diperluas untuk menampung dimensi komprehensif */
-}
-.dynamic-table th, .dynamic-table td { 
-    border: 1px solid #f0f0f0; 
-    padding: 10px; 
-    text-align: left; 
-    white-space: nowrap; 
-}
-.dynamic-table th { 
-    background-color: var(--primary-color); 
-    color: white;
-    font-weight: 600; 
-    text-align: center;
-}
-.dynamic-table tr:nth-child(even) {
-    background-color: #f8f9fa;
-}
-.no-results {
-    text-align: center;
-    padding: 40px;
-    color: #dc3545;
-    font-weight: bold;
-}
-
-/* Chart Styles */
-.chart-container {
-    margin-top: 30px;
-    padding: 20px;
-    background-color: var(--card-bg);
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow-medium);
-}
-
-/* MEDIA QUERY untuk Responsif Mobile */
-@media (max-width: 768px) {
-    .dynamic-table {
-        min-width: 100%;
+<style>
+    /* Kontainer Laporan */
+    .report-container {
+        padding: 10px;
     }
-    .dynamic-table thead {
-        display: none;
+    
+    .report-header-section {
+        background-color: #fff;
+        padding: 25px;
+        border-radius: 12px;
+        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.1);
+        margin-bottom: 25px;
+        border-left: 5px solid var(--primary-color);
     }
-    .dynamic-table tr {
-        display: block;
-        margin-bottom: 15px; 
-        border: 1px solid #ddd;
-        border-radius: var(--border-radius);
+
+    .report-description {
+        color: #858796;
+        font-size: 0.95rem;
+        margin-bottom: 0;
     }
-    .dynamic-table td {
+
+    /* Card Wrapper untuk Tabel & Chart */
+    .report-card {
+        background-color: #fff;
+        border-radius: 12px;
+        border: 1px solid #e3e6f0;
+        box-shadow: 0 0.15rem 1.5rem 0 rgba(0, 0, 0, 0.05);
+        margin-bottom: 30px;
+        overflow: hidden;
+    }
+
+    .report-card-header {
+        padding: 15px 20px;
+        background-color: #f8f9fc;
+        border-bottom: 1px solid #e3e6f0;
         display: flex;
         justify-content: space-between;
-        padding: 10px 12px;
-        border: none;
-        border-bottom: 1px solid #eee;
-        text-align: right;
-        white-space: normal;
+        align-items: center;
     }
-    .dynamic-table td:before {
-        content: attr(data-label); 
-        font-weight: 600;
-        text-align: left;
-        width: 50%; 
-        color: var(--primary-color);
-    }
-}
 
+    .report-card-header h5 {
+        margin: 0;
+        font-weight: 700;
+        color: var(--primary-color);
+        font-size: 1rem;
+    }
+
+    /* Area Tabel */
+    .report-table-wrapper {
+        overflow-x: auto;
+    }
+
+    .dynamic-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+    }
+
+    .dynamic-table thead th {
+        background-color: #f8f9fc;
+        color: #4e73df;
+        font-weight: 800;
+        text-transform: uppercase;
+        padding: 12px 15px;
+        border-bottom: 2px solid #e3e6f0;
+        white-space: nowrap;
+    }
+
+    .dynamic-table tbody td {
+        padding: 12px 15px;
+        border-bottom: 1px solid #f2f2f2;
+        color: #5a5c69;
+        vertical-align: middle;
+    }
+
+    .dynamic-table tbody tr:hover {
+        background-color: #fbfcfe;
+    }
+
+    /* Status & Badges */
+    .badge-anomali {
+        font-weight: 700;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.7rem;
+    }
+
+    /* Media Query Mobile */
+    @media (max-width: 768px) {
+        .dynamic-table thead { display: none; }
+        .dynamic-table tr { 
+            display: block; 
+            border: 1px solid #e3e6f0; 
+            margin: 15px; 
+            border-radius: 8px;
+            background: #fff;
+        }
+        .dynamic-table td {
+            display: flex;
+            justify-content: space-between;
+            text-align: right;
+            border-bottom: 1px solid #eee;
+            padding: 10px;
+        }
+        .dynamic-table td:before {
+            content: attr(data-label);
+            font-weight: 800;
+            text-align: left;
+            color: #4e73df;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+        .dynamic-table td:last-child { border-bottom: none; }
+    }
+</style>
 {% endblock %}
 
 {% block content %}
-    <h2 style="text-align: left; border-bottom: none; margin-bottom: 10px; color: var(--primary-color);">
-        <i class="fas fa-file-alt" style="margin-right: 10px;"></i> {{ title }}
-    </h2>
-    <p class="report-description">{{ description }}</p>
-
-    <div id="loadingStatus" style="text-align: center; padding: 30px; color: #6c757d;">
-        <i class="fas fa-spinner fa-spin"></i> Memuat data laporan...
+<div class="report-container">
+    <!-- Header Laporan -->
+    <div class="report-header-section">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h2 class="font-weight-bold text-gray-800" style="font-size: 1.6rem;">
+                    <i class="fas fa-file-invoice mr-2 text-primary"></i> {{ title }}
+                </h2>
+                <p class="report-description">{{ description }}</p>
+            </div>
+            <button class="btn btn-sm btn-outline-primary shadow-sm d-none d-md-inline" onclick="window.print()">
+                <i class="fas fa-print fa-sm"></i> Cetak Laporan
+            </button>
+        </div>
     </div>
 
+    <!-- Loading Spinner -->
+    <div id="loadingStatus" class="text-center py-5">
+        <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status"></div>
+        <h5 class="mt-3 text-gray-600 font-weight-bold">Mengolah data dari database AB SUNTER...</h5>
+    </div>
+
+    <!-- Konten Laporan -->
     <div id="reportContent" style="display: none;">
         
-        {% if report_type.startswith('DIST_') or report_type == 'AGING_REPORT' or report_type == 'TOP_DEBTORS' or report_type == 'ANOMALY_COMPREHENSIVE' or report_type == 'BASIC_VOLUME' %}
-        <div class="chart-container">
-            <h3 style="margin-top: 0; color: var(--text-color);">Grafik Laporan Distribusi / Top List</h3>
-            <canvas id="distributionChart"></canvas>
+        <!-- Grafik Section -->
+        <div class="report-card">
+            <div class="report-card-header">
+                <h5><i class="fas fa-chart-bar mr-2"></i> Visualisasi Data Laporan</h5>
+                <span class="badge badge-primary px-2 py-1">Top 10 Data</span>
+            </div>
+            <div class="card-body">
+                <div style="height: 350px; position: relative;">
+                    <canvas id="mainReportChart"></canvas>
+                </div>
+            </div>
         </div>
-        {% elif report_type == 'MOM_COMPARISON' or report_type == 'DOD_COMPARISON' %}
-        <div class="chart-container">
-            <h3 style="margin-top: 0; color: var(--text-color);">Grafik Perbandingan Bulanan (MoM) / Harian (DoD)</h3>
-            <canvas id="comparisonChart"></canvas>
-        </div>
-        {% endif %}
 
-        <h3 style="margin-top: 30px; color: var(--primary-color);">Tabel Data Detail</h3>
-        <div id="reportTableArea" class="report-table-wrapper">
-            <!-- Tabel akan dirender dinamis di sini -->
+        <!-- Tabel Detail Section -->
+        <div class="report-card">
+            <div class="report-card-header">
+                <h5><i class="fas fa-list-ul mr-2"></i> Rincian Data Detail</h5>
+                <div id="totalRowsCount" class="small font-weight-bold text-muted">0 Baris Data</div>
+            </div>
+            <div class="report-table-wrapper" id="reportTableArea">
+                <!-- Tabel diisi via JS -->
+            </div>
         </div>
-        
     </div>
-    
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+</div>
+{% endblock %}
 
-    <script>
-        const loadingStatus = document.getElementById('loadingStatus');
-        const reportContent = document.getElementById('reportContent');
-        const reportTableArea = document.getElementById('reportTableArea');
-        const distributionChartCanvas = document.getElementById('distributionChart');
-        const comparisonChartCanvas = document.getElementById('comparisonChart');
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
 
+<script>
+    const loadingStatus = document.getElementById('loadingStatus');
+    const reportContent = document.getElementById('reportContent');
+    const reportTableArea = document.getElementById('reportTableArea');
+    const API_URL = "{{ api_endpoint }}";
+    const reportType = "{{ report_type }}";
 
-        // URL API diambil dari konteks Flask/Jinja
-        const API_URL = "{{ api_endpoint }}"; 
-        
-        // --- UTILITY FORMATTING ---
-        function formatRupiah(number) {
-            return 'Rp ' + (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+    // Formatting Helpers
+    const formatIDR = (v) => 'Rp ' + (parseFloat(v) || 0).toLocaleString('id-ID');
+    const formatNum = (v) => (parseFloat(v) || 0).toLocaleString('id-ID');
+    const formatPct = (v) => (parseFloat(v) || 0).toFixed(1) + '%';
+
+    function formatValue(value, type, unit) {
+        if (value === null || value === undefined) return '-';
+        switch (type) {
+            case 'currency': return formatIDR(value);
+            case 'percent': return formatPct(value);
+            case 'integer': return formatNum(value) + (unit ? ` ${unit}` : '');
+            default: return String(value);
         }
-        
-        function formatNumber(number) {
-            return (parseFloat(number) || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+    }
+
+    function renderTable(data, schema) {
+        if (!data || data.length === 0) {
+            reportTableArea.innerHTML = '<div class="text-center py-5 text-danger font-weight-bold">❌ Data tidak ditemukan.</div>';
+            return;
         }
 
-        function formatPercent(number) {
-            return (parseFloat(number) || 0).toFixed(2) + '%';
-        }
-        
-        // Fungsi untuk menentukan format berdasarkan tipe data
-        function formatValue(value, type, unit) {
-            if (value === null || value === undefined) return 'N/A';
-            
-            switch (type) {
-                case 'currency':
-                    return formatRupiah(value);
-                case 'percent':
-                    return formatPercent(value);
-                case 'integer':
-                    return formatNumber(value) + (unit ? ` ${unit}` : '');
-                case 'date':
-                    // Contoh: konversi YYYY-MM-DD ke DD/MM/YYYY
-                    if (String(value).match(/^\d{4}-\d{2}-\d{2}/)) {
-                        return new Date(value).toLocaleDateString('id-ID');
-                    }
-                    return value;
-                default:
-                    return String(value);
-            }
-        }
-        
-        // --- FUNGSI RENDERING DINAMIS ---
-        
-        function renderTable(data, schema) {
-            if (!data || data.length === 0) {
-                reportTableArea.innerHTML = '<p class="no-results">❌ Tidak ada data yang ditemukan untuk laporan ini.</p>';
-                return;
-            }
+        document.getElementById('totalRowsCount').innerText = `${data.length} Baris Data`;
 
-            let tableHTML = '<table class="dynamic-table"><thead><tr>';
-            
-            // 1. RENDER HEADER DARI SCHEMA
+        let html = '<table class="dynamic-table"><thead><tr>';
+        schema.forEach(col => html += `<th>${col.label}</th>`);
+        html += '</tr></thead><tbody>';
+
+        data.forEach(row => {
+            html += '<tr>';
             schema.forEach(col => {
-                tableHTML += `<th data-key="${col.key}">${col.label}</th>`;
+                const val = row[col.key];
+                const formatted = formatValue(val, col.type, col.unit);
+                const textAlign = ['currency', 'integer', 'percent'].includes(col.type) ? 'right' : 'left';
+                html += `<td data-label="${col.label}" style="text-align: ${textAlign};">${formatted}</td>`;
             });
-            tableHTML += '</tr></thead><tbody>';
-            
-            // 2. RENDER BARIS DATA
-            data.forEach(row => {
-                tableHTML += '<tr>';
-                schema.forEach(col => {
-                    const value = row[col.key];
-                    const formattedValue = formatValue(value, col.type, col.unit);
-                    
-                    // Tambahkan data-label untuk tampilan mobile
-                    // Sesuaikan alignment kolom berdasarkan tipe data
-                    tableHTML += `<td data-label="${col.label}" style="text-align: ${col.type === 'currency' || col.type === 'integer' || col.type === 'percent' ? 'right' : 'left'};">
-                                    ${formattedValue}
-                                  </td>`;
-                });
-                tableHTML += '</tr>';
-            });
-            
-            tableHTML += '</tbody></table>';
-            reportTableArea.innerHTML = tableHTML;
-        }
+            html += '</tr>';
+        });
 
-        function renderSingleMetricChart(data, schema, title, chartElement) {
-            if (!chartElement) return;
-            
-            // Cari metrik Piutang atau Kubikasi pertama yang ditandai sebagai chart_key
-            const metric = schema.find(c => (c.type === 'currency' || c.key.includes('KUBIK')) && c.chart_key);
-            
-            if (!metric) {
-                // Jika tidak ada metrik yang cocok, cek apakah ada TotalKubikasi (untuk laporan volume)
-                const kubikMetric = schema.find(c => c.key === 'TotalKubikasi');
-                if (!kubikMetric) return; // Jika tidak ada, batal
-            }
-            
-            const mainKey = schema.find(c => c.is_main_key)?.key;
-            // Batasi label dan data hanya 10 baris teratas agar chart mudah dibaca
-            const chartDataSubset = data.slice(0, 10);
-            const labels = chartDataSubset.map(item => item.chart_label || item[mainKey]);
-            const metricData = chartDataSubset.map(item => item[metric.key || 'TotalKubikasi']); // Gunakan TotalKubikasi jika metrik tidak ditemukan
+        html += '</tbody></table>';
+        reportTableArea.innerHTML = html;
+    }
 
-            
-            const existingChart = Chart.getChart(chartElement);
-            if (existingChart) {
-                existingChart.destroy();
-            }
-
-            new Chart(chartElement, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: metric.label,
-                        data: metricData,
-                        backgroundColor: 'var(--primary-color)',
-                        borderColor: 'var(--primary-color)',
-                        borderWidth: 1,
-                        yAxisID: 'y'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false,
-                        },
-                        title: {
-                            display: true,
-                            text: title,
-                            font: { size: 16 }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    if (metric.type === 'currency') {
-                                        return label + formatRupiah(context.parsed.y);
-                                    } else {
-                                        return label + formatNumber(context.parsed.y) + (metric.unit ? ` ${metric.unit}` : '');
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: { display: false }
-                        },
-                        y: {
-                            type: 'linear',
-                            position: 'left',
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value, index, ticks) {
-                                    if (metric.type === 'currency') {
-                                        if (Math.abs(value) >= 1000000000) return (value / 1000000000).toFixed(0) + ' Miliar';
-                                        if (Math.abs(value) >= 1000000) return (value / 1000000).toFixed(0) + ' Jt';
-                                        return formatRupiah(value);
-                                    } else {
-                                        return formatNumber(value);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
+    function renderChart(data, schema, title) {
+        const ctx = document.getElementById('mainReportChart').getContext('2d');
+        const metric = schema.find(c => c.chart_key) || schema.find(c => c.type === 'currency');
+        const mainKey = schema.find(c => c.is_main_key)?.key || schema[0].key;
         
-        function renderComparisonChart(data, schema, title, latestPeriod, previousPeriod, chartElement) {
-            if (!chartElement) return;
+        if (!metric) return;
 
-            // Cari kunci Piutang/Koleksi Bulan/Hari M dan M-1/D-1
-            const latestKey = schema.find(c => c.chart_key && (c.key.includes('Piutang') || c.key.includes('Koleksi')) && c.key.includes(latestPeriod))?.key;
-            const previousKey = schema.find(c => c.chart_key && (c.key.includes('Piutang') || c.key.includes('Koleksi')) && c.key.includes(previousPeriod))?.key;
-            
-            if (!latestKey || !previousKey) return;
+        const subset = data.slice(0, 10);
+        const labels = subset.map(d => d.chart_label || d[mainKey]);
+        const values = subset.map(d => d[metric.key]);
 
-            const mainKey = schema.find(c => c.is_main_key)?.key;
-            
-            // Batasi data hanya 10 baris teratas agar chart mudah dibaca
-            const chartDataSubset = data.slice(0, 10); 
-            const labels = chartDataSubset.map(item => item.chart_label || item[mainKey]);
-            const latestData = chartDataSubset.map(item => item[latestKey]);
-            const previousData = chartDataSubset.map(item => item[previousKey]);
-
-            const existingChart = Chart.getChart(chartElement);
-            if (existingChart) {
-                existingChart.destroy();
-            }
-
-            new Chart(chartElement, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: schema.find(c => c.key === latestKey)?.label,
-                            data: latestData,
-                            backgroundColor: 'var(--primary-color)',
-                            yAxisID: 'y'
-                        },
-                        {
-                            label: schema.find(c => c.key === previousKey)?.label,
-                            data: previousData,
-                            backgroundColor: '#ffc107', 
-                            yAxisID: 'y'
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'bottom'
-                        },
-                        title: {
-                            display: true,
-                            text: title,
-                            font: { size: 16 }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    // Asumsi metrik comparison selalu currency
-                                    return label + formatRupiah(context.parsed.y);
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            stacked: false,
-                            grid: { display: false }
-                        },
-                        y: {
-                            type: 'linear',
-                            position: 'left',
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value, index, ticks) {
-                                    if (Math.abs(value) >= 1000000000) return (value / 1000000000).toFixed(0) + ' Miliar';
-                                    if (Math.abs(value) >= 1000000) return (value / 1000000).toFixed(0) + ' Jt';
-                                    return formatRupiah(value);
-                                }
-                            }
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: metric.label,
+                    data: values,
+                    backgroundColor: '#4e73df',
+                    hoverBackgroundColor: '#2e59d9',
+                    borderRadius: 6,
+                    barThickness: 35
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { display: false } },
+                    y: { 
+                        beginAtZero: true,
+                        ticks: {
+                            callback: (v) => v >= 1000000 ? (v/1000000).toFixed(0) + 'jt' : v
                         }
                     }
                 }
-            });
-        }
-
-
-        // --- FUNGSI FETCH UTAMA ---
-        async function fetchReportData() {
-            loadingStatus.style.display = 'block';
-            reportContent.style.display = 'none';
-
-            if (!API_URL) {
-                loadingStatus.innerHTML = '<p class="no-results">❌ Error: API endpoint tidak terdefinisi. Cek konfigurasi rute di app.py.</p>';
-                return;
             }
+        });
+    }
 
-            try {
-                const response = await fetch(API_URL);
-                const result = await response.json();
-                
-                if (response.status !== 200 && result.status !== 'success') {
-                    loadingStatus.innerHTML = `<p class="no-results">❌ Gagal memuat laporan: ${result.message || 'Error Server'}</p>`;
-                    return;
-                }
-                
-                const data = result.data || [];
-                const schema = result.schema || [];
-                const reportType = "{{ report_type }}";
+    async function initReport() {
+        try {
+            const res = await fetch(API_URL);
+            const json = await res.json();
 
-                if (data.length === 0) {
-                    loadingStatus.innerHTML = '<p class="no-results">⚠️ Data kosong untuk laporan ini. Cek koleksi MongoDB Anda.</p>';
-                } else {
-                    // 1. Render Tabel Detail
-                    renderTable(data, schema);
-                    
-                    // 2. Render Chart
-                    if (data.length > 0) {
-                        const chartTitle = result.title || "Grafik Data Laporan";
+            if (json.status !== 'success') throw new Error(json.message);
 
-                        if (reportType === 'MOM_COMPARISON' || reportType === 'DOD_COMPARISON') {
-                            renderComparisonChart(
-                                data, 
-                                schema, 
-                                chartTitle, 
-                                result.latest_month || result.latest_day, 
-                                result.previous_month || result.previous_day, 
-                                comparisonChartCanvas
-                            );
-                        } else {
-                            renderSingleMetricChart(data, schema, chartTitle, distributionChartCanvas);
-                        }
-                    }
+            renderTable(json.data, json.schema);
+            renderChart(json.data, json.schema, json.title);
 
-                    loadingStatus.style.display = 'none';
-                    reportContent.style.display = 'block';
-                }
-
-            } catch (error) {
-                loadingStatus.innerHTML = '<p class="no-results">❌ Gagal terhubung ke server atau memproses data.</p>';
-                console.error('Report Fetch Error:', error);
-            }
+            loadingStatus.style.display = 'none';
+            reportContent.style.display = 'block';
+        } catch (err) {
+            loadingStatus.innerHTML = `<div class="alert alert-danger mx-auto" style="max-width:500px;">❌ Error: ${err.message}</div>`;
         }
-        
-        // Panggil fungsi saat halaman dimuat
-        document.addEventListener('DOMContentLoaded', fetchReportData);
-    </script>
+    }
+
+    document.addEventListener('DOMContentLoaded', initReport);
+</script>
 {% endblock %}
