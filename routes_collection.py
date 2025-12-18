@@ -25,9 +25,9 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
     """
     Menghitung distribusi metrik. 
     report_type: 
-    - PIUTANG: Data MC (Master Cetak) status != PAYMENT (Bulan Berjalan)
+    - PIUTANG: Data MC status != PAYMENT (Bulan Berjalan)
     - COLLECTION: Data MC status == PAYMENT (Bulan Berjalan)
-    - TUNGGAKAN: Data ARDEBT (Account Receivable Debt - Kumulatif)
+    - TUNGGAKAN: Data ARDEBT yang di-join ke MC untuk mengambil Tarif & Kubik
     """
     db_status = get_db_status()
     if db_status['status'] == 'error':
@@ -45,34 +45,57 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
         latest_doc = collections['mc'].find_one(sort=[('BULAN_TAGIHAN', -1)])
         target_month = latest_doc.get('BULAN_TAGIHAN') if latest_doc else datetime.now().strftime('%m%Y')
 
+    pipeline = []
+
     # 1. Konfigurasi sumber data dan field mapping
     if report_type == 'TUNGGAKAN':
+        # MULAI DARI ARDEBT (Daftar Penunggak)
         source_col = collections['ardebt']
-        match_filter = {} # ARDEBT biasanya data snapshot terbaru (keseluruhan)
+        pipeline.append({"$match": {}}) # ARDEBT adalah snapshot keseluruhan
+        
+        # JOIN ke MC untuk mengambil TARIF dan KUBIK sesuai NOMEN dan BULAN_TAGIHAN terpilih
+        pipeline.append({
+            "$lookup": {
+                "from": "mc",
+                "let": {"nomen_ar": "$NOMEN"},
+                "pipeline": [
+                    {"$match": {
+                        "$expr": {
+                            "$and": [
+                                {"$eq": ["$NOMEN", "$$nomen_ar"]},
+                                {"$eq": ["$BULAN_TAGIHAN", target_month]}
+                            ]
+                        }
+                    }}
+                ],
+                "as": "mc_info"
+            }
+        })
+        pipeline.append({"$unwind": {"path": "$mc_info", "preserveNullAndEmptyArrays": True}})
+        
+        # Mapping Field: Piutang dari ARDEBT, Kubik & Tarif dari MC
         val_field = "$JUMLAH"
-        usage_field = {"$literal": 0} # ARDEBT tidak memiliki kolom m3
+        usage_field = "$mc_info.KUBIK"
+        
+        pipeline.append({"$addFields": {
+            "v_RAYON": "$RAYON",
+            "v_PC": {"$substrCP": [{"$ifNull": ["$PCEZ", ""]}, 0, 3]},
+            "v_PCEZ": "$PCEZ",
+            "v_TARIF": {"$ifNull": ["$mc_info.TARIF", "$TIPEPLGGN"]} # Ambil dari MC, fallback ke ARDEBT
+        }})
     else:
+        # LAPORAN STANDAR MC (Piutang Aktif / Koleksi)
         source_col = collections['mc']
         match_filter = {"BULAN_TAGIHAN": target_month}
         if report_type == 'COLLECTION':
             match_filter["STATUS"] = "PAYMENT"
         else:
             match_filter["STATUS"] = {"$ne": "PAYMENT"}
+        
+        pipeline.append({"$match": match_filter})
         val_field = "$NOMINAL"
         usage_field = "$KUBIK"
 
-    # 2. Pipeline Agregasi
-    pipeline = [{"$match": match_filter}]
-
-    # 3. Ekstraksi Field Virtual (Rayon, PC, Tarif)
-    if report_type == 'TUNGGAKAN':
-        pipeline.append({"$addFields": {
-            "v_RAYON": "$RAYON",
-            "v_PC": "$PCEZ",
-            "v_PCEZ": "$PCEZ",
-            "v_TARIF": "$TIPEPLGGN"
-        }})
-    else:
         pipeline.append({"$addFields": {
             "v_RAYON": {"$substrCP": ["$ZONA_NOVAK", 0, 2]},
             "v_PC": {"$substrCP": ["$ZONA_NOVAK", 2, 3]},
@@ -80,38 +103,32 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
             "v_TARIF": "$TARIF"
         }})
 
-    # 4. Mapping Grouping Field & Lookup CID
-    # Gunakan pengecekan case-insensitive untuk group_field
+    # 2. Mapping Grouping Field & Lookup CID (jika perlu Merk)
     g_field = group_field.upper()
     if g_field in ["MERK", "MERK_METER", "READ_METHOD"]:
-        if report_type != 'TUNGGAKAN':
-            pipeline.append({
-                "$lookup": {
-                    "from": "CustomerData",
-                    "localField": "NOMEN",
-                    "foreignField": "NOMEN",
-                    "as": "cust"
-                }
-            })
-            pipeline.append({"$unwind": {"path": "$cust", "preserveNullAndEmptyArrays": True}})
-            
-            # Pengecekan field merk yang fleksibel
-            if g_field.startswith("MERK"):
-                pipeline.append({"$addFields": {
-                    "mapped_id": {"$ifNull": ["$cust.MERK_METER", {"$ifNull": ["$cust.MERK", "TIDAK TERDATA"]}]}
-                }})
-            else:
-                pipeline.append({"$addFields": {
-                    "mapped_id": {"$ifNull": ["$cust.READ_METHOD", "TIDAK TERDATA"]}
-                }})
+        pipeline.append({
+            "$lookup": {
+                "from": "CustomerData",
+                "localField": "NOMEN",
+                "foreignField": "NOMEN",
+                "as": "cust"
+            }
+        })
+        pipeline.append({"$unwind": {"path": "$cust", "preserveNullAndEmptyArrays": True}})
+        
+        if g_field.startswith("MERK"):
+            pipeline.append({"$addFields": {
+                "mapped_id": {"$ifNull": ["$cust.MERK_METER", {"$ifNull": ["$cust.MERK", "TIDAK TERDATA"]}]}
+            }})
         else:
-            # Di ARDEBT field MERK dan READ_METHOD sudah ada langsung
-            pipeline.append({"$addFields": {"mapped_id": {"$ifNull": [f"${g_field}", "TIDAK TERDATA"]}}})
+            pipeline.append({"$addFields": {
+                "mapped_id": {"$ifNull": ["$cust.READ_METHOD", "TIDAK TERDATA"]}
+            }})
     else:
         field_map = {"RAYON": "$v_RAYON", "PC": "$v_PC", "PCEZ": "$v_PCEZ", "TARIF": "$v_TARIF"}
         pipeline.append({"$addFields": {"mapped_id": {"$ifNull": [field_map.get(g_field, f"${g_field}"), "TIDAK TERDATA"]}}})
 
-    # 5. Grouping (val + rayon untuk filter 34/35)
+    # 3. Grouping
     pipeline.append({
         "$group": {
             "_id": {"val": "$mapped_id", "rayon": "$v_RAYON"},
@@ -121,7 +138,7 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
         }
     })
 
-    # 6. Proyeksi Akhir
+    # 4. Proyeksi Akhir
     pipeline.append({
         "$project": {
             "_id": 0,
@@ -147,10 +164,9 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
 @bp_collection.route("/api/stats_summary")
 @login_required
 def get_stats_summary_api():
-    """Menghitung KPI Header Dashboard dengan perbaikan format tanggal."""
+    """Menghitung KPI Header Dashboard dengan join MC untuk kubikasi tunggakan."""
     raw_period = request.args.get('period', datetime.now().strftime('%Y-%m'))
     
-    # Konversi YYYY-MM -> MMYYYY untuk query MC
     if '-' in raw_period:
         y, m = raw_period.split('-')
         formatted_period = f"{m}{y}"
@@ -176,13 +192,35 @@ def get_stats_summary_api():
         return res[0] if res else {"count": 0, "usage": 0, "nominal": 0}
 
     def get_ar_summary():
+        # Menghitung nominal dari ARDEBT dan join MC untuk volume kubikasi
         pipeline = [
-            {"$group": {
-                "_id": None,
-                "nominal": {"$sum": {"$toDouble": {"$ifNull": ["$JUMLAH", 0]}}},
-                "unique_nomen": {"$addToSet": "$NOMEN"}
-            }},
-            {"$project": {"_id": 0, "count": {"$size": "$unique_nomen"}, "usage": {"$literal": 0}, "nominal": 1}}
+            {
+                "$lookup": {
+                    "from": "mc",
+                    "let": {"nomen_ar": "$NOMEN"},
+                    "pipeline": [
+                        {"$match": {
+                            "$expr": {
+                                "$and": [
+                                    {"$eq": ["$NOMEN", "$$nomen_ar"]},
+                                    {"$eq": ["$BULAN_TAGIHAN", formatted_period]}
+                                ]
+                            }
+                        }}
+                    ],
+                    "as": "mc_info"
+                }
+            },
+            {"$unwind": {"path": "$mc_info", "preserveNullAndEmptyArrays": True}},
+            {
+                "$group": {
+                    "_id": None,
+                    "nominal": {"$sum": {"$toDouble": {"$ifNull": ["$JUMLAH", 0]}}},
+                    "usage": {"$sum": {"$toDouble": {"$ifNull": ["$mc_info.KUBIK", 0]}}},
+                    "unique_nomen": {"$addToSet": "$NOMEN"}
+                }
+            },
+            {"$project": {"_id": 0, "count": {"$size": "$unique_nomen"}, "usage": 1, "nominal": 1}}
         ]
         res = list(col_ar.aggregate(pipeline))
         return res[0] if res else {"count": 0, "usage": 0, "nominal": 0}
