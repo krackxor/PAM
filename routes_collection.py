@@ -21,19 +21,14 @@
 }
 .section-title { color: #4e73df; font-weight: 800; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
 
-.chart-container { height: 200px; position: relative; margin-bottom: 15px; }
-.scrollable-table { max-height: 150px; overflow-y: auto; border: 1px solid #eaecf4; border-radius: 5px; margin-bottom: 15px; }
+.chart-container { height: 180px; position: relative; margin-bottom: 15px; }
+.scrollable-table { max-height: 200px; overflow-y: auto; border: 1px solid #eaecf4; border-radius: 5px; margin-bottom: 15px; }
 .table-details { font-size: 0.75rem; width: 100%; margin-bottom: 0; }
 .table-details th { background-color: #f8f9fc; color: #4e73df; text-transform: uppercase; font-size: 0.65rem; position: sticky; top: 0; z-index: 2; }
 
 .insight-box {
-    background-color: #f8f9fc;
-    border-left: 4px solid #4e73df;
-    padding: 12px;
-    border-radius: 4px;
-    font-size: 0.72rem;
-    color: #5a5c69;
-    margin-top: auto;
+    background-color: #f8f9fc; border-left: 4px solid #4e73df;
+    padding: 12px; border-radius: 4px; font-size: 0.7rem; color: #5a5c69; margin-top: auto;
 }
 .insight-box strong { color: #4e73df; display: block; margin-bottom: 4px; text-transform: uppercase; font-size: 0.65rem; }
 
@@ -48,7 +43,7 @@
 <div class="summary-container">
     <!-- Header: Filter & Download -->
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
-        <h2 class="section-title border-0 mb-0"><i class="fas fa-chart-line mr-2"></i> Laporan Piutang & Koleksi</h2>
+        <h2 class="section-title border-0 mb-0"><i class="fas fa-microchip mr-2"></i> Laporan Novak Analytic</h2>
         <div class="d-flex align-items-center">
             <a href="{{ url_for('bp_collection.download_summary_csv', period=period) }}" class="btn btn-sm btn-success shadow-sm mr-3">
                 <i class="fas fa-file-excel mr-1"></i> Download All (CSV)
@@ -60,7 +55,7 @@
         </div>
     </div>
 
-    <!-- Tab Navigasi -->
+    <!-- Tabs Navigasi -->
     <ul class="nav nav-pills mb-4 bg-white p-2 rounded shadow-sm border" id="pills-tab" role="tablist">
         <li class="nav-item"><a class="nav-link active" data-toggle="pill" href="#pills-piutang">Piutang (MC)</a></li>
         <li class="nav-item"><a class="nav-link" data-toggle="pill" href="#pills-tunggakan">Tunggakan (AR)</a></li>
@@ -71,7 +66,7 @@
         {% for cat in ['piutang', 'tunggakan', 'collection'] %}
         <div class="tab-pane fade {% if cat == 'piutang' %}show active{% endif %}" id="pills-{{ cat }}">
             
-            <!-- KPI Cards Row -->
+            <!-- KPI Row -->
             <div class="grid-container">
                 <div class="kpi-card" style="border-left: 4px solid #4e73df;">
                     <h4>Jumlah Nomen</h4>
@@ -87,10 +82,10 @@
                 </div>
             </div>
 
-            <!-- Kontainer Grid Kontributor -->
+            <!-- Kontributor Novak Grid -->
             <div id="container-data-{{ cat }}">
                 <div class="row">
-                    {% for type, label in [('rayon', 'Rayon'), ('pcez', 'PCEZ'), ('pc', 'Petugas (PC)'), ('ez', 'EZ'), ('block', 'Block'), ('tarif', 'Tarif')] %}
+                    {% for type, label in [('rayon', 'Rayon'), ('pcez', 'PCEZ'), ('pc', 'PC (Petugas)'), ('ez', 'EZ'), ('block', 'Block'), ('tarif', 'Tarif')] %}
                     <div class="col-lg-6 col-xl-4 mb-4">
                         <div class="section-card">
                             <div class="d-flex justify-content-between align-items-center mb-3">
@@ -102,12 +97,10 @@
                                 </div>
                             </div>
                             
-                            <!-- Grafik -->
                             <div class="chart-container">
                                 <canvas id="chart-{{ type }}-{{ cat }}"></canvas>
                             </div>
 
-                            <!-- Tabel Seluruh Data -->
                             <div class="scrollable-table">
                                 <table class="table table-sm table-hover table-details" id="table-{{ type }}-{{ cat }}">
                                     <thead><tr><th>{{ label }}</th><th class="text-right">Rp</th></tr></thead>
@@ -115,10 +108,9 @@
                                 </table>
                             </div>
 
-                            <!-- Smart Insight -->
                             <div class="insight-box" id="insight-{{ type }}-{{ cat }}">
-                                <strong><i class="fas fa-lightbulb mr-1"></i> Analisa & Saran</strong>
-                                <span class="insight-text">Menunggu data...</span>
+                                <strong><i class="fas fa-brain mr-1"></i> Smart Analysis</strong>
+                                <span class="insight-text">Menganalisa data zonal...</span>
                             </div>
                         </div>
                     </div>
@@ -128,7 +120,7 @@
 
             <div id="empty-{{ cat }}" style="display:none;" class="alert alert-warning text-center p-5">
                 <h4><i class="fas fa-exclamation-triangle"></i> Data Tidak Ditemukan</h4>
-                <p>Tidak ada record untuk periode {{ period }}</p>
+                <p>Tidak ada record Novak ditemukan untuk periode {{ period }}</p>
             </div>
         </div>
         {% endfor %}
@@ -161,56 +153,54 @@
                     document.getElementById(`empty-${c}`).style.display = 'block';
                 }
             });
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error("Error Loading KPI:", e); }
     }
 
     async function loadData(cat, type) {
         try {
             const res = await fetch(`/collection/api/distribution/${type}?period=${currentPeriod}`);
             const json = await res.json();
-            
             if(!rawStore[cat]) rawStore[cat] = {};
             rawStore[cat][type] = json.data;
-            rawStore[cat][`${type}_field`] = json.category;
-
             renderUI(cat, type, 'ALL');
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error(`Error Loading ${type}:`, e); }
     }
 
     function renderUI(cat, type, filter) {
-        const fullData = rawStore[cat][type];
-        const field = rawStore[cat][`${type}_field`];
+        const fullData = rawStore[cat][type] || [];
         
+        // Filter berdasarkan Rayon Origin yang diekstrak dari ZONA_NOVAK di backend
         let filtered = fullData;
         if (filter !== 'ALL') {
-            filtered = fullData.filter(item => String(item[field] || '').startsWith(filter));
+            filtered = fullData.filter(item => item.rayon_origin === filter);
         }
 
         // 1. Update Tabel
         const tableBody = document.querySelector(`#table-${type}-${cat} tbody`);
         if(filtered.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">Tidak ada data</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">Data Kosong</td></tr>';
         } else {
             tableBody.innerHTML = filtered.map(item => `
                 <tr>
-                    <td><strong>${item[field] || 'N/A'}</strong></td>
+                    <td><strong>${item.id_value || 'N/A'}</strong></td>
                     <td class="text-right font-weight-bold text-primary">${formatIDR(item.total_piutang)}</td>
                 </tr>
             `).join('');
         }
 
-        // 2. Update Grafik (Top 10 saja agar tidak sumpek)
+        // 2. Update Grafik
         const ctx = document.getElementById(`chart-${type}-${cat}`).getContext('2d');
         const chartId = `${type}-${cat}`;
         if (chartInstances[chartId]) chartInstances[chartId].destroy();
 
+        // Ambil Top 10 untuk visualisasi grafik
         const chartData = filtered.slice(0, 10);
         chartInstances[chartId] = new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: chartData.map(d => d[field] || 'N/A'),
+                labels: chartData.map(d => d.id_value || 'N/A'),
                 datasets: [{
-                    label: 'Nominal Rp',
+                    label: 'Nominal (Rp)',
                     data: chartData.map(d => d.total_piutang),
                     backgroundColor: filter === '34' ? '#1cc88a' : (filter === '35' ? '#f6c23e' : '#4e73df'),
                     borderRadius: 4
@@ -226,35 +216,33 @@
             }
         });
 
-        // 3. Update Smart Insight
+        // 3. Smart Insight
         generateInsight(cat, type, filter, filtered);
     }
 
     function generateInsight(cat, type, filter, data) {
         const box = document.querySelector(`#insight-${type}-${cat} .insight-text`);
         if(!data || data.length === 0) {
-            box.innerText = "Belum ada data untuk dianalisa.";
+            box.innerText = "Belum ada data zonal untuk dianalisa.";
             return;
         }
 
-        const topItem = data[0];
-        const topName = topItem[rawStore[cat][`${type}_field`]];
-        const context = cat === 'piutang' ? 'Potensi Pendapatan' : (cat === 'tunggakan' ? 'Beban Piutang' : 'Pencapaian Koleksi');
-
-        let analisa = `Ditemukan kontribusi ${context} tertinggi pada ${type.toUpperCase()} <b>${topName}</b>.`;
+        const top = data[0];
+        const context = cat === 'piutang' ? 'Tagihan Baru' : (cat === 'tunggakan' ? 'Resiko Piutang' : 'Pencapaian Koleksi');
+        
+        let msg = `Analisa Zonal: Fokus utama ${context} berada di ${type.toUpperCase()} <b>${top.id_value}</b>.`;
         let saran = "";
 
         if (cat === 'piutang' || cat === 'tunggakan') {
-            saran = `Disarankan untuk memperketat monitoring penagihan di zona ini melalui tim lapangan.`;
-            if (type === 'pc') saran = `Evaluasi beban kerja Petugas PC ${topName} karena memiliki angka piutang paling mencolok.`;
-            if (type === 'block') saran = `Lakukan audit fisik meter di area Block ${topName} untuk memastikan akurasi pembacaan.`;
+            saran = ` Lakukan percepatan distribusi tagihan dan monitoring intensif pada area ini.`;
+            if (type === 'pc') saran += ` Koordinasikan dengan Petugas PC terkait kendala di lapangan.`;
+            if (type === 'block') saran += ` Cek anomali pemakaian pada blok tersebut.`;
         } else {
-            saran = `Pertahankan performa di zona ini dan jadikan benchmark untuk zona dengan tingkat koleksi rendah.`;
+            saran = ` Performa koleksi stabil. Gunakan zona ini sebagai standar efisiensi untuk wilayah lain.`;
         }
 
-        const masaDepan = `<b>Target ke Depan:</b> Lakukan pemetaan ulang cluster di wilayah ${filter !== 'ALL' ? filter : '34 & 35'} guna menekan angka penunggakan di atas 2 bulan.`;
-
-        box.innerHTML = `${analisa} ${saran}<br><br>${masaDepan}`;
+        const plan = `<br><br><b>Rencana Strategis:</b> Optimalkan Rayon ${filter !== 'ALL' ? filter : '34 & 35'} melalui clusterisasi penagihan digital bulan depan.`;
+        box.innerHTML = `${msg}${saran}${plan}`;
     }
 
     function updateFilter(cat, type, mode, btn) {
