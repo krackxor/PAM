@@ -21,10 +21,11 @@ def admin_required(f):
     return decorated_function
 
 # --- HELPER INTERNAL UNTUK DISTRIBUSI (DENGAN PERSENTASE & LOOKUP CID) ---
-def _get_distribution_report(group_field, collection_mc, period=None):
+def _get_distribution_report(group_field, collection_mc, period=None, report_type='PIUTANG'):
     """
     Menghitung distribusi metrik. 
     GROUPING: Dilakukan per Kategori DAN per Rayon agar filter 34/35 di frontend berfungsi.
+    report_type: 'PIUTANG', 'COLLECTION', 'TUNGGAKAN'
     """
     db_status = get_db_status()
     if db_status['status'] == 'error':
@@ -40,9 +41,19 @@ def _get_distribution_report(group_field, collection_mc, period=None):
     if not target_month:
         return [], "N/A"
 
-    # 1. Hitung Grand Total (Sebagai basis kalkulasi % kontribusi)
+    # Filter dasar berdasarkan Tab yang dipilih di UI
+    base_filter = {"BULAN_TAGIHAN": target_month}
+    if report_type == 'COLLECTION':
+        base_filter["STATUS"] = "PAYMENT"
+    elif report_type == 'TUNGGAKAN':
+        # Tunggakan biasanya kumulatif (semua bulan yang belum bayar)
+        base_filter = {"STATUS": {"$ne": "PAYMENT"}} 
+    else: # Default PIUTANG AKTIF
+        base_filter["STATUS"] = {"$ne": "PAYMENT"}
+
+    # 1. Hitung Grand Total untuk % (Basis perhitungan persentase di baris tabel)
     totals_pipeline = [
-        {"$match": {"BULAN_TAGIHAN": target_month}},
+        {"$match": base_filter},
         {"$group": {
             "_id": None,
             "grand_piutang": {"$sum": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
@@ -55,16 +66,16 @@ def _get_distribution_report(group_field, collection_mc, period=None):
         }}
     ]
     
-    grand_totals = list(collection_mc.aggregate(totals_pipeline))
-    g = grand_totals[0] if grand_totals else {"grand_piutang": 1, "grand_kubikasi": 1, "grand_nomen": 1}
+    grand_results = list(collection_mc.aggregate(totals_pipeline))
+    g = grand_results[0] if grand_results else {"grand_piutang": 1, "grand_kubikasi": 1, "grand_nomen": 1}
     g_p = g.get('grand_piutang', 1) or 1
     g_k = g.get('grand_kubikasi', 1) or 1
     g_n = g.get('grand_nomen', 1) or 1
 
-    # 2. Pipeline Utama
-    pipeline = [{"$match": {"BULAN_TAGIHAN": target_month}}]
+    # 2. Pipeline Utama Distribusi
+    pipeline = [{"$match": base_filter}]
 
-    # Ekstraksi Rayon dari ZONA_NOVAK (2 Digit Pertama)
+    # Ekstraksi Rayon dari ZONA_NOVAK
     pipeline.append({"$addFields": {
         "v_RAYON": {"$substrCP": ["$ZONA_NOVAK", 0, 2]},
         "v_PC": {"$substrCP": ["$ZONA_NOVAK", 2, 3]},
@@ -83,7 +94,6 @@ def _get_distribution_report(group_field, collection_mc, period=None):
         })
         pipeline.append({"$unwind": {"path": "$cust", "preserveNullAndEmptyArrays": True}})
         
-        # Logika Fallback untuk Merk (Mencari di field MERK_METER, MERK, atau MET_BRAND)
         if group_field == "MERK_METER":
             pipeline.append({"$addFields": {
                 "mapped_id": {
@@ -98,12 +108,10 @@ def _get_distribution_report(group_field, collection_mc, period=None):
                 "mapped_id": {"$ifNull": [f"$cust.{group_field}", "TIDAK TERDATA"]}
             }})
     else:
-        # Gunakan field virtual (RAYON, PC, PCEZ) atau field asli (TARIF)
         mapped_field = f"$v_{group_field}" if group_field in ["RAYON", "PC", "PCEZ"] else f"${group_field}"
         pipeline.append({"$addFields": {"mapped_id": mapped_field}})
 
-    # GROUPING: Kelompokkan berdasarkan (Kategori Nilai + Rayon Asal)
-    # Ini krusial agar filter 34/35 di UI bisa bekerja
+    # Grouping by Kategori + Rayon (Krusial untuk filter 34/35)
     pipeline.append({
         "$group": {
             "_id": {"val": "$mapped_id", "rayon": "$v_RAYON"},
@@ -113,7 +121,7 @@ def _get_distribution_report(group_field, collection_mc, period=None):
         }
     })
 
-    # PROYEKSI & KALKULASI PERSENTASE
+    # Proyeksi & Kalkulasi Persentase
     pipeline.append({
         "$project": {
             "_id": 0,
@@ -186,19 +194,16 @@ def analysis_dod_comparison():
 @login_required
 def category_distribution_api(category):
     raw_period = request.args.get('period')
+    report_type = request.args.get('type', 'PIUTANG') # Tangkap tipe laporan dari frontend
+    
     formatted_period = None
     if raw_period and '-' in raw_period:
         y, m = raw_period.split('-')
         formatted_period = f"{m}{y}"
 
-    # Mapping Kategori (Tanpa EZ dan Block)
     cat_map = {
-        "rayon": "RAYON", 
-        "pc": "PC", 
-        "pcez": "PCEZ", 
-        "tarif": "TARIF", 
-        "merk": "MERK_METER",
-        "read_method": "READ_METHOD"
+        "rayon": "RAYON", "pc": "PC", "pcez": "PCEZ", 
+        "tarif": "TARIF", "merk": "MERK_METER", "read_method": "READ_METHOD"
     }
     field = cat_map.get(category.lower())
     if not field: return jsonify({"message": "Kategori tidak valid"}), 400
@@ -206,7 +211,7 @@ def category_distribution_api(category):
     db_status = get_db_status()
     if db_status['status'] == 'error': return jsonify({"message": db_status['message']}), 500
     
-    results, latest_month = _get_distribution_report(field, db_status['collections']['mc'], period=formatted_period)
+    results, latest_month = _get_distribution_report(field, db_status['collections']['mc'], period=formatted_period, report_type=report_type.upper())
     
     return jsonify({
         "data": results, 
@@ -218,25 +223,53 @@ def category_distribution_api(category):
 @bp_collection.route("/api/stats_summary")
 @login_required
 def get_stats_summary_api():
+    """
+    Endpoint utama untuk KPI. 
+    Menghitung detail per tab (count, usage, nominal) agar loading spinner berhenti.
+    """
     raw_period = request.args.get('period', datetime.now().strftime('%Y-%m'))
-    try:
-        if '-' in raw_period:
-            y, m = raw_period.split('-')
-            formatted_period = f"{m}{y}"
-        else:
-            formatted_period = raw_period
-    except:
+    if '-' in raw_period:
+        y, m = raw_period.split('-')
+        formatted_period = f"{m}{y}"
+    else:
         formatted_period = raw_period.replace('-', '')
     
+    db_status = get_db_status()
+    col = db_status['collections']['mc']
+    
+    def get_tab_summary(match_filter):
+        pipeline = [
+            {"$match": match_filter},
+            {"$group": {
+                "_id": None,
+                "usage": {"$sum": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}},
+                "nominal": {"$sum": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
+                "unique_nomen": {"$addToSet": "$NOMEN"}
+            }},
+            {"$project": {
+                "_id": 0,
+                "count": {"$size": "$unique_nomen"},
+                "usage": 1,
+                "nominal": 1
+            }}
+        ]
+        res = list(col.aggregate(pipeline))
+        return res[0] if res else {"count": 0, "usage": 0, "nominal": 0}
+
+    # Ambil stats dasar dari utils
     stats = get_comprehensive_stats(formatted_period)
+    
+    # Hitung detail spesifik untuk 3 tab utama
+    stats['piutang_detail'] = get_tab_summary({"BULAN_TAGIHAN": formatted_period, "STATUS": {"$ne": "PAYMENT"}})
+    stats['collection_detail'] = get_tab_summary({"BULAN_TAGIHAN": formatted_period, "STATUS": "PAYMENT"})
+    stats['tunggakan_detail'] = get_tab_summary({"STATUS": {"$ne": "PAYMENT"}})
+
     return jsonify(stats)
 
 @bp_collection.route("/api/download_summary")
 @login_required
 def download_summary_csv():
     db_status = get_db_status()
-    if db_status['status'] == 'error': return "Database Error", 500
-    
     categories = ["RAYON", "PC", "PCEZ", "TARIF", "MERK_METER", "READ_METHOD"]
     all_rows = []
     raw_period = request.args.get('period')
@@ -249,18 +282,12 @@ def download_summary_csv():
         results, month = _get_distribution_report(field, db_status['collections']['mc'], period=formatted_period)
         for row in results:
             all_rows.append({
-                "Kategori": field, 
-                "Nilai": row.get("id_value"), 
-                "Rayon_Asal": row.get("rayon_origin"),
-                "Pelanggan": row.get("total_nomen"), 
-                "Piutang_Rp": row.get("total_piutang"),
-                "Kubikasi": row.get("total_kubikasi"),
-                "%_Kontribusi_Piutang": round(row.get("pct_piutang", 0), 2),
+                "Kategori": field, "Nilai": row.get("id_value"), "Rayon_Asal": row.get("rayon_origin"),
+                "Pelanggan": row.get("total_nomen"), "Piutang_Rp": row.get("total_piutang"),
+                "Kubikasi": row.get("total_kubikasi"), "%_Kontribusi_Piutang": round(row.get("pct_piutang", 0), 2),
                 "Periode": month
             })
     
-    if not all_rows: return "Data Kosong", 404
-
     df = pd.DataFrame(all_rows)
     output = io.StringIO()
     df.to_csv(output, index=False)
