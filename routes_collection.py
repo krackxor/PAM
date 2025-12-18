@@ -153,6 +153,28 @@ def collection_top_view():
                            api_endpoint=url_for('bp_collection.top_debtors_report_api'),
                            is_admin=current_user.is_admin)
 
+@bp_collection.route('/riwayat_mom', methods=['GET'])
+@login_required
+def collection_riwayat_view():
+    """Rute untuk laporan Riwayat Month over Month"""
+    return render_template('analysis_report_template.html',
+                           title="Riwayat MoM",
+                           description="Perbandingan performa antar bulan (Month over Month).",
+                           report_type="MOM_COMPARISON",
+                           api_endpoint=url_for('bp_collection.mom_comparison_report_api'),
+                           is_admin=current_user.is_admin)
+
+@bp_collection.route('/dod_comparison', methods=['GET'])
+@login_required
+def analysis_dod_comparison():
+    """Rute untuk laporan Koleksi Day over Day"""
+    return render_template('analysis_report_template.html',
+                           title="Koleksi Day over Day",
+                           description="Perbandingan progres koleksi harian (DoD).",
+                           report_type="DOD_COMPARISON",
+                           api_endpoint=url_for('bp_collection.mom_comparison_report_api'), # Placeholder API
+                           is_admin=current_user.is_admin)
+
 # --- API ENDPOINTS ---
 
 @bp_collection.route("/api/distribution/<category>")
@@ -266,6 +288,19 @@ def top_debtors_report_api():
         ]
         return jsonify({'status': 'success', 'data': data, 'schema': schema})
     except Exception as e: return jsonify({"status": 'error', "message": str(e)}), 500
+
+@bp_collection.route('/api/mom_comparison_report', methods=['GET'])
+@login_required
+def mom_comparison_report_api():
+    """API Placeholder untuk MoM"""
+    return jsonify({
+        'status': 'success', 
+        'data': [], 
+        'schema': [
+            {'key': 'PERIODE', 'label': 'Periode', 'type': 'string'},
+            {'key': 'TOTAL', 'label': 'Total Piutang', 'type': 'currency', 'chart_key': True}
+        ]
+    })
 
 @bp_collection.route("/api/stats_summary")
 @login_required
