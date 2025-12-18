@@ -20,11 +20,12 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- HELPER INTERNAL UNTUK DISTRIBUSI ---
+# --- HELPER INTERNAL UNTUK DISTRIBUSI (DENGAN PERSENTASE & LOOKUP CID) ---
 def _get_distribution_report(group_field, collection_mc, period=None, report_type='PIUTANG'):
     """
     Menghitung distribusi metrik. 
     GROUPING: Dilakukan per Kategori DAN per Rayon agar filter 34/35 di frontend berfungsi.
+    report_type: 'PIUTANG', 'COLLECTION', 'TUNGGAKAN'
     """
     db_status = get_db_status()
     if db_status['status'] == 'error':
@@ -50,7 +51,7 @@ def _get_distribution_report(group_field, collection_mc, period=None, report_typ
     else: # Default PIUTANG AKTIF
         base_filter["STATUS"] = {"$ne": "PAYMENT"}
 
-    # 1. Hitung Grand Total untuk % (Dasar kalkulasi di baris tabel)
+    # 1. Hitung Grand Total untuk % (Basis perhitungan persentase di baris tabel)
     totals_pipeline = [
         {"$match": base_filter},
         {"$group": {
@@ -68,6 +69,8 @@ def _get_distribution_report(group_field, collection_mc, period=None, report_typ
     grand_results = list(collection_mc.aggregate(totals_pipeline))
     g = grand_results[0] if grand_results else {"grand_piutang": 1, "grand_kubikasi": 1, "grand_nomen": 1}
     g_p = g.get('grand_piutang', 1) or 1
+    g_k = g.get('grand_kubikasi', 1) or 1
+    g_n = g.get('grand_nomen', 1) or 1
 
     # 2. Pipeline Utama Distribusi
     pipeline = [{"$match": base_filter}]
@@ -105,7 +108,7 @@ def _get_distribution_report(group_field, collection_mc, period=None, report_typ
                 "mapped_id": {"$ifNull": [f"$cust.{group_field}", "TIDAK TERDATA"]}
             }})
     else:
-        # Mapping field virtual atau asli
+        # Penanganan khusus field virtual ZONA_NOVAK
         if group_field == "PC":
             pipeline.append({"$addFields": {"mapped_id": "$v_PC"}})
         elif group_field == "PCEZ":
@@ -113,7 +116,8 @@ def _get_distribution_report(group_field, collection_mc, period=None, report_typ
         else:
             pipeline.append({"$addFields": {"mapped_id": f"$v_{group_field}" if group_field == "RAYON" else f"${group_field}"}})
 
-    # GROUPING: PENTING! menyertakan 'rayon' agar filter tombol 34/35 di UI berfungsi
+    # GROUPING: Kelompokkan berdasarkan (Kategori Nilai + Rayon Asal)
+    # Ini krusial agar filter 34/35 di UI bisa bekerja
     pipeline.append({
         "$group": {
             "_id": {"val": "$mapped_id", "rayon": "$v_RAYON"},
@@ -123,7 +127,7 @@ def _get_distribution_report(group_field, collection_mc, period=None, report_typ
         }
     })
 
-    # PROYEKSI
+    # PROYEKSI & KALKULASI PERSENTASE
     pipeline.append({
         "$project": {
             "_id": 0,
@@ -132,7 +136,9 @@ def _get_distribution_report(group_field, collection_mc, period=None, report_typ
             "total_nomen": {"$size": "$unique_nomen_set"},
             "total_piutang": 1,
             "total_kubikasi": 1,
-            "pct_piutang": {"$multiply": [{"$divide": ["$total_piutang", g_p]}, 100]}
+            "pct_nomen": {"$multiply": [{"$divide": [{"$size": "$unique_nomen_set"}, g_n]}, 100]},
+            "pct_piutang": {"$multiply": [{"$divide": ["$total_piutang", g_p]}, 100]},
+            "pct_kubikasi": {"$multiply": [{"$divide": ["$total_kubikasi", g_k]}, 100]}
         }
     })
 
@@ -153,13 +159,48 @@ def collection_laporan_view():
     raw_period = request.args.get('period', datetime.now().strftime('%Y-%m'))
     return render_template('collection_summary.html', title="Laporan Piutang & Koleksi", period=raw_period, is_admin=current_user.is_admin)
 
+@bp_collection.route('/analisis', methods=['GET'])
+@login_required 
+def collection_analisis_view():
+    return render_template('collection_analysis.html', title="Analisis Kontributor", is_admin=current_user.is_admin)
+
+@bp_collection.route('/top_list', methods=['GET'])
+@login_required
+def collection_top_view():
+    return render_template('analysis_report_template.html',
+                           title="Top List Piutang",
+                           description="Daftar 1000 pelanggan dengan piutang aktif terbesar.",
+                           report_type="TOP_DEBTORS",
+                           api_endpoint=url_for('bp_collection.top_debtors_report_api'),
+                           is_admin=current_user.is_admin)
+
+@bp_collection.route('/riwayat_mom', methods=['GET'])
+@login_required
+def collection_riwayat_view():
+    return render_template('analysis_report_template.html',
+                           title="Riwayat MoM",
+                           description="Perbandingan performa antar bulan (Month over Month).",
+                           report_type="MOM_COMPARISON",
+                           api_endpoint=url_for('bp_collection.mom_comparison_report_api'),
+                           is_admin=current_user.is_admin)
+
+@bp_collection.route('/dod_comparison', methods=['GET'])
+@login_required
+def analysis_dod_comparison():
+    return render_template('analysis_report_template.html',
+                           title="Koleksi Day over Day",
+                           description="Perbandingan progres koleksi harian (DoD).",
+                           report_type="DOD_COMPARISON",
+                           api_endpoint=url_for('bp_collection.mom_comparison_report_api'),
+                           is_admin=current_user.is_admin)
+
 # --- API ENDPOINTS ---
 
 @bp_collection.route("/api/distribution/<category>")
 @login_required
 def category_distribution_api(category):
     raw_period = request.args.get('period')
-    report_type = request.args.get('type', 'PIUTANG') # Menyesuaikan dengan Tab di UI
+    report_type = request.args.get('type', 'PIUTANG') # Tangkap tipe laporan dari frontend
     
     formatted_period = None
     if raw_period and '-' in raw_period:
@@ -180,7 +221,8 @@ def category_distribution_api(category):
     
     return jsonify({
         "data": results, 
-        "title": f"Kontributor {category}", 
+        "category": field, 
+        "title": f"Kontributor {field.replace('_', ' ')}", 
         "subtitle": f"Bulan Tagihan: {latest_month}"
     })
 
@@ -189,10 +231,14 @@ def category_distribution_api(category):
 def get_stats_summary_api():
     """
     Endpoint utama untuk KPI. 
-    Menghitung detail per tab (count, usage, nominal) agar loading spinner di header berhenti.
+    Menghitung detail per tab (count, usage, nominal) agar loading spinner berhenti.
     """
     raw_period = request.args.get('period', datetime.now().strftime('%Y-%m'))
-    formatted_period = raw_period.replace('-', '') if '-' in raw_period else raw_period
+    if '-' in raw_period:
+        y, m = raw_period.split('-')
+        formatted_period = f"{m}{y}"
+    else:
+        formatted_period = raw_period.replace('-', '')
     
     db_status = get_db_status()
     col = db_status['collections']['mc']
@@ -216,7 +262,7 @@ def get_stats_summary_api():
         res = list(col.aggregate(pipeline))
         return res[0] if res else {"count": 0, "usage": 0, "nominal": 0}
 
-    # Data dikirim dengan kunci 'piutang', 'collection', 'tunggakan' agar JavaScript langsung berhenti loading
+    # Sinkronisasi Kunci Data agar dibaca JavaScript: piutang, collection, tunggakan
     data = {
         "piutang": get_tab_summary({"BULAN_TAGIHAN": formatted_period, "STATUS": {"$ne": "PAYMENT"}}),
         "collection": get_tab_summary({"BULAN_TAGIHAN": formatted_period, "STATUS": "PAYMENT"}),
@@ -229,6 +275,8 @@ def get_stats_summary_api():
 @login_required
 def download_summary_csv():
     db_status = get_db_status()
+    if db_status['status'] == 'error': return "Database Error", 500
+    
     categories = ["RAYON", "PC", "PCEZ", "TARIF", "MERK_METER", "READ_METHOD"]
     all_rows = []
     raw_period = request.args.get('period')
@@ -243,7 +291,8 @@ def download_summary_csv():
             all_rows.append({
                 "Kategori": field, "Nilai": row.get("id_value"), "Rayon_Asal": row.get("rayon_origin"),
                 "Pelanggan": row.get("total_nomen"), "Piutang_Rp": row.get("total_piutang"),
-                "Kubikasi": row.get("total_kubikasi"), "Periode": month
+                "Kubikasi": row.get("total_kubikasi"), "%_Kontribusi_Piutang": round(row.get("pct_piutang", 0), 2),
+                "Periode": month
             })
     
     df = pd.DataFrame(all_rows)
@@ -251,26 +300,46 @@ def download_summary_csv():
     df.to_csv(output, index=False)
     return Response(output.getvalue(), mimetype="text/csv", headers={"Content-disposition": "attachment; filename=Analisis_Kontributor_Novak.csv"})
 
-# --- Rute Navigasi (Pencegah BuildError) ---
-@bp_collection.route('/analisis')
-@login_required 
-def collection_analisis_view():
-    return render_template('collection_analysis.html', is_admin=current_user.is_admin)
-
-@bp_collection.route('/top_list')
-@login_required
-def collection_top_view():
-    return render_template('analysis_report_template.html', title="Top List Piutang", report_type="TOP_DEBTORS", api_endpoint=url_for('bp_collection.top_debtors_report_api'), is_admin=current_user.is_admin)
-
-@bp_collection.route('/api/top_debtors_report')
+@bp_collection.route('/api/top_debtors_report', methods=['GET'])
 @login_required 
 def top_debtors_report_api():
-    return jsonify({'status': 'success', 'data': [], 'schema': []})
-
-@bp_collection.route('/riwayat_mom')
-@login_required
-def collection_riwayat_view():
-    return render_template('analysis_report_template.html', title="Riwayat MoM", report_type="MOM_COMPARISON", api_endpoint=url_for('bp_collection.mom_comparison_report_api'), is_admin=current_user.is_admin)
+    db_status = get_db_status()
+    collection_mc = db_status['collections']['mc']
+    try:
+        pipeline = [
+            {'$match': {'STATUS': {'$ne': 'PAYMENT'}, 'NOMINAL': {'$gt': 0}}},
+            {'$group': {
+                '_id': '$NOMEN',
+                'TotalPiutangAktif': {'$sum': {'$toDouble': '$NOMINAL'}},
+                'JumlahBulanTunggakan': {'$sum': 1},
+                'RayonMC': {'$first': '$RAYON'},
+                'TagihanTerbaru': {'$max': '$BULAN_TAGIHAN'}
+            }},
+            {'$lookup': { 'from': 'CustomerData', 'localField': '_id', 'foreignField': 'NOMEN', 'as': 'cust' }},
+            {'$unwind': {'path': '$cust', 'preserveNullAndEmptyArrays': True}},
+            {'$project': {
+                '_id': 0, 'NOMEN': '$_id',
+                'NAMA': {'$ifNull': ['$cust.NAMA', 'N/A']},
+                'RAYON': {'$ifNull': ['$RayonMC', '$cust.RAYON', 'N/A']},
+                'TotalPiutang': {'$round': ['$TotalPiutangAktif', 0]},
+                'BulanTunggakan': '$JumlahBulanTunggakan',
+                'TagihanTerbaru': '$TagihanTerbaru'
+            }},
+            {'$sort': {'TotalPiutang': -1}},
+            {'$limit': 1000}
+        ]
+        data = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
+        
+        schema = [
+            {'key': 'NOMEN', 'label': 'No. Pelanggan', 'type': 'string', 'is_main_key': True},
+            {'key': 'NAMA', 'label': 'Nama', 'type': 'string'},
+            {'key': 'RAYON', 'label': 'Rayon', 'type': 'string'},
+            {'key': 'TotalPiutang', 'label': 'Total Piutang', 'type': 'currency', 'chart_key': True},
+            {'key': 'BulanTunggakan', 'label': 'Jml Bulan', 'type': 'integer'},
+            {'key': 'TagihanTerbaru', 'label': 'Bulan Terakhir', 'type': 'string'},
+        ]
+        return jsonify({'status': 'success', 'data': data, 'schema': schema})
+    except Exception as e: return jsonify({"status": 'error', "message": str(e)}), 500
 
 @bp_collection.route('/api/mom_comparison_report', methods=['GET'])
 @login_required
