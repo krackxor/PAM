@@ -113,6 +113,40 @@ def collection_analisis_view():
                            title="Analisis Kontributor", 
                            is_admin=current_user.is_admin)
 
+@bp_collection.route('/top_list', methods=['GET'])
+@login_required
+def collection_top_view():
+    """Missing route referenced in base.html"""
+    return render_template('analysis_report_template.html',
+                           title="Top List Piutang",
+                           description="Daftar 1000 pelanggan dengan piutang aktif terbesar.",
+                           report_type="TOP_DEBTORS",
+                           api_endpoint=url_for('bp_collection.top_debtors_report_api'),
+                           is_admin=current_user.is_admin)
+
+@bp_collection.route('/riwayat_mom', methods=['GET'])
+@login_required
+def collection_riwayat_view():
+    """Missing route referenced in base.html"""
+    return render_template('analysis_report_template.html',
+                           title="Riwayat MoM",
+                           description="Perbandingan performa antar bulan (Month over Month).",
+                           report_type="MOM_COMPARISON",
+                           api_endpoint=url_for('bp_collection.mom_comparison_report_api'),
+                           is_admin=current_user.is_admin)
+
+@bp_collection.route('/dod_comparison', methods=['GET'])
+@login_required
+def analysis_dod_comparison():
+    """Missing route referenced in base.html"""
+    return render_template('analysis_report_template.html',
+                           title="Koleksi Day over Day",
+                           description="Perbandingan koleksi harian (DoD).",
+                           report_type="DOD_COMPARISON",
+                           api_endpoint=url_for('bp_collection.mom_comparison_report_api'), # Placeholder as actual endpoint not visible
+                           is_admin=current_user.is_admin)
+
+
 # --- API ENDPOINTS (FOR ASYNC LOADING) ---
 
 @bp_collection.route("/api/stats_summary")
@@ -231,17 +265,38 @@ def top_debtors_report_api():
             {'$limit': 1000}
         ]
         data = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
-        return jsonify({'status': 'success', 'data': data})
+        
+        # Schema for top debtors
+        schema = [
+            {'key': 'NOMEN', 'label': 'No. Pelanggan', 'type': 'string', 'is_main_key': True},
+            {'key': 'NAMA', 'label': 'Nama', 'type': 'string'},
+            {'key': 'RAYON', 'label': 'Rayon', 'type': 'string'},
+            {'key': 'TotalPiutang', 'label': 'Total Piutang', 'type': 'currency', 'chart_key': True},
+            {'key': 'BulanTunggakan', 'label': 'Jml Bulan', 'type': 'integer'},
+            {'key': 'TagihanTerbaru', 'label': 'Bulan Terakhir', 'type': 'string'},
+        ]
+        
+        return jsonify({'status': 'success', 'data': data, 'schema': schema})
     except Exception as e: return jsonify({"status": 'error', "message": str(e)}), 500
 
 @bp_collection.route('/api/mom_comparison_report', methods=['GET'])
 @login_required
 def mom_comparison_report_api():
-    # ... (Logika MoM Tetap Sama)
     db_status = get_db_status()
     col_mc = db_status['collections']['mc']
-    latest_doc = col_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
-    M = latest_doc.get('BULAN_TAGIHAN') if latest_doc else None
-    M_1 = _get_previous_month_year(M)
-    # Pipeline MoM ... (disingkat untuk fokus pada Novak)
-    return jsonify({'status': 'success', 'message': 'Endpoint MoM Aktif'})
+    try:
+        latest_doc = col_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
+        M = latest_doc.get('BULAN_TAGIHAN') if latest_doc else None
+        M_1 = _get_previous_month_year(M)
+        
+        # Simple placeholder for actual MoM comparison logic
+        return jsonify({
+            'status': 'success', 
+            'message': 'Endpoint MoM Aktif', 
+            'data': [], 
+            'schema': [],
+            'latest_month': M,
+            'previous_month': M_1
+        })
+    except Exception as e:
+        return jsonify({"status": 'error', "message": str(e)}), 500
