@@ -3,250 +3,291 @@
 {% block title %}Admin Upload Data{% endblock %}
 
 {% block custom_styles %}
-/* Custom styles for the upload page */
-.upload-container {
-    padding: 20px;
-    max-width: 1100px;
-    margin: 20px auto;
-    background-color: var(--background-color-light);
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow-medium);
-}
-.upload-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 20px;
-}
-.upload-card {
-    padding: 20px;
-    border: 1px solid #e0e0e0;
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow-light);
-    transition: transform 0.2s;
-}
-.upload-card:hover {
-    transform: translateY(-3px);
-}
-.upload-card h4 {
-    margin-top: 0;
-    color: var(--primary-color);
-    border-bottom: 1px dashed #eee;
-    padding-bottom: 10px;
-    margin-bottom: 15px;
-}
-.upload-form label {
-    display: block;
-    margin-bottom: 5px;
-    font-weight: 600;
-}
-.upload-form input[type="file"],
-.upload-form select,
-.upload-form input[type="text"] {
-    width: 100%;
-    padding: 8px;
-    margin-bottom: 15px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    box-sizing: border-box;
-}
-.upload-button {
-    background-color: #28a745;
-    color: white;
-    padding: 10px 15px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    width: 100%;
-    transition: background-color 0.2s;
-}
-.upload-button:hover {
-    background-color: #1e7e34;
-}
-.status-message {
-    margin-top: 15px;
-    padding: 10px;
-    border-radius: 4px;
-    font-weight: 600;
-    font-size: 0.9rem;
-}
-.status-success {
-    background-color: #d1e7dd;
-    color: #0f5132;
-    border: 1px solid #badbcc;
-}
-.status-error {
-    background-color: #f8d7da;
-    color: #842029;
-    border: 1px solid #f5c2c7;
-}
+<style>
+    .upload-container {
+        padding: 10px;
+    }
+    
+    .hero-header {
+        background: #fff;
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.1);
+        margin-bottom: 30px;
+        border-left: 5px solid #4e73df;
+    }
 
-/* Flex untuk Grouping Bulan/Tahun */
-.date-group {
-    display: flex;
-    gap: 10px;
-}
-.date-group > div {
-    flex: 1;
-}
-.date-group input {
-    margin-bottom: 0 !important; /* Override default margin */
-}
+    .upload-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 25px;
+    }
 
+    .upload-card {
+        background: #fff;
+        border-radius: 15px;
+        border: 1px solid #e3e6f0;
+        box-shadow: 0 0.15rem 1.5rem 0 rgba(0, 0, 0, 0.05);
+        transition: transform 0.2s, box-shadow 0.2s;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .upload-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 2rem 0 rgba(58, 59, 69, 0.15);
+    }
+
+    .card-accent {
+        height: 4px;
+        width: 100%;
+    }
+
+    .upload-card-body {
+        padding: 25px;
+        flex-grow: 1;
+    }
+
+    .upload-card h5 {
+        font-weight: 800;
+        color: #3a3b45;
+        margin-bottom: 5px;
+        text-transform: uppercase;
+        font-size: 0.9rem;
+        letter-spacing: 0.5px;
+    }
+
+    .upload-card .subtitle {
+        font-size: 0.75rem;
+        color: #858796;
+        margin-bottom: 20px;
+        display: block;
+    }
+
+    /* Form Elements */
+    .form-label {
+        font-weight: 700;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        color: #4e73df;
+        margin-bottom: 5px;
+    }
+
+    .input-custom {
+        border-radius: 8px;
+        border: 1px solid #d1d3e2;
+        padding: 10px;
+        font-size: 0.85rem;
+        width: 100%;
+        margin-bottom: 15px;
+    }
+
+    .input-custom:focus {
+        border-color: #bac8f3;
+        box-shadow: 0 0 0 0.2rem rgba(78, 115, 223, 0.1);
+        outline: none;
+    }
+
+    .btn-upload {
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-size: 0.75rem;
+        padding: 12px;
+        border-radius: 10px;
+        border: none;
+        color: white;
+        width: 100%;
+        transition: all 0.3s;
+        cursor: pointer;
+    }
+
+    .btn-upload:disabled { opacity: 0.7; cursor: not-allowed; }
+
+    /* Colors per Category */
+    .bg-mc { background-color: #4e73df; }
+    .bg-mb { background-color: #1cc88a; }
+    .bg-cid { background-color: #f6c23e; }
+    .bg-sbrs { background-color: #36b9cc; }
+    .bg-ardebt { background-color: #e74a3b; }
+
+    /* Status Messages */
+    .status-msg {
+        margin-top: 15px;
+        padding: 10px;
+        border-radius: 8px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        display: none;
+    }
+    .status-success { background-color: #d1e7dd; color: #0f5132; border: 1px solid #badbcc; }
+    .status-error { background-color: #f8d7da; color: #842029; border: 1px solid #f5c2c7; }
+
+    .date-row { display: flex; gap: 10px; margin-bottom: 10px; }
+    .date-row div { flex: 1; }
+</style>
 {% endblock %}
 
 {% block content %}
 <div class="upload-container">
-    <h2 style="color: var(--primary-color); margin-bottom: 20px;">
-        <i class="fas fa-upload"></i> Admin Upload Data - Manajemen Master Data
-    </h2>
-    <p class="text-muted" style="margin-bottom: 30px;">
-        Unggah file data master (CSV/XLSX) untuk memperbarui koleksi database. Harap perhatikan kolom kunci (NOMEN, NOTAGIHAN) dan Periode Tagihan/Tunggakan yang diperlukan untuk data historis.
-    </p>
+    <!-- Header Section -->
+    <div class="hero-header">
+        <h2 class="font-weight-bold text-gray-800" style="font-size: 1.6rem;">
+            <i class="fas fa-cloud-upload-alt mr-2 text-primary"></i> Manajemen Master Data
+        </h2>
+        <p class="text-muted mb-0 small">Unggah berkas CSV atau Excel untuk memperbarui database AB SUNTER Analytic. Pastikan format kolom sudah sesuai sebelum mengunggah.</p>
+    </div>
 
     <div class="upload-grid">
         
-        <!-- 1. Master Cetak (MC) / Piutang Bulanan -->
+        <!-- 1. Master Cetak (MC) -->
         <div class="upload-card">
-            <h4 style="border-left: 4px solid #007bff; padding-left: 10px;">Master Cetak (MC)</h4>
-            <p style="font-size: 0.8rem; color: var(--secondary-color);">Data Tagihan Bulanan (Perlu Bulan/Tahun)</p>
-            <form class="upload-form" id="formMC" data-endpoint="{{ url_for('upload_mc_data') }}">
-                <div class="date-group">
-                    <div>
-                        <label for="monthMC">Bulan Tagihan (MM)</label>
-                        <input type="text" id="monthMC" name="month" placeholder="contoh: 12" required maxlength="2">
+            <div class="card-accent bg-mc"></div>
+            <div class="upload-card-body">
+                <h5>Master Cetak (MC)</h5>
+                <span class="subtitle">Data piutang bulanan / lembar tagihan</span>
+                <form id="formMC" class="upload-form" data-endpoint="{{ url_for('upload_mc_data') }}">
+                    <div class="date-row">
+                        <div>
+                            <label class="form-label">Bulan (MM)</label>
+                            <input type="text" name="month" class="input-custom" placeholder="01" required maxlength="2">
+                        </div>
+                        <div>
+                            <label class="form-label">Tahun (YYYY)</label>
+                            <input type="text" name="year" class="input-custom" placeholder="2025" required maxlength="4">
+                        </div>
                     </div>
-                    <div>
-                        <label for="yearMC">Tahun Tagihan (YYYY)</label>
-                        <input type="text" id="yearMC" name="year" placeholder="contoh: 2025" required maxlength="4">
-                    </div>
-                </div>
-                <label for="fileMC">Pilih File MC (.csv, .xlsx)</label>
-                <input type="file" id="fileMC" name="file" accept=".csv, .xlsx, .xls" required>
-                <button type="submit" class="upload-button"><i class="fas fa-database"></i> Upload MC Data</button>
-                <div id="statusMC" class="status-message" style="display: none;"></div>
-            </form>
-        </div>
-        
-        <!-- 2. Master Bayar (MB) / Koleksi Harian -->
-        <div class="upload-card">
-            <h4 style="border-left: 4px solid #28a745; padding-left: 10px;">Master Bayar (MB)</h4>
-            <p style="font-size: 0.8rem; color: var(--secondary-color);">Data Transaksi Pembayaran Harian (Mode Append)</p>
-            <form class="upload-form" id="formMB" data-endpoint="{{ url_for('upload_mb_data') }}">
-                <label for="fileMB">Pilih File MB (.csv, .xlsx)</label>
-                <input type="file" id="fileMB" name="file" accept=".csv, .xlsx, .xls" required>
-                <button type="submit" class="upload-button" style="background-color: #28a745;"><i class="fas fa-hand-holding-usd"></i> Upload MB Data</button>
-                <div id="statusMB" class="status-message" style="display: none;"></div>
-            </form>
-        </div>
-        
-        <!-- 3. Customer Data (CID) / Master Pelanggan -->
-        <div class="upload-card">
-            <h4 style="border-left: 4px solid #ffc107; color: #343a40; padding-left: 10px;">Customer Data (CID)</h4>
-            <p style="font-size: 0.8rem; color: var(--secondary-color);">Data Induk Pelanggan (Mode Replace/Historis)</p>
-            <form class="upload-form" id="formCID" data-endpoint="{{ url_for('upload_cid_data') }}">
-                <label for="fileCID">Pilih File CID (.csv, .xlsx)</label>
-                <input type="file" id="fileCID" name="file" accept=".csv, .xlsx, .xls" required>
-                <button type="submit" class="upload-button" style="background-color: #ffc107; color: var(--text-color);"><i class="fas fa-user-circle"></i> Upload CID Data</button>
-                <div id="statusCID" class="status-message" style="display: none;"></div>
-            </form>
+                    <label class="form-label">Pilih Berkas</label>
+                    <input type="file" name="file" class="input-custom" accept=".csv, .xlsx, .xls" required>
+                    <button type="submit" class="btn-upload bg-mc">Upload MC Data</button>
+                    <div id="statusMC" class="status-msg"></div>
+                </form>
+            </div>
         </div>
 
-        <!-- 4. Meter Reading (SBRS) / Stand Meter -->
+        <!-- 2. Master Bayar (MB) -->
         <div class="upload-card">
-            <h4 style="border-left: 4px solid #17a2b8; padding-left: 10px;">Meter Reading (SBRS)</h4>
-            <p style="font-size: 0.8rem; color: var(--secondary-color);">Data Pembacaan Meter Lapangan (Mode Append)</p>
-            <form class="upload-form" id="formSBRS" data-endpoint="{{ url_for('upload_sbrs_data') }}">
-                <label for="fileSBRS">Pilih File SBRS (.csv, .xlsx)</label>
-                <input type="file" id="fileSBRS" name="file" accept=".csv, .xlsx, .xls" required>
-                <button type="submit" class="upload-button" style="background-color: #17a2b8;"><i class="fas fa-tint"></i> Upload SBRS Data</button>
-                <div id="statusSBRS" class="status-message" style="display: none;"></div>
-            </form>
+            <div class="card-accent bg-mb"></div>
+            <div class="upload-card-body">
+                <h5>Master Bayar (MB)</h5>
+                <span class="subtitle">Data koleksi harian (Mode: Append)</span>
+                <form id="formMB" class="upload-form" data-endpoint="{{ url_for('upload_mb_data') }}">
+                    <label class="form-label">Pilih Berkas</label>
+                    <input type="file" name="file" class="input-custom" accept=".csv, .xlsx, .xls" required>
+                    <button type="submit" class="btn-upload bg-mb">Upload MB Data</button>
+                    <div id="statusMB" class="status-msg"></div>
+                </form>
+            </div>
         </div>
 
-        <!-- 5. Account Receivable Debt (ARDEBT) / Detail Tunggakan -->
+        <!-- 3. Customer Data (CID) -->
         <div class="upload-card">
-            <h4 style="border-left: 4px solid #dc3545; padding-left: 10px;">Detail Tunggakan (ARDEBT)</h4>
-            <p style="font-size: 0.8rem; color: var(--secondary-color);">Detail Piutang/Tunggakan per Pelanggan (Perlu Bulan/Tahun)</p>
-            <form class="upload-form" id="formARDEBT" data-endpoint="{{ url_for('upload_ardebt_data') }}">
-                <div class="date-group">
-                    <div>
-                        <label for="monthAR">Bulan Tunggakan (MM)</label>
-                        <input type="text" id="monthAR" name="month" placeholder="contoh: 12" required maxlength="2">
-                    </div>
-                    <div>
-                        <label for="yearAR">Tahun Tunggakan (YYYY)</label>
-                        <input type="text" id="yearAR" name="year" placeholder="contoh: 2025" required maxlength="4">
-                    </div>
-                </div>
-                <label for="fileAR">Pilih File ARDEBT (.csv, .xlsx)</label>
-                <input type="file" id="fileAR" name="file" accept=".csv, .xlsx, .xls" required>
-                <button type="submit" class="upload-button" style="background-color: #dc3545;"><i class="fas fa-hand-holding-usd"></i> Upload ARDEBT Data</button>
-                <div id="statusARDEBT" class="status-message" style="display: none;"></div>
-            </form>
+            <div class="card-accent bg-cid"></div>
+            <div class="upload-card-body">
+                <h5>Customer Data (CID)</h5>
+                <span class="subtitle">Induk Master Pelanggan (Mode: Replace)</span>
+                <form id="formCID" class="upload-form" data-endpoint="{{ url_for('upload_cid_data') }}">
+                    <label class="form-label">Pilih Berkas</label>
+                    <input type="file" name="file" class="input-custom" accept=".csv, .xlsx, .xls" required>
+                    <button type="submit" class="btn-upload bg-cid" style="color: #3a3b45;">Upload CID Data</button>
+                    <div id="statusCID" class="status-msg"></div>
+                </form>
+            </div>
         </div>
+
+        <!-- 4. Meter Reading (SBRS) -->
+        <div class="upload-card">
+            <div class="card-accent bg-sbrs"></div>
+            <div class="upload-card-body">
+                <h5>Meter Reading (SBRS)</h5>
+                <span class="subtitle">Data pembacaan stand meter (Mode: Append)</span>
+                <form id="formSBRS" class="upload-form" data-endpoint="{{ url_for('upload_sbrs_data') }}">
+                    <label class="form-label">Pilih Berkas</label>
+                    <input type="file" name="file" class="input-custom" accept=".csv, .xlsx, .xls" required>
+                    <button type="submit" class="btn-upload bg-sbrs">Upload SBRS Data</button>
+                    <div id="statusSBRS" class="status-msg"></div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 5. Detail Tunggakan (ARDEBT) -->
+        <div class="upload-card">
+            <div class="card-accent bg-ardebt"></div>
+            <div class="upload-card-body">
+                <h5>Detail Tunggakan (AR)</h5>
+                <span class="subtitle">Rincian utang per pelanggan (Per Periode)</span>
+                <form id="formARDEBT" class="upload-form" data-endpoint="{{ url_for('upload_ardebt_data') }}">
+                    <div class="date-row">
+                        <div>
+                            <label class="form-label">Bulan (MM)</label>
+                            <input type="text" name="month" class="input-custom" placeholder="01" required maxlength="2">
+                        </div>
+                        <div>
+                            <label class="form-label">Tahun (YYYY)</label>
+                            <input type="text" name="year" class="input-custom" placeholder="2025" required maxlength="4">
+                        </div>
+                    </div>
+                    <label class="form-label">Pilih Berkas</label>
+                    <input type="file" name="file" class="input-custom" accept=".csv, .xlsx, .xls" required>
+                    <button type="submit" class="btn-upload bg-ardebt">Upload AR Data</button>
+                    <div id="statusARDEBT" class="status-msg"></div>
+                </form>
+            </div>
+        </div>
+
     </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        const forms = ['formMC', 'formMB', 'formCID', 'formSBRS', 'formARDEBT'];
+        const forms = document.querySelectorAll('.upload-form');
 
-        forms.forEach(formId => {
-            const form = document.getElementById(formId);
-            if (form) {
-                form.addEventListener('submit', handleUpload);
-            }
-        });
+        forms.forEach(form => {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formId = form.id;
+                const statusId = 'status' + formId.replace('form', '');
+                const statusDiv = document.getElementById(statusId);
+                const button = form.querySelector('button');
+                const endpoint = form.dataset.endpoint;
+                const originalText = button.innerHTML;
 
-        async function handleUpload(e) {
-            e.preventDefault();
-            const form = e.target;
-            const statusDiv = document.getElementById(`status${form.id.slice(4)}`);
-            const button = form.querySelector('button');
-            const endpoint = form.dataset.endpoint;
-            
-            statusDiv.style.display = 'none';
-            statusDiv.classList.remove('status-success', 'status-error');
-            button.disabled = true;
-            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
+                // Reset Status
+                statusDiv.style.display = 'none';
+                statusDiv.className = 'status-msg';
+                button.disabled = true;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> MEMPROSES...';
 
-            const formData = new FormData(form);
+                const formData = new FormData(form);
 
-            try {
-                const response = await fetch(endpoint, {
-                    method: 'POST',
-                    body: formData,
-                });
-                
-                const result = await response.json();
-                
-                if (result.status === 'success') {
-                    statusDiv.classList.add('status-success');
-                    statusDiv.innerHTML = `<i class="fas fa-check-circle"></i> ${result.message}`;
-                } else {
+                try {
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const result = await response.json();
+
+                    if (result.status === 'success') {
+                        statusDiv.classList.add('status-success');
+                        statusDiv.innerHTML = `<i class="fas fa-check-circle mr-2"></i> ${result.message}`;
+                        form.reset();
+                    } else {
+                        statusDiv.classList.add('status-error');
+                        statusDiv.innerHTML = `<i class="fas fa-exclamation-circle mr-2"></i> ${result.message}`;
+                    }
+                } catch (error) {
                     statusDiv.classList.add('status-error');
-                    statusDiv.innerHTML = `<i class="fas fa-times-circle"></i> ${result.message}`;
+                    statusDiv.innerHTML = `<i class="fas fa-bug mr-2"></i> Terjadi kesalahan jaringan.`;
+                } finally {
+                    statusDiv.style.display = 'block';
+                    button.disabled = false;
+                    button.innerHTML = originalText;
                 }
-
-            } catch (error) {
-                statusDiv.classList.add('status-error');
-                statusDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Terjadi kesalahan jaringan atau server (${error.message}).`;
-                console.error('Upload error:', error);
-            } finally {
-                statusDiv.style.display = 'block';
-                button.disabled = false;
-                button.innerHTML = button.dataset.originalHtml || form.id.includes('MC') ? '<i class="fas fa-database"></i> Upload MC Data' :
-                                   form.id.includes('MB') ? '<i class="fas fa-hand-holding-usd"></i> Upload MB Data' :
-                                   form.id.includes('CID') ? '<i class="fas fa-user-circle"></i> Upload CID Data' :
-                                   form.id.includes('SBRS') ? '<i class="fas fa-tint"></i> Upload SBRS Data' :
-                                   form.id.includes('ARDEBT') ? '<i class="fas fa-hand-holding-usd"></i> Upload ARDEBT Data' : 'Upload Data';
-
-                // Simpan original HTML button untuk penggunaan berikutnya
-                if (!button.dataset.originalHtml) {
-                    button.dataset.originalHtml = button.innerHTML;
-                }
-            }
-        }
+            });
+        });
     });
 </script>
 {% endblock %}
