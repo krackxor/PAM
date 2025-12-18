@@ -205,6 +205,44 @@ def category_distribution_api(category):
         "subtitle": f"Sumber: {'ARDEBT' if report_type == 'TUNGGAKAN' else 'MC'} - {latest_month}"
     })
 
+@bp_collection.route("/api/download_summary")
+@login_required
+def download_summary_csv():
+    """Endpoint untuk mengekspor data summary kontributor ke CSV."""
+    raw_period = request.args.get('period', datetime.now().strftime('%Y-%m'))
+    categories = ["RAYON", "PC", "TARIF", "MERK", "READ_METHOD"]
+    report_types = ["PIUTANG", "TUNGGAKAN", "COLLECTION"]
+    
+    all_data = []
+    for r_type in report_types:
+        for cat in categories:
+            results, month = _get_distribution_report(cat, period=raw_period, report_type=r_type)
+            for row in results:
+                all_data.append({
+                    "Periode": month,
+                    "Tipe_Laporan": r_type,
+                    "Kategori": cat,
+                    "Grup": row.get("id_value"),
+                    "Rayon_Asal": row.get("rayon_origin"),
+                    "Total_Nominal": row.get("total_piutang"),
+                    "Total_Nomen": row.get("total_nomen"),
+                    "Total_Kubikasi": row.get("total_kubikasi")
+                })
+    
+    if not all_data:
+        return jsonify({"status": "error", "message": "Tidak ada data untuk periode ini"}), 404
+        
+    df = pd.DataFrame(all_data)
+    output = io.StringIO()
+    df.to_csv(output, index=False)
+    
+    filename = f"Summary_Analitik_{raw_period}.csv"
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-disposition": f"attachment; filename={filename}"}
+    )
+
 @bp_collection.route('/laporan', methods=['GET'])
 @login_required 
 def collection_laporan_view():
