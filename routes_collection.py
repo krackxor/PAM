@@ -27,7 +27,7 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
     report_type: 
     - PIUTANG: Data MC (Master Cetak) status != PAYMENT (Bulan Berjalan)
     - COLLECTION: Data MC status == PAYMENT (Bulan Berjalan)
-    - TUNGGAKAN: Data ARDEBT (Account Receivable Debt - Kumulatif dari file ARDEBT)
+    - TUNGGAKAN: Data ARDEBT (Account Receivable Debt - Kumulatif)
     """
     db_status = get_db_status()
     if db_status['status'] == 'error':
@@ -35,9 +35,12 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
 
     collections = db_status['collections']
     
-    # Penentuan Target Bulan (hanya berlaku untuk laporan berbasis MC)
-    if period:
-        target_month = period.replace('-', '')
+    # Perbaikan Konversi Periode: YYYY-MM -> MMYYYY
+    if period and '-' in period:
+        y, m = period.split('-')
+        target_month = f"{m}{y}"
+    elif period:
+        target_month = period
     else:
         latest_doc = collections['mc'].find_one(sort=[('BULAN_TAGIHAN', -1)])
         target_month = latest_doc.get('BULAN_TAGIHAN') if latest_doc else datetime.now().strftime('%m%Y')
@@ -63,7 +66,6 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
 
     # 3. Ekstraksi Field Virtual (Rayon, PC, Tarif)
     if report_type == 'TUNGGAKAN':
-        # Mapping dari Header ARDEBT (RAYON, PCEZ, TIPEPLGGN)
         pipeline.append({"$addFields": {
             "v_RAYON": "$RAYON",
             "v_PC": "$PCEZ",
@@ -71,7 +73,6 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
             "v_TARIF": "$TIPEPLGGN"
         }})
     else:
-        # Mapping dari Header MC (ZONA_NOVAK)
         pipeline.append({"$addFields": {
             "v_RAYON": {"$substrCP": ["$ZONA_NOVAK", 0, 2]},
             "v_PC": {"$substrCP": ["$ZONA_NOVAK", 2, 3]},
@@ -79,9 +80,10 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
             "v_TARIF": "$TARIF"
         }})
 
-    # 4. Mapping Grouping Field & Lookup (untuk Merk/Method)
-    if group_field in ["MERK", "READ_METHOD"]:
-        # ARDEBT sudah punya kolom MERK dan READ_METHOD, MC perlu lookup ke CID
+    # 4. Mapping Grouping Field & Lookup CID
+    # Gunakan pengecekan case-insensitive untuk group_field
+    g_field = group_field.upper()
+    if g_field in ["MERK", "MERK_METER", "READ_METHOD"]:
         if report_type != 'TUNGGAKAN':
             pipeline.append({
                 "$lookup": {
@@ -92,18 +94,27 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
                 }
             })
             pipeline.append({"$unwind": {"path": "$cust", "preserveNullAndEmptyArrays": True}})
-            mapped_id_field = f"$cust.{group_field}"
+            
+            # Pengecekan field merk yang fleksibel
+            if g_field.startswith("MERK"):
+                pipeline.append({"$addFields": {
+                    "mapped_id": {"$ifNull": ["$cust.MERK_METER", {"$ifNull": ["$cust.MERK", "TIDAK TERDATA"]}]}
+                }})
+            else:
+                pipeline.append({"$addFields": {
+                    "mapped_id": {"$ifNull": ["$cust.READ_METHOD", "TIDAK TERDATA"]}
+                }})
         else:
-            mapped_id_field = f"${group_field}"
+            # Di ARDEBT field MERK dan READ_METHOD sudah ada langsung
+            pipeline.append({"$addFields": {"mapped_id": {"$ifNull": [f"${g_field}", "TIDAK TERDATA"]}}})
     else:
-        # Field virtual atau default
         field_map = {"RAYON": "$v_RAYON", "PC": "$v_PC", "PCEZ": "$v_PCEZ", "TARIF": "$v_TARIF"}
-        mapped_id_field = field_map.get(group_field, f"${group_field}")
+        pipeline.append({"$addFields": {"mapped_id": {"$ifNull": [field_map.get(g_field, f"${g_field}"), "TIDAK TERDATA"]}}})
 
-    # 5. Grouping
+    # 5. Grouping (val + rayon untuk filter 34/35)
     pipeline.append({
         "$group": {
-            "_id": {"val": mapped_id_field, "rayon": "$v_RAYON"},
+            "_id": {"val": "$mapped_id", "rayon": "$v_RAYON"},
             "unique_nomen_set": {"$addToSet": "$NOMEN"},
             "total_val": {"$sum": {"$toDouble": {"$ifNull": [val_field, 0]}}},
             "total_use": {"$sum": {"$toDouble": {"$ifNull": [usage_field, 0]}}}
@@ -114,7 +125,7 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
     pipeline.append({
         "$project": {
             "_id": 0,
-            "id_value": {"$ifNull": ["$_id.val", "TIDAK TERDATA"]},
+            "id_value": "$_id.val",
             "rayon_origin": "$_id.rayon",
             "total_nomen": {"$size": "$unique_nomen_set"},
             "total_piutang": "$total_val",
@@ -128,7 +139,7 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
         results = list(source_col.aggregate(pipeline, allowDiskUse=True))
         return results, target_month
     except Exception as e:
-        print(f"Aggregation Error: {e}")
+        print(f"Aggr Error: {e}")
         return [], target_month
 
 # --- API ENDPOINTS ---
@@ -136,12 +147,15 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
 @bp_collection.route("/api/stats_summary")
 @login_required
 def get_stats_summary_api():
-    """
-    Menghitung KPI Header Dashboard.
-    Sinkronisasi: Tunggakan dihitung dari koleksi 'ardebt'.
-    """
+    """Menghitung KPI Header Dashboard dengan perbaikan format tanggal."""
     raw_period = request.args.get('period', datetime.now().strftime('%Y-%m'))
-    formatted_period = raw_period.replace('-', '') if '-' in raw_period else raw_period
+    
+    # Konversi YYYY-MM -> MMYYYY untuk query MC
+    if '-' in raw_period:
+        y, m = raw_period.split('-')
+        formatted_period = f"{m}{y}"
+    else:
+        formatted_period = raw_period
     
     db_status = get_db_status()
     col_mc = db_status['collections']['mc']
@@ -162,7 +176,6 @@ def get_stats_summary_api():
         return res[0] if res else {"count": 0, "usage": 0, "nominal": 0}
 
     def get_ar_summary():
-        # Menghitung nominal dari 'JUMLAH' dan Nomen unik dari 'NOMEN' di koleksi ardebt
         pipeline = [
             {"$group": {
                 "_id": None,
@@ -184,17 +197,11 @@ def get_stats_summary_api():
 @bp_collection.route("/api/distribution/<category>")
 @login_required
 def category_distribution_api(category):
-    """API untuk data grafik dan tabel kontributor."""
     raw_period = request.args.get('period')
     report_type = request.args.get('type', 'PIUTANG').upper()
     
-    # Mapping nama kategori agar sesuai dengan helper
-    cat_field = category.upper()
-    if cat_field == 'MERK': cat_field = 'MERK_METER'
-
-    results, latest_month = _get_distribution_report(cat_field, period=raw_period, report_type=report_type)
+    results, latest_month = _get_distribution_report(category, period=raw_period, report_type=report_type)
     
-    # Hitung Persentase Kontribusi secara dinamis
     total_p = sum(item['total_piutang'] for item in results) or 1
     for item in results:
         item['pct_piutang'] = (item['total_piutang'] / total_p) * 100
@@ -202,13 +209,12 @@ def category_distribution_api(category):
     return jsonify({
         "data": results, 
         "title": f"Kontributor {category.upper()}", 
-        "subtitle": f"Sumber: {'ARDEBT' if report_type == 'TUNGGAKAN' else 'MC'} - {latest_month}"
+        "subtitle": f"Bulan: {latest_month} ({report_type})"
     })
 
 @bp_collection.route("/api/download_summary")
 @login_required
 def download_summary_csv():
-    """Endpoint untuk mengekspor data summary kontributor ke CSV."""
     raw_period = request.args.get('period', datetime.now().strftime('%Y-%m'))
     categories = ["RAYON", "PC", "TARIF", "MERK", "READ_METHOD"]
     report_types = ["PIUTANG", "TUNGGAKAN", "COLLECTION"]
@@ -219,29 +225,17 @@ def download_summary_csv():
             results, month = _get_distribution_report(cat, period=raw_period, report_type=r_type)
             for row in results:
                 all_data.append({
-                    "Periode": month,
-                    "Tipe_Laporan": r_type,
-                    "Kategori": cat,
-                    "Grup": row.get("id_value"),
-                    "Rayon_Asal": row.get("rayon_origin"),
-                    "Total_Nominal": row.get("total_piutang"),
-                    "Total_Nomen": row.get("total_nomen"),
-                    "Total_Kubikasi": row.get("total_kubikasi")
+                    "Periode": month, "Tipe": r_type, "Kategori": cat,
+                    "Grup": row.get("id_value"), "Total_Nominal": row.get("total_piutang"),
+                    "Total_Nomen": row.get("total_nomen"), "Total_Kubikasi": row.get("total_kubikasi")
                 })
     
-    if not all_data:
-        return jsonify({"status": "error", "message": "Tidak ada data untuk periode ini"}), 404
+    if not all_data: return jsonify({"status": "error", "message": "No data"}), 404
         
     df = pd.DataFrame(all_data)
     output = io.StringIO()
     df.to_csv(output, index=False)
-    
-    filename = f"Summary_Analitik_{raw_period}.csv"
-    return Response(
-        output.getvalue(),
-        mimetype="text/csv",
-        headers={"Content-disposition": f"attachment; filename={filename}"}
-    )
+    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-disposition": f"attachment; filename=Summary_Analitik_{raw_period}.csv"})
 
 @bp_collection.route('/laporan', methods=['GET'])
 @login_required 
@@ -257,7 +251,6 @@ def collection_analisis_view():
 @bp_collection.route('/api/top_debtors_report', methods=['GET'])
 @login_required 
 def top_debtors_report_api():
-    # Placeholder atau implementasi list 1000 penunggak terbesar dari ARDEBT
     return jsonify({'status': 'success', 'data': []})
 
 @bp_collection.route('/top_list', methods=['GET'])
