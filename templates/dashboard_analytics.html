@@ -1,356 +1,355 @@
 {% extends "base.html" %}
 
+{% block title %}Dashboard Analitik{% endblock %}
+
+{% block custom_styles %}
+<style>
+    .analytics-container { padding: 10px; }
+    
+    /* Custom Card Style */
+    .kpi-card-custom {
+        border: none;
+        border-radius: 12px;
+        transition: transform 0.2s;
+    }
+    .kpi-card-custom:hover { transform: translateY(-5px); }
+    
+    .card-label {
+        font-size: 0.7rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .card-value {
+        font-size: 1.5rem;
+        font-weight: 800;
+        margin-bottom: 0;
+    }
+
+    /* Chart & Table Containers */
+    .section-card {
+        background: #fff;
+        border-radius: 15px;
+        border: 1px solid #e3e6f0;
+        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.1);
+        margin-bottom: 30px;
+        overflow: hidden;
+    }
+
+    .section-header {
+        padding: 15px 20px;
+        background-color: #f8f9fc;
+        border-bottom: 1px solid #e3e6f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .section-header h6 {
+        margin: 0;
+        font-weight: 700;
+        color: #4e73df;
+    }
+
+    .chart-container {
+        position: relative;
+        height: 320px;
+        width: 100%;
+        padding: 15px;
+    }
+
+    /* Alerts Table */
+    .table-critical {
+        font-size: 0.85rem;
+    }
+    .table-critical thead th {
+        background-color: #fff;
+        border-top: none;
+        color: #e74a3b;
+        font-weight: 800;
+        text-transform: uppercase;
+        font-size: 0.7rem;
+    }
+
+    .badge-critical {
+        font-weight: 700;
+        border-radius: 4px;
+        padding: 4px 8px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<h1 class="mb-4">Dashboard Analitik AB SUNTER</h1>
-<p class="lead">Ringkasan KPI dan tren koleksi harian serta anomali pemakaian air.</p>
+<div class="analytics-container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800 font-weight-bold">Dashboard Analitik AB SUNTER</h1>
+            <p class="text-muted small">Ringkasan performa koleksi dan status anomali sistem.</p>
+        </div>
+        <button id="export-dashboard-btn" class="btn btn-sm btn-success shadow-sm font-weight-bold">
+            <i class="fas fa-file-export mr-1"></i> EXPORT DATA
+        </button>
+    </div>
 
-<!-- Peringatan Koneksi DB -->
-<div id="db-warning" class="alert alert-danger d-none" role="alert">
-    <strong>Koneksi Database Gagal:</strong> Dashboard tidak dapat memuat data. Mohon cek status koneksi di halaman utama.
-</div>
+    <!-- Peringatan Koneksi -->
+    <div id="db-warning" class="alert alert-danger shadow-sm d-none" role="alert">
+        <i class="fas fa-exclamation-circle mr-2"></i> <strong>Koneksi Database Terputus:</strong> Dashboard gagal memuat data terbaru.
+    </div>
 
-<!-- RINGKASAN KPI UTAMA -->
-<div class="row">
-    <!-- Total Piutang Aktif -->
-    <div class="col-lg-3 col-md-6 mb-4">
-        <div class="card text-white bg-danger h-100 shadow">
-            <div class="card-body">
-                <div class="row align-items-center">
-                    <div class="col-auto">
-                        <i class="fas fa-file-invoice-dollar fa-2x"></i>
+    <!-- KPI UTAMA -->
+    <div class="row">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card kpi-card-custom shadow h-100 border-left-danger">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="card-label text-danger mb-1">Total Piutang (MC)</div>
+                            <div class="card-value text-gray-800" id="kpi-piutang">Rp 0</div>
+                        </div>
+                        <div class="col-auto"><i class="fas fa-file-invoice-dollar fa-2x text-gray-300"></i></div>
                     </div>
-                    <div class="col">
-                        <div class="text-xs font-weight-bold text-uppercase mb-1" style="font-size: 0.75em;">Total Piutang (MC)</div>
-                        <div class="h5 mb-0 font-weight-bold" id="kpi-piutang" style="font-size: 1.1em;">Rp 0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card kpi-card-custom shadow h-100 border-left-warning">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="card-label text-warning mb-1">Tunggakan (ARDEBT)</div>
+                            <div class="card-value text-gray-800" id="kpi-tunggakan">Rp 0</div>
+                        </div>
+                        <div class="col-auto"><i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card kpi-card-custom shadow h-100 border-left-success">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="card-label text-success mb-1">Koleksi Hari Ini</div>
+                            <div class="card-value text-gray-800" id="kpi-koleksi-today">Rp 0</div>
+                            <div class="text-xs font-weight-bold text-success mt-1" id="kpi-transaksi-today">0 Transaksi</div>
+                        </div>
+                        <div class="col-auto"><i class="fas fa-wallet fa-2x text-gray-300"></i></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card kpi-card-custom shadow h-100 border-left-info">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="card-label text-info mb-1">Total Anomali SBRS</div>
+                            <div class="card-value text-gray-800" id="kpi-anomali">0</div>
+                            <div class="text-xs font-weight-bold text-info mt-1">Pelanggan Terdampak</div>
+                        </div>
+                        <div class="col-auto"><i class="fas fa-search-minus fa-2x text-gray-300"></i></div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Total Tunggakan (ARDEBT) -->
-    <div class="col-lg-3 col-md-6 mb-4">
-        <div class="card text-white bg-warning h-100 shadow">
-            <div class="card-body">
-                <div class="row align-items-center">
-                    <div class="col-auto">
-                        <i class="fas fa-exclamation-circle fa-2x"></i>
-                    </div>
-                    <div class="col">
-                        <div class="text-xs font-weight-bold text-uppercase mb-1" style="font-size: 0.75em;">Total Tunggakan (ARDEBT)</div>
-                        <div class="h5 mb-0 font-weight-bold" id="kpi-tunggakan" style="font-size: 1.1em;">Rp 0</div>
-                    </div>
+    <!-- GRAFIK & VISUALISASI -->
+    <div class="row">
+        <div class="col-lg-7 mb-4">
+            <div class="section-card shadow">
+                <div class="section-header">
+                    <h6><i class="fas fa-chart-line mr-2"></i> Tren Koleksi 7 Hari Terakhir</h6>
                 </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Koleksi Hari Ini -->
-    <div class="col-lg-3 col-md-6 mb-4">
-        <div class="card text-white bg-success h-100 shadow">
-            <div class="card-body">
-                <div class="row align-items-center">
-                    <div class="col-auto">
-                        <i class="fas fa-money-check-alt fa-2x"></i>
-                    </div>
-                    <div class="col">
-                        <div class="text-xs font-weight-bold text-uppercase mb-1" style="font-size: 0.75em;">Koleksi Hari Ini</div>
-                        <div class="h5 mb-0 font-weight-bold" id="kpi-koleksi-today" style="font-size: 1.1em;">Rp 0</div>
-                        <small id="kpi-transaksi-today" class="text-white-50">0 Transaksi</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Total Anomali SBRS -->
-    <div class="col-lg-3 col-md-6 mb-4">
-        <div class="card text-white bg-info h-100 shadow">
-            <div class="card-body">
-                <div class="row align-items-center">
-                    <div class="col-auto">
-                        <i class="fas fa-water fa-2x"></i>
-                    </div>
-                    <div class="col">
-                        <div class="text-xs font-weight-bold text-uppercase mb-1" style="font-size: 0.75em;">Anomali SBRS (Pelanggan)</div>
-                        <div class="h5 mb-0 font-weight-bold" id="kpi-anomali" style="font-size: 1.1em;">0</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ANALISIS GRAFIK DAN TREND -->
-<div class="row">
-    <!-- Tren Koleksi 7 Hari -->
-    <div class="col-lg-6 mb-4">
-        <div class="card shadow h-100">
-            <div class="card-header bg-white py-3">
-                <h6 class="m-0 font-weight-bold text-primary">Tren Koleksi Nominal 7 Hari Terakhir</h6>
-            </div>
-            <div class="card-body">
-                <div class="chart-container" style="height: 300px;">
+                <div class="chart-container">
                     <canvas id="collectionTrendChart"></canvas>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Top 5 Rayon Piutang -->
-    <div class="col-lg-6 mb-4">
-        <div class="card shadow h-100">
-            <div class="card-header bg-white py-3">
-                <h6 class="m-0 font-weight-bold text-primary">Top 5 Rayon Piutang Aktif Terbesar</h6>
-            </div>
-            <div class="card-body">
-                <div class="chart-container" style="height: 300px;">
+        <div class="col-lg-5 mb-4">
+            <div class="section-card shadow">
+                <div class="section-header">
+                    <h6><i class="fas fa-trophy mr-2"></i> Top 5 Rayon Piutang</h6>
+                </div>
+                <div class="chart-container">
                     <canvas id="rayonPiutangChart"></canvas>
                 </div>
-                <div id="rayonPiutangTable" class="mt-3 table-responsive">
-                    <!-- Data Rayon Top Piutang akan dimasukkan di sini -->
+                <div id="rayonPiutangTable" class="p-3">
+                    <!-- Dinamis via JS -->
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<!-- ALERT KRITIS -->
-<div class="card shadow mb-4">
-    <div class="card-header bg-danger text-white">
-        <h6><i class="fas fa-exclamation-triangle"></i> Peringatan Kritis (Volume/Tunggakan > 5 Bln)</h6>
-    </div>
-    <div class="card-body">
-        <div id="critical-alerts-container" class="table-responsive" style="font-size: 0.8em;">
-            <p>Memuat peringatan...</p>
+    <!-- KRITIS ALERTS -->
+    <div class="section-card border-left-danger">
+        <div class="section-header bg-white">
+            <h6 class="text-danger"><i class="fas fa-bell mr-2"></i> Peringatan Kritis (Tunggakan > 5 Bulan)</h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-critical mb-0" id="critical-alerts-table">
+                    <thead>
+                        <tr>
+                            <th>NOMEN</th>
+                            <th>Status Pelanggan</th>
+                            <th>Rayon</th>
+                            <th class="text-right">Total Kewajiban</th>
+                        </tr>
+                    </thead>
+                    <tbody id="critical-alerts-body">
+                        <tr><td colspan="4" class="text-center py-4 text-muted small">Sedang memproses data anomali...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
-
-<div class="text-right mb-5">
-    <button id="export-dashboard-btn" class="btn btn-success"><i class="fas fa-file-excel"></i> Export Semua Data Dashboard</button>
-</div>
-
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/Chart.min.js"></script>
+<!-- Menggunakan Chart.js v3.7.0 agar konsisten dengan halaman lain -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+
 <script>
     const SUMMARY_API = "{{ url_for('dashboard_summary_api') }}";
-    const RAYON_ANALYSIS_API = "{{ url_for('rayon_analysis_api') }}";
     const CRITICAL_ALERTS_API = "{{ url_for('critical_alerts_api') }}";
     
-    const DB_WARNING = document.getElementById('db-warning');
+    // Formatting Helpers
+    const formatIDR = (v) => 'Rp ' + (parseFloat(v) || 0).toLocaleString('id-ID');
+    const formatNum = (v) => (parseInt(v) || 0).toLocaleString('id-ID');
 
-    // Helper untuk memformat angka mata uang Rupiah
-    const formatCurrency = (amount) => {
-        if (typeof amount !== 'number') return 'Rp ' + new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(amount);
-        return 'Rp ' + new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(amount);
-    };
-    
-    // Helper untuk memformat angka dengan pemisah ribuan
-    const formatNumber = (num) => {
-        if (typeof num !== 'number') return '0';
-        return new Intl.NumberFormat('id-ID').format(num);
-    };
-
-    // --- CHART FUNCTIONS ---
-    function createTrendChart(data) {
-        const labels = data.map(d => d.tanggal);
-        const totals = data.map(d => d.total);
-        
+    // --- CHART CREATION ---
+    function renderTrendChart(data) {
         const ctx = document.getElementById('collectionTrendChart').getContext('2d');
+        const sorted = data.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
+
         new Chart(ctx, {
             type: 'line',
             data: {
-                labels: labels,
+                labels: sorted.map(d => {
+                    const date = new Date(d.tanggal);
+                    return date.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' });
+                }),
                 datasets: [{
-                    label: 'Koleksi Nominal',
-                    data: totals,
-                    backgroundColor: 'rgba(52, 152, 219, 0.7)', /* Warna biru dinamis */
-                    borderColor: 'rgba(52, 152, 219, 1)',
-                    borderWidth: 3, /* Sedikit lebih tebal */
-                    fill: true
+                    label: 'Nominal Koleksi',
+                    data: sorted.map(d => d.total),
+                    borderColor: '#4e73df',
+                    backgroundColor: 'rgba(78, 115, 223, 0.05)',
+                    fill: true,
+                    tension: 0.3,
+                    borderWidth: 3,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#fff'
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
                 scales: {
-                    xAxes: [{
-                        scaleLabel: { display: true, labelString: 'Tanggal', fontSize: 10 },
-                        ticks: { fontSize: 10 } /* Font size lebih kecil */
-                    }],
-                    yAxes: [{
-                        ticks: {
-                            beginAtZero: true,
-                            fontSize: 10,
-                            callback: function(value, index, values) {
-                                return formatCurrency(value);
-                            }
-                        },
-                        scaleLabel: { display: true, labelString: 'Nominal (Rp)', fontSize: 10 }
-                    }]
-                },
-                legend: {
-                    labels: {
-                        fontSize: 11 /* Font size legend */
-                    }
-                },
-                tooltips: {
-                    callbacks: {
-                        label: function(tooltipItem, data) {
-                            return data.datasets[tooltipItem.datasetIndex].label + ': ' + formatCurrency(tooltipItem.yLabel);
-                        }
-                    }
+                    x: { grid: { display: false } },
+                    y: { beginAtZero: true, ticks: { callback: v => v >= 1000000 ? (v/1000000).toFixed(1) + 'jt' : v } }
                 }
             }
         });
     }
 
-    function createRayonPiutangChart(data) {
-        const labels = data.map(d => d.rayon);
-        const totals = data.map(d => d.total);
-        
+    function renderRayonChart(data) {
         const ctx = document.getElementById('rayonPiutangChart').getContext('2d');
+        const top5 = data.slice(0, 5);
+
         new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: labels,
+                labels: top5.map(d => 'R:' + d.rayon),
                 datasets: [{
-                    label: 'Total Piutang',
-                    data: totals,
-                    backgroundColor: 'rgba(46, 204, 113, 0.7)', /* Warna hijau dinamis */
-                    borderColor: 'rgba(39, 174, 96, 1)',
-                    borderWidth: 1
+                    data: top5.map(d => d.total),
+                    backgroundColor: '#1cc88a',
+                    borderRadius: 5,
+                    barThickness: 25
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
                 scales: {
-                    xAxes: [{
-                        ticks: { fontSize: 10 } /* Font size lebih kecil */
-                    }],
-                    yAxes: [{
-                        ticks: {
-                            beginAtZero: true,
-                            fontSize: 10,
-                            callback: function(value, index, values) {
-                                return formatCurrency(value);
-                            }
-                        },
-                        scaleLabel: { display: true, labelString: 'Nominal (Rp)', fontSize: 10 }
-                    }]
-                },
-                legend: {
-                    labels: {
-                        fontSize: 11
-                    }
-                },
-                tooltips: {
-                    callbacks: {
-                        label: function(tooltipItem, data) {
-                            return data.datasets[tooltipItem.datasetIndex].label + ': ' + formatCurrency(tooltipItem.yLabel);
-                        }
-                    }
+                    x: { grid: { display: false } },
+                    y: { display: false }
                 }
             }
         });
-    }
-    
-    function updateRayonTable(data) {
-        const table = document.getElementById('rayonPiutangTable');
-        if (!data || data.length === 0) {
-            table.innerHTML = '<p class="text-muted" style="font-size: 0.9em;">Tidak ada data rayon piutang.</p>';
-            return;
-        }
 
-        let html = '<table class="table table-striped table-sm" style="font-size: 0.8em;">';
-        html += '<thead><tr><th>#</th><th>Rayon</th><th>Piutang</th></tr></thead><tbody>';
-        
-        data.forEach((item, index) => {
-            html += `<tr>
-                <td>${index + 1}</td>
-                <td>${item.rayon}</td>
-                <td>${formatCurrency(item.total)}</td>
-            </tr>`;
-        });
-
-        html += '</tbody></table>';
-        table.innerHTML = html;
+        // Update list table di bawah chart
+        const tableArea = document.getElementById('rayonPiutangTable');
+        tableArea.innerHTML = top5.map((d, i) => `
+            <div class="d-flex justify-content-between align-items-center mb-2 small">
+                <span class="font-weight-bold text-gray-700">${i+1}. Rayon ${d.rayon}</span>
+                <span class="text-primary font-weight-bold">${formatIDR(d.total)}</span>
+            </div>
+        `).join('');
     }
 
-    function updateCriticalAlerts(data) {
-        const container = document.getElementById('critical-alerts-container');
-        if (!data || data.length === 0) {
-            container.innerHTML = '<div class="alert alert-success" style="font-size: 0.9em;">Tidak ada peringatan kritis saat ini.</div>';
-            return;
-        }
-        
-        let html = '<table class="table table-striped table-bordered table-sm" style="font-size: 0.8em;">';
-        html += '<thead><tr><th>NOMEN</th><th>Status</th><th>Rayon</th><th>Nominal (Jika Debt)</th></tr></thead><tbody>';
-
-        data.forEach(item => {
-            let nominal = item.category === 'DEBT_CRITICAL' ? formatCurrency(item.amount) : '-';
-            let badgeClass = item.category === 'DEBT_CRITICAL' ? 'danger' : 'warning';
-            let rayon = item.ray || 'N/A';
-            
-            html += `<tr>
-                <td>${item.nomen}</td>
-                <td><span class="badge badge-${badgeClass}">${item.status}</span></td>
-                <td>${rayon}</td>
-                <td>${nominal}</td>
-            </tr>`;
-        });
-        
-        html += '</tbody></table>';
-        container.innerHTML = html;
-    }
-
-
-    // --- FETCH DATA ---
-    async function loadDashboardData() {
+    // --- DATA FETCHING ---
+    async function loadDashboard() {
+        const warning = document.getElementById('db-warning');
         try {
-            // 1. Fetch Summary
-            const summaryResponse = await fetch(SUMMARY_API);
-            const summaryData = await summaryResponse.json();
+            const [resSummary, resAlerts] = await Promise.all([
+                fetch(SUMMARY_API),
+                fetch(CRITICAL_ALERTS_API)
+            ]);
 
-            if (summaryData.message && summaryData.message.includes('Server tidak terhubung ke Database')) {
-                DB_WARNING.classList.remove('d-none');
+            const summary = await resSummary.json();
+            const alerts = await resAlerts.json();
+
+            if (summary.message && summary.message.includes('tidak terhubung')) {
+                warning.classList.remove('d-none');
                 return;
             }
-            DB_WARNING.classList.add('d-none');
-            
-            document.getElementById('kpi-piutang').textContent = formatCurrency(summaryData.total_piutang);
-            document.getElementById('kpi-tunggakan').textContent = formatCurrency(summaryData.total_tunggakan);
-            document.getElementById('kpi-koleksi-today').textContent = formatCurrency(summaryData.koleksi_hari_ini);
-            document.getElementById('kpi-transaksi-today').textContent = `${formatNumber(summaryData.transaksi_hari_ini)} Transaksi`;
-            document.getElementById('kpi-anomali').textContent = formatNumber(summaryData.total_anomali);
 
-            // 2. Tren Koleksi
-            createTrendChart(summaryData.tren_koleksi_7_hari);
+            // Update KPI
+            document.getElementById('kpi-piutang').innerText = formatIDR(summary.total_piutang);
+            document.getElementById('kpi-tunggakan').innerText = formatIDR(summary.total_tunggakan);
+            document.getElementById('kpi-koleksi-today').innerText = formatIDR(summary.koleksi_hari_ini);
+            document.getElementById('kpi-transaksi-today').innerText = `${formatNum(summary.transaksi_hari_ini)} Transaksi`;
+            document.getElementById('kpi-anomali').innerText = formatNum(summary.total_anomali);
 
-            // 3. Top Rayon
-            createRayonPiutangChart(summaryData.top_rayon_piutang);
-            updateRayonTable(summaryData.top_rayon_piutang);
-            
-            // 4. Critical Alerts (Ambil dari API terpisah jika perlu, tapi sudah terintegrasi di Summary)
-            const alertResponse = await fetch(CRITICAL_ALERTS_API);
-            const alertData = await alertResponse.json();
-            updateCriticalAlerts(alertData);
+            // Render Grafis
+            renderTrendChart(summary.tren_koleksi_7_hari || []);
+            renderRayonChart(summary.top_rayon_piutang || []);
 
-        } catch (error) {
-            console.error("Gagal memuat dashboard data:", error);
-            DB_WARNING.classList.remove('d-none');
-            DB_WARNING.textContent = "Error: Gagal memuat data dashboard. Cek koneksi server atau API.";
+            // Update Tabel Kritis
+            const alertsBody = document.getElementById('critical-alerts-body');
+            if (!alerts || alerts.length === 0) {
+                alertsBody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-success font-weight-bold">✓ Tidak ada tunggakan kritis terdeteksi.</td></tr>';
+            } else {
+                alertsBody.innerHTML = alerts.map(item => `
+                    <tr>
+                        <td class="font-weight-bold text-gray-800">${item.nomen}</td>
+                        <td><span class="badge badge-light border text-danger small">${item.status}</span></td>
+                        <td class="text-gray-600">${item.ray || '-'}</td>
+                        <td class="text-right font-weight-bold text-danger">${formatIDR(item.amount)}</td>
+                    </tr>
+                `).join('');
+            }
+
+        } catch (err) {
+            console.error(err);
+            warning.classList.remove('d-none');
+            warning.innerHTML = `<i class="fas fa-times-circle mr-2"></i> Gagal terhubung ke API Server. Silakan muat ulang halaman.`;
         }
     }
 
-    document.getElementById('export-dashboard-btn').addEventListener('click', function() {
+    document.getElementById('export-dashboard-btn').addEventListener('click', () => {
         window.location.href = "{{ url_for('export_dashboard_data') }}";
     });
 
-    document.addEventListener('DOMContentLoaded', loadDashboardData);
+    document.addEventListener('DOMContentLoaded', loadDashboard);
 </script>
 {% endblock %}
