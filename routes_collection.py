@@ -20,9 +20,9 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- HELPER INTERNAL UNTUK DISTRIBUSI (Dioptimalkan dengan Limit) ---
+# --- HELPER INTERNAL UNTUK DISTRIBUSI (DIOPTIMALKAN UNTUK DATA BESAR) ---
 def _get_distribution_report(group_fields, collection_mc, limit=None):
-    """Menghitung distribusi metrik dengan limit opsional untuk performa UI."""
+    """Menghitung distribusi metrik tanpa batasan limit default untuk menampilkan semua data."""
     db_status = get_db_status()
     if db_status['status'] == 'error':
         return [], "N/A"
@@ -36,36 +36,55 @@ def _get_distribution_report(group_fields, collection_mc, limit=None):
     if not latest_month:
         return [], "N/A"
 
-    pipeline = [
-        {"$match": {"BULAN_TAGIHAN": latest_month}},
-        {'$lookup': {
-            'from': 'CustomerData',
-            'localField': 'NOMEN',
-            'foreignField': 'NOMEN',
-            'as': 'cust_info'
-        }},
-        {'$unwind': {'path': '$cust_info', 'preserveNullAndEmptyArrays': True}},
-        {"$project": {
-            **{field: {"$ifNull": [f"${field}", f"$cust_info.{field}", "N/A"]} for field in group_fields},
-            "NOMEN": 1,
-            "NOMINAL": {"$toDouble": {'$ifNull': ['$NOMINAL', 0]}}, 
-            "KUBIK": {"$toDouble": {'$ifNull': ['$KUBIK', 0]}},
-        }},
-        {"$group": {
-            "_id": {field: f"${field}" for field in group_fields},
-            "unique_nomen_set": {"$addToSet": "$NOMEN"},
-            "total_piutang": {"$sum": "$NOMINAL"},
-            "total_kubikasi": {"$sum": "$KUBIK"}
-        }},
-        {"$project": {
-            **{field: f"$_id.{field}" for field in group_fields},
-            "_id": 0,
-            "total_nomen": {"$size": "$unique_nomen_set"},
-            "total_piutang": 1,
-            "total_kubikasi": 1
-        }},
-        {"$sort": {"total_piutang": -1}}
-    ]
+    # Field yang biasanya ada di MC untuk kueri cepat (RAYON, PC, TARIF)
+    fields_in_mc = ["RAYON", "PC", "TARIF"]
+    use_simple_pipeline = all(f in fields_in_mc for f in group_fields)
+
+    if use_simple_pipeline:
+        # PIPELINE CEPAT: Langsung grouping tanpa join
+        pipeline = [
+            {"$match": {"BULAN_TAGIHAN": latest_month}},
+            {"$group": {
+                "_id": {field: f"${field}" for field in group_fields},
+                "unique_nomen_set": {"$addToSet": "$NOMEN"},
+                "total_piutang": {"$sum": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
+                "total_kubikasi": {"$sum": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}}
+            }},
+            {"$project": {
+                **{field: f"$_id.{field}" for field in group_fields},
+                "_id": 0,
+                "total_nomen": {"$size": "$unique_nomen_set"},
+                "total_piutang": 1,
+                "total_kubikasi": 1
+            }},
+            {"$sort": {"total_piutang": -1}}
+        ]
+    else:
+        # PIPELINE DETAIL: Join ke CustomerData (untuk PCEZ atau MERK)
+        pipeline = [
+            {"$match": {"BULAN_TAGIHAN": latest_month}},
+            {'$lookup': {
+                'from': 'CustomerData',
+                'localField': 'NOMEN',
+                'foreignField': 'NOMEN',
+                'as': 'cust_info'
+            }},
+            {'$unwind': {'path': '$cust_info', 'preserveNullAndEmptyArrays': True}},
+            {"$group": {
+                "_id": {field: {"$ifNull": [f"${field}", f"$cust_info.{field}", "N/A"]} for field in group_fields},
+                "unique_nomen_set": {"$addToSet": "$NOMEN"},
+                "total_piutang": {"$sum": {"$toDouble": {"$ifNull": ["$NOMINAL", 0]}}},
+                "total_kubikasi": {"$sum": {"$toDouble": {"$ifNull": ["$KUBIK", 0]}}}
+            }},
+            {"$project": {
+                **{field: f"$_id.{field}" for field in group_fields},
+                "_id": 0,
+                "total_nomen": {"$size": "$unique_nomen_set"},
+                "total_piutang": 1,
+                "total_kubikasi": 1
+            }},
+            {"$sort": {"total_piutang": -1}}
+        ]
 
     if limit:
         pipeline.append({"$limit": limit})
@@ -87,20 +106,10 @@ def collection_laporan_view():
     default_html_period = current_date.strftime('%Y-%m')
     raw_period = request.args.get('period', default_html_period)
     
-    try:
-        if '-' in raw_period:
-            year, month = raw_period.split('-')
-            formatted_period = f"{month}{year}"
-        else:
-            formatted_period = raw_period
-    except:
-        formatted_period = raw_period.replace('-', '')
-
-    stats = get_comprehensive_stats(formatted_period)
-
+    # Render template dengan stats=None agar halaman muncul SEKETIKA
     return render_template('collection_summary.html', 
                            title="Laporan Piutang & Koleksi",
-                           stats=stats,
+                           stats=None, 
                            period=raw_period,
                            is_admin=current_user.is_admin)
 
@@ -108,7 +117,7 @@ def collection_laporan_view():
 @login_required 
 def collection_analisis_view():
     return render_template('collection_analysis.html', 
-                           title="Analisis Kontributor Piutang",
+                           title="Analisis Kontributor",
                            is_admin=current_user.is_admin)
 
 @bp_collection.route('/top', methods=['GET'])
@@ -138,7 +147,23 @@ def analysis_dod_comparison():
                             is_admin=current_user.is_admin,
                             api_endpoint=url_for("bp_collection.dod_comparison_report_api"))
 
-# --- API DISTRIBUTION ENDPOINTS (DENGAN TOP 5 LIMIT) ---
+# --- API ENDPOINTS (MENAMPILKAN SELURUH DATA SECARA ASYNC) ---
+
+@bp_collection.route("/api/stats_summary")
+@login_required
+def get_stats_summary_api():
+    raw_period = request.args.get('period', datetime.now().strftime('%Y-%m'))
+    try:
+        if '-' in raw_period:
+            year, month = raw_period.split('-')
+            formatted_period = f"{month}{year}"
+        else:
+            formatted_period = raw_period
+    except:
+        formatted_period = raw_period.replace('-', '')
+
+    stats = get_comprehensive_stats(formatted_period)
+    return jsonify(stats)
 
 @bp_collection.route("/api/distribution/<category>")
 @login_required
@@ -150,16 +175,15 @@ def category_distribution_api(category):
     db_status = get_db_status()
     if db_status['status'] == 'error': return jsonify({"message": db_status['message']}), 500
     
-    # UI Hanya butuh Top 5 agar cepat
-    results, latest_month = _get_distribution_report([field], db_status['collections']['mc'], limit=5)
+    # Ambil ALL DATA (tanpa limit)
+    results, latest_month = _get_distribution_report([field], db_status['collections']['mc'])
+    
     for item in results: 
         item['chart_label'] = item.get(field, "N/A")
         item['chart_data_piutang'] = round(item['total_piutang'], 2)
         item['nominal'] = item['total_piutang'] 
 
-    return jsonify({"data": results, "category": field, "title": f"Top 5 {field}", "subtitle": f"Bulan: {latest_month}"})
-
-# --- API DOWNLOAD FULL SUMMARY (SEMUA DATA TANPA LIMIT) ---
+    return jsonify({"data": results, "category": field, "title": f"Kontributor {field}", "subtitle": f"Bulan: {latest_month}"})
 
 @bp_collection.route("/api/download_summary")
 @login_required
@@ -187,10 +211,10 @@ def download_summary_csv():
     output = io.StringIO()
     df.to_csv(output, index=False)
     
-    filename = f"Summary_Kontributor_{latest_month}.csv"
+    filename = f"Summary_Lengkap_Kontributor_{latest_month}.csv"
     return Response(output.getvalue(), mimetype="text/csv", headers={"Content-disposition": f"attachment; filename={filename}"})
 
-# --- API TOP LIST & COMPARISON ---
+# --- API TOP LIST (Limit 1000) ---
 
 @bp_collection.route('/api/top_debtors_report', methods=['GET'])
 @login_required 
@@ -220,7 +244,7 @@ def top_debtors_report_api():
                 'TagihanTerbaru': '$TagihanTerbaru'
             }},
             {'$sort': {'TotalPiutang': -1}},
-            {'$limit': 500}
+            {'$limit': 1000} 
         ]
         data = list(collection_mc.aggregate(pipeline, allowDiskUse=True))
         schema = [
