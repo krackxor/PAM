@@ -23,15 +23,16 @@ def admin_required(f):
 # --- HELPER INTERNAL UNTUK DISTRIBUSI (DENGAN PERSENTASE & LOOKUP CID) ---
 def _get_distribution_report(group_field, collection_mc, period=None):
     """
-    Menghitung distribusi metrik dengan persentase dan join ke CustomerData jika perlu.
+    Menghitung distribusi metrik dengan persentase dan join ke CustomerData (CID)
+    untuk mendapatkan Merk Meter dan Read Method.
     """
     db_status = get_db_status()
     if db_status['status'] == 'error':
         return [], "N/A"
 
-    # Penentuan periode target
+    # Penentuan periode target (Format mmyyyy)
     if period:
-        target_month = period
+        target_month = period.replace('-', '')
     else:
         latest_mc_month_doc = collection_mc.find_one(sort=[('BULAN_TAGIHAN', -1)])
         target_month = latest_mc_month_doc.get('BULAN_TAGIHAN') if latest_mc_month_doc else None
@@ -39,7 +40,7 @@ def _get_distribution_report(group_field, collection_mc, period=None):
     if not target_month:
         return [], "N/A"
 
-    # 1. Hitung Grand Total untuk periode ini (untuk perhitungan %)
+    # 1. Hitung Grand Total untuk periode ini (sebagai basis perhitungan %)
     totals_pipeline = [
         {"$match": {"BULAN_TAGIHAN": target_month}},
         {"$group": {
@@ -57,12 +58,13 @@ def _get_distribution_report(group_field, collection_mc, period=None):
     
     grand_totals = list(collection_mc.aggregate(totals_pipeline))
     g = grand_totals[0] if grand_totals else {"grand_piutang": 1, "grand_kubikasi": 1, "grand_nomen": 1}
-    # Hindari pembagian dengan nol
+    
+    # Pencegahan pembagian dengan nol
     g_p = g.get('grand_piutang', 1) or 1
     g_k = g.get('grand_kubikasi', 1) or 1
     g_n = g.get('grand_nomen', 1) or 1
 
-    # 2. Pipeline utama
+    # 2. Pipeline Utama
     pipeline = [{"$match": {"BULAN_TAGIHAN": target_month}}]
 
     # Tambahkan field virtual dari ZONA_NOVAK
@@ -72,9 +74,8 @@ def _get_distribution_report(group_field, collection_mc, period=None):
         "v_PCEZ": {"$concat": [{"$substrCP": ["$ZONA_NOVAK", 2, 3]}, "/", {"$substrCP": ["$ZONA_NOVAK", 5, 2]}]}
     }})
 
-    # Mapping field
-    if group_field == "MERK_METER":
-        # Join dengan CustomerData untuk mendapatkan Merk
+    # Mapping field (Join ke CustomerData/CID jika field adalah MERK atau READ_METHOD)
+    if group_field in ["MERK_METER", "READ_METHOD"]:
         pipeline.append({
             "$lookup": {
                 "from": "CustomerData",
@@ -84,9 +85,9 @@ def _get_distribution_report(group_field, collection_mc, period=None):
             }
         })
         pipeline.append({"$unwind": {"path": "$cust", "preserveNullAndEmptyArrays": True}})
-        pipeline.append({"$addFields": {"mapped_id": {"$ifNull": ["$cust.MERK_METER", "TIDAK TERDATA"]}}})
+        pipeline.append({"$addFields": {"mapped_id": {"$ifNull": [f"$cust.{group_field}", "TIDAK TERDATA"]}}})
     else:
-        # Gunakan field virtual atau field asli
+        # Gunakan field virtual (RAYON, PC, PCEZ) atau field asli (TARIF)
         mapped_field = f"$v_{group_field}" if group_field in ["RAYON", "PC", "PCEZ"] else f"${group_field}"
         pipeline.append({"$addFields": {"mapped_id": mapped_field}})
 
@@ -100,7 +101,7 @@ def _get_distribution_report(group_field, collection_mc, period=None):
         }
     })
 
-    # Proyeksi dengan kalkulasi Persentase
+    # Proyeksi dengan kalkulasi % untuk Nomen, Piutang, dan Kubikasi
     pipeline.append({
         "$project": {
             "_id": 0,
@@ -156,7 +157,6 @@ def collection_top_view():
 @bp_collection.route('/riwayat_mom', methods=['GET'])
 @login_required
 def collection_riwayat_view():
-    """Rute untuk laporan Riwayat Month over Month"""
     return render_template('analysis_report_template.html',
                            title="Riwayat MoM",
                            description="Perbandingan performa antar bulan (Month over Month).",
@@ -167,12 +167,11 @@ def collection_riwayat_view():
 @bp_collection.route('/dod_comparison', methods=['GET'])
 @login_required
 def analysis_dod_comparison():
-    """Rute untuk laporan Koleksi Day over Day"""
     return render_template('analysis_report_template.html',
                            title="Koleksi Day over Day",
                            description="Perbandingan progres koleksi harian (DoD).",
                            report_type="DOD_COMPARISON",
-                           api_endpoint=url_for('bp_collection.mom_comparison_report_api'), # Placeholder API
+                           api_endpoint=url_for('bp_collection.mom_comparison_report_api'),
                            is_admin=current_user.is_admin)
 
 # --- API ENDPOINTS ---
@@ -186,13 +185,14 @@ def category_distribution_api(category):
         y, m = raw_period.split('-')
         formatted_period = f"{m}{y}"
 
-    # Mapping kategori (EZ dan BLOCK dihilangkan sesuai permintaan)
+    # Mapping kategori (EZ dan BLOCK dihilangkan, MERK dan READ_METHOD ditambahkan)
     cat_map = {
         "rayon": "RAYON", 
         "pc": "PC", 
         "pcez": "PCEZ", 
         "tarif": "TARIF", 
-        "merk": "MERK_METER"
+        "merk": "MERK_METER",
+        "read_method": "READ_METHOD"
     }
     field = cat_map.get(category.lower())
     if not field: return jsonify({"message": "Kategori tidak valid"}), 400
@@ -205,8 +205,8 @@ def category_distribution_api(category):
     return jsonify({
         "data": results, 
         "category": field, 
-        "title": f"Kontributor {field}", 
-        "subtitle": f"Bulan: {latest_month}"
+        "title": f"Kontributor {field.replace('_', ' ')}", 
+        "subtitle": f"Bulan Tagihan: {latest_month}"
     })
 
 @bp_collection.route("/api/download_summary")
@@ -215,8 +215,7 @@ def download_summary_csv():
     db_status = get_db_status()
     if db_status['status'] == 'error': return "Database Error", 500
     
-    # Kategori yang diikutsertakan (EZ/BLOCK dihilangkan)
-    categories = ["RAYON", "PC", "PCEZ", "TARIF", "MERK_METER"]
+    categories = ["RAYON", "PC", "PCEZ", "TARIF", "MERK_METER", "READ_METHOD"]
     all_rows = []
     raw_period = request.args.get('period')
     formatted_period = None
@@ -244,7 +243,7 @@ def download_summary_csv():
     df = pd.DataFrame(all_rows)
     output = io.StringIO()
     df.to_csv(output, index=False)
-    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-disposition": "attachment; filename=Summary_Kontributor.csv"})
+    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-disposition": "attachment; filename=Analisis_Kontributor.csv"})
 
 # --- API TOP LIST & LAINNYA ---
 
@@ -292,7 +291,6 @@ def top_debtors_report_api():
 @bp_collection.route('/api/mom_comparison_report', methods=['GET'])
 @login_required
 def mom_comparison_report_api():
-    """API Placeholder untuk MoM"""
     return jsonify({
         'status': 'success', 
         'data': [], 
