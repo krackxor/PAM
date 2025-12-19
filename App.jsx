@@ -3,7 +3,8 @@ import {
   ShieldCheck, Upload, Activity, BarChart3, Users, 
   AlertTriangle, ArrowLeft, Save, ChevronRight, Search, 
   FileText, Database, CreditCard, Droplets, RefreshCw,
-  TrendingUp, Layers, PieChart, Info, Download, Filter
+  TrendingUp, Layers, PieChart, Info, Download, Filter,
+  CheckCircle, History, MapPin, User, MessageSquare
 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:5000/api';
@@ -19,8 +20,14 @@ const App = () => {
   // --- FILTER & DATA ---
   const [rayonFilter, setRayonFilter] = useState('34');
   const [summarizingDim, setSummarizingDim] = useState('RAYON');
-  const [summaryList, setSummaryList] = useState([]);
-  const [topList, setTopList] = useState([]);
+  const [summaryData, setSummaryData] = useState([]);
+  const [summaryTarget, setSummaryTarget] = useState('mc');
+  const [collectionData, setCollectionData] = useState(null);
+  const [paymentStatus, setPaymentStatus] = useState(null);
+  const [topPremium, setTopPremium] = useState([]);
+  const [topDebt, setTopDebt] = useState([]);
+  const [topUnpaidCurrent, setTopUnpaidCurrent] = useState([]);
+  const [topUnpaidDebt, setTopUnpaidDebt] = useState([]);
   const [auditRemark, setAuditRemark] = useState('');
   const [auditStatus, setAuditStatus] = useState('RE-CHECK');
 
@@ -43,15 +50,79 @@ const App = () => {
       
       if (result.status === 'success') {
         setUploadResult(result);
+        
         // Otomatis pindah tab berdasarkan jenis file
-        if (result.type === 'METER_READING') setActiveTab('meter');
-        else if (result.type === 'BILLING_SUMMARY') setActiveTab('summary');
-        else if (result.type === 'COLLECTION_REPORT') setActiveTab('collection');
+        if (result.type === 'METER_READING') {
+          setActiveTab('meter');
+        } else if (result.type === 'BILLING_SUMMARY') {
+          setActiveTab('summary');
+          fetchSummaryData();
+        } else if (result.type === 'COLLECTION_REPORT') {
+          setActiveTab('collection');
+          fetchCollectionData();
+        }
       } else {
         alert(result.message);
       }
     } catch (error) {
-      alert("Gagal koneksi ke server backend!");
+      alert("Gagal koneksi ke server backend! Pastikan backend berjalan di port 5000.");
+      console.error(error);
+    }
+    setLoading(false);
+  };
+
+  const fetchSummaryData = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/summary?target=${summaryTarget}&dimension=${summarizingDim}&rayon=${rayonFilter}`);
+      const data = await res.json();
+      if (data.status === 'success') setSummaryData(data.data);
+    } catch (e) {
+      console.error("Error fetching summary:", e);
+    }
+    setLoading(false);
+  };
+
+  const fetchCollectionData = async () => {
+    setLoading(true);
+    try {
+      const [collRes, statusRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/collection/detailed?rayon=${rayonFilter}`),
+        fetch(`${API_BASE_URL}/collection/payment-status?rayon=${rayonFilter}`)
+      ]);
+      
+      const collData = await collRes.json();
+      const statusData = await statusRes.json();
+      
+      if (collData.status === 'success') setCollectionData(collData.data);
+      if (statusData.status === 'success') setPaymentStatus(statusData.data);
+    } catch (e) {
+      console.error("Error fetching collection:", e);
+    }
+    setLoading(false);
+  };
+
+  const fetchTopData = async () => {
+    setLoading(true);
+    try {
+      const [premiumRes, debtRes, unpaidCurrentRes, unpaidDebtRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/top100/premium?rayon=${rayonFilter}`),
+        fetch(`${API_BASE_URL}/top100/debt?rayon=${rayonFilter}`),
+        fetch(`${API_BASE_URL}/top100/unpaid-current?rayon=${rayonFilter}`),
+        fetch(`${API_BASE_URL}/top100/unpaid-debt?rayon=${rayonFilter}`)
+      ]);
+      
+      const premium = await premiumRes.json();
+      const debt = await debtRes.json();
+      const unpaidCurr = await unpaidCurrentRes.json();
+      const unpaidDebt = await unpaidDebtRes.json();
+      
+      if (premium.status === 'success') setTopPremium(premium.data);
+      if (debt.status === 'success') setTopDebt(debt.data);
+      if (unpaidCurr.status === 'success') setTopUnpaidCurrent(unpaidCurr.data);
+      if (unpaidDebt.status === 'success') setTopUnpaidDebt(unpaidDebt.data);
+    } catch (e) {
+      console.error("Error fetching top data:", e);
     }
     setLoading(false);
   };
@@ -62,12 +133,15 @@ const App = () => {
       const res = await fetch(`${API_BASE_URL}/detective/${nomen}`);
       const data = await res.json();
       if (data.status === 'success') setDetectiveHistory(data.data);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error("Error fetching detective data:", e);
+    }
     setLoading(false);
   };
 
   const saveAuditResult = async () => {
     if (!auditRemark) return alert("Keterangan audit wajib diisi!");
+    
     try {
       const res = await fetch(`${API_BASE_URL}/audit/save`, {
         method: 'POST',
@@ -78,13 +152,31 @@ const App = () => {
           status: auditStatus
         })
       });
-      if (res.ok) {
+      
+      const data = await res.json();
+      
+      if (data.status === 'success') {
         alert("Analisa manual berhasil disimpan!");
         setSelectedAnomaly(null);
         setAuditRemark('');
+      } else {
+        alert("Gagal menyimpan: " + data.message);
       }
-    } catch (e) { alert("Gagal menyimpan data."); }
+    } catch (e) {
+      alert("Gagal menyimpan data: " + e.message);
+    }
   };
+
+  // --- EFFECTS ---
+  useEffect(() => {
+    if (activeTab === 'summary') {
+      fetchSummaryData();
+    } else if (activeTab === 'collection') {
+      fetchCollectionData();
+    } else if (activeTab === 'top') {
+      fetchTopData();
+    }
+  }, [activeTab, summarizingDim, summaryTarget, rayonFilter]);
 
   // --- KOMPONEN UI ---
 
@@ -124,8 +216,18 @@ const App = () => {
         <div className="mt-auto bg-slate-900/50 p-5 rounded-[2rem] border border-white/5">
            <p className="text-[10px] font-black text-slate-500 uppercase mb-3 tracking-widest text-center">Rayon Monitoring</p>
            <div className="flex gap-2">
-              <button onClick={() => setRayonFilter('34')} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${rayonFilter === '34' ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-slate-800'}`}>R-34</button>
-              <button onClick={() => setRayonFilter('35')} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${rayonFilter === '35' ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-slate-800'}`}>R-35</button>
+              <button 
+                onClick={() => setRayonFilter('34')} 
+                className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${rayonFilter === '34' ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-slate-800'}`}
+              >
+                R-34
+              </button>
+              <button 
+                onClick={() => setRayonFilter('35')} 
+                className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${rayonFilter === '35' ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-slate-800'}`}
+              >
+                R-35
+              </button>
            </div>
         </div>
       </aside>
@@ -162,7 +264,7 @@ const App = () => {
                   <p className="text-slate-400 mb-12 max-w-md mx-auto font-bold text-lg">Mendukung file SBRS (Cycle), Master (MC/MB/ARDEBT), dan Collection (Harian).</p>
                   <label className="bg-blue-600 text-white px-16 py-6 rounded-[2rem] font-black text-lg cursor-pointer shadow-2xl shadow-blue-200 hover:bg-blue-700 transition-all inline-block active:scale-95 uppercase tracking-widest">
                     {loading ? 'Sedang Memproses...' : 'Pilih File Sekarang'}
-                    <input type="file" className="hidden" onChange={handleFileUpload} />
+                    <input type="file" className="hidden" onChange={handleFileUpload} accept=".csv,.txt,.xlsx,.xls" />
                   </label>
                 </div>
                 <Database size={300} className="absolute -right-20 -bottom-20 opacity-[0.03] -rotate-12" />
@@ -173,24 +275,41 @@ const App = () => {
             {activeTab === 'summary' && (
               <div className="space-y-8 animate-in slide-in-from-bottom-6 duration-700">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                   <HeroStat title="MC (Master Cetak)" val="Rp 1.42 B" icon={<FileText/>} color="blue" />
-                   <HeroStat title="MB (Master Bayar)" val="Rp 1.18 B" icon={<CheckCircle/>} color="emerald" />
-                   <HeroStat title="AR (Tunggakan)" val="Rp 340 M" icon={<AlertTriangle/>} color="rose" />
-                   <HeroStat title="Collection Ratio" val="83.2%" icon={<TrendingUp/>} color="indigo" />
+                   <HeroStat title="MC (Master Cetak)" val={uploadResult?.data?.total_nominal ? `Rp ${(uploadResult.data.total_nominal/1000000).toFixed(1)} M` : 'Rp 0'} icon={<FileText/>} color="blue" />
+                   <HeroStat title="Total Volume" val={uploadResult?.data?.total_volume ? `${uploadResult.data.total_volume.toFixed(0)} m³` : '0 m³'} icon={<Droplets/>} color="emerald" />
+                   <HeroStat title="Total Records" val={uploadResult?.data?.total_records || 0} icon={<Database/>} color="rose" />
+                   <HeroStat title="Active Rayon" val={`R-${rayonFilter}`} icon={<TrendingUp/>} color="indigo" />
                 </div>
 
                 <div className="bg-white rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden">
                   <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">
                     <h3 className="font-black text-xl text-slate-800 uppercase tracking-widest">Tabel Ringkasan Multidimensi</h3>
-                    <div className="flex bg-white rounded-2xl p-1.5 border border-slate-200 shadow-sm ring-1 ring-slate-100">
-                      {['RAYON', 'PC', 'PCEZ', 'TARIF', 'METER'].map(d => (
-                        <button 
-                          key={d} onClick={() => setSummarizingDim(d)}
-                          className={`px-6 py-2.5 rounded-xl text-[10px] font-black tracking-[0.2em] transition-all ${summarizingDim === d ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-600'}`}
-                        >
-                          {d}
-                        </button>
-                      ))}
+                    <div className="flex gap-4">
+                      {/* Target Selector */}
+                      <select 
+                        value={summaryTarget}
+                        onChange={(e) => setSummaryTarget(e.target.value)}
+                        className="px-4 py-2 rounded-xl border-2 border-slate-200 font-bold text-sm"
+                      >
+                        <option value="mc">MC (Master Cetak)</option>
+                        <option value="mb">MB (Master Bayar)</option>
+                        <option value="ardebt">ARDEBT</option>
+                        <option value="mainbill">Main Bill</option>
+                        <option value="coll">Collection</option>
+                      </select>
+                      
+                      {/* Dimension Selector */}
+                      <div className="flex bg-white rounded-2xl p-1.5 border border-slate-200 shadow-sm ring-1 ring-slate-100">
+                        {['RAYON', 'PC', 'PCEZ', 'TARIF', 'METER'].map(d => (
+                          <button 
+                            key={d} 
+                            onClick={() => setSummarizingDim(d)}
+                            className={`px-6 py-2.5 rounded-xl text-[10px] font-black tracking-[0.2em] transition-all ${summarizingDim === d ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-600'}`}
+                          >
+                            {d}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                   <div className="overflow-x-auto">
@@ -200,14 +319,28 @@ const App = () => {
                           <th className="px-10 py-6">Grup {summarizingDim}</th>
                           <th className="px-10 py-6 text-right">Nominal (Juta)</th>
                           <th className="px-10 py-6 text-right">Volume (m³)</th>
+                          <th className="px-10 py-6 text-right">Count</th>
                           <th className="px-10 py-6 text-right">Realisasi %</th>
                           <th className="px-10 py-6 text-center">Status</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        <TableRow label="Grup 01" val="450.2" vol="12,500" pct="88.2%" />
-                        <TableRow label="Grup 02" val="320.5" vol="9,200" pct="91.5%" />
-                        <TableRow label="Grup 03" val="115.8" vol="4,100" pct="76.4%" />
+                        {loading ? (
+                          <tr><td colSpan="6" className="p-10 text-center text-slate-400 italic">Loading...</td></tr>
+                        ) : summaryData.length > 0 ? (
+                          summaryData.map((row, idx) => (
+                            <TableRow 
+                              key={idx}
+                              label={row.group}
+                              val={row.nominal.toFixed(2)}
+                              vol={row.volume.toFixed(0)}
+                              count={row.count}
+                              pct={`${row.realization_pct}%`}
+                            />
+                          ))
+                        ) : (
+                          <tr><td colSpan="6" className="p-10 text-center text-slate-400 italic">Tidak ada data. Silakan upload file terlebih dahulu.</td></tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -219,10 +352,10 @@ const App = () => {
             {activeTab === 'meter' && (
               <div className="space-y-8 animate-in slide-in-from-bottom-6 duration-700">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                   <MiniStat label="Ekstrim" val="45" color="orange" />
-                   <MiniStat label="Stand Negatif" val="12" color="rose" />
-                   <MiniStat label="Nol Usage" val="128" color="blue" />
-                   <MiniStat label="Salah Catat" val="8" color="purple" />
+                   <MiniStat label="Ekstrim" val={uploadResult?.data?.summary?.extreme || 0} color="orange" />
+                   <MiniStat label="Stand Negatif" val={uploadResult?.data?.summary?.negative || 0} color="rose" />
+                   <MiniStat label="Nol Usage" val={uploadResult?.data?.summary?.zero || 0} color="blue" />
+                   <MiniStat label="Salah Catat" val={uploadResult?.data?.summary?.wrong_record || 0} color="purple" />
                 </div>
 
                 <div className="bg-white rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden">
@@ -236,42 +369,51 @@ const App = () => {
                     </button>
                   </div>
                   <div className="divide-y divide-slate-100">
-                    {(uploadResult?.data.anomalies || []).map((anom, i) => (
-                      <div 
-                        key={i} 
-                        onClick={() => { setSelectedAnomaly(anom); fetchDetectiveData(anom.nomen); }}
-                        className="p-10 flex justify-between items-center hover:bg-blue-50/50 cursor-pointer transition-all group relative overflow-hidden"
-                      >
-                        <div className="flex gap-10 items-center relative z-10">
-                          <div className={`p-6 rounded-[2rem] shadow-xl ${anom.status.includes('STAND NEGATIF') ? 'bg-rose-500 shadow-rose-100' : 'bg-orange-500 shadow-orange-100'}`}>
-                            <Activity size={32} className="text-white" />
-                          </div>
-                          <div>
-                            <div className="font-black text-3xl text-slate-900 group-hover:text-blue-600 transition-colors tracking-tight">{anom.name}</div>
-                            <div className="flex items-center gap-4 mt-3">
-                               <span className="text-sm font-bold text-slate-400 tracking-widest uppercase">Nomen: {anom.nomen}</span>
-                               <span className="w-1.5 h-1.5 bg-slate-200 rounded-full"></span>
-                               <div className="flex gap-2">
-                                  {anom.status.map(s => <span key={s} className="bg-slate-950 text-white text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-widest border border-white/20">{s}</span>)}
-                               </div>
+                    {uploadResult?.data?.anomalies && uploadResult.data.anomalies.length > 0 ? (
+                      uploadResult.data.anomalies.map((anom, i) => (
+                        <div 
+                          key={i} 
+                          onClick={() => { setSelectedAnomaly(anom); fetchDetectiveData(anom.nomen); }}
+                          className="p-10 flex justify-between items-center hover:bg-blue-50/50 cursor-pointer transition-all group relative overflow-hidden"
+                        >
+                          <div className="flex gap-10 items-center relative z-10">
+                            <div className={`p-6 rounded-[2rem] shadow-xl ${anom.status.includes('STAND NEGATIF') ? 'bg-rose-500 shadow-rose-100' : 'bg-orange-500 shadow-orange-100'}`}>
+                              <Activity size={32} className="text-white" />
+                            </div>
+                            <div>
+                              <div className="font-black text-3xl text-slate-900 group-hover:text-blue-600 transition-colors tracking-tight">{anom.name}</div>
+                              <div className="flex items-center gap-4 mt-3">
+                                 <span className="text-sm font-bold text-slate-400 tracking-widest uppercase">Nomen: {anom.nomen}</span>
+                                 <span className="w-1.5 h-1.5 bg-slate-200 rounded-full"></span>
+                                 <div className="flex gap-2">
+                                    {anom.status.slice(0, 3).map((s, idx) => (
+                                      <span key={idx} className="bg-slate-950 text-white text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-widest border border-white/20">
+                                        {s}
+                                      </span>
+                                    ))}
+                                 </div>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-12 relative z-10">
-                          <div className="text-right">
-                            <div className={`text-4xl font-black ${anom.usage < 0 ? 'text-rose-600' : 'text-slate-900'} tracking-tighter`}>{anom.usage} m³</div>
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-2 leading-none">Delta Bacaan</div>
+                          <div className="flex items-center gap-12 relative z-10">
+                            <div className="text-right">
+                              <div className={`text-4xl font-black ${anom.usage < 0 ? 'text-rose-600' : 'text-slate-900'} tracking-tighter`}>
+                                {anom.usage} m³
+                              </div>
+                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-2 leading-none">Delta Bacaan</div>
+                            </div>
+                            <div className="p-4 bg-white rounded-2xl shadow-sm border border-slate-100 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                               <ChevronRight size={24} />
+                            </div>
                           </div>
-                          <div className="p-4 bg-white rounded-2xl shadow-sm border border-slate-100 group-hover:bg-blue-600 group-hover:text-white transition-all">
-                             <ChevronRight size={24} />
-                          </div>
+                          <div className="absolute right-0 top-0 h-full w-1 bg-transparent group-hover:bg-blue-600 transition-all"></div>
                         </div>
-                        <div className="absolute right-0 top-0 h-full w-1 bg-transparent group-hover:bg-blue-600 transition-all"></div>
-                      </div>
-                    ))}
-                    {(!uploadResult || uploadResult.type !== 'METER_READING') && (
+                      ))
+                    ) : (
                        <div className="p-32 text-center text-slate-300 font-black uppercase tracking-widest italic opacity-50">
-                          Silakan Unggah File SBRS Untuk Melihat Anomali
+                          {uploadResult && uploadResult.type !== 'METER_READING' ? 
+                            'Silakan Unggah File SBRS Untuk Melihat Anomali' :
+                            'Tidak ada anomali terdeteksi'}
                        </div>
                     )}
                   </div>
@@ -285,14 +427,22 @@ const App = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                      <div className="p-12 rounded-[4rem] bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-2xl shadow-blue-200 relative overflow-hidden group">
                         <div className="text-xs font-black uppercase tracking-[0.2em] opacity-60 mb-6">Collection Undue (Dimuka)</div>
-                        <div className="text-6xl font-black tracking-tighter mb-4 leading-none">Rp 125.8 JT</div>
-                        <p className="text-sm font-bold opacity-80 flex items-center gap-2 tracking-wide"><Users size={18}/> 1,240 Palanggan</p>
+                        <div className="text-6xl font-black tracking-tighter mb-4 leading-none">
+                          Rp {collectionData?.undue?.revenue?.toFixed(1) || '0'} JT
+                        </div>
+                        <p className="text-sm font-bold opacity-80 flex items-center gap-2 tracking-wide">
+                          <Users size={18}/> {collectionData?.undue?.count || 0} Pelanggan
+                        </p>
                         <CreditCard size={200} className="absolute -right-20 -bottom-20 opacity-10 -rotate-12 group-hover:scale-110 transition-transform" />
                      </div>
                      <div className="p-12 rounded-[4rem] bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow-2xl shadow-emerald-200 relative overflow-hidden group">
                         <div className="text-xs font-black uppercase tracking-[0.2em] opacity-60 mb-6">Collection Current (Tepat Waktu)</div>
-                        <div className="text-6xl font-black tracking-tighter mb-4 leading-none">Rp 482.4 JT</div>
-                        <p className="text-sm font-bold opacity-80 flex items-center gap-2 tracking-wide"><Users size={18}/> 4,512 Palanggan</p>
+                        <div className="text-6xl font-black tracking-tighter mb-4 leading-none">
+                          Rp {collectionData?.current?.revenue?.toFixed(1) || '0'} JT
+                        </div>
+                        <p className="text-sm font-bold opacity-80 flex items-center gap-2 tracking-wide">
+                          <Users size={18}/> {collectionData?.current?.count || 0} Pelanggan
+                        </p>
                         <Droplets size={200} className="absolute -right-20 -bottom-20 opacity-10 -rotate-12 group-hover:scale-110 transition-transform" />
                      </div>
                   </div>
@@ -302,9 +452,24 @@ const App = () => {
                         <Layers className="text-blue-600" /> STATUS PIUTANG & TUNGGAKAN
                      </h3>
                      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        <StatusCard label="Pelanggan Tunggakan" val="2,410" color="rose" />
-                        <StatusCard label="Sudah Bayar Tunggakan" val="1,105" color="emerald" />
-                        <StatusCard label="Belum Bayar Piutang" val="842" color="blue" sub="Nomen Tanpa Tunggakan" />
+                        <StatusCard 
+                          label="Pelanggan Tunggakan" 
+                          val={paymentStatus?.with_debt?.count || 0} 
+                          color="rose" 
+                          sub={`Total: Rp ${paymentStatus?.with_debt?.total?.toFixed(1) || '0'} JT`}
+                        />
+                        <StatusCard 
+                          label="Sudah Bayar Tunggakan" 
+                          val={paymentStatus?.paid_debt?.count || 0} 
+                          color="emerald"
+                          sub={`Total: Rp ${paymentStatus?.paid_debt?.total?.toFixed(1) || '0'} JT`}
+                        />
+                        <StatusCard 
+                          label="Belum Bayar Piutang" 
+                          val={paymentStatus?.unpaid_receivable?.count || 0} 
+                          color="blue" 
+                          sub="Nomen Tanpa Tunggakan" 
+                        />
                      </div>
                   </div>
                </div>
@@ -312,9 +477,36 @@ const App = () => {
 
             {/* VIEW: TOP 100 RANKINGS */}
             {activeTab === 'top' && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 animate-in fade-in duration-1000">
-                 <RankList title={`Top 100 Premium - R-${rayonFilter}`} type="premium" />
-                 <RankList title={`Top 100 Tunggakan - R-${rayonFilter}`} type="debt" />
+              <div className="space-y-8 animate-in fade-in duration-1000">
+                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                   <RankList 
+                     title={`Top 100 Premium - R-${rayonFilter}`} 
+                     type="premium" 
+                     data={topPremium}
+                     loading={loading}
+                   />
+                   <RankList 
+                     title={`Top 100 Tunggakan - R-${rayonFilter}`} 
+                     type="debt" 
+                     data={topDebt}
+                     loading={loading}
+                   />
+                 </div>
+                 
+                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                   <RankList 
+                     title={`Top 100 Belum Bayar Current - R-${rayonFilter}`} 
+                     type="unpaid-current" 
+                     data={topUnpaidCurrent}
+                     loading={loading}
+                   />
+                   <RankList 
+                     title={`Top 100 Belum Bayar Tunggakan - R-${rayonFilter}`} 
+                     type="unpaid-debt" 
+                     data={topUnpaidDebt}
+                     loading={loading}
+                   />
+                 </div>
               </div>
             )}
           </div>
@@ -332,7 +524,11 @@ const App = () => {
                     <span className="text-sm font-black text-slate-400 uppercase tracking-widest">Detective Analytics #{selectedAnomaly.nomen}</span>
                     <span className="w-1.5 h-1.5 bg-slate-300 rounded-full"></span>
                     <div className="flex gap-2">
-                       {selectedAnomaly.status.map(s => <span key={s} className="px-3 py-1 bg-rose-100 text-rose-700 rounded-lg text-[10px] font-black uppercase tracking-widest border border-rose-200">{s}</span>)}
+                       {selectedAnomaly.status.map((s, idx) => (
+                         <span key={idx} className="px-3 py-1 bg-rose-100 text-rose-700 rounded-lg text-[10px] font-black uppercase tracking-widest border border-rose-200">
+                           {s}
+                         </span>
+                       ))}
                     </div>
                   </div>
                 </div>
@@ -361,31 +557,45 @@ const App = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-600">
-                        {(detectiveHistory?.reading_history || []).map((h, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-8 py-6 font-black text-slate-900">{h.cmr_rd_date}</td>
-                            <td className="px-8 py-6 text-center font-mono text-slate-400">{h.cmr_prev_read}</td>
-                            <td className="px-8 py-6 text-center font-mono font-black text-slate-900">{h.cmr_reading}</td>
-                            <td className={`px-8 py-6 text-center font-black text-sm ${h.cmr_reading - h.cmr_prev_read > 100 ? 'text-rose-600' : 'text-blue-600'}`}>
-                              {h.cmr_reading - h.cmr_prev_read} <span className="text-[10px] opacity-40 uppercase">m³</span>
-                            </td>
-                            <td className="px-8 py-6">
-                              <div className="space-y-1">
-                                {h.cmr_skip_code && <div className="text-[9px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-md font-black w-fit uppercase">{h.cmr_skip_code}</div>}
-                                {h.cmr_trbl1_code && <div className="text-[9px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-md font-black w-fit uppercase">{h.cmr_trbl1_code}</div>}
-                              </div>
-                            </td>
-                            <td className="px-8 py-6 italic text-slate-400 text-[10px] font-medium max-w-[200px] truncate">{h.cmr_chg_spcl_msg || '-'}</td>
-                          </tr>
-                        ))}
+                        {detectiveHistory?.reading_history?.length > 0 ? (
+                          detectiveHistory.reading_history.map((h, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                              <td className="px-8 py-6 font-black text-slate-900">{h.cmr_rd_date || '-'}</td>
+                              <td className="px-8 py-6 text-center font-mono text-slate-400">{h.cmr_prev_read || 0}</td>
+                              <td className="px-8 py-6 text-center font-mono font-black text-slate-900">{h.cmr_reading || 0}</td>
+                              <td className={`px-8 py-6 text-center font-black text-sm ${(h.cmr_reading - h.cmr_prev_read) > 100 ? 'text-rose-600' : 'text-blue-600'}`}>
+                                {(h.cmr_reading - h.cmr_prev_read) || 0} <span className="text-[10px] opacity-40 uppercase">m³</span>
+                              </td>
+                              <td className="px-8 py-6">
+                                <div className="space-y-1">
+                                  {h.cmr_skip_code && <div className="text-[9px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-md font-black w-fit uppercase">{h.cmr_skip_code}</div>}
+                                  {h.cmr_trbl1_code && <div className="text-[9px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-md font-black w-fit uppercase">{h.cmr_trbl1_code}</div>}
+                                </div>
+                              </td>
+                              <td className="px-8 py-6 italic text-slate-400 text-[10px] font-medium max-w-[200px] truncate">{h.cmr_chg_spcl_msg || '-'}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr><td colSpan="6" className="p-10 text-center text-slate-400 italic">Loading history...</td></tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                   <DetailBox title="Titik Lokasi" icon={<MapPin/>} val="Sunter Agung, Blok A8" sub="Rayon 34 / PC 094" />
-                   <DetailBox title="Data Pelanggan" icon={<User/>} val={detectiveHistory?.customer?.NAMA || 'Loading...'} sub={`Tarif: ${detectiveHistory?.customer?.TARIFF || '-'}`} />
+                   <DetailBox 
+                     title="Data Pelanggan" 
+                     icon={<User/>} 
+                     val={detectiveHistory?.customer?.NAMA || 'Loading...'} 
+                     sub={`Tarif: ${detectiveHistory?.customer?.TARIFF || '-'} | Rayon: ${detectiveHistory?.customer?.RAYON || '-'}`} 
+                   />
+                   <DetailBox 
+                     title="Anomali Detected" 
+                     icon={<AlertTriangle/>} 
+                     val={selectedAnomaly?.details?.anomaly_reason || 'Lihat detail lengkap'} 
+                     sub={`Method: ${selectedAnomaly?.details?.read_method || '-'}`} 
+                   />
                 </div>
               </div>
 
@@ -407,7 +617,8 @@ const App = () => {
                        <div className="flex flex-wrap gap-2.5">
                           {['VALID', 'FRAUD', 'RE-CHECK', 'RE-READ', 'MTR-RUSAK', 'ESTIMASI'].map(s => (
                              <button 
-                               key={s} onClick={() => setAuditStatus(s)}
+                               key={s} 
+                               onClick={() => setAuditStatus(s)}
                                className={`px-5 py-3 rounded-2xl text-[10px] font-black transition-all border-2 ${auditStatus === s ? 'bg-slate-900 border-slate-900 text-white shadow-xl shadow-slate-200 -translate-y-1' : 'bg-slate-50 border-slate-50 text-slate-400 hover:border-slate-100'}`}
                              >
                                 {s}
@@ -419,7 +630,7 @@ const App = () => {
                     <textarea 
                       value={auditRemark}
                       onChange={(e) => setAuditRemark(e.target.value)}
-                      placeholder="Tuliskan alasan teknis di sini... Contoh: Berdasarkan history, pemakaian bulan ini ekstrim karena adanya kebocoran pipa dalam yang tidak disadari pelanggan. Skip code 3A (Imah Kosong) bulan lalu memperkuat bukti bahwa pelanggan baru saja kembali menghuni rumah."
+                      placeholder="Tuliskan alasan teknis di sini... Contoh: Berdasarkan history, pemakaian bulan ini ekstrim karena adanya kebocoran pipa dalam yang tidak disadari pelanggan."
                       className="w-full h-80 p-8 bg-slate-50 border-2 border-slate-50 rounded-[3rem] outline-none focus:ring-[12px] focus:ring-blue-500/10 font-medium text-slate-700 text-lg leading-relaxed shadow-inner placeholder:italic placeholder:text-slate-300"
                     />
 
@@ -467,11 +678,12 @@ const HeroStat = ({ title, val, icon, color }) => {
   );
 };
 
-const TableRow = ({ label, val, vol, pct }) => (
+const TableRow = ({ label, val, vol, count, pct }) => (
   <tr className="hover:bg-slate-50/80 transition-colors group">
     <td className="px-10 py-6 font-black text-slate-800 text-lg tracking-tighter">{label}</td>
     <td className="px-10 py-6 text-right font-mono font-bold text-slate-600">{val}M</td>
     <td className="px-10 py-6 text-right font-mono font-bold text-blue-600">{vol}</td>
+    <td className="px-10 py-6 text-right font-mono font-bold text-slate-500">{count}</td>
     <td className="px-10 py-6 text-right">
        <span className="bg-emerald-100 text-emerald-700 px-4 py-1.5 rounded-full text-xs font-black border border-emerald-200">{pct}</span>
     </td>
@@ -520,32 +732,61 @@ const DetailBox = ({ title, icon, val, sub }) => (
   </div>
 );
 
-const RankList = ({ title, type }) => (
-  <div className="bg-white rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden group">
-    <div className={`p-10 flex justify-between items-center ${type === 'premium' ? 'bg-emerald-50 text-emerald-900' : 'bg-rose-50 text-rose-900'}`}>
-      <h3 className="font-black text-xl uppercase tracking-tighter leading-none">{title}</h3>
-      <PieChart size={24} className="opacity-40" />
-    </div>
-    <div className="divide-y divide-slate-50 p-4">
-      {[1, 2, 3, 4, 5].map(i => (
-        <div key={i} className="p-6 flex items-center justify-between hover:bg-slate-50 rounded-2xl transition-all group/item">
-          <div className="flex items-center gap-6">
-            <span className="text-3xl font-black text-slate-100 italic group-hover/item:text-blue-200 transition-colors">#{i}</span>
-            <div>
-              <div className="font-black text-lg text-slate-900 leading-none">PALANGGAN CONTOH {i}</div>
-              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2">Nomen: 3001390{i}</div>
+const RankList = ({ title, type, data, loading }) => {
+  const getColorClass = (type) => {
+    if (type === 'premium') return 'bg-emerald-50 text-emerald-900';
+    if (type === 'debt' || type === 'unpaid-debt') return 'bg-rose-50 text-rose-900';
+    return 'bg-blue-50 text-blue-900';
+  };
+
+  const getValueColor = (type) => {
+    if (type === 'premium') return 'text-emerald-600';
+    if (type === 'debt' || type === 'unpaid-debt') return 'text-rose-600';
+    return 'text-blue-600';
+  };
+
+  const getValue = (item, type) => {
+    if (type === 'premium') return `${item.ontime_count}x Tepat Waktu`;
+    if (type === 'debt') return `Rp ${item.debt_amount} JT`;
+    if (type === 'unpaid-current') return `Rp ${item.outstanding} JT`;
+    if (type === 'unpaid-debt') return `Rp ${item.unpaid_debt} JT`;
+    return '-';
+  };
+
+  return (
+    <div className="bg-white rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden group">
+      <div className={`p-10 flex justify-between items-center ${getColorClass(type)}`}>
+        <h3 className="font-black text-xl uppercase tracking-tighter leading-none">{title}</h3>
+        <PieChart size={24} className="opacity-40" />
+      </div>
+      <div className="divide-y divide-slate-50 p-4 max-h-[600px] overflow-y-auto">
+        {loading ? (
+          <div className="p-10 text-center text-slate-400 italic">Loading...</div>
+        ) : data && data.length > 0 ? (
+          data.slice(0, 100).map((item, i) => (
+            <div key={i} className="p-6 flex items-center justify-between hover:bg-slate-50 rounded-2xl transition-all group/item">
+              <div className="flex items-center gap-6">
+                <span className="text-3xl font-black text-slate-100 italic group-hover/item:text-blue-200 transition-colors">#{i+1}</span>
+                <div>
+                  <div className="font-black text-lg text-slate-900 leading-none">
+                    {item.name || item.NAMA || `PELANGGAN ${i+1}`}
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2">
+                    Nomen: {item.nomen || item.NOMEN || '-'}
+                  </div>
+                </div>
+              </div>
+              <div className={`text-lg font-black ${getValueColor(type)} tracking-tighter uppercase`}>
+                {getValue(item, type)}
+              </div>
             </div>
-          </div>
-          <div className={`text-lg font-black ${type === 'premium' ? 'text-emerald-600' : 'text-rose-600'} tracking-tighter uppercase`}>
-            {type === 'premium' ? 'Lancar' : 'Rp 14.5 JT'}
-          </div>
-        </div>
-      ))}
+          ))
+        ) : (
+          <div className="p-10 text-center text-slate-400 italic">Tidak ada data</div>
+        )}
+      </div>
     </div>
-    <button className="w-full py-8 text-xs font-black text-slate-400 uppercase tracking-[0.3em] bg-slate-50/50 hover:bg-slate-100 transition-all border-t border-slate-100">
-       Buka Seluruh 100 Data
-    </button>
-  </div>
-);
+  );
+};
 
 export default App;
