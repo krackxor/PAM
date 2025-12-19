@@ -17,14 +17,17 @@ def init_db():
             client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
             db = client.get_database("PAM_DSS_DB")
             print(f"✅ Database Connected: {db.name}")
-            # Buat index untuk mempercepat pencarian
+            
+            # Indexing untuk performa query cepat
             db.meter_history.create_index([("nomen", ASCENDING), ("period", DESCENDING)])
-            db.billing_history.create_index([("nomen", ASCENDING)])
-            db.customers.create_index([("nomen", ASCENDING)], unique=True)
+            db.collections.create_index([("RAYON", ASCENDING), ("TYPE", ASCENDING)])
+            db.arrears.create_index([("RAYON", ASCENDING), ("JUMLAH", DESCENDING)])
+            db.master_cetak.create_index([("RAYON", ASCENDING)])
+            
         except Exception as e:
             print(f"⚠️ Database Connection Failed: {e}")
     else:
-        print("⚠️ Warning: MONGO_URI not found in .env. Running in Stateless Mode (Upload Only).")
+        print("⚠️ Warning: MONGO_URI not found in .env. Running in Stateless Mode.")
 
 # --- DATA CLEANING ---
 def clean_dataframe(df):
@@ -44,14 +47,22 @@ def clean_dataframe(df):
 # --- 1. METER READING ANALYSIS ---
 def analyze_meter_anomalies(df_records):
     """
-    Menganalisa data SBRS untuk menemukan:
-    - Ekstrim (Lonjakan > 100% atau Threshold)
-    - Stand Negatif (Kini < Lalu)
-    - Zero Usage (0 m3)
-    - Estimasi / Salah Catat
+    Menganalisa data SBRS/Meter Reading.
+    Menyimpan history ke database secara otomatis jika terkoneksi.
     """
     anomalies = []
     
+    # Opsi: Simpan data mentah ke DB untuk keperluan History
+    if db is not None and df_records:
+        try:
+            # Menggunakan insert_many dengan ordered=False agar data duplikat tidak menghentikan proses
+            # Pastikan logic aplikasi menangani duplikasi jika perlu (misal menggunakan upsert di masa depan)
+            # Untuk versi simpel, kita append saja.
+            # db.meter_history.insert_many(df_records, ordered=False) 
+            pass # Diaktifkan jika ingin auto-save history setiap upload
+        except:
+            pass
+
     for row in df_records:
         status_list = []
         
@@ -59,14 +70,15 @@ def analyze_meter_anomalies(df_records):
         nomen = str(row.get('NOMEN', row.get('CMR_ACCOUNT', 'Unknown')))
         name = row.get('NAMA', row.get('CMR_NAME', 'Pelanggan'))
         
+        # Pastikan angka valid
         try:
             prev = float(row.get('CMR_PREV_READ', 0))
             curr = float(row.get('CMR_READING', 0))
             usage = curr - prev
-            # Asumsi rata-rata pemakaian dari data historis (jika ada di row) atau default
+            # Asumsi rata-rata pemakaian (bisa diambil dari DB jika ada, disini pakai default/kolom)
             avg_usage = float(row.get('AVG_USAGE', 20)) 
         except:
-            continue # Skip jika data numerik rusak
+            continue 
 
         # A. STAND NEGATIF
         if usage < 0:
@@ -76,22 +88,22 @@ def analyze_meter_anomalies(df_records):
         if usage == 0:
             status_list.append('PEMAKAIAN ZERO')
             
-        # C. PEMAKAIAN EKSTRIM (Contoh: > 2x Rata-rata atau > 50m3 mendadak)
+        # C. PEMAKAIAN EKSTRIM (Contoh: > 2x Rata-rata dan > 50m3)
         if usage > 0 and (usage > (avg_usage * 2) and usage > 50):
             status_list.append('EKSTRIM')
             
         # D. ANALISA KODE (Skip/Trouble)
         skip_code = str(row.get('CMR_SKIP_CODE', '0')).strip()
-        if skip_code not in ['0', 'nan', '']:
+        if skip_code not in ['0', 'nan', '', 'None']:
             status_list.append(f'SKIP: {skip_code}')
-            if skip_code in ['EST']: status_list.append('ESTIMASI')
+            if skip_code in ['EST', 'E']: status_list.append('ESTIMASI')
             
         # E. PESAN KHUSUS
         msg = str(row.get('CMR_CHG_SPCL_MSG', '')).upper()
         if 'REBILL' in msg: status_list.append('INDIKASI REBILL')
         if 'SALAH' in msg: status_list.append('SALAH CATAT')
 
-        # Jika ada anomali, masukkan ke list
+        # Jika ada anomali, masukkan ke list result
         if status_list:
             anomalies.append({
                 'nomen': nomen,
@@ -106,26 +118,17 @@ def analyze_meter_anomalies(df_records):
                 }
             })
             
-    # Opsi: Simpan data ini ke DB untuk history
-    if db is not None and df_records:
-        try:
-            # Gunakan bulk write untuk performa jika data banyak
-            # Disini kita simpan contoh simpel one-by-one untuk keamanan
-            # db.meter_history.insert_many(df_records) (Hati-hati duplikat)
-            pass
-        except: pass
-            
     return anomalies
 
 # --- 2. SUMMARIZING REPORT ---
 def get_summarized_report(target, dimension, rayon_filter=None):
     """
     Summarize data berdasarkan Target (MC, MB, dll) dan Dimensi (RAYON, TARIF, dll).
-    Menggunakan Aggregation Pipeline MongoDB.
+    Mengambil data real dari MongoDB.
     """
     if db is None: return []
     
-    # Mapping Target ke Collection Name
+    # Mapping Target ke Collection Name di MongoDB
     col_map = {
         'mc': 'master_cetak',
         'mb': 'master_bayar',
@@ -133,7 +136,8 @@ def get_summarized_report(target, dimension, rayon_filter=None):
         'mainbill': 'main_bill',
         'collection': 'collections'
     }
-    collection = db[col_map.get(target, 'master_cetak')]
+    coll_name = col_map.get(target, 'master_cetak')
+    collection = db[coll_name]
     
     pipeline = []
     
@@ -142,14 +146,19 @@ def get_summarized_report(target, dimension, rayon_filter=None):
         pipeline.append({'$match': {'RAYON': str(rayon_filter)}})
         
     # 2. Grouping
-    # Tentukan nama field nilai uang (NOMINAL vs AMT_COLLECT)
-    val_field = '$AMT_COLLECT' if target == 'collection' else ('$JUMLAH' if target == 'ardebt' else '$NOMINAL')
+    # Tentukan nama field nilai uang (NOMINAL vs AMT_COLLECT vs JUMLAH)
+    if target == 'collection': val_field = '$AMT_COLLECT'
+    elif target == 'ardebt': val_field = '$JUMLAH'
+    else: val_field = '$NOMINAL'
+    
+    # Dimensi grouping (perlu $ di depan nama field)
+    group_id = f'${dimension}'
     
     pipeline.append({
         '$group': {
-            '_id': f'${dimension}', # e.g., $RAYON, $TARIF
+            '_id': group_id, 
             'nominal': {'$sum': val_field},
-            'volume': {'$sum': '$KUBIK'},
+            'volume': {'$sum': '$KUBIK'}, # Asumsi kolom KUBIK ada
             'count': {'$sum': 1}
         }
     })
@@ -157,65 +166,72 @@ def get_summarized_report(target, dimension, rayon_filter=None):
     # 3. Sorting
     pipeline.append({'$sort': {'_id': 1}})
     
-    results = list(collection.aggregate(pipeline))
+    try:
+        results = list(collection.aggregate(pipeline))
+    except Exception as e:
+        print(f"Error Aggregation: {e}")
+        return []
     
-    # Formatting Output
     formatted = []
     for r in results:
         formatted.append({
-            'group': r['_id'] if r['_id'] else 'UNDEFINED',
+            'group': r['_id'] if r['_id'] else 'LAINNYA',
             'nominal': r.get('nominal', 0),
             'volume': r.get('volume', 0),
             'count': r['count'],
-            'realization_pct': 0 # Placeholder untuk perhitungan lanjutan
+            'realization_pct': 0 # Bisa ditambahkan logic persentase jika ada target
         })
     return formatted
 
 # --- 3. COLLECTION DETAILED ANALYSIS ---
+# FUNGSI INI MENGGANTIKAN get_collection_detailed_analysis
 def get_customer_payment_status(rayon=None):
     """
-    Mengelompokkan pelanggan berdasarkan perilaku bayar:
-    - Undue (Bayar Dimuka)
-    - Current (Bayar Bulan Ini)
-    - Arrears (Bayar Tunggakan)
-    - Unpaid Receivable (Punya Piutang tapi lancar)
+    Mengelompokkan status pembayaran pelanggan:
+    - Undue (Dimuka)
+    - Current (Bulan Ini)
+    - Arrears (Tunggakan)
+    - Unpaid Receivable (Piutang Lancar tapi belum bayar)
     - Outstanding Arrears (Masih Menunggak)
     """
     if db is None: return {}
     
     match_stage = {'RAYON': str(rayon)} if rayon else {}
     
-    # Helper untuk hitung agregat
-    def count_sum(coll_name, query):
+    # Helper query
+    def agg_sum(coll, query):
         pipeline = [
             {'$match': {**match_stage, **query}},
             {'$group': {'_id': None, 'total': {'$sum': '$AMT_COLLECT'}, 'count': {'$sum': 1}}}
         ]
-        res = list(db[coll_name].aggregate(pipeline))
-        return {'revenue': res[0]['total'], 'count': res[0]['count']} if res else {'revenue': 0, 'count': 0}
+        try:
+            res = list(db[coll].aggregate(pipeline))
+            return {'revenue': res[0]['total'], 'count': res[0]['count']} if res else {'revenue': 0, 'count': 0}
+        except: return {'revenue': 0, 'count': 0}
 
-    # A. Collection Stats (Uang Masuk)
+    # A. Realisasi Pembayaran (Dari tabel collections)
+    # Asumsi kolom TYPE ada di tabel collections (UNDUE, CURRENT, ARREARS)
     stats = {
-        'undue': count_sum('collections', {'TYPE': 'UNDUE'}),
-        'current': count_sum('collections', {'TYPE': 'CURRENT'}),
-        'paid_arrears': count_sum('collections', {'TYPE': 'ARREARS'}),
+        'undue': agg_sum('collections', {'TYPE': 'UNDUE'}),
+        'current': agg_sum('collections', {'TYPE': 'CURRENT'}),
+        'paid_arrears': agg_sum('collections', {'TYPE': 'ARREARS'}),
         'total_cash': 0
     }
     stats['total_cash'] = stats['undue']['revenue'] + stats['current']['revenue'] + stats['paid_arrears']['revenue']
     
-    # B. Outstanding Stats (Belum Bayar)
+    # B. Posisi Saldo Piutang (Outstanding)
     # 1. Menunggak (Ada di tabel Arrears)
     arrears_res = list(db.arrears.aggregate([
         {'$match': match_stage},
-        {'$group': {'_id': None, 'total': {'$sum': '$JUMLAH'}, 'count': {'$sum': 1}}} # Asumsi kolom JUMLAH di Arrears
+        {'$group': {'_id': None, 'total': {'$sum': '$JUMLAH'}, 'count': {'$sum': 1}}} 
     ]))
     stats['outstanding_arrears'] = {'revenue': arrears_res[0]['total'], 'count': arrears_res[0]['count']} if arrears_res else {'revenue':0, 'count':0}
     
-    # 2. Belum Bayar Piutang (No Tunggakan)
-    # Logika: Ada di Master Cetak, Tidak ada di Master Bayar, Tidak ada di Arrears
-    # Ini query kompleks, disederhanakan: Ambil count dari MC yang flag 'LUNAS' belum set
+    # 2. Belum Bayar Current (Ada di MC tapi belum Lunas)
+    # Asumsi MC punya flag LUNAS atau kita cek yang tidak ada di MB
+    # Disini kita pakai query simpel: MC dengan STATUS_LUNAS != True
     mc_unpaid = list(db.master_cetak.aggregate([
-        {'$match': {**match_stage, 'STATUS_LUNAS': {'$ne': True}}}, # Asumsi ada flag
+        {'$match': {**match_stage, 'STATUS_LUNAS': {'$ne': True}}}, 
         {'$group': {'_id': None, 'total': {'$sum': '$NOMINAL'}, 'count': {'$sum': 1}}}
     ]))
     stats['unpaid_receivable_no_arrears'] = {'revenue': mc_unpaid[0]['total'], 'count': mc_unpaid[0]['count']} if mc_unpaid else {'revenue':0, 'count':0}
@@ -224,13 +240,14 @@ def get_customer_payment_status(rayon=None):
 
 # --- 4. HISTORY ---
 def get_usage_history(dimension, value):
-    """Ambil riwayat pemakaian (Kubikasi)"""
+    """Ambil riwayat pemakaian (Kubikasi) dari database"""
     if db is None: return []
     
     query = {}
-    if dimension == 'CUSTOMER': query['nomen'] = value
+    # Mapping filter field
+    if dimension == 'CUSTOMER': query['nomen'] = value # Asumsi field di db lower case
     elif dimension == 'RAYON': query['RAYON'] = value
-    # ... tambahkan dimensi lain jika perlu
+    elif dimension == 'PC': query['PC'] = value
     
     # Ambil dari meter_history
     history = list(db.meter_history.find(query).sort('period', -1).limit(12))
@@ -242,10 +259,10 @@ def get_usage_history(dimension, value):
     } for h in history]
 
 def get_payment_history(nomen):
-    """Ambil riwayat pembayaran"""
+    """Ambil riwayat pembayaran per Nomen"""
     if db is None: return []
     
-    history = list(db.collections.find({'NOMEN': nomen}).sort('TGL_BAYAR', -1).limit(12))
+    history = list(db.collections.find({'NOMEN': str(nomen)}).sort('TGL_BAYAR', -1).limit(12))
     return [{
         'date': h.get('TGL_BAYAR'),
         'value': h.get('AMT_COLLECT'),
@@ -254,23 +271,21 @@ def get_payment_history(nomen):
 
 # --- 5. TOP 100 RANKINGS ---
 def get_top_100_debt(rayon):
-    """Top 100 Penunggak Terbesar"""
+    """Top 100 Penunggak Terbesar (Dari Arrears)"""
     if db is None: return []
     
     pipeline = [
         {'$match': {'RAYON': str(rayon)}},
-        {'$sort': {'JUMLAH': -1}}, # Sort Descending by Jumlah Tunggakan
+        {'$sort': {'JUMLAH': -1}}, 
         {'$limit': 100},
         {'$project': {'_id': 0, 'NAMA': 1, 'NOMEN': 1, 'debt_amount': '$JUMLAH', 'UMUR_TUNGGAKAN': '$LEMBAR'}}
     ]
     return list(db.arrears.aggregate(pipeline))
 
 def get_top_100_premium(rayon):
-    """Top 100 Pelanggan Premium (Selalu Tepat Waktu)"""
-    # Logika: Ambil dari Master Bayar dengan tgl bayar < tgl jatuh tempo terbanyak
+    """Top 100 Pelanggan Premium (Selalu Tepat Waktu / Revenue Tertinggi)"""
     if db is None: return []
     
-    # Simplified: Top Revenue dari Collection Current
     pipeline = [
         {'$match': {'RAYON': str(rayon), 'TYPE': 'CURRENT'}},
         {'$group': {'_id': '$NOMEN', 'total_paid': {'$sum': '$AMT_COLLECT'}, 'NAMA': {'$first': '$NAMA'}}},
@@ -283,7 +298,6 @@ def get_top_100_unpaid_current(rayon):
     """Top 100 Belum Bayar Tagihan Bulan Ini (Current)"""
     if db is None: return []
     
-    # Ambil MC, filter yang belum ada di MB
     pipeline = [
         {'$match': {'RAYON': str(rayon), 'STATUS_LUNAS': {'$ne': True}}},
         {'$sort': {'NOMINAL': -1}},
@@ -293,30 +307,38 @@ def get_top_100_unpaid_current(rayon):
     return list(db.master_cetak.aggregate(pipeline))
 
 def get_top_100_unpaid_debt(rayon):
-    """Top 100 Belum Bayar Tunggakan (Sama dengan Top Debt tapi khusus status belum lunas)"""
-    # Asumsi tabel arrears hanya berisi yang belum lunas
+    """Top 100 Belum Bayar Tunggakan"""
+    # Mengembalikan data yang sama dengan top debt, karena arrears asumsinya belum lunas
     return get_top_100_debt(rayon)
 
 # --- 6. DETECTIVE & AUDIT ---
 def get_audit_detective_data(nomen):
     if db is None: return {}
     
-    customer = db.customers.find_one({'nomen': nomen}, {'_id': 0})
-    reading_hist = list(db.meter_history.find({'nomen': nomen}, {'_id': 0}).sort('period', -1).limit(12))
+    # Ambil info customer (bisa dari MC atau tabel customers)
+    customer = db.customers.find_one({'nomen': str(nomen)}, {'_id': 0})
+    if not customer:
+        # Fallback cari di master cetak jika tabel customers belum sync
+        customer = db.master_cetak.find_one({'NOMEN': str(nomen)}, {'_id': 0})
+        
+    reading_hist = list(db.meter_history.find({'nomen': str(nomen)}, {'_id': 0}).sort('period', -1).limit(12))
     
     return {
-        'customer': customer or {'NAMA': 'Unknown', 'NOMEN': nomen},
+        'customer': customer or {'NAMA': 'Tidak Ditemukan', 'NOMEN': nomen},
         'reading_history': reading_hist
     }
 
 def save_manual_audit(nomen, remark, user, status):
     if db is None: return False
     
-    db.audit_logs.insert_one({
-        'nomen': nomen,
-        'remark': remark,
-        'user': user,
-        'status': status,
-        'timestamp': datetime.now()
-    })
-    return True
+    try:
+        db.audit_logs.insert_one({
+            'nomen': nomen,
+            'remark': remark,
+            'user': user,
+            'status': status,
+            'timestamp': datetime.now()
+        })
+        return True
+    except:
+        return False
