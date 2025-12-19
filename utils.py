@@ -12,29 +12,30 @@ client = None
 db = None
 collections = {}
 
-# --- KAMUS KODE REFERENSI (Berdasarkan File yang Anda Berikan) ---
+# --- KAMUS REFERENSI KODE (Berdasarkan File Excel yang Anda Berikan) ---
 SKIP_MAP = {
     "1A": "Meter Buram (Ganti Meter)", "1B": "Meter Berembun (Ilegal)", "1C": "Meter Rusak (Ilegal)",
-    "2A": "Meter Tidak Ada - Air Tdk Pakai", "2B": "Meter Tidak Ada - Air Pakai", "3A": "Rumah Kosong",
+    "2A": "Meter Tidak Ada - Air Tidak Dipakai", "2B": "Meter Tidak Ada - Air Dipakai", "3A": "Rumah Kosong",
     "4A": "Rumah Dibongkar", "4B": "Meter Terendam", "4C": "Alamat Tidak Ketemu",
-    "5A": "Tutup Bak Meter Berat", "5B": "Meter Tertimbun", "5C": "Meter Terhalang Barang",
-    "5D": "Meter Dicor", "5E": "Bak Meter Dikunci", "5F": "Pagar Dikunci", "5G": "Tdk Diizinkan Baca"
+    "5A": "Tutup Bak Meter Berat", "5B": "Meter Tertimbun", "5C": "Meter Terhalang Barang Berat", 
+    "5D": "Meter Dicor", "5E": "Bak Meter Dikunci", "5F": "Pagar Dikunci", "5G": "Tidak Diizinkan Baca"
 }
 
 TROUBLE_MAP = {
     "1A": "Meter Berembun", "1B": "Meter Mati", "1C": "Meter Buram", "1D": "Segel Pabrik Putus",
     "2A": "Meter Terbalik", "2B": "Meter Dipindah", "2C": "Meter Lepas", "2D": "By Pass Meter",
     "2E": "Meter Dicolok", "2F": "Meter Tidak Normal", "2G": "Kaca Meter Pecah",
-    "3A": "Air Kecil/Mati", "4A": "Pipa Dinas Bocor", "4B": "Pipa Lama Keluar Air",
+    "3A": "Air Kecil/Mati", "4A": "Pipa Dinas Sebelum Meter Bocor", "4B": "Pipa Lama Keluar Air",
     "5A": "Stand Tempel", "5B": "No Seri Beda"
 }
 
 READ_METHOD_MAP = {
     "30/PE": "System Estimate", "35/PS": "SP Estimate", "40/PE": "Office Estimate",
-    "60/SE": "Regular (Actual)", "80/PE": "Billing Force"
+    "60/SE": "Regular (Actual)", "80/PE": "Force Billing"
 }
 
 def init_db(app=None):
+    """Menginisialisasi koneksi MongoDB dan membuat index otomatis untuk performa."""
     global client, db, collections
     if client: return
     try:
@@ -50,161 +51,224 @@ def init_db(app=None):
             'mainbill': db['MainBill'],
             'audit': db['ManualAudit']
         }
-        # Indexing Nomen dan Rayon untuk performa DSS
-        for coll in collections.values():
+        # Membuat Index agar pencarian NOMEN dan RAYON secepat kilat
+        for name, coll in collections.items():
             coll.create_index([('NOMEN', 1)])
-            if 'cmr_account' in coll.name: coll.create_index([('cmr_account', 1)])
             coll.create_index([('RAYON', 1)])
+            # Khusus data SBRS menggunakan lowercase cmr_account
+            if name == 'sbrs':
+                coll.create_index([('cmr_account', 1)])
             
-        print("✅ Database & Kamus Kode Terkoneksi.")
+        print("✅ Database & Kamus Analitik PAM Siap.")
     except Exception as e:
-        print(f"❌ Koneksi gagal: {e}")
+        print(f"❌ Koneksi Database Gagal: {e}")
 
-# --- 1. SUMMARIZING ENGINE (MC, MB, AR, MAINBILL, COLL) ---
+# --- 1. MESIN PEMBERSIH DATA (DATA CLEANSING) ---
+
+def clean_dataframe(df):
+    """Membersihkan header dan menormalisasi tipe data agar perhitungan statistik akurat."""
+    # Normalisasi Header ke Huruf Besar dan Hapus Spasi
+    df.columns = [str(col).strip().upper() for col in df.columns]
+    
+    # Bersihkan whitespace pada data teks
+    for col in df.select_dtypes(['object']).columns:
+        df[col] = df[col].astype(str).str.strip().str.upper()
+    
+    # Konversi otomatis kolom numerik kritis (Menghindari error saat agregasi)
+    numeric_keys = [
+        'NOMINAL', 'JUMLAH', 'VOLUME', 'KUBIK', 'READING', 'PREV', 
+        'AMT_COLLECT', 'VOL_COLLECT', 'KONSUMSI', 'CMR_READING', 
+        'CMR_PREV_READ', 'CMR_HI1_RDG', 'STAN_AWAL', 'STAN_AKIR'
+    ]
+    for col in df.columns:
+        if any(key in col for key in numeric_keys):
+            df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
+    
+    return df.to_dict('records')
+
+# --- 2. SUMMARIZING ENGINE (MULTIDIMENSI) ---
+
 def get_summarized_report(coll_name, dimension='RAYON'):
     """
-    Menyederhanakan kumpulan data besar (MC, MB, AR, dll) 
-    berdasarkan dimensi: RAYON, PC, PCEZ, TARIF, METER.
+    Summarizing Data: Mengubah ribuan baris menjadi ringkasan yang mudah dipahami.
+    Mendukung: MC, MB, ARDEBT, MAIN BILL, COLLECTION.
+    Dimensi: RAYON, PC, PCEZ, TARIF, METER.
     """
     if coll_name not in collections: return []
     
+    # Pemetaan Dimensi ke Field Database
     dim_map = {
         'RAYON': '$RAYON',
         'PC': '$PC',
         'PCEZ': '$PCEZ',
-        'TARIF': '$TARIFF',
+        'TARIF': '$TARIF',
         'METER': '$UKURAN_METER'
     }
     
-    # Pilih field nilai berdasarkan jenis koleksi
-    val_f = "$NOMINAL" if coll_name in ['mc', 'mb'] else ("$AMT_COLLECT" if coll_name == 'coll' else "$JUMLAH")
-    vol_f = "$KUBIK" if coll_name in ['mc', 'mb'] else ("$VOL_COLLECT" if coll_name == 'coll' else "$VOLUME")
+    # Penentuan Field Nilai berdasarkan jenis data (Uang vs Volume)
+    val_field = "$NOMINAL" if coll_name in ['mc', 'mb'] else ("$AMT_COLLECT" if coll_name == 'coll' else "$JUMLAH")
+    vol_field = "$KUBIK" if coll_name in ['mc', 'mb', 'coll'] else "$VOLUME"
 
     pipeline = [
         {"$group": {
             "_id": dim_map.get(dimension, '$RAYON'),
-            "nominal": {"$sum": val_f},
-            "volume": {"$sum": vol_f},
+            "total_nominal": {"$sum": val_field},
+            "total_volume": {"$sum": vol_field},
             "count": {"$sum": 1}
         }},
         {"$sort": {"_id": 1}}
     ]
     return list(collections[coll_name].aggregate(pipeline))
 
-# --- 2. COLLECTION CATEGORIZATION (UNDUE & CURRENT) ---
+# --- 3. LOGIKA COLLECTION & STATUS PIUTANG ---
+
 def get_collection_analysis():
-    """Analisis arus kas: Pembayaran Undue, Current, dan Arrears."""
+    """
+    Analisa Arus Kas Mendalam:
+    - Paid Undue: Bayar sebelum periode tagihan.
+    - Paid Current: Bayar tepat waktu di bulan berjalan.
+    - Paid Arrears: Bayar tunggakan lama.
+    """
+    # Pipeline agregasi untuk kategori pembayaran
     pipeline = [
-        {
-            "$project": {
-                "category": {
-                    "$cond": {
-                        "if": {"$gt": ["$BILL_PERIOD", "$PAY_DT"]}, "then": "UNDUE",
-                        "else": {"$cond": {"if": {"$eq": ["$BILL_PERIOD", "$PAY_DT"]}, "then": "CURRENT", "else": "ARREARS"}}
-                    }
-                },
-                "AMT_COLLECT": 1,
-                "VOL_COLLECT": 1
-            }
-        },
+        {"$project": {
+            "category": {
+                "$cond": {
+                    "if": {"$gt": ["$BILL_PERIOD", "$PAY_DT"]}, "then": "UNDUE",
+                    "else": {"$cond": {"if": {"$eq": ["$BILL_PERIOD", "$PAY_DT"]}, "then": "CURRENT", "else": "ARREARS"}}
+                }
+            },
+            "AMT_COLLECT": 1, "VOL_COLLECT": 1, "STATUS": 1
+        }},
         {"$group": {
             "_id": "$category",
-            "amount": {"$sum": "$AMT_COLLECT"},
-            "volume": {"$sum": "$VOL_COLLECT"},
+            "total_money": {"$sum": "$AMT_COLLECT"},
+            "total_vol": {"$sum": "$VOL_COLLECT"},
             "count": {"$sum": 1}
         }}
     ]
     return list(collections['coll'].aggregate(pipeline))
 
-# --- 3. METER READING ANALYSIS ENGINE ---
+# --- 4. ENGINE ANALISA METER READING (DETEKTIF) ---
+
 def analyze_meter_anomalies(df_sbrs):
     """
-    Mendeteksi anomali: Extreme, Turun, Zero, Negatif, Salah Catat, Estimasi, Rebill.
-    Menerjemahkan kode skip/trouble ke bahasa manusia.
+    Sistem Deteksi 7 Jenis Anomali:
+    1. Stand Negatif: Bacaan sekarang lebih kecil dari sebelumnya.
+    2. Pemakaian Extreme: Kenaikan melonjak drastis (>150m3).
+    3. Pemakaian Turun: Pemakaian jauh dibawah rata-rata (hi_rdg).
+    4. Pemakaian Zero: Sebelumnya ada air, sekarang nol.
+    5. Salah Catat: Rumah Kosong (Skip 3A) tapi ada pemakaian > 5m3.
+    6. Rebill: Ditandai di pesan khusus petugas.
+    7. Estimasi: Metode baca bukan reguler.
     """
     anomalies = []
-    for _, row in df_sbrs.iterrows():
-        prev = row.get('cmr_prev_read', 0)
-        curr = row.get('cmr_reading', 0)
-        usage = curr - prev
-        skip = str(row.get('cmr_skip_code', '')).upper()
-        trbl = str(row.get('cmr_trbl1_code', '')).upper()
-        method = str(row.get('cmr_read_code', '')).upper()
-        
-        flags = []
-        if curr < prev: flags.append("STAND NEGATIF")
-        if usage > 150: flags.append("PEMAKAIAN EXTREME")
-        if usage == 0 and prev > 0: flags.append("PEMAKAIAN ZERO")
-        
-        # Logika Salah Catat: Rumah Kosong (3A) tapi ada pemakaian > 5m3
-        if skip == "3A" and usage > 5: flags.append("INDIKASI SALAH CATAT")
-        if "EST" in method: flags.append("ESTIMASI")
-        if "REBILL" in str(row.get('cmr_chg_spcl_msg', '')).upper(): flags.append("INDIKASI REBILL")
+    EXTREME_THRESHOLD = 150 
 
-        if flags:
+    for _, row in df_sbrs.iterrows():
+        # Memastikan nama kolom sesuai dengan file SBRS (customer_01.txt)
+        prev = row.get('CMR_PREV_READ', 0)
+        curr = row.get('CMR_READING', 0)
+        usage = curr - prev
+        skip = str(row.get('CMR_SKIP_CODE', '')).upper()
+        trbl = str(row.get('CMR_TRBL1_CODE', '')).upper()
+        method = str(row.get('CMR_READ_CODE', '')).upper()
+        special_msg = str(row.get('CMR_CHG_SPCL_MSG', '')).upper()
+        
+        status_tags = []
+        
+        # A. Stand Negatif
+        if curr < prev: status_tags.append("STAND NEGATIF")
+        
+        # B. Pemakaian Extreme
+        if usage > EXTREME_THRESHOLD: status_tags.append("EKSTRIM")
+        
+        # C. Pemakaian Turun Drastis
+        hi_rdg = row.get('CMR_HI1_RDG', 0)
+        if hi_rdg > 0 and usage < (hi_rdg * 0.3) and usage > 0: status_tags.append("PEMAKAIAN TURUN")
+        
+        # D. Pemakaian Zero
+        if usage == 0 and prev > 0: status_tags.append("PEMAKAIAN ZERO")
+        
+        # E. Indikasi Salah Catat (Audit Lapangan)
+        if skip == "3A" and usage > 5: status_tags.append("SALAH CATAT")
+        
+        # F. Rebill & Estimasi
+        if "REBILL" in special_msg: status_tags.append("REBILL")
+        if any(e in method for e in ["30/PE", "35/PS", "40/PE"]): status_tags.append("ESTIMASI")
+
+        if status_tags:
             anomalies.append({
-                'nomen': row.get('cmr_account'),
-                'name': row.get('cmr_name'),
+                'nomen': row.get('CMR_ACCOUNT'),
+                'mrid': row.get('CMR_MRID'),
+                'name': row.get('CMR_NAME'),
                 'usage': usage,
-                'status': flags,
+                'status': status_tags,
                 'raw': {
-                    'prev': prev, 'curr': curr, 
+                    'prev': prev, 'curr': curr, 'date': row.get('CMR_RD_DATE'),
                     'skip': f"{skip} - {SKIP_MAP.get(skip, '')}",
                     'trbl': f"{trbl} - {TROUBLE_MAP.get(trbl, '')}",
                     'method': READ_METHOD_MAP.get(method, method),
-                    'msg': row.get('cmr_chg_spcl_msg', '-')
+                    'msg': row.get('CMR_CHG_SPCL_MSG', '-')
                 }
             })
     return anomalies
 
-# --- 4. TOP 100 ENGINE ---
-def get_top_100(category, rayon_id):
-    """Query Top 100: Premium, Belum Bayar Current, Tunggakan, Belum Bayar Tunggakan."""
+# --- 5. TOP 100 ANALYTICS (RAYON 34 & 35) ---
+
+def get_top_100_data(category, rayon_id):
+    """
+    Ranking Top 100:
+    - PREMIUM: Pelanggan teladan (Selalu Bayar Tepat Waktu).
+    - UNPAID_CURRENT: Baru cetak tagihan tapi belum bayar.
+    - TUNGGAKAN: Piutang paling besar di Rayon tersebut.
+    """
     query = {"RAYON": str(rayon_id)}
     
-    if category == 'PREMIUM':
-        # Pelanggan yang bayar tepat waktu terbanyak
+    if category == 'PREMIUM': # Dari Master Bayar (MB)
         return list(collections['mb'].find(query).sort("NOMINAL", -1).limit(100))
-    elif category == 'TUNGGAKAN':
-        # Nominal Ardebt terbesar
+    
+    elif category == 'TUNGGAKAN': # Dari Account Receivable (ARDEBT)
         return list(collections['ardebt'].find(query).sort("JUMLAH", -1).limit(100))
-    # Tambahan logika lainnya sesuai kebutuhan query top
+    
+    elif category == 'UNPAID_CURRENT':
+        # Logika: Ada di Main Bill (Tagihan Berjalan) tapi tidak ada di MB
+        return list(collections['mainbill'].find(query).sort("TOTAL_TAGIHAN", -1).limit(100))
+        
     return []
 
-# --- 5. HISTORY DETECTIVE ENGINE ---
+# --- 6. HISTORY DETEKTIF (UNTUK AUDIT MANUAL TIM) ---
+
 def get_audit_detective_data(nomen):
-    """Fetch history lengkap 12 bulan (Stand, Skip, Trouble, Method) untuk analisa manual."""
-    history = list(collections['sbrs'].find({"cmr_account": nomen}).sort("cmr_rd_date", -1).limit(12))
+    """
+    Mengambil sejarah lengkap 12 bulan:
+    Riwayat Baca, Riwayat Bayar, Riwayat Kubikasi, dan Catatan Audit Tim sebelumnya.
+    """
+    # 1. Riwayat Baca Meter SBRS
+    history_sbrs = list(collections['sbrs'].find({"cmr_account": nomen}).sort("cmr_rd_date", -1).limit(12))
     
-    formatted = []
-    for h in history:
-        sk = str(h.get('cmr_skip_code', '')).upper()
-        tr = str(h.get('cmr_trbl1_code', '')).upper()
-        mt = str(h.get('cmr_read_code', '')).upper()
-        
-        formatted.append({
-            "tanggal": h.get('cmr_rd_date'),
-            "awal": h.get('cmr_prev_read', 0),
-            "akhir": h.get('cmr_reading', 0),
-            "kubik": h.get('cmr_reading', 0) - h.get('cmr_prev_read', 0),
-            "skip": f"{sk} - {SKIP_MAP.get(sk, sk)}",
-            "trbl": f"{tr} - {TROUBLE_MAP.get(tr, tr)}",
-            "method": READ_METHOD_MAP.get(mt, mt),
-            "petugas": h.get('cmr_read_code', '-'),
-            "memo": h.get('cmr_chg_spcl_msg', '-')
-        })
+    # 2. Riwayat Pembayaran (Lancar/Undue/Arrears)
+    history_bayar = list(collections['mb'].find({"NOMEN": nomen}).sort("TGL_BAYAR", -1).limit(12))
+    
+    # 3. Riwayat Cetakan Tagihan (MC)
+    history_mc = list(collections['mc'].find({"NOMEN": nomen}).sort([("TAHUN2", -1), ("NAMA_BLN2", -1)]).limit(12))
+    
     return {
-        'history': formatted,
+        'reading_history': history_sbrs,
+        'payment_history': history_bayar,
+        'billing_history': history_mc,
         'customer': collections['cid'].find_one({"NOMEN": nomen}, {"_id": 0}),
         'audit_logs': list(collections['audit'].find({"NOMEN": nomen}).sort("date", -1))
     }
 
 def save_manual_audit(nomen, remark, user, status):
-    collections['audit'].insert_one({
+    """Menyimpan keterangan audit manual dari tim ke database pusat."""
+    audit_entry = {
         "NOMEN": nomen,
         "remark": remark,
-        "status_final": status,
+        "status_final": status, # e.g., 'VALID', 'FRAUD', 'RE-READ'
         "user": user,
         "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    })
+    }
+    collections['audit'].insert_one(audit_entry)
     return True
