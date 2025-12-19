@@ -1,20 +1,16 @@
 import os
 import pandas as pd
 import numpy as np
-from pymongo import MongoClient
+from pymongo import MongoClient, ASCENDING, DESCENDING
 from datetime import datetime
+from dotenv import load_dotenv
 
-# --- KONFIGURASI DATABASE ---
-# URI diambil dari .env (pastikan app.py memanggil load_dotenv())
-MONGO_URI = os.getenv("MONGO_URI")
-DB_NAME = os.getenv("MONGO_DB_NAME") or "pam_analytics"
-
+# --- KONFIGURASI GLOBAL ---
 client = None
 db = None
 collections = {}
 
-# --- KAMUS REFERENSI KODE ---
-# Digunakan untuk menerjemahkan kode teknis lapangan menjadi informasi yang mudah dipahami
+# --- KAMUS REFERENSI KODE (Berdasarkan Standar Operasional Lapangan) ---
 SKIP_MAP = {
     "1A": "Meter Buram (Ganti Meter)", "1B": "Meter Berembun (Ilegal)", "1C": "Meter Rusak (Ilegal)",
     "2A": "Meter Tidak Ada - Air Tidak Dipakai", "2B": "Meter Tidak Ada - Air Dipakai", "3A": "Rumah Kosong",
@@ -37,23 +33,30 @@ READ_METHOD_MAP = {
 }
 
 def init_db(app=None):
-    """Menginisialisasi koneksi MongoDB dan membuat index otomatis untuk performa."""
+    """
+    Menginisialisasi koneksi MongoDB Atlas. 
+    Memastikan variabel lingkungan dimuat dan membuat index untuk performa maksimal.
+    """
     global client, db, collections
     
-    # Ambil ulang URI dari environment untuk memastikan sinkronisasi dengan .env
-    uri = os.getenv("MONGO_URI") or MONGO_URI
-    db_name = os.getenv("MONGO_DB_NAME") or DB_NAME
+    # Muat ulang .env untuk memastikan MONGO_URI tersedia sebelum koneksi
+    load_dotenv()
+    
+    uri = os.getenv("MONGO_URI")
+    db_name = os.getenv("MONGO_DB_NAME") or "pam_analytics"
     
     if not uri:
-        print("⚠️ Warning: MONGO_URI tidak ditemukan. Menggunakan localhost default.")
-        uri = "mongodb://localhost:27017"
+        print("❌ CRITICAL: MONGO_URI tidak ditemukan di .env. Gunakan format mongodb+srv://...")
+        return
 
     try:
-        client = MongoClient(uri, serverSelectionTimeoutMS=12000)
-        # Verifikasi koneksi dengan ping
-        client.admin.command('ping')
+        # Koneksi dengan timeout agar tidak menggantung jika jaringan bermasalah
+        client = MongoClient(uri, serverSelectionTimeoutMS=5000)
+        client.admin.command('ping') # Tes koneksi nyata
         
         db = client[db_name]
+        
+        # Mapping Koleksi Utama
         collections = {
             'mc': db['MasterCetak'],
             'mb': db['MasterBayar'],
@@ -65,69 +68,79 @@ def init_db(app=None):
             'audit': db['ManualAudit']
         }
         
-        # Membuat Index untuk optimasi pencarian NOMEN (ID Pelanggan) dan RAYON
+        # AUTOMATIC INDEXING: Memastikan pencarian NOMEN & RAYON secepat kilat
         for name, coll in collections.items():
-            coll.create_index([('NOMEN', 1)])
-            coll.create_index([('RAYON', 1)])
-            # Index tambahan untuk format data SBRS
+            coll.create_index([('NOMEN', ASCENDING)])
+            coll.create_index([('RAYON', ASCENDING)])
             if name == 'sbrs':
-                coll.create_index([('cmr_account', 1)])
+                coll.create_index([('cmr_account', ASCENDING)])
+                coll.create_index([('cmr_rd_date', DESCENDING)])
             
-        print(f"✅ Database '{db_name}' & Kamus Analitik PAM Siap.")
+        print(f"✅ Database '{db_name}' Terhubung ke Cloud Atlas & Indexing Siap.")
     except Exception as e:
-        print(f"❌ Koneksi Database Gagal: {e}")
+        print(f"❌ Koneksi Database Gagal: {str(e)}")
 
-# --- 1. MESIN PEMBERSIH DATA (DATA CLEANSING) ---
+# --- 1. ENGINE PEMBERSIH DATA ---
 
 def clean_dataframe(df):
-    """Membersihkan header dan menormalisasi tipe data agar perhitungan statistik akurat."""
-    # Normalisasi Header: Huruf Besar, Tanpa Spasi
+    """
+    Menormalisasi data mentah dari Excel/CSV agar siap dianalisa.
+    - Menghapus spasi pada header & data.
+    - Mengubah string angka (dengan koma) menjadi numerik murni.
+    """
+    # Header Standar (Upper Case)
     df.columns = [str(col).strip().upper() for col in df.columns]
     
-    # Bersihkan whitespace pada data teks
+    # Trim Whitespace pada seluruh kolom teks
     for col in df.select_dtypes(['object']).columns:
         df[col] = df[col].astype(str).str.strip().str.upper()
     
-    # Daftar kolom yang harus berupa angka untuk perhitungan
-    numeric_keys = [
+    # Konversi Numerik Aman (Menangani ribuan dengan koma)
+    numeric_columns = [
         'NOMINAL', 'JUMLAH', 'VOLUME', 'KUBIK', 'READING', 'PREV', 
         'AMT_COLLECT', 'VOL_COLLECT', 'KONSUMSI', 'CMR_READING', 
         'CMR_PREV_READ', 'CMR_HI1_RDG', 'STAN_AWAL', 'STAN_AKIR'
     ]
+    
     for col in df.columns:
-        if any(key in col for key in numeric_keys):
-            # Hilangkan karakter pemisah ribuan (koma) dan konversi ke float/int
+        if any(key in col for key in numeric_columns):
             df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
     
     return df.to_dict('records')
 
-# --- 2. SUMMARIZING ENGINE (MULTIDIMENSI) ---
+# --- 2. MULTIDIMENSIONAL SUMMARIZING ---
 
 def get_summarized_report(coll_name, dimension='RAYON'):
-    """Ringkasan Data: Mengonversi baris mentah menjadi agregat per wilayah/tarif."""
+    """
+    Menghasilkan ringkasan eksekutif per dimensi (Wilayah/Tarif/Ukuran Meter).
+    Menggunakan Aggregation Pipeline MongoDB untuk efisiensi RAM.
+    """
     if coll_name not in collections or not db: return []
     
-    dim_field = f"${dimension.upper()}"
-    
-    # Tentukan field mana yang dijumlahkan berdasarkan koleksi
+    # Penentuan field berdasarkan target koleksi
     val_field = "$NOMINAL" if coll_name in ['mc', 'mb'] else ("$AMT_COLLECT" if coll_name == 'coll' else "$JUMLAH")
     vol_field = "$KUBIK" if coll_name in ['mc', 'mb', 'coll'] else "$VOLUME"
 
     pipeline = [
         {"$group": {
-            "_id": dim_field,
-            "total_nominal": {"$sum": val_field},
-            "total_volume": {"$sum": vol_field},
-            "count": {"$sum": 1}
+            "_id": f"${dimension.upper()}",
+            "total_money": {"$sum": val_field},
+            "total_usage": {"$sum": vol_field},
+            "customer_count": {"$sum": 1}
         }},
         {"$sort": {"_id": 1}}
     ]
     return list(collections[coll_name].aggregate(pipeline))
 
-# --- 3. LOGIKA COLLECTION & STATUS PIUTANG ---
+# --- 3. CASH FLOW & AR ANALYSIS ---
 
 def get_collection_analysis():
-    """Analisa Arus Kas: Mendeteksi Pembayaran Undue (Awal), Current (Tepat), Arrears (Tunggakan)."""
+    """
+    Analisa Kualitas Penagihan:
+    - UNDUE: Bayar sebelum jatuh tempo.
+    - CURRENT: Bayar tepat di bulan berjalan.
+    - ARREARS: Bayar tunggakan bulan lalu.
+    """
     if not collections.get('coll'): return []
     
     pipeline = [
@@ -142,105 +155,131 @@ def get_collection_analysis():
         }},
         {"$group": {
             "_id": "$category",
-            "total_money": {"$sum": "$AMT_COLLECT"},
-            "total_vol": {"$sum": "$VOL_COLLECT"},
+            "revenue": {"$sum": "$AMT_COLLECT"},
+            "volume": {"$sum": "$VOL_COLLECT"},
             "count": {"$sum": 1}
         }}
     ]
     return list(collections['coll'].aggregate(pipeline))
 
-# --- 4. ENGINE ANALISA METER READING (DETEKTIF) ---
+# --- 4. ENGINE DETEKSI ANOMALI METER (DETEKTIF) ---
 
 def analyze_meter_anomalies(df_sbrs):
-    """Sistem Deteksi Anomali Meter: Stand Negatif, Ekstrim, Zero, Salah Catat, dll."""
+    """
+    Logic Deteksi 7 Anomali Utama untuk mencegah kerugian air (NRW).
+    Mendeteksi: Negatif, Ekstrim, Zero, Salah Catat, Estimasi, dll.
+    """
     anomalies = []
-    EXTREME_LIMIT = 150 # m3
+    THRESHOLD_EKSTRIM = 150 # m3
 
     for _, row in df_sbrs.iterrows():
         prev = float(row.get('CMR_PREV_READ', 0))
         curr = float(row.get('CMR_READING', 0))
         usage = curr - prev
         
+        # Metadata Petugas Lapangan
         skip = str(row.get('CMR_SKIP_CODE', '')).upper()
         trbl = str(row.get('CMR_TRBL1_CODE', '')).upper()
-        method = str(row.get('CMR_READ_CODE', '')).upper()
-        msg = str(row.get('CMR_CHG_SPCL_MSG', '')).upper()
+        meth = str(row.get('CMR_READ_CODE', '')).upper()
+        msg  = str(row.get('CMR_CHG_SPCL_MSG', '')).upper()
         
-        status_tags = []
+        tags = []
         
-        if curr < prev: status_tags.append("STAND NEGATIF")
-        if usage > EXTREME_LIMIT: status_tags.append("EKSTRIM")
+        if curr < prev: tags.append("STAND NEGATIF")
+        if usage > THRESHOLD_EKSTRIM: tags.append("EKSTRIM")
         
+        # Bandingkan dengan High Reading (Rata-rata history)
         hi_rdg = float(row.get('CMR_HI1_RDG', 0))
-        if hi_rdg > 0 and usage < (hi_rdg * 0.3) and usage > 0: status_tags.append("PEMAKAIAN TURUN")
-        if usage == 0 and prev > 0: status_tags.append("PEMAKAIAN ZERO")
-        if skip == "3A" and usage > 5: status_tags.append("SALAH CATAT")
-        if "REBILL" in msg: status_tags.append("REBILL")
-        if any(e in method for e in ["30/PE", "35/PS", "40/PE"]): status_tags.append("ESTIMASI")
+        if hi_rdg > 0 and usage < (hi_rdg * 0.3) and usage > 0: tags.append("PEMAKAIAN TURUN")
+        
+        if usage == 0 and prev > 0: tags.append("PEMAKAIAN ZERO")
+        if skip == "3A" and usage > 5: tags.append("SALAH CATAT (Audit Lapangan)")
+        if "REBILL" in msg: tags.append("INDIKASI REBILL")
+        if any(code in meth for code in ["30/PE", "35/PS", "40/PE"]): tags.append("ESTIMASI")
 
-        if status_tags:
+        if tags:
             anomalies.append({
                 'nomen': row.get('CMR_ACCOUNT'),
                 'mrid': row.get('CMR_MRID'),
                 'name': row.get('CMR_NAME'),
                 'usage': int(usage),
-                'status': status_tags,
-                'details': {
+                'status': tags,
+                'audit_details': {
                     'prev': int(prev), 'curr': int(curr),
-                    'skip': f"{skip} - {SKIP_MAP.get(skip, 'Normal')}",
-                    'trouble': f"{trbl} - {TROUBLE_MAP.get(trbl, 'Normal')}",
-                    'method': READ_METHOD_MAP.get(method, method),
-                    'special_msg': msg if msg else "-"
+                    'skip_info': f"{skip}: {SKIP_MAP.get(skip, 'Normal')}",
+                    'trouble_info': f"{trbl}: {TROUBLE_MAP.get(trbl, 'Normal')}",
+                    'method': READ_METHOD_MAP.get(meth, meth),
+                    'field_note': msg if msg else "Tidak ada catatan"
                 }
             })
     return anomalies
 
-# --- 5. TOP 100 ANALYTICS ---
+# --- 5. TOP 100 RANKING ENGINE ---
 
 def get_top_100_data(category, rayon_id):
-    """Ranking 100 teratas per wilayah (Rayon) untuk kategori tertentu."""
+    """
+    Peringkat 100 teratas per Rayon.
+    Digunakan untuk apresiasi pelanggan premium atau penagihan intensif tunggakan.
+    """
     if not db: return []
     query = {"RAYON": str(rayon_id)}
     
-    # Memilih koleksi berdasarkan kategori pencarian
-    coll_target = 'mb' if category == 'PREMIUM' else ('ardebt' if category == 'TUNGGAKAN' else 'mainbill')
-    sort_field = 'NOMINAL' if coll_target == 'mb' else ('JUMLAH' if coll_target == 'ardebt' else 'TOTAL_TAGIHAN')
-    
-    return list(collections[coll_target].find(query).sort(sort_field, -1).limit(100))
+    # Pemilihan sumber data
+    if category == 'PREMIUM':
+        coll = collections['mb']
+        sort_field = "NOMINAL"
+    elif category == 'TUNGGAKAN':
+        coll = collections['ardebt']
+        sort_field = "JUMLAH"
+    else:
+        coll = collections['mainbill']
+        sort_field = "TOTAL_TAGIHAN"
+        
+    results = list(coll.find(query).sort(sort_field, DESCENDING).limit(100))
+    for r in results: r.pop('_id', None) # Clean for JSON
+    return results
 
-# --- 6. HISTORY DETEKTIF ---
+# --- 6. AUDIT HISTORY (TIM DETEKTIF) ---
 
 def get_audit_detective_data(nomen):
-    """Mengambil profil lengkap & history 12 bulan pelanggan untuk audit tim."""
+    """
+    Profil 360 Derajat Pelanggan:
+    Menggabungkan history baca meter, pembayaran, dan cetakan tagihan 12 bulan terakhir.
+    """
     if not db: return {}
     
-    # Riwayat multi-koleksi (SBRS, Bayar, Cetak)
-    history_sbrs = list(collections['sbrs'].find({"cmr_account": nomen}).sort("cmr_rd_date", -1).limit(12))
-    history_bayar = list(collections['mb'].find({"NOMEN": nomen}).sort("TGL_BAYAR", -1).limit(12))
-    history_mc = list(collections['mc'].find({"NOMEN": nomen}).sort([("TAHUN2", -1), ("NAMA_BLN2", -1)]).limit(12))
+    # Ambil 12 Periode Terakhir
+    sbrs_hist = list(collections['sbrs'].find({"cmr_account": nomen}).sort("cmr_rd_date", DESCENDING).limit(12))
+    pay_hist  = list(collections['mb'].find({"NOMEN": nomen}).sort("TGL_BAYAR", DESCENDING).limit(12))
+    bill_hist = list(collections['mc'].find({"NOMEN": nomen}).sort("TAHUN2", DESCENDING).limit(12))
     
-    # Pembersihan field internal MongoDB sebelum dikirim ke Frontend
-    for dataset in [history_sbrs, history_bayar, history_mc]:
+    # Hapus _id MongoDB agar tidak error JSON
+    for dataset in [sbrs_hist, pay_hist, bill_hist]:
         for doc in dataset: doc.pop('_id', None)
 
     return {
-        'reading_history': history_sbrs,
-        'payment_history': history_bayar,
-        'billing_history': history_mc,
-        'customer': collections['cid'].find_one({"NOMEN": nomen}, {"_id": 0}),
-        'audit_logs': list(collections['audit'].find({"NOMEN": nomen}).sort("date", -1))
+        'customer_info': collections['cid'].find_one({"NOMEN": nomen}, {"_id": 0}),
+        'reading_history': sbrs_hist,
+        'payment_history': pay_hist,
+        'billing_history': bill_hist,
+        'manual_audit_logs': list(collections['audit'].find({"NOMEN": nomen}).sort("date", DESCENDING))
     }
 
 def save_manual_audit(nomen, remark, user, status):
-    """Menyimpan catatan audit manual dari tim ke dalam database."""
+    """
+    Menyimpan hasil kunjungan atau analisa manual tim detektif ke database.
+    """
     if not collections.get('audit'): return False
     
     audit_entry = {
         "NOMEN": nomen,
         "remark": remark,
         "status_final": status,
-        "user": user,
+        "inspector": user,
         "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
-    collections['audit'].insert_one(audit_entry)
-    return True
+    try:
+        collections['audit'].insert_one(audit_entry)
+        return True
+    except:
+        return False
