@@ -24,7 +24,7 @@ def admin_required(f):
 def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
     """
     Menghitung distribusi metrik. 
-    FIX: Ambil KUBIK dari MC (join PERIODE_BILL) dan TARIFF dari CID.
+    FIX: Ambil KUBIK dari MC (join PERIODE_BILL dengan padding) dan TARIFF dari CID.
     """
     db_status = get_db_status()
     if db_status['status'] == 'error':
@@ -47,7 +47,7 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
     if report_type == 'TUNGGAKAN':
         source_col = collections['ardebt']
         
-        # 1. Join ke CustomerData (CID) untuk mendapatkan TARIFF yang BENAR
+        # 1. Join ke CustomerData (CID) untuk mendapatkan TARIFF yang BENAR (Master Data)
         pipeline.append({
             "$lookup": {
                 "from": "CustomerData",
@@ -63,7 +63,7 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
         pipeline.append({"$unwind": {"path": "$cid_info", "preserveNullAndEmptyArrays": True}})
         
         # 2. Join ke Master Cetak (MC) untuk mendapatkan KUBIKASI yang BENAR
-        # Menggunakan PERIODE_BILL dari ardebt dengan padding (misal 5 -> 05)
+        # Menggunakan PERIODE_BILL dari ardebt dengan padding (misal 5 -> 05) untuk regex match
         pipeline.append({
             "$lookup": {
                 "from": "MasterCetak",
@@ -86,12 +86,12 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
         })
         pipeline.append({"$unwind": {"path": "$mc_info", "preserveNullAndEmptyArrays": True}})
         
-        # 3. Mapping Data sesuai instruksi (Prioritas MC untuk Kubik, CID untuk Tarif)
+        # 3. Mapping Data (Prioritas TARIFF CID dan KUBIK MC)
         pipeline.append({"$addFields": {
             "v_RAYON": "$RAYON",
             "v_PC": {"$substrCP": [{"$ifNull": ["$PCEZ", ""]}, 0, 3]},
             "v_PCEZ": "$PCEZ",
-            # Periksa TARIFF (2 F) atau TARIF (1 F) dari CID
+            # Periksa TARIFF (dua 'F' sesuai file CID) atau TARIF
             "v_TARIF": { "$ifNull": ["$cid_info.TARIFF", { "$ifNull": ["$cid_info.TARIF", { "$ifNull": ["$mc_info.TARIF", "$TIPEPLGGN"] }] }] },
             "v_KUBIK": { "$toDouble": { "$ifNull": ["$mc_info.KUBIK", { "$ifNull": ["$VOLUME", 0] }] } },
             "v_NOMINAL": { "$toDouble": { "$ifNull": ["$JUMLAH", 0] } }
@@ -169,7 +169,7 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
 @bp_collection.route("/api/stats_summary")
 @login_required
 def get_stats_summary_api():
-    """Update KPI Header dengan perbaikan join untuk Tunggakan AR."""
+    """Update KPI Header dengan perbaikan join dan padding untuk Tunggakan."""
     raw_period = request.args.get('period', datetime.now().strftime('%Y-%m'))
     if '-' in raw_period:
         y, m = raw_period.split('-')
@@ -196,7 +196,7 @@ def get_stats_summary_api():
         return res[0] if res else {"count": 0, "usage": 0, "nominal": 0}
 
     def get_ar_summary():
-        # Join AR ke MC untuk mendapatkan Kubikasi penunggak bulan tersebut (Support padding)
+        # Join AR ke MC untuk mendapatkan Kubikasi penunggak dengan padding periode (5 -> 05)
         pipeline = [
             {
                 "$lookup": {
@@ -255,7 +255,7 @@ def category_distribution_api(category):
         "subtitle": f"Bulan: {month} ({report_type})"
     })
 
-# --- Rute View & Lainnya tetap sama ---
+# --- Rute View ---
 @bp_collection.route('/laporan', methods=['GET'])
 @login_required 
 def collection_laporan_view():
