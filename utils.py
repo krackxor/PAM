@@ -248,41 +248,61 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
     Fungsi agregasi yang diperbaiki untuk memastikan Konsistensi Data:
     1. Menggunakan Unique NOMEN untuk semua perhitungan jumlah pelanggan.
     2. Memprioritaskan data transaksi (MC/MB) daripada data master (CID).
-    3. FIX: Fallback VOLUME jika PEMAKAIAN kosong (Mengatasi Total Kubakis 0).
+    3. FIX: Ambil kubikasi dari MC filter nomen yang ada di ardebt, tarif ambil di cid.
     """
     if collection is None:
         return {'totals': {'count':0, 'total_usage':0, 'total_nominal':0}, 'largest': {}, 'charts': {}, 'lists': {}}
+
+    # Detect if we are aggregating Tunggakan (AccountReceivable)
+    is_tunggakan = (money_field == "JUMLAH")
 
     # 1. Setup Filter Periode
     match_stage = {}
     if period and date_field:
         match_stage = {date_field: {'$regex': f"{period}"}} 
     
-    # Logic to handle the case where usage_field might be PEMAKAIAN but the data uses VOLUME
-    alt_usage_field = 'VOLUME' if usage_field == 'PEMAKAIAN' else usage_field
+    # 2. Base Totals Pipeline
+    totals_pipeline = [{'$match': match_stage}]
+
+    if is_tunggakan:
+        # Join to MasterCetak (MC) to get real KUBIK based on PERIODE_BILL
+        totals_pipeline.extend([
+            {
+                '$lookup': {
+                    'from': 'MasterCetak',
+                    'let': {'n': '$NOMEN', 'p': '$PERIODE_BILL'},
+                    'pipeline': [
+                        {'$match': {'$expr': {'$and': [{'$eq': ['$NOMEN', '$$n']}, {'$eq': ['$BULAN_TAGIHAN', '$$p']}]}}}
+                    ],
+                    'as': 'mc_data'
+                }
+            },
+            {'$unwind': {'path': '$mc_data', 'preserveNullAndEmptyArrays': True}}
+        ])
+        # Use mc_data.KUBIK if available, otherwise VOLUME or 0
+        final_usage = {'$toDouble': {'$ifNull': ['$mc_data.KUBIK', {'$ifNull': ['$VOLUME', 0]}]}}
+    else:
+        # Standard collection aggregation
+        final_usage = {'$toDouble': {'$ifNull': [f'${usage_field}', 0]}}
+
+    totals_pipeline.append({
+        '$group': {
+            '_id': None,
+            'unique_set': {'$addToSet': '$NOMEN'},
+            'total_usage': {'$sum': final_usage},
+            'total_nominal': {'$sum': {'$toDouble': {'$ifNull': [f'${money_field}', 0]}}}
+        }
+    })
     
-    # 2. Base Totals (MENGGUNAKAN UNIQUE NOMEN)
+    totals_pipeline.append({
+        '$project': {
+            'count': {'$size': '$unique_set'},
+            'total_usage': 1,
+            'total_nominal': 1
+        }
+    })
+
     try:
-        totals_pipeline = [
-            {'$match': match_stage},
-            {'$group': {
-                '_id': None,
-                'unique_set': {'$addToSet': '$NOMEN'},
-                'total_usage': {
-                    '$sum': {
-                        '$toDouble': { 
-                            '$ifNull': [f'${usage_field}', { '$ifNull': [f'${alt_usage_field}', 0] }] 
-                        }
-                    }
-                },
-                'total_nominal': {'$sum': {'$toDouble': {'$ifNull': [f'${money_field}', 0]}}}
-            }},
-            {'$project': {
-                'count': {'$size': '$unique_set'},
-                'total_usage': 1,
-                'total_nominal': 1
-            }}
-        ]
         totals_res = list(collection.aggregate(totals_pipeline))
         base = totals_res[0] if totals_res else {'count': 0, 'total_usage': 0, 'total_nominal': 0}
     except Exception as e:
@@ -296,9 +316,25 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
             local_match['$or'] = [{'RAYON': rayon_filter}, {'KODERAYON': rayon_filter}]
 
         pipeline = [{'$match': local_match}]
+        
+        # If Tunggakan, we need the join to MC for correct kubikasi in charts
+        if is_tunggakan:
+            pipeline.extend([
+                {
+                    '$lookup': {
+                        'from': 'MasterCetak',
+                        'let': {'n': '$NOMEN', 'p': '$PERIODE_BILL'},
+                        'pipeline': [
+                            {'$match': {'$expr': {'$and': [{'$eq': ['$NOMEN', '$$n']}, {'$eq': ['$BULAN_TAGIHAN', '$$p']}]}}}
+                        ],
+                        'as': 'mc_data'
+                    }
+                },
+                {'$unwind': {'path': '$mc_data', 'preserveNullAndEmptyArrays': True}}
+            ])
 
         prefix = ""
-        if lookup_cid:
+        if lookup_cid or is_tunggakan: # Always join CID for Tunggakan to get correct TARIF
             pipeline.extend([
                 {'$lookup': {
                     'from': 'CustomerData',
@@ -310,30 +346,36 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
             ])
             prefix = "$cust_info."
 
-        # C. Konstruksi Field Grouping: Prioritas MC/Transaksi Baru, lalu CID
+        # C. Konstruksi Field Grouping: Prioritas CID (Master) for Tarif, then others
         id_candidates = []
         for f in group_candidates:
-            id_candidates.append(f"${f}") # Prioritas 1: Field di MC
-            if lookup_cid:
+            if f == 'TARIF':
+                # Force TARIF from CID as requested
+                id_candidates.append(f"{prefix}TARIF")
+            else:
+                id_candidates.append(f"${f}") # Prioritas 1: Field di collection asal
                 id_candidates.append(f"{prefix}{f}") # Prioritas 2: Field di CID
         
-        # Tambahan untuk PC dari PCEZ
-        if derive_pc_from_pcez and lookup_cid:
+        if derive_pc_from_pcez and (lookup_cid or is_tunggakan):
              id_candidates.append({ '$substr': [ f"{prefix}PCEZ", 0, 3 ] })
 
         id_candidates.append("N/A")
 
-        # D. Grouping (Unique NOMEN Count & Nominal)
+        # D. Grouping (Unique NOMEN Count & Nominal & Usage)
+        local_usage_field = {'$ifNull': ['$mc_data.KUBIK', {'$ifNull': ['$VOLUME', 0]}]} if is_tunggakan else f'${usage_field}'
+        
         pipeline.extend([
             {'$group': {
                 '_id': {'$ifNull': id_candidates},
                 'unique_nomen': {'$addToSet': '$NOMEN'},
-                'nominal': {'$sum': {'$toDouble': {'$ifNull': [f'${money_field}', 0]}}}
+                'nominal': {'$sum': {'$toDouble': {'$ifNull': [f'${money_field}', 0]}}},
+                'usage': {'$sum': {'$toDouble': {'$ifNull': [local_usage_field, 0]}}}
             }},
             {'$project': {
                 '_id': 1,
                 'val': {'$size': '$unique_nomen'},
-                'nominal': 1
+                'nominal': 1,
+                'usage': 1
             }},
             {'$sort': {'nominal': -1}}
         ])
@@ -346,26 +388,13 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
 
     # Mapping Kolom Kandidat
     tarif_cols = ['TARIF', 'KODETARIF', 'GOLONGAN']
-    merek_cols = ['MERK', 'KODEMEREK', 'MEREKMETER', 'METER_MAKE']
     pcez_cols = ['PCEZ', 'KODEPCEZ', 'PCEZ_ZONA']
     pc_cols = ['PC', 'KODEPC', 'PC_ZONA']
 
     breakdowns = {
         'pc_all': get_distribution_smart(pc_cols, lookup_cid=True, derive_pc_from_pcez=True),
-        'pc_34': get_distribution_smart(pc_cols, '34', lookup_cid=True, derive_pc_from_pcez=True),
-        'pc_35': get_distribution_smart(pc_cols, '35', lookup_cid=True, derive_pc_from_pcez=True),
-
         'pcez_all': get_distribution_smart(pcez_cols, lookup_cid=True),
-        'pcez_34': get_distribution_smart(pcez_cols, '34', lookup_cid=True),
-        'pcez_35': get_distribution_smart(pcez_cols, '35', lookup_cid=True),
-
-        'tarif_all': get_distribution_smart(tarif_cols),
-        'tarif_34': get_distribution_smart(tarif_cols, '34'),
-        'tarif_35': get_distribution_smart(tarif_cols, '35'),
-        
-        'merek_all': get_distribution_smart(merek_cols, lookup_cid=True),
-        'merek_34': get_distribution_smart(merek_cols, '34', lookup_cid=True),
-        'merek_35': get_distribution_smart(merek_cols, '35', lookup_cid=True),
+        'tarif_all': get_distribution_smart(tarif_cols, lookup_cid=True), # lookup_cid True to force Tarif from CID
     }
 
     # 4. Largest Contributors (Rayon, PC, PCEZ)
@@ -439,7 +468,7 @@ def get_comprehensive_stats(period=None):
         'tunggakan': _aggregate_category(
             collections.get('ardebt'), 
             money_field="JUMLAH", 
-            usage_field="PEMAKAIAN", 
+            usage_field="PEMAKAIAN", # This will trigger the MC lookup in _aggregate_category
             period=None, 
             date_field=None 
         ),
