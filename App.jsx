@@ -3,18 +3,16 @@ import {
   ShieldCheck, Upload, Activity, BarChart3, Users, 
   AlertTriangle, ArrowLeft, Save, Database, CreditCard, 
   Droplets, RefreshCw, TrendingUp, Layers, History, 
-  User, MessageSquare, Search, FileText, CheckCircle, MapPin
+  User, MessageSquare, Search, FileText, CheckCircle, Filter
 } from 'lucide-react';
 
 // --- CONFIG ---
-// Ubah ke true jika ingin mencoba tampilan tanpa koneksi server (Mock Mode)
 const USE_MOCK = false; 
 const API_BASE_URL = 'http://174.138.16.241:5000/api';
 
 // --- HELPER UNTUK FETCH API ---
 const apiCall = async (url, options = {}) => {
   if (USE_MOCK) {
-    // Simulasi delay jaringan jika mock
     await new Promise(r => setTimeout(r, 500)); 
     return { ok: true, json: async () => ({ status: 'success', data: [] }) };
   }
@@ -23,7 +21,7 @@ const apiCall = async (url, options = {}) => {
 
 const App = () => {
   // --- STATE UI ---
-  const [activeTab, setActiveTab] = useState('upload'); // upload, summary, collection, meter, top, history
+  const [activeTab, setActiveTab] = useState('upload');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -39,19 +37,23 @@ const App = () => {
   const [detectiveData, setDetectiveData] = useState(null);
   const [auditRemark, setAuditRemark] = useState('');
 
-  // --- FILTERS ---
-  const [rayonFilter, setRayonFilter] = useState('34');
+  // --- FILTERS (TANPA RAYON GLOBAL) ---
   
   // Summarizing Filters
-  const [sumTarget, setSumTarget] = useState('mc'); // mc, mb, ardebt, mainbill, collection
-  const [sumDim, setSumDim] = useState('RAYON'); // RAYON, PC, PCEZ, TARIF, METER
+  const [sumTarget, setSumTarget] = useState('mc');
+  const [sumDim, setSumDim] = useState('RAYON');
+  const [sumRayon, setSumRayon] = useState('');  // Opsional, kosong = semua
+  
+  // Collection Filters
+  const [collRayon, setCollRayon] = useState('');
   
   // Top 100 Filters
-  const [topCategory, setTopCategory] = useState('premium'); // premium, debt, unpaid_current, unpaid_debt
+  const [topCategory, setTopCategory] = useState('premium');
+  const [topRayon, setTopRayon] = useState('34');
   
   // History Filters
-  const [historyType, setHistoryType] = useState('usage'); // usage, payment
-  const [historyFilterBy, setHistoryFilterBy] = useState('CUSTOMER'); // CUSTOMER, RAYON, PC, PCEZ, TARIF, METER
+  const [historyType, setHistoryType] = useState('usage');
+  const [historyFilterBy, setHistoryFilterBy] = useState('CUSTOMER');
   const [historyValue, setHistoryValue] = useState('');
 
   // --- API HANDLERS ---
@@ -72,15 +74,27 @@ const App = () => {
       
       if (json.status === 'success') {
         setUploadRes(json);
+        
         // Auto-switch tab berdasarkan tipe file
-        if (json.type === 'METER_READING') setActiveTab('meter');
-        else if (json.type.includes('COLLECTION')) setActiveTab('collection');
-        else setActiveTab('summary');
+        if (json.type === 'METER_READING') {
+          setActiveTab('meter');
+          alert(`✅ File SBRS/Cycle berhasil dianalisa!\n\n` +
+                `Total Anomali: ${json.data.anomalies.length}\n` +
+                `- Ekstrim: ${json.data.summary.extreme}\n` +
+                `- Stand Negatif: ${json.data.summary.negative}\n` +
+                `- Zero: ${json.data.summary.zero}`);
+        } else if (json.type.includes('COLLECTION')) {
+          setActiveTab('collection');
+          alert(`✅ File Collection berhasil diupload!\n\nTotal Records: ${json.data.records}`);
+        } else {
+          setActiveTab('summary');
+          alert(`✅ File berhasil diupload!\n\nTotal Records: ${json.data.records}`);
+        }
       } else {
-        alert("Gagal: " + json.message);
+        alert("❌ Gagal: " + json.message);
       }
     } catch (err) {
-      setErrorMsg("Koneksi ke server gagal. Pastikan VPS aktif.");
+      setErrorMsg("⚠️ Koneksi ke server gagal. Pastikan VPS aktif dan port 5000 terbuka.");
       console.error(err);
     }
     setLoading(false);
@@ -89,7 +103,8 @@ const App = () => {
   const fetchSummary = async () => {
     setLoading(true);
     try {
-      const res = await apiCall(`${API_BASE_URL}/summary?target=${sumTarget}&dimension=${sumDim}&rayon=${rayonFilter}`);
+      const rayonParam = sumRayon ? `&rayon=${sumRayon}` : '';
+      const res = await apiCall(`${API_BASE_URL}/summary?target=${sumTarget}&dimension=${sumDim}${rayonParam}`);
       const json = await res.json();
       if (json.status === 'success') setSummaryData(json.data);
     } catch (e) { console.error(e); }
@@ -99,7 +114,8 @@ const App = () => {
   const fetchCollection = async () => {
     setLoading(true);
     try {
-      const res = await apiCall(`${API_BASE_URL}/collection/status?rayon=${rayonFilter}`);
+      const rayonParam = collRayon ? `?rayon=${collRayon}` : '';
+      const res = await apiCall(`${API_BASE_URL}/collection/status${rayonParam}`);
       const json = await res.json();
       if (json.status === 'success') setCollectionData(json.data);
     } catch (e) { console.error(e); }
@@ -109,7 +125,7 @@ const App = () => {
   const fetchTop100 = async () => {
     setLoading(true);
     try {
-      const res = await apiCall(`${API_BASE_URL}/top100?category=${topCategory}&rayon=${rayonFilter}`);
+      const res = await apiCall(`${API_BASE_URL}/top100?category=${topCategory}&rayon=${topRayon}`);
       const json = await res.json();
       if (json.status === 'success') setTopData(json.data);
     } catch (e) { console.error(e); }
@@ -117,7 +133,7 @@ const App = () => {
   };
 
   const fetchHistory = async () => {
-    if (!historyValue) return alert("Masukkan nilai pencarian dulu (misal: Nomen atau Kode Rayon)");
+    if (!historyValue) return alert("⚠️ Masukkan nilai pencarian dulu (misal: Nomen atau Kode Rayon)");
     setLoading(true);
     try {
       const res = await apiCall(`${API_BASE_URL}/history?type=${historyType}&filter_by=${historyFilterBy}&value=${historyValue}`);
@@ -139,7 +155,7 @@ const App = () => {
   };
 
   const saveAudit = async () => {
-    if(!auditRemark) return alert("Isi catatan audit dulu.");
+    if(!auditRemark) return alert("⚠️ Isi catatan audit dulu.");
     try {
       const res = await apiCall(`${API_BASE_URL}/audit/save`, {
         method: 'POST',
@@ -153,10 +169,10 @@ const App = () => {
       });
       const json = await res.json();
       if(json.status === 'success') {
-        alert("Data audit tersimpan!");
+        alert("✅ Data audit tersimpan!");
         setAuditRemark('');
       }
-    } catch(e) { alert("Gagal simpan."); }
+    } catch(e) { alert("❌ Gagal simpan."); }
   };
 
   // Auto-fetch data saat tab atau filter berubah
@@ -164,7 +180,7 @@ const App = () => {
     if (activeTab === 'summary') fetchSummary();
     if (activeTab === 'collection') fetchCollection();
     if (activeTab === 'top') fetchTop100();
-  }, [activeTab, sumTarget, sumDim, rayonFilter, topCategory]);
+  }, [activeTab, sumTarget, sumDim, sumRayon, collRayon, topCategory, topRayon]);
 
   // --- UI COMPONENTS ---
   
@@ -186,7 +202,7 @@ const App = () => {
           </div>
           <div>
             <h1 className="font-black text-2xl tracking-tighter leading-none">PAM DSS</h1>
-            <div className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mt-1">Enterprise V2.0</div>
+            <div className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mt-1">Enterprise V3.0</div>
           </div>
         </div>
 
@@ -199,17 +215,20 @@ const App = () => {
           <NavBtn id="top" icon={<Users size={20}/>} label="Top 100 Ranking" />
         </nav>
 
-        {/* Global Rayon Filter */}
+        {/* Info Box */}
         <div className="mt-4 bg-slate-900 p-5 rounded-[1.5rem] border border-slate-800">
           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 text-center flex items-center justify-center gap-2">
-            <MapPin size={10}/> Filter Rayon Aktif
+            <Database size={10}/> Sistem Info
           </div>
-          <div className="flex gap-2 bg-slate-950 p-1 rounded-xl">
-            {['34', '35'].map(r => (
-              <button key={r} onClick={() => setRayonFilter(r)} className={`flex-1 py-2.5 rounded-lg text-xs font-black transition-all ${rayonFilter===r ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>
-                RAYON {r}
-              </button>
-            ))}
+          <div className="text-xs text-slate-400 space-y-2">
+            <div className="flex justify-between">
+              <span>Status:</span>
+              <span className="text-emerald-400 font-bold">Online</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Mode:</span>
+              <span className="text-blue-400 font-bold">Production</span>
+            </div>
           </div>
         </div>
       </aside>
@@ -258,17 +277,17 @@ const App = () => {
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
                       <thead className="text-slate-400 font-black uppercase text-[10px] tracking-widest border-b border-slate-50 bg-slate-50/50">
-                        <tr><th className="py-4 px-4">Tanggal</th><th className="px-4">Lalu</th><th className="px-4">Kini</th><th className="px-4">Pakai</th><th className="px-4">Kode</th><th className="px-4">Pesan</th></tr>
+                        <tr><th className="py-4 px-4">Periode</th><th className="px-4">Lalu</th><th className="px-4">Kini</th><th className="px-4">Pakai</th><th className="px-4">Kode</th><th className="px-4">MRID</th></tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50 font-medium text-slate-600">
                         {detectiveData?.reading_history?.map((h, i) => (
                           <tr key={i} className="hover:bg-slate-50 transition-colors">
-                            <td className="py-4 px-4 text-slate-900 font-bold">{h.cmr_rd_date}</td>
+                            <td className="py-4 px-4 text-slate-900 font-bold">{h.period || h.cmr_rd_date}</td>
                             <td className="px-4 font-mono text-slate-400">{h.cmr_prev_read}</td>
                             <td className="px-4 font-mono text-slate-900">{h.cmr_reading}</td>
-                            <td className={`px-4 font-black ${h.cmr_reading - h.cmr_prev_read < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>{h.cmr_reading - h.cmr_prev_read}</td>
+                            <td className={`px-4 font-black ${h.usage < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>{h.usage}</td>
                             <td className="px-4"><span className="bg-slate-100 px-2 py-1 rounded text-xs font-bold text-slate-500">{h.cmr_skip_code || '-'}</span></td>
-                            <td className="px-4 text-xs italic">{h.cmr_chg_spcl_msg}</td>
+                            <td className="px-4 text-xs italic">{h.cmr_mrid || '-'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -287,11 +306,15 @@ const App = () => {
                  <div className="space-y-3">
                     <div className="p-5 bg-slate-50 rounded-[1.5rem] border border-slate-100">
                       <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Indikasi Sistem</div>
-                      <div className="font-bold text-slate-800 leading-snug">{selectedAnomaly.details?.anomaly_reason || 'Tidak ada data spesifik'}</div>
+                      <div className="font-bold text-slate-800 leading-snug text-sm">{selectedAnomaly.details?.anomaly_reason || 'Tidak ada data spesifik'}</div>
                     </div>
                     <div className="p-5 bg-slate-50 rounded-[1.5rem] border border-slate-100">
                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Skip Code</div>
                        <div className="font-bold text-slate-800">{selectedAnomaly.details?.skip_desc || 'Normal'}</div>
+                    </div>
+                    <div className="p-5 bg-slate-50 rounded-[1.5rem] border border-slate-100">
+                       <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Pesan Khusus</div>
+                       <div className="font-bold text-slate-800 text-sm">{selectedAnomaly.details?.cmr_chg_spcl_msg || 'Tidak ada'}</div>
                     </div>
                  </div>
 
@@ -320,24 +343,38 @@ const App = () => {
                 {activeTab === 'history' && 'Pencarian Data'}
                 {activeTab === 'top' && 'Top 100 Ranking'}
               </h2>
-              <p className="text-slate-500 font-medium text-lg">Dashboard Analitik untuk Rayon {rayonFilter}</p>
+              <p className="text-slate-500 font-medium text-lg">
+                {activeTab === 'summary' && `Target: ${sumTarget.toUpperCase()} | Dimensi: ${sumDim}${sumRayon ? ` | Rayon: ${sumRayon}` : ' | Semua Rayon'}`}
+                {activeTab === 'collection' && (collRayon ? `Rayon ${collRayon}` : 'Semua Rayon')}
+                {activeTab === 'top' && `Kategori: ${topCategory.toUpperCase()} | Rayon: ${topRayon}`}
+                {activeTab !== 'summary' && activeTab !== 'collection' && activeTab !== 'top' && 'Dashboard Analitik PAM DSS'}
+              </p>
             </header>
 
             {/* TAB: UPLOAD CENTER */}
             {activeTab === 'upload' && (
-               <div className="bg-white p-20 rounded-[3.5rem] border-4 border-dashed border-slate-200 text-center shadow-sm hover:border-blue-300 transition-all group">
-                 <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-8 text-blue-500 group-hover:scale-110 transition-transform">
-                    <Upload size={40}/>
+               <div className="space-y-8">
+                 <div className="bg-white p-20 rounded-[3.5rem] border-4 border-dashed border-slate-200 text-center shadow-sm hover:border-blue-300 transition-all group">
+                   <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-8 text-blue-500 group-hover:scale-110 transition-transform">
+                      <Upload size={40}/>
+                   </div>
+                   <h3 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">Unggah File Laporan</h3>
+                   <p className="text-slate-400 mb-10 max-w-lg mx-auto leading-relaxed">
+                     Sistem mendukung format <strong>.CSV / .TXT</strong> (SBRS/Cycle) dan <strong>.XLSX</strong> (Master, Billing, Collection, Arrears).
+                   </p>
+                   <label className="inline-flex items-center gap-3 bg-blue-600 text-white px-10 py-5 rounded-2xl font-black text-lg cursor-pointer hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 active:translate-y-1">
+                     {loading ? <RefreshCw className="animate-spin"/> : <FileText/>}
+                     {loading ? 'Sedang Menganalisa...' : 'Pilih File dari Komputer'}
+                     <input type="file" className="hidden" onChange={handleUpload}/>
+                   </label>
                  </div>
-                 <h3 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">Unggah File Laporan</h3>
-                 <p className="text-slate-400 mb-10 max-w-lg mx-auto leading-relaxed">
-                   Sistem mendukung format <strong>.CSV / .TXT</strong> (SBRS/Cycle) dan <strong>.XLSX</strong> (Master, Billing, Collection, Arrears).
-                 </p>
-                 <label className="inline-flex items-center gap-3 bg-blue-600 text-white px-10 py-5 rounded-2xl font-black text-lg cursor-pointer hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 active:translate-y-1">
-                   {loading ? <RefreshCw className="animate-spin"/> : <FileText/>}
-                   {loading ? 'Sedang Menganalisa...' : 'Pilih File dari Komputer'}
-                   <input type="file" className="hidden" onChange={handleUpload}/>
-                 </label>
+
+                 {/* Info Supported Files */}
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                   <InfoCard title="SBRS / Cycle" desc="File meter reading (.csv / .txt)" icon="📊" />
+                   <InfoCard title="Master Cetak/Bayar" desc="File tagihan & pembayaran (.xlsx)" icon="📄" />
+                   <InfoCard title="Collection & Arrears" desc="File collection & tunggakan (.xlsx)" icon="💰" />
+                 </div>
                </div>
             )}
 
@@ -345,8 +382,8 @@ const App = () => {
             {activeTab === 'summary' && (
               <div className="space-y-6">
                 {/* Control Bar */}
-                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-wrap gap-6 items-center justify-between">
-                  <div className="flex flex-wrap gap-4 items-center">
+                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-wrap gap-6 items-end justify-between">
+                  <div className="flex flex-wrap gap-4 items-end">
                      <div className="flex flex-col gap-1">
                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-2">Jenis Laporan</label>
                         <select value={sumTarget} onChange={e => setSumTarget(e.target.value)} className="bg-slate-50 border-2 border-slate-100 px-5 py-3 rounded-2xl font-bold text-sm outline-none focus:border-blue-500 h-[50px] min-w-[200px]">
@@ -367,8 +404,20 @@ const App = () => {
                           <option value="METER">Per METER SIZE</option>
                         </select>
                      </div>
+                     <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-2 flex items-center gap-2">
+                          <Filter size={10}/> Filter Rayon (Opsional)
+                        </label>
+                        <input 
+                          type="text"
+                          value={sumRayon}
+                          onChange={e => setSumRayon(e.target.value)}
+                          placeholder="34, 35, atau kosong"
+                          className="bg-slate-50 border-2 border-slate-100 px-5 py-3 rounded-2xl font-bold text-sm outline-none focus:border-blue-500 h-[50px] w-[180px]"
+                        />
+                     </div>
                   </div>
-                  <button onClick={fetchSummary} className="bg-slate-900 text-white px-6 py-4 rounded-2xl font-bold text-sm hover:bg-slate-700 flex items-center gap-2 h-[50px] mt-auto">
+                  <button onClick={fetchSummary} className="bg-slate-900 text-white px-6 py-4 rounded-2xl font-bold text-sm hover:bg-slate-700 flex items-center gap-2 h-[50px]">
                     <RefreshCw size={16}/> Refresh Data
                   </button>
                 </div>
@@ -377,7 +426,7 @@ const App = () => {
                 <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
                    <table className="w-full text-left">
                      <thead className="bg-slate-50 text-slate-500 text-[10px] font-black uppercase tracking-widest">
-                       <tr><th className="px-8 py-6">Grup {sumDim}</th><th className="px-8 py-6 text-right">Nominal (Rp)</th><th className="px-8 py-6 text-right">Volume (m³)</th><th className="px-8 py-6 text-right">Lembar</th><th className="px-8 py-6 text-right">Status</th></tr>
+                       <tr><th className="px-8 py-6">Grup {sumDim}</th><th className="px-8 py-6 text-right">Nominal (Rp)</th><th className="px-8 py-6 text-right">Volume (m³)</th><th className="px-8 py-6 text-right">Lembar</th><th className="px-8 py-6 text-right">Realisasi</th></tr>
                      </thead>
                      <tbody className="divide-y divide-slate-50 text-sm font-medium text-slate-700">
                        {summaryData.length > 0 ? summaryData.map((row, i) => (
@@ -386,9 +435,9 @@ const App = () => {
                            <td className="px-8 py-5 text-right font-mono font-bold text-emerald-600 text-lg">{row.nominal?.toLocaleString()}</td>
                            <td className="px-8 py-5 text-right font-mono font-bold text-blue-600">{row.volume?.toLocaleString()}</td>
                            <td className="px-8 py-5 text-right font-mono text-slate-500">{row.count?.toLocaleString()}</td>
-                           <td className="px-8 py-5 text-right"><span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg text-xs font-bold">{row.realization_pct || '-'}%</span></td>
+                           <td className="px-8 py-5 text-right"><span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg text-xs font-bold">{row.realization_pct}%</span></td>
                          </tr>
-                       )) : <tr><td colSpan="5" className="p-20 text-center text-slate-400 italic font-bold">Tidak ada data untuk filter ini.</td></tr>}
+                       )) : <tr><td colSpan="5" className="p-20 text-center text-slate-400 italic font-bold">Tidak ada data. Silakan upload file terlebih dahulu.</td></tr>}
                      </tbody>
                    </table>
                 </div>
@@ -398,10 +447,27 @@ const App = () => {
             {/* TAB: COLLECTION ANALYSIS */}
             {activeTab === 'collection' && (
               <div className="space-y-8 animate-in slide-in-from-bottom-4">
+                 {/* Filter Rayon */}
+                 <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex items-center gap-4">
+                    <label className="text-sm font-bold text-slate-600 flex items-center gap-2">
+                      <Filter size={16}/> Filter Rayon (Opsional):
+                    </label>
+                    <input 
+                      type="text"
+                      value={collRayon}
+                      onChange={e => setCollRayon(e.target.value)}
+                      placeholder="34, 35, atau kosong untuk semua"
+                      className="bg-slate-50 border-2 border-slate-100 px-5 py-3 rounded-2xl font-bold text-sm outline-none focus:border-blue-500 flex-1 max-w-md"
+                    />
+                    <button onClick={fetchCollection} className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-bold text-sm hover:bg-slate-700 flex items-center gap-2">
+                      <RefreshCw size={16}/> Refresh
+                    </button>
+                 </div>
+
                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
                     <StatBox label="Undue (Dimuka)" val={collectionData?.undue?.revenue} color="blue" icon={<Layers/>} sub="Pembayaran Dimuka"/>
                     <StatBox label="Current (Lancar)" val={collectionData?.current?.revenue} color="emerald" icon={<CheckCircle/>} sub="Pembayaran Bulan Ini"/>
-                    <StatBox label="Arrears (Tunggakan)" val={collectionData?.arrears?.revenue} color="rose" icon={<AlertTriangle/>} sub="Pelunasan Tunggakan"/>
+                    <StatBox label="Arrears (Tunggakan)" val={collectionData?.paid_arrears?.revenue} color="rose" icon={<AlertTriangle/>} sub="Pelunasan Tunggakan"/>
                     <StatBox label="Total Cash Masuk" val={collectionData?.total_cash} color="indigo" icon={<Database/>} sub="Semua Penerimaan"/>
                  </div>
                  
@@ -413,8 +479,8 @@ const App = () => {
                           <StatusRow label="Pelanggan Bayar Current" val={collectionData?.current?.count} icon="✅"/>
                           <StatusRow label="Pelanggan Bayar Tunggakan" val={collectionData?.paid_arrears?.count} icon="💰"/>
                           <div className="border-t-2 border-dashed border-slate-100 my-4"></div>
-                          <StatusRow label="Masih Menunggak (Ada Piutang)" val={collectionData?.outstanding_arrears?.count} highlight="red"/>
-                          <StatusRow label="Belum Bayar Piutang (Tanpa Tunggakan)" val={collectionData?.unpaid_receivable_no_arrears?.count} highlight="orange" sub="Nomen Lancar tapi belum bayar bulan ini"/>
+                          <StatusRow label="Masih Punya Tunggakan" val={collectionData?.outstanding_arrears?.count} highlight="red"/>
+                          <StatusRow label="Belum Bayar Piutang (Tanpa Tunggakan)" val={collectionData?.unpaid_receivable_no_arrears?.count} highlight="orange" sub="Nomen lancar tapi belum bayar bulan ini"/>
                        </div>
                     </div>
                  </div>
@@ -429,7 +495,7 @@ const App = () => {
                     <AnomalyCard label="Pemakaian Ekstrim" val={uploadRes?.data?.summary?.extreme} color="orange" desc="Lonjakan Signifikan"/>
                     <AnomalyCard label="Stand Negatif" val={uploadRes?.data?.summary?.negative} color="rose" desc="Angka Mundur"/>
                     <AnomalyCard label="Pemakaian Zero" val={uploadRes?.data?.summary?.zero} color="blue" desc="Tidak Ada Pemakaian"/>
-                    <AnomalyCard label="Estimasi / Kode Salah" val={uploadRes?.data?.summary?.estimate} color="purple" desc="Perlu Cek Ulang"/>
+                    <AnomalyCard label="Estimasi / Kode" val={uploadRes?.data?.summary?.estimate} color="purple" desc="Perlu Cek Ulang"/>
                  </div>
 
                  {/* List */}
@@ -443,7 +509,7 @@ const App = () => {
                                   <div className="font-black text-xl text-slate-900 group-hover:text-blue-600 transition-colors">{anom.name}</div>
                                   <div className="flex flex-wrap gap-2 text-[10px] font-black uppercase mt-2">
                                      <span className="bg-slate-100 px-3 py-1 rounded-lg text-slate-500 tracking-widest">{anom.nomen}</span>
-                                     {anom.status.map(s => <span key={s} className="bg-rose-50 text-rose-600 px-3 py-1 rounded-lg border border-rose-100">{s}</span>)}
+                                     {anom.status.slice(0, 3).map(s => <span key={s} className="bg-rose-50 text-rose-600 px-3 py-1 rounded-lg border border-rose-100">{s}</span>)}
                                   </div>
                                </div>
                             </div>
@@ -485,10 +551,12 @@ const App = () => {
                        <select value={historyType} onChange={e => setHistoryType(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-bold outline-none h-[64px]">
                           <option value="usage">History Kubikasi</option>
                           <option value="payment">History Pembayaran</option>
+                          <option value="payment_undue">History Bayar Undue</option>
+                          <option value="payment_current">History Bayar Current</option>
                        </select>
                     </div>
-                    <button onClick={fetchHistory} className="bg-blue-600 text-white h-[64px] px-8 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 w-full md:w-auto">
-                       <Search size={24}/>
+                    <button onClick={fetchHistory} className="bg-blue-600 text-white h-[64px] px-8 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 w-full md:w-auto flex items-center justify-center gap-2">
+                       <Search size={20}/> Cari
                     </button>
                  </div>
 
@@ -503,7 +571,7 @@ const App = () => {
                            <div key={i} className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 hover:bg-white hover:shadow-lg transition-all">
                               <div className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-widest">{item.period || item.date}</div>
                               <div className="text-3xl font-black text-slate-800 mb-2 tracking-tight">
-                                {item.value?.toLocaleString()} <span className="text-sm text-slate-400 font-medium">{historyType==='usage' ? 'm³' : 'IDR'}</span>
+                                {item.value?.toLocaleString()} <span className="text-sm text-slate-400 font-medium">{historyType.includes('usage') ? 'm³' : 'IDR'}</span>
                               </div>
                               <div className="text-xs font-bold bg-white inline-block px-3 py-1 rounded-lg border border-slate-100 text-slate-500">{item.desc || item.keterangan || 'Data Tercatat'}</div>
                            </div>
@@ -517,18 +585,28 @@ const App = () => {
             {/* TAB: TOP 100 */}
             {activeTab === 'top' && (
                <div className="space-y-6">
-                  {/* Category Tabs */}
-                  <div className="flex flex-wrap gap-3 pb-2">
-                     {[
-                       {id:'premium', l:'🏆 Premium (Tepat Waktu)'}, 
-                       {id:'debt', l:'⚠️ Top Tunggakan'}, 
-                       {id:'unpaid_current', l:'🕒 Belum Bayar Current'}, 
-                       {id:'unpaid_debt', l:'🛑 Belum Bayar Tunggakan'}
-                     ].map(opt => (
-                       <button key={opt.id} onClick={() => setTopCategory(opt.id)} className={`px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-wide transition-all ${topCategory===opt.id ? 'bg-slate-900 text-white shadow-lg' : 'bg-white border border-slate-200 text-slate-400 hover:bg-slate-50'}`}>
-                         {opt.l}
-                       </button>
-                     ))}
+                  {/* Filter Bar */}
+                  <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-wrap gap-4 items-center justify-between">
+                    <div className="flex flex-wrap gap-3">
+                      {[
+                        {id:'premium', l:'🏆 Premium'}, 
+                        {id:'debt', l:'⚠️ Tunggakan'}, 
+                        {id:'unpaid_current', l:'🕒 Belum Bayar Current'}, 
+                        {id:'unpaid_debt', l:'🛑 Belum Bayar Tunggakan'}
+                      ].map(opt => (
+                        <button key={opt.id} onClick={() => setTopCategory(opt.id)} className={`px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-wide transition-all ${topCategory===opt.id ? 'bg-slate-900 text-white shadow-lg' : 'bg-white border border-slate-200 text-slate-400 hover:bg-slate-50'}`}>
+                          {opt.l}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <label className="text-sm font-bold text-slate-600">Rayon:</label>
+                      <select value={topRayon} onChange={e => setTopRayon(e.target.value)} className="bg-slate-50 border-2 border-slate-100 px-5 py-3 rounded-2xl font-bold text-sm outline-none focus:border-blue-500">
+                        <option value="34">Rayon 34</option>
+                        <option value="35">Rayon 35</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
@@ -541,20 +619,22 @@ const App = () => {
                            <tr key={i} className="hover:bg-slate-50">
                              <td className="px-8 py-5 font-black text-slate-300 italic text-xl">#{i+1}</td>
                              <td className="px-8 py-5">
-                                <div className="font-black text-slate-900 text-lg">{row.name || row.NAMA}</div>
-                                <div className="text-[10px] font-mono font-bold text-slate-400 mt-1 bg-slate-100 inline-block px-2 py-0.5 rounded">{row.nomen || row.NOMEN}</div>
+                                <div className="font-black text-slate-900 text-lg">{row.name || row.NAMA || row._id}</div>
+                                <div className="text-[10px] font-mono font-bold text-slate-400 mt-1 bg-slate-100 inline-block px-2 py-0.5 rounded">{row.nomen || row.NOMEN || row._id}</div>
                              </td>
                              <td className="px-8 py-5 text-right font-mono font-bold text-blue-600 text-lg">
                                Rp {(row.total_paid || row.debt_amount || row.outstanding || 0).toLocaleString()}
                              </td>
                              <td className="px-8 py-5 text-right text-xs font-bold text-slate-500">
-                               {row.UMUR_TUNGGAKAN ? <span className="text-rose-500">{row.UMUR_TUNGGAKAN} Bulan</span> : '-'}
+                               {row.UMUR_TUNGGAKAN && <span className="text-rose-500">{row.UMUR_TUNGGAKAN} Bulan</span>}
+                               {row.payment_count && <span className="text-emerald-500">{row.payment_count}x Bayar</span>}
+                               {!row.UMUR_TUNGGAKAN && !row.payment_count && '-'}
                              </td>
                            </tr>
                          ))}
                        </tbody>
                      </table>
-                     {topData.length === 0 && <div className="p-20 text-center text-slate-400 italic font-bold">Tidak ada data untuk kategori ini.</div>}
+                     {topData.length === 0 && <div className="p-20 text-center text-slate-400 italic font-bold">Tidak ada data untuk kategori ini. Silakan upload file terlebih dahulu.</div>}
                   </div>
                </div>
             )}
@@ -568,8 +648,21 @@ const App = () => {
 
 // --- SUB COMPONENTS ---
 
+const InfoCard = ({ title, desc, icon }) => (
+  <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-lg transition-all">
+    <div className="text-4xl mb-4">{icon}</div>
+    <h4 className="font-black text-lg text-slate-900 mb-2">{title}</h4>
+    <p className="text-sm text-slate-500 font-medium">{desc}</p>
+  </div>
+);
+
 const StatBox = ({ label, val, color, icon, sub }) => {
-  const colors = { blue: 'text-blue-600 bg-blue-50 border-blue-100', emerald: 'text-emerald-600 bg-emerald-50 border-emerald-100', rose: 'text-rose-600 bg-rose-50 border-rose-100', indigo: 'text-indigo-600 bg-indigo-50 border-indigo-100' };
+  const colors = { 
+    blue: 'text-blue-600 bg-blue-50 border-blue-100', 
+    emerald: 'text-emerald-600 bg-emerald-50 border-emerald-100', 
+    rose: 'text-rose-600 bg-rose-50 border-rose-100', 
+    indigo: 'text-indigo-600 bg-indigo-50 border-indigo-100' 
+  };
   return (
     <div className={`p-8 rounded-[2.5rem] border shadow-sm bg-white ${colors[color].split(' ')[2]}`}>
       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-6 ${colors[color]} shadow-sm`}>{icon}</div>
@@ -596,7 +689,12 @@ const StatusRow = ({ label, val, highlight, icon, sub }) => (
 );
 
 const AnomalyCard = ({ label, val, color, desc }) => {
-   const colors = { orange: 'bg-orange-50 text-orange-600 border-orange-100', rose: 'bg-rose-50 text-rose-600 border-rose-100', blue: 'bg-blue-50 text-blue-600 border-blue-100', purple: 'bg-purple-50 text-purple-600 border-purple-100' };
+   const colors = { 
+     orange: 'bg-orange-50 text-orange-600 border-orange-100', 
+     rose: 'bg-rose-50 text-rose-600 border-rose-100', 
+     blue: 'bg-blue-50 text-blue-600 border-blue-100', 
+     purple: 'bg-purple-50 text-purple-600 border-purple-100' 
+   };
    return (
      <div className={`p-6 rounded-[2rem] border ${colors[color]} flex flex-col justify-between h-32 relative overflow-hidden`}>
         <div className="relative z-10">
