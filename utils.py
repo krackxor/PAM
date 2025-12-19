@@ -253,7 +253,7 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
     if collection is None:
         return {'totals': {'count':0, 'total_usage':0, 'total_nominal':0}, 'largest': {}, 'charts': {}, 'lists': {}}
 
-    # Detect if we are aggregating Tunggakan (AccountReceivable)
+    # Identifikasi apakah ini agregasi Tunggakan (AccountReceivable)
     is_tunggakan = (money_field == "JUMLAH")
 
     # 1. Setup Filter Periode
@@ -265,24 +265,35 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
     totals_pipeline = [{'$match': match_stage}]
 
     if is_tunggakan:
-        # Join to MasterCetak (MC) to get real KUBIK based on PERIODE_BILL
+        # Join ke MasterCetak (MC) untuk ambil KUBIK berdasarkan PERIODE_BILL (ARDEBT)
         totals_pipeline.extend([
             {
                 '$lookup': {
                     'from': 'MasterCetak',
                     'let': {'n': '$NOMEN', 'p': '$PERIODE_BILL'},
                     'pipeline': [
-                        {'$match': {'$expr': {'$and': [{'$eq': ['$NOMEN', '$$n']}, {'$eq': ['$BULAN_TAGIHAN', '$$p']}]}}}
+                        {'$match': {
+                            '$expr': {
+                                '$and': [
+                                    {'$eq': ['$NOMEN', '$$n']},
+                                    # Logic padding: Jika p='5', cari yang berawalan '05' di MC
+                                    {'$regexMatch': {
+                                        'input': '$BULAN_TAGIHAN',
+                                        'regex': {'$concat': ["^", {'$cond': [{'$lt': [{'$strLenCP': {'$toString': '$$p'}}, 2]}, {'$concat': ["0", {'$toString': '$$p'}]}, {'$toString': '$$p'}]}]}
+                                    }}
+                                ]
+                            }
+                        }}
                     ],
                     'as': 'mc_data'
                 }
             },
             {'$unwind': {'path': '$mc_data', 'preserveNullAndEmptyArrays': True}}
         ])
-        # Use mc_data.KUBIK if available, otherwise VOLUME or 0
+        # Gunakan mc_data.KUBIK (sesuai file MC), fallback ke VOLUME (field di ardebt)
         final_usage = {'$toDouble': {'$ifNull': ['$mc_data.KUBIK', {'$ifNull': ['$VOLUME', 0]}]}}
     else:
-        # Standard collection aggregation
+        # Agregasi standar untuk Piutang/Collection
         final_usage = {'$toDouble': {'$ifNull': [f'${usage_field}', 0]}}
 
     totals_pipeline.append({
@@ -317,7 +328,7 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
 
         pipeline = [{'$match': local_match}]
         
-        # If Tunggakan, we need the join to MC for correct kubikasi in charts
+        # Jika Tunggakan, kita perlu join MC untuk kubikasi yang benar di grafik
         if is_tunggakan:
             pipeline.extend([
                 {
@@ -325,7 +336,17 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
                         'from': 'MasterCetak',
                         'let': {'n': '$NOMEN', 'p': '$PERIODE_BILL'},
                         'pipeline': [
-                            {'$match': {'$expr': {'$and': [{'$eq': ['$NOMEN', '$$n']}, {'$eq': ['$BULAN_TAGIHAN', '$$p']}]}}}
+                            {'$match': {
+                                '$expr': {
+                                    '$and': [
+                                        {'$eq': ['$NOMEN', '$$n']},
+                                        {'$regexMatch': {
+                                            'input': '$BULAN_TAGIHAN',
+                                            'regex': {'$concat': ["^", {'$cond': [{'$lt': [{'$strLenCP': {'$toString': '$$p'}}, 2]}, {'$concat': ["0", {'$toString': '$$p'}]}, {'$toString': '$$p'}]}]}
+                                        }}
+                                    ]
+                                }
+                            }}
                         ],
                         'as': 'mc_data'
                     }
@@ -334,7 +355,8 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
             ])
 
         prefix = ""
-        if lookup_cid or is_tunggakan: # Always join CID for Tunggakan to get correct TARIF
+        if lookup_cid or is_tunggakan: 
+            # Selalu join CID untuk Tunggakan agar dapat TARIFF master yang benar
             pipeline.extend([
                 {'$lookup': {
                     'from': 'CustomerData',
@@ -346,12 +368,12 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
             ])
             prefix = "$cust_info."
 
-        # C. Konstruksi Field Grouping: Prioritas CID (Master) for Tarif, then others
+        # C. Konstruksi Field Grouping: Prioritas CID Master untuk Tarif
         id_candidates = []
         for f in group_candidates:
             if f == 'TARIF':
-                # Force TARIF from CID as requested
-                id_candidates.append(f"{prefix}TARIF")
+                # Force TARIFF (dua F dari file) atau TARIF dari CID
+                id_candidates.append({'$ifNull': [f"{prefix}TARIFF", f"{prefix}TARIF"]})
             else:
                 id_candidates.append(f"${f}") # Prioritas 1: Field di collection asal
                 id_candidates.append(f"{prefix}{f}") # Prioritas 2: Field di CID
@@ -394,7 +416,7 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
     breakdowns = {
         'pc_all': get_distribution_smart(pc_cols, lookup_cid=True, derive_pc_from_pcez=True),
         'pcez_all': get_distribution_smart(pcez_cols, lookup_cid=True),
-        'tarif_all': get_distribution_smart(tarif_cols, lookup_cid=True), # lookup_cid True to force Tarif from CID
+        'tarif_all': get_distribution_smart(tarif_cols, lookup_cid=True), 
     }
 
     # 4. Largest Contributors (Rayon, PC, PCEZ)
@@ -457,18 +479,20 @@ def get_comprehensive_stats(period=None):
     if not collections:
         return {}
 
+    p = period.replace('-', '') if period else None
+
     stats = {
         'piutang': _aggregate_category(
             collections.get('mc'), 
             money_field="NOMINAL", 
             usage_field="KUBIK",   
-            period=period, 
+            period=p, 
             date_field="BULAN_TAGIHAN" 
         ),
         'tunggakan': _aggregate_category(
             collections.get('ardebt'), 
             money_field="JUMLAH", 
-            usage_field="PEMAKAIAN", # This will trigger the MC lookup in _aggregate_category
+            usage_field="PEMAKAIAN", 
             period=None, 
             date_field=None 
         ),
@@ -476,7 +500,7 @@ def get_comprehensive_stats(period=None):
             collections.get('mb'), 
             money_field="NOMINAL", 
             usage_field="KUBIKBAYAR",
-            period=period, 
+            period=p, 
             date_field="BULAN_REK"
         )
     }
