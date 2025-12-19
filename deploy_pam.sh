@@ -109,6 +109,7 @@ def save_to_db(data, type_str):
         elif 'ARREARS' in type_str: coll_name = 'arrears'
         elif 'MAINBILL' in type_str: coll_name = 'main_bill'
         elif 'METER' in type_str: coll_name = 'meter_history'
+        elif 'MASTER_BAYAR' in type_str: coll_name = 'master_bayar'
         db[coll_name].insert_many(data, ordered=False)
     except: pass
 
