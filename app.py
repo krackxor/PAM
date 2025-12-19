@@ -4,6 +4,11 @@ import pandas as pd
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime
+from dotenv import load_dotenv
+
+# --- KONFIGURASI LINGKUNGAN ---
+# Memuat variabel lingkungan dari .env agar MONGO_URI terbaca dengan benar
+load_dotenv()
 
 # Mengimpor logika bisnis dan analitik dari utils.py
 from utils import (
@@ -21,11 +26,23 @@ app = Flask(__name__)
 # CORS diaktifkan agar frontend React bisa mengakses backend ini
 CORS(app)
 
-# Inisialisasi database dan indexing saat aplikasi mulai berjalan
+# Inisialisasi database saat aplikasi mulai berjalan
+# Menggunakan app_context untuk memastikan database siap sebelum request pertama
 with app.app_context():
     init_db()
 
-# --- 1. ENDPOINT UTAMA: UPLOAD & ANALISA INSTAN ---
+# --- 1. ENDPOINT STATUS ---
+
+@app.route('/api/status', methods=['GET'])
+def get_status():
+    """Cek status koneksi server dan database."""
+    return jsonify({
+        "status": "online", 
+        "database": "connected" if os.getenv("MONGO_URI") else "config_missing",
+        "timestamp": datetime.now().isoformat()
+    })
+
+# --- 2. ENDPOINT UTAMA: UPLOAD & ANALISA INSTAN ---
 
 @app.route('/api/upload-and-analyze', methods=['POST'])
 def upload_and_analyze():
@@ -59,11 +76,8 @@ def upload_and_analyze():
         # B. DETEKSI OTOMATIS & DISPATCH ANALISA
 
         # 1. Jika ini data Meter Reading (SBRS / Cycle)
-        # Menggunakan field: cmr_account, cmr_reading, cmr_prev_read, dll.
         if 'CMR_ACCOUNT' in df.columns or 'CMR_READING' in df.columns:
-            # Normalisasi data untuk kalkulasi angka
             df_cleaned = pd.DataFrame(clean_dataframe(df))
-            # Jalankan mesin deteksi anomali (Extreme, Zero, Stand Negatif, Salah Catat, Estimasi, Rebill)
             anomalies = analyze_meter_anomalies(df_cleaned)
             
             return jsonify({
@@ -105,7 +119,6 @@ def upload_and_analyze():
         # 3. Jika ini data Collection (Harian)
         elif 'AMT_COLLECT' in df.columns:
             df_cleaned = pd.DataFrame(clean_dataframe(df))
-            # Analisa kategori: Payment (Lancar) vs Cancellation
             return jsonify({
                 "status": "success",
                 "type": "COLLECTION_REPORT",
@@ -122,14 +135,11 @@ def upload_and_analyze():
     except Exception as e:
         return jsonify({"status": "error", "message": f"Kesalahan Sistem: {str(e)}"}), 500
 
-# --- 2. ENDPOINT DASHBOARD & ANALITIK ---
+# --- 3. ENDPOINT DASHBOARD & ANALITIK ---
 
 @app.route('/api/summary', methods=['GET'])
 def api_get_summary():
-    """
-    Mengambil Laporan Summarizing dari Database.
-    Parameter: target (mc, mb, ardebt, coll, mainbill), dimension (RAYON, PC, PCEZ, TARIF, METER)
-    """
+    """Mengambil Laporan Summarizing dari Database."""
     target = request.args.get('target', 'mc').lower()
     dimension = request.args.get('dimension', 'RAYON').upper()
     try:
@@ -149,40 +159,35 @@ def api_get_coll_analysis():
 
 @app.route('/api/top100', methods=['GET'])
 def api_get_top100():
-    """
-    Ranking Top 100 per Rayon.
-    Kategori: PREMIUM (Lancar), TUNGGAKAN (Debt)
-    """
+    """Ranking Top 100 per Rayon (PREMIUM atau TUNGGAKAN)."""
     category = request.args.get('category', 'PREMIUM').upper()
     rayon = request.args.get('rayon', '34')
     try:
         data = get_top_100_data(category, rayon)
-        # Menghapus ID internal MongoDB untuk format JSON yang bersih
         for item in data: item.pop('_id', None)
         return jsonify({"status": "success", "data": data})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# --- 3. ENDPOINT DETEKTIF & AUDIT ---
+# --- 4. ENDPOINT DETEKTIF & AUDIT ---
 
 @app.route('/api/detective/<nomen>', methods=['GET'])
 def api_get_detective(nomen):
-    """Mengambil history lengkap 12 bulan untuk analisa manual tim."""
+    """Mengambil history lengkap 12 bulan untuk analisa manual."""
     try:
         data = get_audit_detective_data(nomen)
-        if data['customer']: data['customer'].pop('_id', None)
-        for log in data['audit']: log.pop('_id', None)
-        # Tambahkan info tambahan jika diperlukan untuk mendukung analisa
+        if data.get('customer'): data['customer'].pop('_id', None)
+        if data.get('audit'):
+            for log in data['audit']: log.pop('_id', None)
         return jsonify({"status": "success", "data": data})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/audit/save', methods=['POST'])
 def api_save_audit():
-    """Menyimpan keterangan/remark hasil analisa tim ke database."""
+    """Menyimpan remark hasil analisa ke database."""
     req = request.json
     try:
-        # Menyimpan audit trail agar bisa dilacak siapa yang menganalisa
         save_manual_audit(
             req.get('nomen'), 
             req.get('remark'), 
@@ -196,5 +201,5 @@ def api_save_audit():
 # --- MENJALANKAN SERVER ---
 
 if __name__ == '__main__':
-    # Server berjalan di port 5000 sebagai default backend
+    # Menjalankan Flask di semua interface pada port 5000
     app.run(debug=True, host='0.0.0.0', port=5000)
