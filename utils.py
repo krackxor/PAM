@@ -5,6 +5,7 @@ from pymongo import MongoClient
 from datetime import datetime
 
 # --- KONFIGURASI DATABASE ---
+# URI diambil dari .env (pastikan app.py memanggil load_dotenv())
 MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = os.getenv("MONGO_DB_NAME") or "pam_analytics"
 
@@ -12,7 +13,7 @@ client = None
 db = None
 collections = {}
 
-# --- KAMUS REFERENSI KODE (Berdasarkan File Excel yang Anda Berikan) ---
+# --- KAMUS REFERENSI KODE ---
 SKIP_MAP = {
     "1A": "Meter Buram (Ganti Meter)", "1B": "Meter Berembun (Ilegal)", "1C": "Meter Rusak (Ilegal)",
     "2A": "Meter Tidak Ada - Air Tidak Dipakai", "2B": "Meter Tidak Ada - Air Dipakai", "3A": "Rumah Kosong",
@@ -37,9 +38,19 @@ READ_METHOD_MAP = {
 def init_db(app=None):
     """Menginisialisasi koneksi MongoDB dan membuat index otomatis untuk performa."""
     global client, db, collections
-    if client: return
+    
+    # Ambil ulang URI jika belum terdefinisi (antisipasi urutan load_dotenv)
+    uri = os.getenv("MONGO_URI") or MONGO_URI
+    
+    if not uri:
+        print("⚠️ Warning: MONGO_URI tidak ditemukan. Menggunakan localhost default.")
+        uri = "mongodb://localhost:27017"
+
     try:
-        client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=12000)
+        client = MongoClient(uri, serverSelectionTimeoutMS=12000)
+        # Ping database untuk memastikan koneksi aktif
+        client.admin.command('ping')
+        
         db = client[DB_NAME]
         collections = {
             'mc': db['MasterCetak'],
@@ -51,15 +62,17 @@ def init_db(app=None):
             'mainbill': db['MainBill'],
             'audit': db['ManualAudit']
         }
+        
         # Membuat Index agar pencarian NOMEN dan RAYON secepat kilat
+        # Indexing sangat penting untuk collection besar agar tidak lemot
         for name, coll in collections.items():
             coll.create_index([('NOMEN', 1)])
             coll.create_index([('RAYON', 1)])
-            # Khusus data SBRS menggunakan lowercase cmr_account
+            # Khusus data SBRS sering menggunakan lowercase cmr_account
             if name == 'sbrs':
                 coll.create_index([('cmr_account', 1)])
             
-        print("✅ Database & Kamus Analitik PAM Siap.")
+        print(f"✅ Database '{DB_NAME}' & Kamus Analitik PAM Siap.")
     except Exception as e:
         print(f"❌ Koneksi Database Gagal: {e}")
 
@@ -82,6 +95,7 @@ def clean_dataframe(df):
     ]
     for col in df.columns:
         if any(key in col for key in numeric_keys):
+            # Membersihkan koma ribuan dan mengonversi ke angka
             df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
     
     return df.to_dict('records')
@@ -91,12 +105,9 @@ def clean_dataframe(df):
 def get_summarized_report(coll_name, dimension='RAYON'):
     """
     Summarizing Data: Mengubah ribuan baris menjadi ringkasan yang mudah dipahami.
-    Mendukung: MC, MB, ARDEBT, MAIN BILL, COLLECTION.
-    Dimensi: RAYON, PC, PCEZ, TARIF, METER.
     """
-    if coll_name not in collections: return []
+    if coll_name not in collections or not db: return []
     
-    # Pemetaan Dimensi ke Field Database
     dim_map = {
         'RAYON': '$RAYON',
         'PC': '$PC',
@@ -105,7 +116,7 @@ def get_summarized_report(coll_name, dimension='RAYON'):
         'METER': '$UKURAN_METER'
     }
     
-    # Penentuan Field Nilai berdasarkan jenis data (Uang vs Volume)
+    # Penentuan Field Nilai berdasarkan jenis data
     val_field = "$NOMINAL" if coll_name in ['mc', 'mb'] else ("$AMT_COLLECT" if coll_name == 'coll' else "$JUMLAH")
     vol_field = "$KUBIK" if coll_name in ['mc', 'mb', 'coll'] else "$VOLUME"
 
@@ -123,13 +134,9 @@ def get_summarized_report(coll_name, dimension='RAYON'):
 # --- 3. LOGIKA COLLECTION & STATUS PIUTANG ---
 
 def get_collection_analysis():
-    """
-    Analisa Arus Kas Mendalam:
-    - Paid Undue: Bayar sebelum periode tagihan.
-    - Paid Current: Bayar tepat waktu di bulan berjalan.
-    - Paid Arrears: Bayar tunggakan lama.
-    """
-    # Pipeline agregasi untuk kategori pembayaran
+    """Analisa Arus Kas Mendalam: Paid Undue, Current, Arrears."""
+    if not collections.get('coll'): return []
+    
     pipeline = [
         {"$project": {
             "category": {
@@ -153,20 +160,12 @@ def get_collection_analysis():
 
 def analyze_meter_anomalies(df_sbrs):
     """
-    Sistem Deteksi 7 Jenis Anomali:
-    1. Stand Negatif: Bacaan sekarang lebih kecil dari sebelumnya.
-    2. Pemakaian Extreme: Kenaikan melonjak drastis (>150m3).
-    3. Pemakaian Turun: Pemakaian jauh dibawah rata-rata (hi_rdg).
-    4. Pemakaian Zero: Sebelumnya ada air, sekarang nol.
-    5. Salah Catat: Rumah Kosong (Skip 3A) tapi ada pemakaian > 5m3.
-    6. Rebill: Ditandai di pesan khusus petugas.
-    7. Estimasi: Metode baca bukan reguler.
+    Sistem Deteksi 7 Jenis Anomali Meter Reading.
     """
     anomalies = []
     EXTREME_THRESHOLD = 150 
 
     for _, row in df_sbrs.iterrows():
-        # Memastikan nama kolom sesuai dengan file SBRS (customer_01.txt)
         prev = row.get('CMR_PREV_READ', 0)
         curr = row.get('CMR_READING', 0)
         usage = curr - prev
@@ -202,57 +201,50 @@ def analyze_meter_anomalies(df_sbrs):
                 'nomen': row.get('CMR_ACCOUNT'),
                 'mrid': row.get('CMR_MRID'),
                 'name': row.get('CMR_NAME'),
-                'usage': usage,
+                'usage': int(usage),
                 'status': status_tags,
                 'raw': {
-                    'prev': prev, 'curr': curr, 'date': row.get('CMR_RD_DATE'),
-                    'skip': f"{skip} - {SKIP_MAP.get(skip, '')}",
-                    'trbl': f"{trbl} - {TROUBLE_MAP.get(trbl, '')}",
+                    'prev': int(prev), 
+                    'curr': int(curr), 
+                    'date': row.get('CMR_RD_DATE'),
+                    'skip': f"{skip} - {SKIP_MAP.get(skip, 'Normal')}",
+                    'trbl': f"{trbl} - {TROUBLE_MAP.get(trbl, 'Normal')}",
                     'method': READ_METHOD_MAP.get(method, method),
                     'msg': row.get('CMR_CHG_SPCL_MSG', '-')
                 }
             })
     return anomalies
 
-# --- 5. TOP 100 ANALYTICS (RAYON 34 & 35) ---
+# --- 5. TOP 100 ANALYTICS ---
 
 def get_top_100_data(category, rayon_id):
-    """
-    Ranking Top 100:
-    - PREMIUM: Pelanggan teladan (Selalu Bayar Tepat Waktu).
-    - UNPAID_CURRENT: Baru cetak tagihan tapi belum bayar.
-    - TUNGGAKAN: Piutang paling besar di Rayon tersebut.
-    """
+    """Ranking Top 100 berdasarkan kategori per Rayon."""
+    if not db: return []
     query = {"RAYON": str(rayon_id)}
     
-    if category == 'PREMIUM': # Dari Master Bayar (MB)
+    if category == 'PREMIUM':
         return list(collections['mb'].find(query).sort("NOMINAL", -1).limit(100))
-    
-    elif category == 'TUNGGAKAN': # Dari Account Receivable (ARDEBT)
+    elif category == 'TUNGGAKAN':
         return list(collections['ardebt'].find(query).sort("JUMLAH", -1).limit(100))
-    
     elif category == 'UNPAID_CURRENT':
-        # Logika: Ada di Main Bill (Tagihan Berjalan) tapi tidak ada di MB
         return list(collections['mainbill'].find(query).sort("TOTAL_TAGIHAN", -1).limit(100))
         
     return []
 
-# --- 6. HISTORY DETEKTIF (UNTUK AUDIT MANUAL TIM) ---
+# --- 6. HISTORY DETEKTIF ---
 
 def get_audit_detective_data(nomen):
-    """
-    Mengambil sejarah lengkap 12 bulan:
-    Riwayat Baca, Riwayat Bayar, Riwayat Kubikasi, dan Catatan Audit Tim sebelumnya.
-    """
-    # 1. Riwayat Baca Meter SBRS
+    """Mengambil sejarah lengkap 12 bulan pelanggan untuk audit manual."""
+    if not db: return {}
+    
     history_sbrs = list(collections['sbrs'].find({"cmr_account": nomen}).sort("cmr_rd_date", -1).limit(12))
-    
-    # 2. Riwayat Pembayaran (Lancar/Undue/Arrears)
     history_bayar = list(collections['mb'].find({"NOMEN": nomen}).sort("TGL_BAYAR", -1).limit(12))
-    
-    # 3. Riwayat Cetakan Tagihan (MC)
     history_mc = list(collections['mc'].find({"NOMEN": nomen}).sort([("TAHUN2", -1), ("NAMA_BLN2", -1)]).limit(12))
     
+    # Hapus _id agar tidak error saat dikirim ke frontend JSON
+    for items in [history_sbrs, history_bayar, history_mc]:
+        for item in items: item.pop('_id', None)
+
     return {
         'reading_history': history_sbrs,
         'payment_history': history_bayar,
@@ -262,11 +254,12 @@ def get_audit_detective_data(nomen):
     }
 
 def save_manual_audit(nomen, remark, user, status):
-    """Menyimpan keterangan audit manual dari tim ke database pusat."""
+    """Menyimpan keterangan audit manual dari tim ke database."""
+    if not collections.get('audit'): return False
     audit_entry = {
         "NOMEN": nomen,
         "remark": remark,
-        "status_final": status, # e.g., 'VALID', 'FRAUD', 'RE-READ'
+        "status_final": status, 
         "user": user,
         "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
