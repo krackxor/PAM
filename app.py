@@ -8,11 +8,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Import fungsi logika dari utils (Pastikan utils.py Anda mendukung fungsi-fungsi ini)
-# Jika ada fungsi yang belum ada di utils.py, Anda perlu menambahkannya atau menyesuaikan import ini.
+# Import fungsi logika dari utils
+# FIXED: Menghapus 'get_collection_detailed_analysis' yang sudah tidak digunakan
 from utils import (
     init_db, clean_dataframe, analyze_meter_anomalies, get_summarized_report,
-    get_collection_detailed_analysis, get_customer_payment_status,
+    get_customer_payment_status,
     get_usage_history, get_payment_history, get_audit_detective_data,
     save_manual_audit, get_top_100_premium, get_top_100_unpaid_current,
     get_top_100_debt, get_top_100_unpaid_debt
