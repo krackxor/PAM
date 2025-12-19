@@ -6,6 +6,7 @@ gunicorn
 requests
 Flask-Login
 Flask-WTF
+flask-cors
 Flask-Caching==2.0.2
 openpyxl
 xlrd
