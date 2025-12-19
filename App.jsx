@@ -1,494 +1,564 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, Upload, Activity, BarChart3, Users, 
-  AlertTriangle, ArrowLeft, Save, ChevronRight, Search, 
-  FileText, Database, CreditCard, Droplets, RefreshCw,
-  TrendingUp, Layers, PieChart, Info, Download, Filter,
-  CheckCircle, History, MapPin, User, MessageSquare
+  AlertTriangle, ArrowLeft, Save, Database, CreditCard, 
+  Droplets, RefreshCw, TrendingUp, Layers, History, 
+  User, MessageSquare, Search, FileText, CheckCircle, MapPin
 } from 'lucide-react';
 
-// --- KONFIGURASI KONEKSI ---
-// Set 'false' untuk menggunakan data asli dari VPS Anda
-// Set 'true' jika ingin demo tanpa koneksi internet/server
+// --- CONFIG ---
+// Ubah ke true jika ingin mencoba tampilan tanpa koneksi server (Mock Mode)
 const USE_MOCK = false; 
 const API_BASE_URL = 'http://174.138.16.241:5000/api';
 
-// --- MOCK DATA GENERATORS (Untuk Demo/Fallback) ---
-const generateMockAnomalies = () => [
-  { nomen: '10002341', name: 'BUDI SANTOSO', usage: 155, status: ['EKSTRIM', 'LONJAKAN'], details: { anomaly_reason: 'Lonjakan 200% dari rata-rata', skip_desc: 'Normal', history_avg: 50 } },
-  { nomen: '10008821', name: 'PT. MAKMUR JAYA', usage: -45, status: ['STAND NEGATIF', 'METER ISSUE'], details: { anomaly_reason: 'Stand mundur 45 m³', skip_desc: 'Meter Buram', history_avg: 210 } },
-  { nomen: '10001122', name: 'RUMAH MAKAN PADANG', usage: 0, status: ['PEMAKAIAN ZERO'], details: { anomaly_reason: 'Tidak ada pemakaian (Rata-rata 80)', skip_desc: 'Pagar Dikunci', history_avg: 80 } },
-];
-
-const generateMockSummary = () => [
-  { group: '34', nominal: 450.5, volume: 125000, count: 5200, avg: 86000, realization_pct: 98.5 },
-  { group: '35', nominal: 320.2, volume: 98000, count: 3100, avg: 103000, realization_pct: 92.1 },
-];
-
-const mockCollectionData = {
-  undue: { revenue: 125.5, count: 450, volume: 32000 },
-  current: { revenue: 850.2, count: 2100, volume: 150000 },
-  arrears: { revenue: 45.3, count: 120, volume: 5000 }
-};
-
-const mockPaymentStatus = {
-  with_debt: { count: 1200, total: 450.5 },
-  paid_debt: { count: 350, total: 120.2 },
-  unpaid_receivable: { count: 85, total: 25.1 }
-};
-
-const mockTopData = Array(10).fill(0).map((_, i) => ({
-  name: `PELANGGAN TOP ${i+1}`,
-  ontime_count: 12 - i,
-  total_paid: (50 - i * 2).toFixed(2),
-  debt_amount: (10 + i).toFixed(2),
-  outstanding: (5 + i).toFixed(2),
-  unpaid_debt: (2 + i).toFixed(2),
-  UMUR_TUNGGAKAN: 30 + i
-}));
-
-const mockDetectiveData = {
-  customer: { NAMA: 'BUDI SANTOSO', TARIFF: 'R2', RAYON: '34' },
-  reading_history: Array(12).fill(0).map((_, i) => ({
-    cmr_rd_date: `2024-${12-i}-01`,
-    cmr_prev_read: 1000 + (i*50),
-    cmr_reading: 1050 + (i*50) + (Math.random() > 0.8 ? 100 : 0),
-    cmr_skip_code: Math.random() > 0.9 ? '1A' : null,
-    cmr_trbl1_code: null,
-    cmr_chg_spcl_msg: 'NORMAL'
-  }))
-};
-
-// --- FAKE FETCH SERVICE (Hanya jalan jika USE_MOCK = true) ---
-const fakeFetch = (url, options) => {
-  console.log(`[MOCK API] Fetching: ${url}`);
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      let responseData = { status: 'success', data: {} };
-      
-      if (url.includes('/upload-and-analyze')) {
-        responseData = { 
-          status: 'success', 
-          type: 'METER_READING', 
-          filename: 'SBRS_UPLOAD_TEST.csv',
-          data: { 
-            anomalies: generateMockAnomalies(),
-            summary: { extreme: 1, negative: 1, zero: 1, decrease: 1, wrong_record: 0 }
-          }
-        };
-      } else if (url.includes('/summary')) {
-        responseData.data = generateMockSummary();
-      } else if (url.includes('/collection/detailed')) {
-        responseData.data = mockCollectionData;
-      } else if (url.includes('/collection/payment-status')) {
-        responseData.data = mockPaymentStatus;
-      } else if (url.includes('/top100')) {
-        responseData.data = mockTopData;
-      } else if (url.includes('/detective')) {
-        responseData.data = mockDetectiveData;
-      } else if (url.includes('/audit/save')) {
-        responseData = { status: 'success', message: 'Audit saved (MOCK)' };
-      }
-
-      resolve({
-        json: () => Promise.resolve(responseData)
-      });
-    }, 800);
-  });
+// --- HELPER UNTUK FETCH API ---
+const apiCall = async (url, options = {}) => {
+  if (USE_MOCK) {
+    // Simulasi delay jaringan jika mock
+    await new Promise(r => setTimeout(r, 500)); 
+    return { ok: true, json: async () => ({ status: 'success', data: [] }) };
+  }
+  return fetch(url, options);
 };
 
 const App = () => {
-  // --- STATE MANAGEMENT ---
-  const [activeTab, setActiveTab] = useState('upload');
+  // --- STATE UI ---
+  const [activeTab, setActiveTab] = useState('upload'); // upload, summary, collection, meter, top, history
   const [loading, setLoading] = useState(false);
-  const [uploadResult, setUploadResult] = useState(null);
-  const [selectedAnomaly, setSelectedAnomaly] = useState(null);
-  const [detectiveHistory, setDetectiveHistory] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  // --- FILTERS & DATA ---
-  const [rayonFilter, setRayonFilter] = useState('34');
-  const [summarizingDim, setSummarizingDim] = useState('RAYON');
+  // --- STATE DATA ---
+  const [uploadRes, setUploadRes] = useState(null);
   const [summaryData, setSummaryData] = useState([]);
-  const [summaryTarget, setSummaryTarget] = useState('mc');
   const [collectionData, setCollectionData] = useState(null);
-  const [paymentStatus, setPaymentStatus] = useState(null);
-  const [topPremium, setTopPremium] = useState([]);
-  const [topDebt, setTopDebt] = useState([]);
+  const [topData, setTopData] = useState([]);
+  const [historyData, setHistoryData] = useState([]);
+  
+  // Detective Mode State
+  const [selectedAnomaly, setSelectedAnomaly] = useState(null);
+  const [detectiveData, setDetectiveData] = useState(null);
   const [auditRemark, setAuditRemark] = useState('');
-  const [auditStatus, setAuditStatus] = useState('RE-CHECK');
 
-  // --- API HELPER ---
-  const apiCall = (url, options) => {
-    return USE_MOCK ? fakeFetch(url, options) : fetch(url, options);
-  };
+  // --- FILTERS ---
+  const [rayonFilter, setRayonFilter] = useState('34');
+  
+  // Summarizing Filters
+  const [sumTarget, setSumTarget] = useState('mc'); // mc, mb, ardebt, mainbill, collection
+  const [sumDim, setSumDim] = useState('RAYON'); // RAYON, PC, PCEZ, TARIF, METER
+  
+  // Top 100 Filters
+  const [topCategory, setTopCategory] = useState('premium'); // premium, debt, unpaid_current, unpaid_debt
+  
+  // History Filters
+  const [historyType, setHistoryType] = useState('usage'); // usage, payment
+  const [historyFilterBy, setHistoryFilterBy] = useState('CUSTOMER'); // CUSTOMER, RAYON, PC, PCEZ, TARIF, METER
+  const [historyValue, setHistoryValue] = useState('');
 
-  // --- API SERVICE FUNCTIONS ---
+  // --- API HANDLERS ---
 
-  const handleFileUpload = async (e) => {
-    if (!USE_MOCK) {
-       const file = e.target.files[0];
-       if (!file) return;
-    }
+  const handleUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
     setLoading(true);
-    const formData = new FormData();
-    if (!USE_MOCK) formData.append('file', e.target.files[0]);
+    setErrorMsg('');
+    
+    const fd = new FormData();
+    fd.append('file', file);
 
     try {
-      const response = await apiCall(`${API_BASE_URL}/upload-and-analyze`, {
-        method: 'POST',
-        body: formData,
-      });
-      const result = await response.json();
+      const res = await apiCall(`${API_BASE_URL}/upload-and-analyze`, { method: 'POST', body: fd });
+      const json = await res.json();
       
-      if (result.status === 'success') {
-        setUploadResult(result);
-        if (result.type === 'METER_READING') setActiveTab('meter');
-        else if (result.type === 'BILLING_SUMMARY') { setActiveTab('summary'); fetchSummaryData(); }
-        else if (result.type === 'COLLECTION_REPORT') { setActiveTab('collection'); fetchCollectionData(); }
+      if (json.status === 'success') {
+        setUploadRes(json);
+        // Auto-switch tab berdasarkan tipe file
+        if (json.type === 'METER_READING') setActiveTab('meter');
+        else if (json.type.includes('COLLECTION')) setActiveTab('collection');
+        else setActiveTab('summary');
       } else {
-        alert(result.message);
+        alert("Gagal: " + json.message);
       }
-    } catch (error) {
-      alert("Gagal koneksi ke server VPS! Pastikan server menyala (Port 5000).");
-      console.error(error);
+    } catch (err) {
+      setErrorMsg("Koneksi ke server gagal. Pastikan VPS aktif.");
+      console.error(err);
     }
     setLoading(false);
   };
 
-  const fetchSummaryData = async () => {
+  const fetchSummary = async () => {
     setLoading(true);
     try {
-      const res = await apiCall(`${API_BASE_URL}/summary?target=${summaryTarget}&dimension=${summarizingDim}&rayon=${rayonFilter}`);
-      const data = await res.json();
-      if (data.status === 'success') setSummaryData(data.data);
+      const res = await apiCall(`${API_BASE_URL}/summary?target=${sumTarget}&dimension=${sumDim}&rayon=${rayonFilter}`);
+      const json = await res.json();
+      if (json.status === 'success') setSummaryData(json.data);
     } catch (e) { console.error(e); }
     setLoading(false);
   };
 
-  const fetchCollectionData = async () => {
+  const fetchCollection = async () => {
     setLoading(true);
     try {
-      const [collRes, statusRes] = await Promise.all([
-        apiCall(`${API_BASE_URL}/collection/detailed?rayon=${rayonFilter}`),
-        apiCall(`${API_BASE_URL}/collection/payment-status?rayon=${rayonFilter}`)
-      ]);
-      const collData = await collRes.json();
-      const statusData = await statusRes.json();
-      if (collData.status === 'success') setCollectionData(collData.data);
-      if (statusData.status === 'success') setPaymentStatus(statusData.data);
+      const res = await apiCall(`${API_BASE_URL}/collection/status?rayon=${rayonFilter}`);
+      const json = await res.json();
+      if (json.status === 'success') setCollectionData(json.data);
     } catch (e) { console.error(e); }
     setLoading(false);
   };
 
-  const fetchTopData = async () => {
+  const fetchTop100 = async () => {
     setLoading(true);
     try {
-      const endpoints = ['premium', 'debt'];
-      const responses = await Promise.all(
-        endpoints.map(ep => apiCall(`${API_BASE_URL}/top100/${ep}?rayon=${rayonFilter}`))
-      );
-      const results = await Promise.all(responses.map(r => r.json()));
-      
-      if (results[0].status === 'success') setTopPremium(results[0].data);
-      if (results[1].status === 'success') setTopDebt(results[1].data);
+      const res = await apiCall(`${API_BASE_URL}/top100?category=${topCategory}&rayon=${rayonFilter}`);
+      const json = await res.json();
+      if (json.status === 'success') setTopData(json.data);
     } catch (e) { console.error(e); }
     setLoading(false);
   };
 
-  const fetchDetectiveData = async (nomen) => {
+  const fetchHistory = async () => {
+    if (!historyValue) return alert("Masukkan nilai pencarian dulu (misal: Nomen atau Kode Rayon)");
+    setLoading(true);
+    try {
+      const res = await apiCall(`${API_BASE_URL}/history?type=${historyType}&filter_by=${historyFilterBy}&value=${historyValue}`);
+      const json = await res.json();
+      if (json.status === 'success') setHistoryData(json.data);
+      else alert(json.message);
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  };
+
+  const fetchDetective = async (nomen) => {
     setLoading(true);
     try {
       const res = await apiCall(`${API_BASE_URL}/detective/${nomen}`);
-      const data = await res.json();
-      if (data.status === 'success') setDetectiveHistory(data.data);
+      const json = await res.json();
+      if (json.status === 'success') setDetectiveData(json.data);
     } catch (e) { console.error(e); }
     setLoading(false);
   };
 
-  const saveAuditResult = async () => {
-    if (!auditRemark) return alert("Keterangan audit wajib diisi!");
+  const saveAudit = async () => {
+    if(!auditRemark) return alert("Isi catatan audit dulu.");
     try {
       const res = await apiCall(`${API_BASE_URL}/audit/save`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nomen: selectedAnomaly.nomen, remark: auditRemark, status: auditStatus })
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          nomen: selectedAnomaly.nomen,
+          remark: auditRemark,
+          status: 'AUDITED',
+          user: 'ADMIN_WEB'
+        })
       });
-      const data = await res.json();
-      if (data.status === 'success') {
-        alert("Analisa manual berhasil disimpan!");
-        setSelectedAnomaly(null); setAuditRemark('');
-      } else { alert("Gagal: " + data.message); }
-    } catch (e) { alert("Error: " + e.message); }
+      const json = await res.json();
+      if(json.status === 'success') {
+        alert("Data audit tersimpan!");
+        setAuditRemark('');
+      }
+    } catch(e) { alert("Gagal simpan."); }
   };
 
+  // Auto-fetch data saat tab atau filter berubah
   useEffect(() => {
-    if (activeTab === 'summary') fetchSummaryData();
-    else if (activeTab === 'collection') fetchCollectionData();
-    else if (activeTab === 'top') fetchTopData();
-  }, [activeTab, summarizingDim, summaryTarget, rayonFilter]);
+    if (activeTab === 'summary') fetchSummary();
+    if (activeTab === 'collection') fetchCollection();
+    if (activeTab === 'top') fetchTop100();
+  }, [activeTab, sumTarget, sumDim, rayonFilter, topCategory]);
 
   // --- UI COMPONENTS ---
-  const SidebarItem = ({ id, icon, label }) => (
-    <button 
-      onClick={() => { setActiveTab(id); setSelectedAnomaly(null); }}
-      className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all font-bold text-sm ${
-        activeTab === id ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/40 translate-x-2' : 'hover:bg-slate-900 hover:text-white'
-      }`}
-    >
+  
+  const NavBtn = ({ id, icon, label }) => (
+    <button onClick={() => {setActiveTab(id); setSelectedAnomaly(null); setErrorMsg('');}} 
+      className={`flex items-center gap-3 w-full px-6 py-4 rounded-2xl font-bold text-sm transition-all mb-2 ${activeTab===id ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/20 translate-x-2' : 'text-slate-400 hover:bg-slate-900 hover:text-white'}`}>
       {icon} <span>{label}</span>
     </button>
   );
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex font-sans text-slate-900 selection:bg-blue-100">
-      <aside className="fixed inset-y-0 left-0 w-72 bg-slate-950 text-slate-400 p-6 flex flex-col z-20 border-r border-white/5 shadow-2xl">
-        <div className="flex items-center gap-4 mb-12 text-white px-2">
-          <div className="bg-gradient-to-br from-blue-500 to-indigo-700 p-3 rounded-2xl shadow-xl shadow-blue-500/20">
-            <ShieldCheck size={28} />
+    <div className="flex min-h-screen bg-[#f8fafc] text-slate-900 font-sans selection:bg-blue-100">
+      
+      {/* SIDEBAR NAVIGATION */}
+      <aside className="w-80 bg-slate-950 p-6 flex flex-col border-r border-slate-900 fixed h-full z-20 shadow-2xl">
+        <div className="flex items-center gap-4 mb-10 px-2 text-white">
+          <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-3 rounded-2xl shadow-lg shadow-blue-500/30">
+            <ShieldCheck size={28} className="text-white"/>
           </div>
           <div>
-            <h1 className="font-black text-2xl tracking-tighter leading-none uppercase">PAM DSS</h1>
-            <span className="text-[10px] font-bold text-blue-400 tracking-widest uppercase">Detective Analytics</span>
+            <h1 className="font-black text-2xl tracking-tighter leading-none">PAM DSS</h1>
+            <div className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mt-1">Enterprise V2.0</div>
           </div>
         </div>
-        
-        <nav className="space-y-2 flex-1">
-          <SidebarItem id="upload" icon={<Upload size={20}/>} label="Upload Center" />
-          <SidebarItem id="summary" icon={<BarChart3 size={20}/>} label="Summarizing" />
-          <SidebarItem id="collection" icon={<CreditCard size={20}/>} label="Collection & AR" />
-          <SidebarItem id="meter" icon={<Activity size={20}/>} label="Meter Analysis" />
-          <SidebarItem id="top" icon={<Users size={20}/>} label="Top 100 Analytics" />
+
+        <nav className="flex-1 overflow-y-auto pr-2">
+          <NavBtn id="upload" icon={<Upload size={20}/>} label="Upload Center" />
+          <NavBtn id="summary" icon={<BarChart3 size={20}/>} label="Summarizing" />
+          <NavBtn id="collection" icon={<CreditCard size={20}/>} label="Collection & AR" />
+          <NavBtn id="meter" icon={<Activity size={20}/>} label="Meter Analysis" />
+          <NavBtn id="history" icon={<History size={20}/>} label="History Data" />
+          <NavBtn id="top" icon={<Users size={20}/>} label="Top 100 Ranking" />
         </nav>
 
-        <div className="mt-auto bg-slate-900/50 p-5 rounded-[2rem] border border-white/5">
-            {USE_MOCK && (
-              <div className="mb-4 bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[10px] p-2 rounded-lg text-center font-black uppercase tracking-widest">
-                Mock Mode Active
-              </div>
-            )}
-            <p className="text-[10px] font-black text-slate-500 uppercase mb-3 tracking-widest text-center">Rayon Monitoring</p>
-            <div className="flex gap-2">
-              <button onClick={() => setRayonFilter('34')} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${rayonFilter === '34' ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-slate-800'}`}>R-34</button>
-              <button onClick={() => setRayonFilter('35')} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${rayonFilter === '35' ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-slate-800'}`}>R-35</button>
-            </div>
+        {/* Global Rayon Filter */}
+        <div className="mt-4 bg-slate-900 p-5 rounded-[1.5rem] border border-slate-800">
+          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 text-center flex items-center justify-center gap-2">
+            <MapPin size={10}/> Filter Rayon Aktif
+          </div>
+          <div className="flex gap-2 bg-slate-950 p-1 rounded-xl">
+            {['34', '35'].map(r => (
+              <button key={r} onClick={() => setRayonFilter(r)} className={`flex-1 py-2.5 rounded-lg text-xs font-black transition-all ${rayonFilter===r ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>
+                RAYON {r}
+              </button>
+            ))}
+          </div>
         </div>
       </aside>
 
-      <main className="flex-1 ml-72 p-10">
-        {!selectedAnomaly ? (
-          <div className="animate-in fade-in duration-500 space-y-10 max-w-7xl mx-auto">
-            <header className="flex justify-between items-end border-b border-slate-200 pb-8">
+      {/* MAIN CONTENT AREA */}
+      <main className="ml-80 flex-1 p-10 min-w-0">
+        
+        {/* Error Alert */}
+        {errorMsg && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-700 px-6 py-4 rounded-2xl mb-8 flex items-center gap-3 font-bold animate-pulse">
+            <AlertTriangle size={20}/> {errorMsg}
+          </div>
+        )}
+
+        {selectedAnomaly ? (
+          /* --- DETECTIVE MODE (DETAIL) --- */
+          <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8 duration-500">
+            <button onClick={() => setSelectedAnomaly(null)} className="flex items-center gap-2 text-slate-400 hover:text-blue-600 font-bold mb-8 transition-colors group">
+              <div className="bg-white p-2 rounded-lg border border-slate-200 group-hover:border-blue-200"><ArrowLeft size={20}/></div>
+              Kembali ke Daftar
+            </button>
+            
+            {/* Header Detail */}
+            <div className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 mb-8 flex flex-wrap justify-between items-center gap-6">
               <div>
-                <h2 className="text-5xl font-black text-slate-900 uppercase tracking-tighter leading-none">
-                  {activeTab === 'upload' && 'Pusat Unggah'}
-                  {activeTab === 'summary' && 'Summarizing'}
-                  {activeTab === 'collection' && 'Collection & AR'}
-                  {activeTab === 'meter' && 'Hasil Analisa'}
-                  {activeTab === 'top' && 'Top Rankings'}
-                </h2>
-                <p className="text-slate-500 font-medium mt-4 text-lg">Keputusan bisnis berbasis statistik deskriptif dan deteksi anomali.</p>
+                <h2 className="text-4xl font-black text-slate-900 tracking-tight">{selectedAnomaly.name}</h2>
+                <div className="flex items-center gap-4 mt-3">
+                  <span className="bg-slate-100 text-slate-600 px-4 py-1.5 rounded-full text-xs font-bold font-mono tracking-wider">{selectedAnomaly.nomen}</span>
+                  {selectedAnomaly.status.map(s => <span key={s} className="bg-rose-100 text-rose-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest">{s}</span>)}
+                </div>
               </div>
-              {uploadResult && (
-                <div className="flex items-center gap-3 bg-emerald-50 px-6 py-3 rounded-2xl border border-emerald-100 shadow-sm">
-                  <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></div>
-                  <span className="text-xs font-black text-emerald-700 uppercase tracking-widest">Aktif: {uploadResult.filename}</span>
-                </div>
-              )}
-            </header>
-
-            {/* VIEW: UPLOAD CENTER */}
-            {activeTab === 'upload' && (
-              <div className="p-32 border-4 border-dashed border-slate-200 rounded-[4rem] bg-white text-center hover:border-blue-400 transition-all group shadow-sm relative overflow-hidden">
-                <div className="relative z-10">
-                  <Upload size={80} className="mx-auto text-blue-500 mb-10 group-hover:scale-110 transition-transform" />
-                  <h3 className="text-3xl font-black mb-4 text-slate-800">Unggah Data Untuk Analisa</h3>
-                  <p className="text-slate-400 mb-12 max-w-md mx-auto font-bold text-lg">Mendukung file SBRS (Cycle), Master (MC/MB/ARDEBT), dan Collection (Harian).</p>
-                  <label className="bg-blue-600 text-white px-16 py-6 rounded-[2rem] font-black text-lg cursor-pointer shadow-2xl shadow-blue-200 hover:bg-blue-700 transition-all inline-block active:scale-95 uppercase tracking-widest">
-                    {loading ? 'Sedang Memproses...' : 'Pilih File'}
-                    <input type="file" className="hidden" onChange={handleFileUpload} />
-                  </label>
-                </div>
-                <Database size={300} className="absolute -right-20 -bottom-20 opacity-[0.03] -rotate-12" />
+              <div className="text-right bg-blue-50 px-8 py-4 rounded-[2rem]">
+                <div className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">Pemakaian</div>
+                <div className="text-5xl font-black text-blue-600 tracking-tighter">{selectedAnomaly.usage} <span className="text-lg text-blue-400">m³</span></div>
               </div>
-            )}
+            </div>
 
-            {/* VIEW: SUMMARIZING REPORT */}
-            {activeTab === 'summary' && (
-              <div className="space-y-8 animate-in slide-in-from-bottom-6 duration-700">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                   <HeroStat title="Revenue Impact" val={uploadResult?.data?.total_nominal ? `Rp ${(uploadResult.data.total_nominal/1000000).toFixed(1)} M` : 'Rp 0'} icon={<FileText/>} color="blue" />
-                   <HeroStat title="Total Volume" val={uploadResult?.data?.total_volume ? `${uploadResult.data.total_volume.toLocaleString()} m³` : '0 m³'} icon={<Droplets/>} color="emerald" />
-                   <HeroStat title="Total Records" val={uploadResult?.data?.total_records?.toLocaleString() || 0} icon={<Database/>} color="rose" />
-                   <HeroStat title="Active Rayon" val={`R-${rayonFilter}`} icon={<TrendingUp/>} color="indigo" />
-                </div>
-                <div className="bg-white rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden">
-                  <div className="p-10 border-b border-slate-50 flex flex-wrap gap-6 justify-between items-center bg-slate-50/30">
-                    <h3 className="font-black text-xl text-slate-800 uppercase tracking-widest">Tabel Ringkasan Multidimensi</h3>
-                    <div className="flex flex-wrap gap-4">
-                      <select value={summaryTarget} onChange={(e) => setSummaryTarget(e.target.value)} className="px-4 py-2 rounded-xl border-2 border-slate-200 font-bold text-sm bg-white outline-none focus:border-blue-500 transition-all">
-                        <option value="mc">MC (Master Cetak)</option>
-                        <option value="mb">MB (Master Bayar)</option>
-                        <option value="ardebt">ARDEBT (Piutang)</option>
-                      </select>
-                      <div className="flex bg-white rounded-2xl p-1.5 border border-slate-200 shadow-sm ring-1 ring-slate-100">
-                        {['RAYON', 'PC', 'PCEZ'].map(d => (
-                          <button key={d} onClick={() => setSummarizingDim(d)} className={`px-6 py-2.5 rounded-xl text-[10px] font-black tracking-[0.2em] transition-all ${summarizingDim === d ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-600'}`}>{d}</button>
-                        ))}
-                      </div>
-                    </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* History Table */}
+              <div className="lg:col-span-2 space-y-8">
+                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
+                  <div className="flex items-center gap-3 mb-6 px-2">
+                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><History size={20}/></div>
+                    <h3 className="font-black text-lg text-slate-800">Riwayat Bacaan (12 Periode)</h3>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead className="bg-slate-50 text-slate-400 text-[10px] uppercase tracking-[0.3em] font-black">
-                        <tr>
-                          <th className="px-10 py-6">Grup {summarizingDim}</th>
-                          <th className="px-10 py-6 text-right">Nominal (Juta)</th>
-                          <th className="px-10 py-6 text-right">Volume (m³)</th>
-                          <th className="px-10 py-6 text-right">Count</th>
-                          <th className="px-10 py-6 text-right">Realisasi %</th>
-                        </tr>
+                    <table className="w-full text-left text-sm">
+                      <thead className="text-slate-400 font-black uppercase text-[10px] tracking-widest border-b border-slate-50 bg-slate-50/50">
+                        <tr><th className="py-4 px-4">Tanggal</th><th className="px-4">Lalu</th><th className="px-4">Kini</th><th className="px-4">Pakai</th><th className="px-4">Kode</th><th className="px-4">Pesan</th></tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {loading ? <tr><td colSpan="5" className="p-20 text-center"><RefreshCw size={40} className="animate-spin mx-auto text-blue-200" /></td></tr> : 
-                          summaryData.length > 0 ? summaryData.map((row, idx) => <TableRow key={idx} {...row} val={row.nominal.toFixed(2)} vol={row.volume.toLocaleString()} pct={`${row.realization_pct}%`} label={row.group} />) : 
-                          <tr><td colSpan="5" className="p-20 text-center text-slate-400 italic font-bold">Tidak ada data.</td></tr>}
+                      <tbody className="divide-y divide-slate-50 font-medium text-slate-600">
+                        {detectiveData?.reading_history?.map((h, i) => (
+                          <tr key={i} className="hover:bg-slate-50 transition-colors">
+                            <td className="py-4 px-4 text-slate-900 font-bold">{h.cmr_rd_date}</td>
+                            <td className="px-4 font-mono text-slate-400">{h.cmr_prev_read}</td>
+                            <td className="px-4 font-mono text-slate-900">{h.cmr_reading}</td>
+                            <td className={`px-4 font-black ${h.cmr_reading - h.cmr_prev_read < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>{h.cmr_reading - h.cmr_prev_read}</td>
+                            <td className="px-4"><span className="bg-slate-100 px-2 py-1 rounded text-xs font-bold text-slate-500">{h.cmr_skip_code || '-'}</span></td>
+                            <td className="px-4 text-xs italic">{h.cmr_chg_spcl_msg}</td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
                 </div>
               </div>
-            )}
-
-            {/* VIEW: METER ANALYSIS */}
-            {activeTab === 'meter' && (
-              <div className="space-y-8 animate-in slide-in-from-bottom-6 duration-700">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                   <MiniStat label="Ekstrim" val={uploadResult?.data?.summary?.extreme || 0} color="orange" />
-                   <MiniStat label="Stand Negatif" val={uploadResult?.data?.summary?.negative || 0} color="rose" />
-                   <MiniStat label="Nol Usage" val={uploadResult?.data?.summary?.zero || 0} color="blue" />
-                   <MiniStat label="Turun" val={uploadResult?.data?.summary?.decrease || 0} color="purple" />
-                </div>
-                <div className="bg-white rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden">
-                  <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-orange-50/20">
-                    <div className="flex items-center gap-4">
-                      <div className="bg-orange-500 p-3 rounded-2xl text-white shadow-lg shadow-orange-200"><AlertTriangle size={24}/></div>
-                      <h3 className="font-black text-2xl text-slate-800 uppercase tracking-tighter leading-none">Investigasi Temuan Lapangan</h3>
+              
+              {/* Analysis & Audit Box */}
+              <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 h-fit space-y-6">
+                 <div className="flex items-center gap-3 mb-2 px-2">
+                    <div className="p-2 bg-orange-50 text-orange-600 rounded-xl"><MessageSquare size={20}/></div>
+                    <h3 className="font-black text-lg text-slate-800">Audit Lapangan</h3>
+                 </div>
+                 
+                 <div className="space-y-3">
+                    <div className="p-5 bg-slate-50 rounded-[1.5rem] border border-slate-100">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Indikasi Sistem</div>
+                      <div className="font-bold text-slate-800 leading-snug">{selectedAnomaly.details?.anomaly_reason || 'Tidak ada data spesifik'}</div>
                     </div>
-                  </div>
-                  <div className="divide-y divide-slate-100">
-                    {uploadResult?.data?.anomalies?.length > 0 ? uploadResult.data.anomalies.map((anom, i) => (
-                      <div key={i} onClick={() => { setSelectedAnomaly(anom); fetchDetectiveData(anom.nomen); }} className="p-10 flex justify-between items-center hover:bg-blue-50/50 cursor-pointer transition-all group">
-                         <div className="flex gap-10 items-center">
-                            <div className={`p-6 rounded-[2rem] shadow-xl ${anom.status.includes('STAND NEGATIF') ? 'bg-rose-500' : 'bg-orange-500'}`}><Activity size={32} className="text-white"/></div>
-                            <div>
-                               <div className="font-black text-3xl text-slate-900 group-hover:text-blue-600 transition-colors tracking-tight">{anom.name}</div>
-                               <div className="flex items-center gap-4 mt-3">
-                                  <span className="text-sm font-bold text-slate-400 tracking-widest uppercase">{anom.nomen}</span>
-                                  {anom.status.map((s, idx) => <span key={idx} className="bg-slate-950 text-white text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-widest">{s}</span>)}
-                               </div>
-                            </div>
-                         </div>
-                         <div className="text-right">
-                            <div className={`text-4xl font-black ${anom.usage < 0 ? 'text-rose-600' : 'text-slate-900'} tracking-tighter`}>{anom.usage} m³</div>
-                         </div>
-                      </div>
-                    )) : <div className="p-32 text-center text-slate-300 font-black uppercase tracking-widest italic opacity-50">Silakan Unggah File SBRS</div>}
-                  </div>
-                </div>
-              </div>
-            )}
+                    <div className="p-5 bg-slate-50 rounded-[1.5rem] border border-slate-100">
+                       <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Skip Code</div>
+                       <div className="font-bold text-slate-800">{selectedAnomaly.details?.skip_desc || 'Normal'}</div>
+                    </div>
+                 </div>
 
-            {/* VIEW: COLLECTION ANALYTICS */}
-            {activeTab === 'collection' && (
-               <div className="space-y-10 animate-in slide-in-from-bottom-6 duration-700">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                     <div className="p-12 rounded-[4rem] bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-2xl relative overflow-hidden">
-                        <div className="text-xs font-black uppercase tracking-[0.2em] opacity-60 mb-6">Collection Undue (Dimuka)</div>
-                        <div className="text-6xl font-black tracking-tighter mb-4">Rp {collectionData?.undue?.revenue?.toFixed(1) || '0'} JT</div>
-                     </div>
-                     <div className="p-12 rounded-[4rem] bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow-2xl relative overflow-hidden">
-                        <div className="text-xs font-black uppercase tracking-[0.2em] opacity-60 mb-6">Collection Current (Lancar)</div>
-                        <div className="text-6xl font-black tracking-tighter mb-4">Rp {collectionData?.current?.revenue?.toFixed(1) || '0'} JT</div>
-                     </div>
-                  </div>
-                  <div className="bg-white rounded-[3rem] p-12 shadow-sm border border-slate-100">
-                     <h3 className="font-black text-2xl mb-10 flex items-center gap-3 tracking-tighter"><Layers className="text-blue-600" /> MONITORING PIUTANG & TUNGGAKAN</h3>
-                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        <StatusCard label="Pelanggan Tunggakan" val={paymentStatus?.with_debt?.count || 0} color="rose" sub={`Rp ${paymentStatus?.with_debt?.total?.toFixed(1) || '0'} JT`} />
-                        <StatusCard label="Berhasil Ditagih" val={paymentStatus?.paid_debt?.count || 0} color="emerald" sub={`Rp ${paymentStatus?.paid_debt?.total?.toFixed(1) || '0'} JT`} />
-                        <StatusCard label="Belum Bayar Piutang" val={paymentStatus?.unpaid_receivable?.count || 0} color="blue" sub="Nomen Tanpa Tunggakan" />
-                     </div>
-                  </div>
+                 <textarea 
+                    value={auditRemark} 
+                    onChange={e => setAuditRemark(e.target.value)}
+                    placeholder="Tulis hasil cek lapangan disini..." 
+                    className="w-full h-32 p-5 bg-white border-2 border-slate-100 rounded-[1.5rem] text-sm font-medium outline-none focus:border-blue-500 transition-all resize-none"
+                 />
+                 
+                 <button onClick={saveAudit} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all flex justify-center items-center gap-2 active:scale-95">
+                   <Save size={18}/> Simpan Laporan
+                 </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* --- MAIN TABS VIEW --- */
+          <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-700">
+            <header className="mb-8">
+              <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter mb-2">
+                {activeTab === 'upload' && 'Pusat Unggah Data'}
+                {activeTab === 'summary' && 'Summarizing Report'}
+                {activeTab === 'collection' && 'Collection & AR'}
+                {activeTab === 'meter' && 'Analisa Meter'}
+                {activeTab === 'history' && 'Pencarian Data'}
+                {activeTab === 'top' && 'Top 100 Ranking'}
+              </h2>
+              <p className="text-slate-500 font-medium text-lg">Dashboard Analitik untuk Rayon {rayonFilter}</p>
+            </header>
+
+            {/* TAB: UPLOAD CENTER */}
+            {activeTab === 'upload' && (
+               <div className="bg-white p-20 rounded-[3.5rem] border-4 border-dashed border-slate-200 text-center shadow-sm hover:border-blue-300 transition-all group">
+                 <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-8 text-blue-500 group-hover:scale-110 transition-transform">
+                    <Upload size={40}/>
+                 </div>
+                 <h3 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">Unggah File Laporan</h3>
+                 <p className="text-slate-400 mb-10 max-w-lg mx-auto leading-relaxed">
+                   Sistem mendukung format <strong>.CSV / .TXT</strong> (SBRS/Cycle) dan <strong>.XLSX</strong> (Master, Billing, Collection, Arrears).
+                 </p>
+                 <label className="inline-flex items-center gap-3 bg-blue-600 text-white px-10 py-5 rounded-2xl font-black text-lg cursor-pointer hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 active:translate-y-1">
+                   {loading ? <RefreshCw className="animate-spin"/> : <FileText/>}
+                   {loading ? 'Sedang Menganalisa...' : 'Pilih File dari Komputer'}
+                   <input type="file" className="hidden" onChange={handleUpload}/>
+                 </label>
                </div>
             )}
 
-            {/* VIEW: TOP 100 */}
-            {activeTab === 'top' && (
-              <div className="space-y-8 animate-in fade-in duration-1000 pb-20">
-                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                   <RankList title={`Top 100 Premium - R-${rayonFilter}`} type="premium" data={topPremium} loading={loading}/>
-                   <RankList title={`Top 100 Tunggakan - R-${rayonFilter}`} type="debt" data={topDebt} loading={loading}/>
+            {/* TAB: SUMMARIZING */}
+            {activeTab === 'summary' && (
+              <div className="space-y-6">
+                {/* Control Bar */}
+                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-wrap gap-6 items-center justify-between">
+                  <div className="flex flex-wrap gap-4 items-center">
+                     <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-2">Jenis Laporan</label>
+                        <select value={sumTarget} onChange={e => setSumTarget(e.target.value)} className="bg-slate-50 border-2 border-slate-100 px-5 py-3 rounded-2xl font-bold text-sm outline-none focus:border-blue-500 h-[50px] min-w-[200px]">
+                          <option value="mc">MC (Master Cetak)</option>
+                          <option value="mb">MB (Master Bayar)</option>
+                          <option value="ardebt">ARDEBT (Piutang)</option>
+                          <option value="mainbill">MAIN BILL</option>
+                          <option value="collection">COLLECTION</option>
+                        </select>
+                     </div>
+                     <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-2">Dimensi Grouping</label>
+                        <select value={sumDim} onChange={e => setSumDim(e.target.value)} className="bg-slate-50 border-2 border-slate-100 px-5 py-3 rounded-2xl font-bold text-sm outline-none focus:border-blue-500 h-[50px] min-w-[200px]">
+                          <option value="RAYON">Per RAYON</option>
+                          <option value="PC">Per PC (Kode Baca)</option>
+                          <option value="PCEZ">Per PCEZ</option>
+                          <option value="TARIF">Per TARIF</option>
+                          <option value="METER">Per METER SIZE</option>
+                        </select>
+                     </div>
+                  </div>
+                  <button onClick={fetchSummary} className="bg-slate-900 text-white px-6 py-4 rounded-2xl font-bold text-sm hover:bg-slate-700 flex items-center gap-2 h-[50px] mt-auto">
+                    <RefreshCw size={16}/> Refresh Data
+                  </button>
+                </div>
+
+                {/* Result Table */}
+                <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
+                   <table className="w-full text-left">
+                     <thead className="bg-slate-50 text-slate-500 text-[10px] font-black uppercase tracking-widest">
+                       <tr><th className="px-8 py-6">Grup {sumDim}</th><th className="px-8 py-6 text-right">Nominal (Rp)</th><th className="px-8 py-6 text-right">Volume (m³)</th><th className="px-8 py-6 text-right">Lembar</th><th className="px-8 py-6 text-right">Status</th></tr>
+                     </thead>
+                     <tbody className="divide-y divide-slate-50 text-sm font-medium text-slate-700">
+                       {summaryData.length > 0 ? summaryData.map((row, i) => (
+                         <tr key={i} className="hover:bg-slate-50">
+                           <td className="px-8 py-5 font-black text-slate-900 text-lg">{row.group}</td>
+                           <td className="px-8 py-5 text-right font-mono font-bold text-emerald-600 text-lg">{row.nominal?.toLocaleString()}</td>
+                           <td className="px-8 py-5 text-right font-mono font-bold text-blue-600">{row.volume?.toLocaleString()}</td>
+                           <td className="px-8 py-5 text-right font-mono text-slate-500">{row.count?.toLocaleString()}</td>
+                           <td className="px-8 py-5 text-right"><span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg text-xs font-bold">{row.realization_pct || '-'}%</span></td>
+                         </tr>
+                       )) : <tr><td colSpan="5" className="p-20 text-center text-slate-400 italic font-bold">Tidak ada data untuk filter ini.</td></tr>}
+                     </tbody>
+                   </table>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: COLLECTION ANALYSIS */}
+            {activeTab === 'collection' && (
+              <div className="space-y-8 animate-in slide-in-from-bottom-4">
+                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                    <StatBox label="Undue (Dimuka)" val={collectionData?.undue?.revenue} color="blue" icon={<Layers/>} sub="Pembayaran Dimuka"/>
+                    <StatBox label="Current (Lancar)" val={collectionData?.current?.revenue} color="emerald" icon={<CheckCircle/>} sub="Pembayaran Bulan Ini"/>
+                    <StatBox label="Arrears (Tunggakan)" val={collectionData?.arrears?.revenue} color="rose" icon={<AlertTriangle/>} sub="Pelunasan Tunggakan"/>
+                    <StatBox label="Total Cash Masuk" val={collectionData?.total_cash} color="indigo" icon={<Database/>} sub="Semua Penerimaan"/>
+                 </div>
+                 
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                       <h3 className="font-black text-xl mb-8 flex items-center gap-3"><Users className="text-slate-400"/> Status Pembayaran Pelanggan</h3>
+                       <div className="space-y-6">
+                          <StatusRow label="Pelanggan Bayar Undue" val={collectionData?.undue?.count} icon="🔹"/>
+                          <StatusRow label="Pelanggan Bayar Current" val={collectionData?.current?.count} icon="✅"/>
+                          <StatusRow label="Pelanggan Bayar Tunggakan" val={collectionData?.paid_arrears?.count} icon="💰"/>
+                          <div className="border-t-2 border-dashed border-slate-100 my-4"></div>
+                          <StatusRow label="Masih Menunggak (Ada Piutang)" val={collectionData?.outstanding_arrears?.count} highlight="red"/>
+                          <StatusRow label="Belum Bayar Piutang (Tanpa Tunggakan)" val={collectionData?.unpaid_receivable_no_arrears?.count} highlight="orange" sub="Nomen Lancar tapi belum bayar bulan ini"/>
+                       </div>
+                    </div>
                  </div>
               </div>
             )}
-          </div>
-        ) : (
-          /* --- DETECTIVE MODE DETAIL --- */
-          <div className="max-w-7xl mx-auto space-y-8 animate-in slide-in-from-bottom-12 duration-700 pb-32">
-            <header className="flex flex-wrap items-center justify-between bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm gap-6">
-              <div className="flex items-center gap-6">
-                <button onClick={() => setSelectedAnomaly(null)} className="p-5 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-all text-slate-400 hover:text-slate-900 border border-slate-100"><ArrowLeft size={28} /></button>
-                <div>
-                  <h2 className="text-4xl font-black text-slate-900 leading-none tracking-tighter">{selectedAnomaly.name}</h2>
-                  <div className="flex items-center gap-6 mt-3">
-                    <span className="text-sm font-black text-slate-400 uppercase tracking-widest">Detective Analytics #{selectedAnomaly.nomen}</span>
-                    <span className="w-1.5 h-1.5 bg-slate-300 rounded-full"></span>
-                    <div className="flex gap-2">{selectedAnomaly.status.map((s, idx) => <span key={idx} className="px-3 py-1 bg-rose-100 text-rose-700 rounded-lg text-[10px] font-black uppercase tracking-widest">{s}</span>)}</div>
-                  </div>
-                </div>
-              </div>
-            </header>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-              <div className="lg:col-span-8 space-y-8">
-                <div className="bg-white rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden">
-                  <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-blue-50/20">
-                    <h3 className="font-black text-slate-800 flex items-center gap-4 uppercase tracking-widest text-sm"><History size={22} className="text-blue-600" /> Riwayat 12 Periode</h3>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead className="bg-slate-50 text-slate-400 text-[9px] uppercase tracking-[0.3em] font-black">
-                         <tr><th className="px-8 py-6">Tgl</th><th className="px-8 py-6 text-center">Prev</th><th className="px-8 py-6 text-center">Curr</th><th className="px-8 py-6 text-center">Vol</th><th className="px-8 py-6">Code</th></tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-600">
-                        {detectiveHistory?.reading_history?.length > 0 ? detectiveHistory.reading_history.map((h, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50"><td className="px-8 py-6 text-slate-900">{h.cmr_rd_date}</td><td className="px-8 py-6 text-center font-mono">{h.cmr_prev_read}</td><td className="px-8 py-6 text-center font-mono text-slate-900">{h.cmr_reading}</td><td className="px-8 py-6 text-center text-blue-600">{h.cmr_reading - h.cmr_prev_read}</td><td className="px-8 py-6 text-orange-500">{h.cmr_skip_code || '-'}</td></tr>
-                        )) : <tr><td colSpan="5" className="p-10 text-center text-slate-400 italic">No history.</td></tr>}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                   <DetailBox title="Info Pelanggan" icon={<User/>} val={detectiveHistory?.customer?.NAMA || 'Mencari...'} sub={`Tarif: ${detectiveHistory?.customer?.TARIFF || '-'} | Rayon: ${detectiveHistory?.customer?.RAYON || '-'}`} />
-                   <DetailBox title="Analisa Sistem" icon={<AlertTriangle/>} val={selectedAnomaly?.details?.anomaly_reason || 'Lonjakan Terdeteksi'} sub={`Skip: ${selectedAnomaly?.details?.skip_desc || '-'}`} />
-                </div>
-              </div>
+            {/* TAB: METER ANALYSIS */}
+            {activeTab === 'meter' && (
+               <div className="space-y-6">
+                 {/* Summary Cards */}
+                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <AnomalyCard label="Pemakaian Ekstrim" val={uploadRes?.data?.summary?.extreme} color="orange" desc="Lonjakan Signifikan"/>
+                    <AnomalyCard label="Stand Negatif" val={uploadRes?.data?.summary?.negative} color="rose" desc="Angka Mundur"/>
+                    <AnomalyCard label="Pemakaian Zero" val={uploadRes?.data?.summary?.zero} color="blue" desc="Tidak Ada Pemakaian"/>
+                    <AnomalyCard label="Estimasi / Kode Salah" val={uploadRes?.data?.summary?.estimate} color="purple" desc="Perlu Cek Ulang"/>
+                 </div>
 
-              <div className="lg:col-span-4 flex flex-col gap-8">
-                <div className="bg-white p-10 rounded-[4rem] border-[10px] border-blue-500 shadow-2xl flex flex-col h-full ring-2 ring-blue-100 relative overflow-hidden">
-                   <h3 className="font-black text-3xl flex items-center gap-3 text-slate-900 tracking-tighter leading-none uppercase mb-10"><MessageSquare className="text-blue-600" size={32} /> Audit Lapangan</h3>
-                   <div className="mb-10 space-y-4">
-                       <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest pl-2">Status Investigasi:</p>
-                       <div className="flex flex-wrap gap-2.5">
-                          {['VALID', 'FRAUD', 'RE-CHECK', 'RE-READ'].map(s => <button key={s} onClick={() => setAuditStatus(s)} className={`px-5 py-3 rounded-2xl text-[10px] font-black transition-all border-2 ${auditStatus === s ? 'bg-slate-900 border-slate-900 text-white' : 'bg-slate-50 border-slate-50 text-slate-400'}`}>{s}</button>)}
-                       </div>
+                 {/* List */}
+                 <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
+                    <div className="divide-y divide-slate-100">
+                       {uploadRes?.data?.anomalies?.map((anom, i) => (
+                         <div key={i} onClick={() => { setSelectedAnomaly(anom); fetchDetective(anom.nomen); }} className="p-8 hover:bg-slate-50 cursor-pointer flex justify-between items-center group transition-all">
+                            <div className="flex gap-6 items-center">
+                               <div className="bg-slate-100 p-4 rounded-2xl text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm"><Activity size={24}/></div>
+                               <div>
+                                  <div className="font-black text-xl text-slate-900 group-hover:text-blue-600 transition-colors">{anom.name}</div>
+                                  <div className="flex flex-wrap gap-2 text-[10px] font-black uppercase mt-2">
+                                     <span className="bg-slate-100 px-3 py-1 rounded-lg text-slate-500 tracking-widest">{anom.nomen}</span>
+                                     {anom.status.map(s => <span key={s} className="bg-rose-50 text-rose-600 px-3 py-1 rounded-lg border border-rose-100">{s}</span>)}
+                                  </div>
+                               </div>
+                            </div>
+                            <div className="text-right">
+                               <div className={`font-black text-3xl tracking-tighter ${anom.usage < 0 ? 'text-rose-600' : 'text-slate-900'}`}>{anom.usage} m³</div>
+                               <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Volume Air</div>
+                            </div>
+                         </div>
+                       ))}
+                       {(!uploadRes?.data?.anomalies || uploadRes.data.anomalies.length === 0) && (
+                         <div className="p-20 text-center text-slate-400 italic font-bold">Tidak ada anomali atau belum upload file SBRS.</div>
+                       )}
                     </div>
-                    <textarea value={auditRemark} onChange={(e) => setAuditRemark(e.target.value)} placeholder="Catatan audit..." className="w-full h-80 p-8 bg-slate-50 border-2 border-slate-50 rounded-[3rem] outline-none focus:ring-[12px] focus:ring-blue-500/10 font-medium text-slate-700 text-lg shadow-inner" />
-                    <button onClick={saveAuditResult} className="mt-6 w-full bg-blue-600 text-white py-8 rounded-[2.5rem] font-black text-xl shadow-2xl flex items-center justify-center gap-4 hover:bg-blue-700 transition-all uppercase tracking-widest"><Save size={28}/> Simpan Audit</button>
-                </div>
+                 </div>
+               </div>
+            )}
+
+            {/* TAB: HISTORY SEARCH */}
+            {activeTab === 'history' && (
+              <div className="space-y-8">
+                 <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col md:flex-row gap-6 items-end">
+                    <div className="flex-1 space-y-2 w-full">
+                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2">Kata Kunci Pencarian</label>
+                       <input value={historyValue} onChange={e => setHistoryValue(e.target.value)} type="text" placeholder="Masukkan Nomen, Rayon, atau Kode PC..." className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-bold outline-none focus:border-blue-500 transition-all text-lg"/>
+                    </div>
+                    <div className="space-y-2 w-full md:w-auto">
+                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2">Filter Berdasarkan</label>
+                       <select value={historyFilterBy} onChange={e => setHistoryFilterBy(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-bold outline-none h-[64px]">
+                          <option value="CUSTOMER">ID Pelanggan (Nomen)</option>
+                          <option value="RAYON">Kode Rayon</option>
+                          <option value="PC">Kode PC</option>
+                          <option value="PCEZ">Kode PCEZ</option>
+                          <option value="TARIF">Golongan Tarif</option>
+                          <option value="METER">Ukuran Meter</option>
+                       </select>
+                    </div>
+                    <div className="space-y-2 w-full md:w-auto">
+                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-2">Tipe Data</label>
+                       <select value={historyType} onChange={e => setHistoryType(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-bold outline-none h-[64px]">
+                          <option value="usage">History Kubikasi</option>
+                          <option value="payment">History Pembayaran</option>
+                       </select>
+                    </div>
+                    <button onClick={fetchHistory} className="bg-blue-600 text-white h-[64px] px-8 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 w-full md:w-auto">
+                       <Search size={24}/>
+                    </button>
+                 </div>
+
+                 {historyData.length > 0 && (
+                   <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden p-10">
+                      <h3 className="font-black text-xl mb-8 flex items-center gap-2">
+                        <span className="bg-blue-100 text-blue-600 px-3 py-1 rounded-lg text-sm">Hasil: {historyData.length} Data</span>
+                        <span className="text-slate-400 font-medium text-sm">untuk "{historyValue}"</span>
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                         {historyData.map((item, i) => (
+                           <div key={i} className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 hover:bg-white hover:shadow-lg transition-all">
+                              <div className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-widest">{item.period || item.date}</div>
+                              <div className="text-3xl font-black text-slate-800 mb-2 tracking-tight">
+                                {item.value?.toLocaleString()} <span className="text-sm text-slate-400 font-medium">{historyType==='usage' ? 'm³' : 'IDR'}</span>
+                              </div>
+                              <div className="text-xs font-bold bg-white inline-block px-3 py-1 rounded-lg border border-slate-100 text-slate-500">{item.desc || item.keterangan || 'Data Tercatat'}</div>
+                           </div>
+                         ))}
+                      </div>
+                   </div>
+                 )}
               </div>
-            </div>
+            )}
+
+            {/* TAB: TOP 100 */}
+            {activeTab === 'top' && (
+               <div className="space-y-6">
+                  {/* Category Tabs */}
+                  <div className="flex flex-wrap gap-3 pb-2">
+                     {[
+                       {id:'premium', l:'🏆 Premium (Tepat Waktu)'}, 
+                       {id:'debt', l:'⚠️ Top Tunggakan'}, 
+                       {id:'unpaid_current', l:'🕒 Belum Bayar Current'}, 
+                       {id:'unpaid_debt', l:'🛑 Belum Bayar Tunggakan'}
+                     ].map(opt => (
+                       <button key={opt.id} onClick={() => setTopCategory(opt.id)} className={`px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-wide transition-all ${topCategory===opt.id ? 'bg-slate-900 text-white shadow-lg' : 'bg-white border border-slate-200 text-slate-400 hover:bg-slate-50'}`}>
+                         {opt.l}
+                       </button>
+                     ))}
+                  </div>
+
+                  <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
+                     <table className="w-full text-left">
+                       <thead className="bg-slate-50 text-slate-500 text-[10px] font-black uppercase tracking-widest">
+                         <tr><th className="px-8 py-6">Rank</th><th className="px-8 py-6">Pelanggan</th><th className="px-8 py-6 text-right">Total Nilai</th><th className="px-8 py-6 text-right">Info Tambahan</th></tr>
+                       </thead>
+                       <tbody className="divide-y divide-slate-50 text-sm font-medium text-slate-700">
+                         {topData.map((row, i) => (
+                           <tr key={i} className="hover:bg-slate-50">
+                             <td className="px-8 py-5 font-black text-slate-300 italic text-xl">#{i+1}</td>
+                             <td className="px-8 py-5">
+                                <div className="font-black text-slate-900 text-lg">{row.name || row.NAMA}</div>
+                                <div className="text-[10px] font-mono font-bold text-slate-400 mt-1 bg-slate-100 inline-block px-2 py-0.5 rounded">{row.nomen || row.NOMEN}</div>
+                             </td>
+                             <td className="px-8 py-5 text-right font-mono font-bold text-blue-600 text-lg">
+                               Rp {(row.total_paid || row.debt_amount || row.outstanding || 0).toLocaleString()}
+                             </td>
+                             <td className="px-8 py-5 text-right text-xs font-bold text-slate-500">
+                               {row.UMUR_TUNGGAKAN ? <span className="text-rose-500">{row.UMUR_TUNGGAKAN} Bulan</span> : '-'}
+                             </td>
+                           </tr>
+                         ))}
+                       </tbody>
+                     </table>
+                     {topData.length === 0 && <div className="p-20 text-center text-slate-400 italic font-bold">Tidak ada data untuk kategori ini.</div>}
+                  </div>
+               </div>
+            )}
+            
           </div>
         )}
       </main>
@@ -496,49 +566,47 @@ const App = () => {
   );
 };
 
-// --- HELPER COMPONENTS ---
-const HeroStat = ({ title, val, icon, color }) => {
-  const cMap = { blue: 'from-blue-600 to-indigo-700', emerald: 'from-emerald-600 to-teal-700', rose: 'from-rose-600 to-pink-700', indigo: 'from-indigo-600 to-purple-700' };
+// --- SUB COMPONENTS ---
+
+const StatBox = ({ label, val, color, icon, sub }) => {
+  const colors = { blue: 'text-blue-600 bg-blue-50 border-blue-100', emerald: 'text-emerald-600 bg-emerald-50 border-emerald-100', rose: 'text-rose-600 bg-rose-50 border-rose-100', indigo: 'text-indigo-600 bg-indigo-50 border-indigo-100' };
   return (
-    <div className={`p-8 rounded-[2.5rem] bg-gradient-to-br ${cMap[color]} text-white shadow-2xl hover:scale-[1.02] transition-all`}>
-        <div className="flex justify-between items-start mb-6"><div className="bg-white/20 p-3 rounded-2xl backdrop-blur-md">{icon}</div><TrendingUp size={16} className="opacity-40" /></div>
-        <div className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60 mb-2">{title}</div>
-        <div className="text-3xl font-black tracking-tighter leading-none">{val}</div>
-    </div>
-  );
-};
-
-const TableRow = ({ label, val, vol, count, pct }) => (
-  <tr className="hover:bg-slate-50/80 transition-colors group"><td className="px-10 py-6 font-black text-slate-800 text-lg tracking-tighter">{label}</td><td className="px-10 py-6 text-right font-mono font-bold text-slate-600">{val}M</td><td className="px-10 py-6 text-right font-mono font-bold text-blue-600">{vol}</td><td className="px-10 py-6 text-right font-mono font-bold text-slate-500">{count}</td><td className="px-10 py-6 text-right"><span className="bg-emerald-100 text-emerald-700 px-4 py-1.5 rounded-full text-[10px] font-black">{pct}</span></td></tr>
-);
-
-const MiniStat = ({ label, val, color }) => {
-  const cMap = { orange: 'bg-orange-50 text-orange-600 border-orange-100', rose: 'bg-rose-50 text-rose-600 border-rose-100', blue: 'bg-blue-50 text-blue-600 border-blue-100', purple: 'bg-purple-50 text-purple-600 border-purple-100' };
-  return (<div className={`p-8 rounded-3xl border-2 ${cMap[color]} text-center shadow-sm`}><div className="text-4xl font-black mb-2 tracking-tighter">{val}</div><div className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70">{label}</div></div>);
-};
-
-const StatusCard = ({ label, val, color, sub }) => {
-  const cMap = { rose: 'text-rose-600', emerald: 'text-emerald-600', blue: 'text-blue-600' };
-  return (<div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 text-center shadow-inner group hover:bg-white hover:shadow-xl transition-all"><div className={`text-5xl font-black mb-3 tracking-tighter ${cMap[color]}`}>{val?.toLocaleString() || 0}</div><div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">{label}</div>{sub && <p className="text-[9px] font-bold text-slate-300 uppercase italic tracking-tighter">{sub}</p>}</div>);
-};
-
-const DetailBox = ({ title, icon, val, sub }) => (
-  <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-start gap-6 group hover:shadow-md transition-all"><div className="bg-blue-50 p-5 rounded-3xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">{icon}</div><div className="flex-1 min-w-0"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{title}</p><p className="text-2xl font-black text-slate-900 tracking-tighter truncate">{val}</p><p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-tighter">{sub}</p></div></div>
-);
-
-const RankList = ({ title, type, data, loading }) => {
-  const getColorClass = (type) => type === 'premium' ? 'bg-emerald-50 text-emerald-900' : type === 'debt' ? 'bg-rose-50 text-rose-900' : 'bg-blue-50 text-blue-900';
-  const getValue = (item, type) => type === 'premium' ? `Rp ${item.total_paid || 0} JT` : `Rp ${item.debt_amount || item.outstanding || 0} JT`;
-  return (
-    <div className="bg-white rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden flex flex-col h-full">
-      <div className={`p-10 flex justify-between items-center ${getColorClass(type)}`}><h3 className="font-black text-xl uppercase tracking-tighter leading-none">{title}</h3></div>
-      <div className="divide-y divide-slate-50 p-4 max-h-[600px] overflow-y-auto">
-        {loading ? <div className="p-10 text-center"><RefreshCw className="animate-spin mx-auto text-slate-200" /></div> : data && data.length > 0 ? data.map((item, i) => (
-            <div key={i} className="p-6 flex items-center justify-between hover:bg-slate-50 rounded-2xl transition-all group/item"><div className="flex items-center gap-6"><span className="text-3xl font-black text-slate-100 italic group-hover/item:text-blue-200 transition-colors">#{i+1}</span><div><div className="font-black text-lg text-slate-900 leading-none">{item.name || item.NAMA || `PELANGGAN ${i+1}`}</div></div></div><div className="text-lg font-black tracking-tighter uppercase">{getValue(item, type)}</div></div>
-          )) : <div className="p-10 text-center text-slate-300 font-bold italic">Tidak ada data</div>}
+    <div className={`p-8 rounded-[2.5rem] border shadow-sm bg-white ${colors[color].split(' ')[2]}`}>
+      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-6 ${colors[color]} shadow-sm`}>{icon}</div>
+      <div className="text-4xl font-black tracking-tighter mb-2 text-slate-900">
+        {typeof val === 'number' ? (val/1000000).toFixed(1) + 'M' : '0'}
       </div>
+      <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">{label}</div>
+      <div className="text-[9px] font-bold text-slate-300 uppercase">{sub}</div>
     </div>
   );
-};
+}
+
+const StatusRow = ({ label, val, highlight, icon, sub }) => (
+  <div className="flex justify-between items-start py-3 group">
+    <div className="flex items-center gap-3">
+       {icon && <span className="text-lg">{icon}</span>}
+       <div>
+         <div className={`text-sm font-bold ${highlight ? (highlight==='red'?'text-rose-600':'text-orange-500') : 'text-slate-600'}`}>{label}</div>
+         {sub && <div className="text-[9px] font-bold text-slate-300 uppercase mt-0.5">{sub}</div>}
+       </div>
+    </div>
+    <span className="font-mono font-black text-slate-900 bg-slate-50 px-3 py-1 rounded-lg group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">{val ? val.toLocaleString() : 0}</span>
+  </div>
+);
+
+const AnomalyCard = ({ label, val, color, desc }) => {
+   const colors = { orange: 'bg-orange-50 text-orange-600 border-orange-100', rose: 'bg-rose-50 text-rose-600 border-rose-100', blue: 'bg-blue-50 text-blue-600 border-blue-100', purple: 'bg-purple-50 text-purple-600 border-purple-100' };
+   return (
+     <div className={`p-6 rounded-[2rem] border ${colors[color]} flex flex-col justify-between h-32 relative overflow-hidden`}>
+        <div className="relative z-10">
+           <div className="text-4xl font-black mb-1">{val || 0}</div>
+           <div className="text-[10px] font-black uppercase tracking-widest opacity-80">{label}</div>
+        </div>
+        <div className="text-[9px] font-bold uppercase opacity-60 mt-auto">{desc}</div>
+        <Activity className="absolute -right-2 -bottom-2 opacity-10 w-20 h-20"/>
+     </div>
+   )
+}
 
 export default App;
