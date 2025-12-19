@@ -376,7 +376,7 @@ const App = () => {
               <button onClick={()=>setSelAnom(null)} className="mb-6 flex gap-2 font-bold text-slate-400 hover:text-blue-600"><ArrowLeft/> Back</button>
               <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 mb-6 flex justify-between">
                  <div><h2 className="text-3xl font-black">{selAnom.name}</h2><div className="mt-2 bg-slate-100 px-3 py-1 rounded inline-block font-mono text-sm">{selAnom.nomen}</div></div>
-                 <div className="text-right"><div className="text-4xl font-black text-blue-600">{selAnom.usage} m³</div><div className="text-xs font-bold text-slate-400 uppercase">Usage</div></div>
+                 <div className="text-right"><div className="text-4xl font-black text-blue-600">{selAnom.usage} m3</div><div className="text-xs font-bold text-slate-400 uppercase">Usage</div></div>
               </div>
               <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
                  <h3 className="font-bold mb-4 flex gap-2"><History/> History</h3>
@@ -471,15 +471,15 @@ cat > index.html <<EOF
 EOF
 
 # 5. INSTALL & RUN
-echo "📦 [5/7] MENGINSTALL DEPENDENCIES..."
+echo "📦 [6/7] INSTALL DEPENDENCIES..."
 pip3 install -r requirements.txt > /dev/null 2>&1
 npm install > /dev/null 2>&1
 
-echo "🚀 [6/7] MENJALANKAN SERVER..."
+echo "🚀 [7/7] START SERVICES..."
 nohup python3 app.py > backend.log 2>&1 &
 nohup npm run dev > frontend.log 2>&1 &
 
-echo "=========================================="
-echo "✅ DEPLOY SUKSES!"
+echo "==================================="
+echo "✅ INSTALASI SELESAI!"
 echo "👉 Dashboard: http://174.138.16.241:5173"
-echo "=========================================="
+echo "==================================="
