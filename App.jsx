@@ -7,17 +7,18 @@ import {
   CheckCircle, History, MapPin, User, MessageSquare
 } from 'lucide-react';
 
+// Configuration: Adjust this to your VPS IP if deploying remotely
 const API_BASE_URL = 'http://localhost:5000/api';
 
 const App = () => {
-  // --- STATE UTAMA ---
+  // --- STATE MANAGEMENT ---
   const [activeTab, setActiveTab] = useState('upload');
   const [loading, setLoading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
   const [selectedAnomaly, setSelectedAnomaly] = useState(null);
   const [detectiveHistory, setDetectiveHistory] = useState(null);
 
-  // --- FILTER & DATA ---
+  // --- FILTERS & DATA ---
   const [rayonFilter, setRayonFilter] = useState('34');
   const [summarizingDim, setSummarizingDim] = useState('RAYON');
   const [summaryData, setSummaryData] = useState([]);
@@ -31,7 +32,7 @@ const App = () => {
   const [auditRemark, setAuditRemark] = useState('');
   const [auditStatus, setAuditStatus] = useState('RE-CHECK');
 
-  // --- FUNGSI API ---
+  // --- API SERVICE FUNCTIONS ---
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -51,7 +52,7 @@ const App = () => {
       if (result.status === 'success') {
         setUploadResult(result);
         
-        // Otomatis pindah tab berdasarkan jenis file
+        // Auto-navigate based on detected file type
         if (result.type === 'METER_READING') {
           setActiveTab('meter');
         } else if (result.type === 'BILLING_SUMMARY') {
@@ -167,7 +168,7 @@ const App = () => {
     }
   };
 
-  // --- EFFECTS ---
+  // --- TRIGGER DATA ON STATE CHANGE ---
   useEffect(() => {
     if (activeTab === 'summary') {
       fetchSummaryData();
@@ -178,7 +179,7 @@ const App = () => {
     }
   }, [activeTab, summarizingDim, summaryTarget, rayonFilter]);
 
-  // --- KOMPONEN UI ---
+  // --- SHARED UI COMPONENTS ---
 
   const SidebarItem = ({ id, icon, label }) => (
     <button 
@@ -214,8 +215,8 @@ const App = () => {
         </nav>
 
         <div className="mt-auto bg-slate-900/50 p-5 rounded-[2rem] border border-white/5">
-           <p className="text-[10px] font-black text-slate-500 uppercase mb-3 tracking-widest text-center">Rayon Monitoring</p>
-           <div className="flex gap-2">
+            <p className="text-[10px] font-black text-slate-500 uppercase mb-3 tracking-widest text-center">Rayon Monitoring</p>
+            <div className="flex gap-2">
               <button 
                 onClick={() => setRayonFilter('34')} 
                 className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${rayonFilter === '34' ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-slate-800'}`}
@@ -228,7 +229,7 @@ const App = () => {
               >
                 R-35
               </button>
-           </div>
+            </div>
         </div>
       </aside>
 
@@ -275,30 +276,28 @@ const App = () => {
             {activeTab === 'summary' && (
               <div className="space-y-8 animate-in slide-in-from-bottom-6 duration-700">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                   <HeroStat title="MC (Master Cetak)" val={uploadResult?.data?.total_nominal ? `Rp ${(uploadResult.data.total_nominal/1000000).toFixed(1)} M` : 'Rp 0'} icon={<FileText/>} color="blue" />
-                   <HeroStat title="Total Volume" val={uploadResult?.data?.total_volume ? `${uploadResult.data.total_volume.toFixed(0)} m³` : '0 m³'} icon={<Droplets/>} color="emerald" />
-                   <HeroStat title="Total Records" val={uploadResult?.data?.total_records || 0} icon={<Database/>} color="rose" />
+                   <HeroStat title="Revenue Impact" val={uploadResult?.data?.total_nominal ? `Rp ${(uploadResult.data.total_nominal/1000000).toFixed(1)} M` : 'Rp 0'} icon={<FileText/>} color="blue" />
+                   <HeroStat title="Total Volume" val={uploadResult?.data?.total_volume ? `${uploadResult.data.total_volume.toLocaleString()} m³` : '0 m³'} icon={<Droplets/>} color="emerald" />
+                   <HeroStat title="Total Records" val={uploadResult?.data?.total_records?.toLocaleString() || 0} icon={<Database/>} color="rose" />
                    <HeroStat title="Active Rayon" val={`R-${rayonFilter}`} icon={<TrendingUp/>} color="indigo" />
                 </div>
 
                 <div className="bg-white rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden">
-                  <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">
+                  <div className="p-10 border-b border-slate-50 flex flex-wrap gap-6 justify-between items-center bg-slate-50/30">
                     <h3 className="font-black text-xl text-slate-800 uppercase tracking-widest">Tabel Ringkasan Multidimensi</h3>
-                    <div className="flex gap-4">
-                      {/* Target Selector */}
+                    <div className="flex flex-wrap gap-4">
                       <select 
                         value={summaryTarget}
                         onChange={(e) => setSummaryTarget(e.target.value)}
-                        className="px-4 py-2 rounded-xl border-2 border-slate-200 font-bold text-sm"
+                        className="px-4 py-2 rounded-xl border-2 border-slate-200 font-bold text-sm bg-white outline-none focus:border-blue-500 transition-all"
                       >
                         <option value="mc">MC (Master Cetak)</option>
                         <option value="mb">MB (Master Bayar)</option>
-                        <option value="ardebt">ARDEBT</option>
+                        <option value="ardebt">ARDEBT (Piutang)</option>
                         <option value="mainbill">Main Bill</option>
-                        <option value="coll">Collection</option>
+                        <option value="coll">Collection (Harian)</option>
                       </select>
                       
-                      {/* Dimension Selector */}
                       <div className="flex bg-white rounded-2xl p-1.5 border border-slate-200 shadow-sm ring-1 ring-slate-100">
                         {['RAYON', 'PC', 'PCEZ', 'TARIF', 'METER'].map(d => (
                           <button 
@@ -321,25 +320,25 @@ const App = () => {
                           <th className="px-10 py-6 text-right">Volume (m³)</th>
                           <th className="px-10 py-6 text-right">Count</th>
                           <th className="px-10 py-6 text-right">Realisasi %</th>
-                          <th className="px-10 py-6 text-center">Status</th>
+                          <th className="px-10 py-6 text-center">Aksi</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {loading ? (
-                          <tr><td colSpan="6" className="p-10 text-center text-slate-400 italic">Loading...</td></tr>
+                          <tr><td colSpan="6" className="p-20 text-center"><RefreshCw size={40} className="animate-spin mx-auto text-blue-200 mb-4" /><span className="text-slate-400 font-bold italic">Loading data...</span></td></tr>
                         ) : summaryData.length > 0 ? (
                           summaryData.map((row, idx) => (
                             <TableRow 
                               key={idx}
                               label={row.group}
                               val={row.nominal.toFixed(2)}
-                              vol={row.volume.toFixed(0)}
+                              vol={row.volume.toLocaleString()}
                               count={row.count}
                               pct={`${row.realization_pct}%`}
                             />
                           ))
                         ) : (
-                          <tr><td colSpan="6" className="p-10 text-center text-slate-400 italic">Tidak ada data. Silakan upload file terlebih dahulu.</td></tr>
+                          <tr><td colSpan="6" className="p-20 text-center text-slate-400 italic font-bold">Tidak ada data. Silakan upload file Master terlebih dahulu.</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -348,7 +347,7 @@ const App = () => {
               </div>
             )}
 
-            {/* VIEW: METER ANALYSIS (HASIL DETEKSI ANOMALI) */}
+            {/* VIEW: METER ANALYSIS */}
             {activeTab === 'meter' && (
               <div className="space-y-8 animate-in slide-in-from-bottom-6 duration-700">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -374,7 +373,7 @@ const App = () => {
                         <div 
                           key={i} 
                           onClick={() => { setSelectedAnomaly(anom); fetchDetectiveData(anom.nomen); }}
-                          className="p-10 flex justify-between items-center hover:bg-blue-50/50 cursor-pointer transition-all group relative overflow-hidden"
+                          className="p-10 flex flex-wrap justify-between items-center hover:bg-blue-50/50 cursor-pointer transition-all group relative overflow-hidden"
                         >
                           <div className="flex gap-10 items-center relative z-10">
                             <div className={`p-6 rounded-[2rem] shadow-xl ${anom.status.includes('STAND NEGATIF') ? 'bg-rose-500 shadow-rose-100' : 'bg-orange-500 shadow-orange-100'}`}>
@@ -385,8 +384,8 @@ const App = () => {
                               <div className="flex items-center gap-4 mt-3">
                                  <span className="text-sm font-bold text-slate-400 tracking-widest uppercase">Nomen: {anom.nomen}</span>
                                  <span className="w-1.5 h-1.5 bg-slate-200 rounded-full"></span>
-                                 <div className="flex gap-2">
-                                    {anom.status.slice(0, 3).map((s, idx) => (
+                                 <div className="flex flex-wrap gap-2">
+                                    {anom.status.map((s, idx) => (
                                       <span key={idx} className="bg-slate-950 text-white text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-widest border border-white/20">
                                         {s}
                                       </span>
@@ -395,25 +394,24 @@ const App = () => {
                               </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-12 relative z-10">
+                          <div className="flex items-center gap-12 relative z-10 mt-6 md:mt-0">
                             <div className="text-right">
                               <div className={`text-4xl font-black ${anom.usage < 0 ? 'text-rose-600' : 'text-slate-900'} tracking-tighter`}>
                                 {anom.usage} m³
                               </div>
-                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-2 leading-none">Delta Bacaan</div>
+                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-2 leading-none">Pemakaian</div>
                             </div>
                             <div className="p-4 bg-white rounded-2xl shadow-sm border border-slate-100 group-hover:bg-blue-600 group-hover:text-white transition-all">
                                <ChevronRight size={24} />
                             </div>
                           </div>
-                          <div className="absolute right-0 top-0 h-full w-1 bg-transparent group-hover:bg-blue-600 transition-all"></div>
                         </div>
                       ))
                     ) : (
                        <div className="p-32 text-center text-slate-300 font-black uppercase tracking-widest italic opacity-50">
-                          {uploadResult && uploadResult.type !== 'METER_READING' ? 
-                            'Silakan Unggah File SBRS Untuk Melihat Anomali' :
-                            'Tidak ada anomali terdeteksi'}
+                         {uploadResult && uploadResult.type !== 'METER_READING' ? 
+                           'Silakan Unggah File SBRS Untuk Melihat Anomali' : 
+                           'Tidak ada anomali terdeteksi'}
                        </div>
                     )}
                   </div>
@@ -436,7 +434,7 @@ const App = () => {
                         <CreditCard size={200} className="absolute -right-20 -bottom-20 opacity-10 -rotate-12 group-hover:scale-110 transition-transform" />
                      </div>
                      <div className="p-12 rounded-[4rem] bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow-2xl shadow-emerald-200 relative overflow-hidden group">
-                        <div className="text-xs font-black uppercase tracking-[0.2em] opacity-60 mb-6">Collection Current (Tepat Waktu)</div>
+                        <div className="text-xs font-black uppercase tracking-[0.2em] opacity-60 mb-6">Collection Current (Lancar)</div>
                         <div className="text-6xl font-black tracking-tighter mb-4 leading-none">
                           Rp {collectionData?.current?.revenue?.toFixed(1) || '0'} JT
                         </div>
@@ -449,7 +447,7 @@ const App = () => {
 
                   <div className="bg-white rounded-[3rem] p-12 shadow-sm border border-slate-100">
                      <h3 className="font-black text-2xl mb-10 flex items-center gap-3 tracking-tighter">
-                        <Layers className="text-blue-600" /> STATUS PIUTANG & TUNGGAKAN
+                        <Layers className="text-blue-600" /> MONITORING PIUTANG & TUNGGAKAN
                      </h3>
                      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                         <StatusCard 
@@ -459,7 +457,7 @@ const App = () => {
                           sub={`Total: Rp ${paymentStatus?.with_debt?.total?.toFixed(1) || '0'} JT`}
                         />
                         <StatusCard 
-                          label="Sudah Bayar Tunggakan" 
+                          label="Berhasil Ditagih (Debt)" 
                           val={paymentStatus?.paid_debt?.count || 0} 
                           color="emerald"
                           sub={`Total: Rp ${paymentStatus?.paid_debt?.total?.toFixed(1) || '0'} JT`}
@@ -477,7 +475,7 @@ const App = () => {
 
             {/* VIEW: TOP 100 RANKINGS */}
             {activeTab === 'top' && (
-              <div className="space-y-8 animate-in fade-in duration-1000">
+              <div className="space-y-8 animate-in fade-in duration-1000 pb-20">
                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                    <RankList 
                      title={`Top 100 Premium - R-${rayonFilter}`} 
@@ -495,13 +493,13 @@ const App = () => {
                  
                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                    <RankList 
-                     title={`Top 100 Belum Bayar Current - R-${rayonFilter}`} 
+                     title={`Top 100 Unpaid Current - R-${rayonFilter}`} 
                      type="unpaid-current" 
                      data={topUnpaidCurrent}
                      loading={loading}
                    />
                    <RankList 
-                     title={`Top 100 Belum Bayar Tunggakan - R-${rayonFilter}`} 
+                     title={`Top 100 Unpaid Debt - R-${rayonFilter}`} 
                      type="unpaid-debt" 
                      data={topUnpaidDebt}
                      loading={loading}
@@ -511,9 +509,9 @@ const App = () => {
             )}
           </div>
         ) : (
-          /* --- DETECTIVE MODE: INVESTIGASI DETAIL & AUDIT MANUAL --- */
+          /* --- DETECTIVE MODE DETAIL --- */
           <div className="max-w-7xl mx-auto space-y-8 animate-in slide-in-from-bottom-12 duration-700 pb-32">
-            <header className="flex items-center justify-between bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+            <header className="flex flex-wrap items-center justify-between bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm gap-6">
               <div className="flex items-center gap-6">
                 <button onClick={() => setSelectedAnomaly(null)} className="p-5 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-all text-slate-400 hover:text-slate-900 border border-slate-100">
                   <ArrowLeft size={28} />
@@ -523,7 +521,7 @@ const App = () => {
                   <div className="flex items-center gap-6 mt-3">
                     <span className="text-sm font-black text-slate-400 uppercase tracking-widest">Detective Analytics #{selectedAnomaly.nomen}</span>
                     <span className="w-1.5 h-1.5 bg-slate-300 rounded-full"></span>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                        {selectedAnomaly.status.map((s, idx) => (
                          <span key={idx} className="px-3 py-1 bg-rose-100 text-rose-700 rounded-lg text-[10px] font-black uppercase tracking-widest border border-rose-200">
                            {s}
@@ -536,8 +534,8 @@ const App = () => {
             </header>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-              {/* TABEL RIWAYAT 12 PERIODE */}
               <div className="lg:col-span-8 space-y-8">
+                {/* READING HISTORY TABLE */}
                 <div className="bg-white rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden">
                   <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-blue-50/20">
                     <h3 className="font-black text-slate-800 flex items-center gap-4 uppercase tracking-widest text-sm">
@@ -549,11 +547,11 @@ const App = () => {
                       <thead className="bg-slate-50 text-slate-400 text-[9px] uppercase tracking-[0.3em] font-black">
                         <tr>
                           <th className="px-8 py-6">Tgl Baca</th>
-                          <th className="px-8 py-6 text-center">Stand Awal</th>
-                          <th className="px-8 py-6 text-center">Stand Akhir</th>
+                          <th className="px-8 py-6 text-center">Prev Read</th>
+                          <th className="px-8 py-6 text-center">Curr Read</th>
                           <th className="px-8 py-6 text-center">Volume</th>
-                          <th className="px-8 py-6">Skip / Trouble</th>
-                          <th className="px-8 py-6">Special Msg</th>
+                          <th className="px-8 py-6">Codes</th>
+                          <th className="px-8 py-6">Message</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-600">
@@ -561,22 +559,22 @@ const App = () => {
                           detectiveHistory.reading_history.map((h, idx) => (
                             <tr key={idx} className="hover:bg-slate-50 transition-colors">
                               <td className="px-8 py-6 font-black text-slate-900">{h.cmr_rd_date || '-'}</td>
-                              <td className="px-8 py-6 text-center font-mono text-slate-400">{h.cmr_prev_read || 0}</td>
-                              <td className="px-8 py-6 text-center font-mono font-black text-slate-900">{h.cmr_reading || 0}</td>
+                              <td className="px-8 py-6 text-center font-mono text-slate-400">{h.cmr_prev_read?.toLocaleString() || 0}</td>
+                              <td className="px-8 py-6 text-center font-mono font-black text-slate-900">{h.cmr_reading?.toLocaleString() || 0}</td>
                               <td className={`px-8 py-6 text-center font-black text-sm ${(h.cmr_reading - h.cmr_prev_read) > 100 ? 'text-rose-600' : 'text-blue-600'}`}>
-                                {(h.cmr_reading - h.cmr_prev_read) || 0} <span className="text-[10px] opacity-40 uppercase">m³</span>
+                                {(h.cmr_reading - h.cmr_prev_read)?.toLocaleString() || 0} <span className="text-[10px] opacity-40 uppercase">m³</span>
                               </td>
                               <td className="px-8 py-6">
-                                <div className="space-y-1">
-                                  {h.cmr_skip_code && <div className="text-[9px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-md font-black w-fit uppercase">{h.cmr_skip_code}</div>}
-                                  {h.cmr_trbl1_code && <div className="text-[9px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-md font-black w-fit uppercase">{h.cmr_trbl1_code}</div>}
+                                <div className="flex gap-1">
+                                  {h.cmr_skip_code && <div className="text-[8px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-black uppercase">S:{h.cmr_skip_code}</div>}
+                                  {h.cmr_trbl1_code && <div className="text-[8px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-black uppercase">T:{h.cmr_trbl1_code}</div>}
                                 </div>
                               </td>
-                              <td className="px-8 py-6 italic text-slate-400 text-[10px] font-medium max-w-[200px] truncate">{h.cmr_chg_spcl_msg || '-'}</td>
+                              <td className="px-8 py-6 italic text-slate-400 text-[10px] max-w-[150px] truncate">{h.cmr_chg_spcl_msg || '-'}</td>
                             </tr>
                           ))
                         ) : (
-                          <tr><td colSpan="6" className="p-10 text-center text-slate-400 italic">Loading history...</td></tr>
+                          <tr><td colSpan="6" className="p-10 text-center text-slate-400 italic">Mencari data history...</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -585,37 +583,37 @@ const App = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                    <DetailBox 
-                     title="Data Pelanggan" 
+                     title="Info Pelanggan" 
                      icon={<User/>} 
-                     val={detectiveHistory?.customer?.NAMA || 'Loading...'} 
+                     val={detectiveHistory?.customer?.NAMA || 'Mencari...'} 
                      sub={`Tarif: ${detectiveHistory?.customer?.TARIFF || '-'} | Rayon: ${detectiveHistory?.customer?.RAYON || '-'}`} 
                    />
                    <DetailBox 
-                     title="Anomali Detected" 
+                     title="Analisa Sistem" 
                      icon={<AlertTriangle/>} 
-                     val={selectedAnomaly?.details?.anomaly_reason || 'Lihat detail lengkap'} 
-                     sub={`Method: ${selectedAnomaly?.details?.read_method || '-'}`} 
+                     val={selectedAnomaly?.details?.anomaly_reason || 'Lonjakan Terdeteksi'} 
+                     sub={`Skip: ${selectedAnomaly?.details?.skip_desc || '-'}`} 
                    />
                 </div>
               </div>
 
-              {/* PANEL INPUT AUDIT TIM */}
+              {/* AUDIT PANEL */}
               <div className="lg:col-span-4 flex flex-col gap-8">
                 <div className="bg-white p-10 rounded-[4rem] border-[10px] border-blue-500 shadow-2xl flex flex-col h-full ring-2 ring-blue-100 relative overflow-hidden">
                   <div className="relative z-10">
                     <div className="mb-10">
                       <h3 className="font-black text-3xl flex items-center gap-3 text-slate-900 tracking-tighter leading-none uppercase">
-                        <MessageSquare className="text-blue-600" size={32} /> Analisa Tim
+                        <MessageSquare className="text-blue-600" size={32} /> Audit Lapangan
                       </h3>
                       <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em] mt-4 bg-slate-50 py-3 px-5 rounded-2xl w-fit border border-slate-100 shadow-inner">
-                         Input Keputusan Berbasis Bukti
+                          Entry Keputusan Petugas
                       </p>
                     </div>
                     
                     <div className="mb-10 space-y-4">
-                       <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest pl-2">Status Investigasi Akhir:</p>
+                       <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest pl-2">Status Investigasi:</p>
                        <div className="flex flex-wrap gap-2.5">
-                          {['VALID', 'FRAUD', 'RE-CHECK', 'RE-READ', 'MTR-RUSAK', 'ESTIMASI'].map(s => (
+                          {['VALID', 'FRAUD', 'RE-CHECK', 'RE-READ', 'RUSAK'].map(s => (
                              <button 
                                key={s} 
                                onClick={() => setAuditStatus(s)}
@@ -630,7 +628,7 @@ const App = () => {
                     <textarea 
                       value={auditRemark}
                       onChange={(e) => setAuditRemark(e.target.value)}
-                      placeholder="Tuliskan alasan teknis di sini... Contoh: Berdasarkan history, pemakaian bulan ini ekstrim karena adanya kebocoran pipa dalam yang tidak disadari pelanggan."
+                      placeholder="Contoh: Berdasarkan history, pemakaian bulan ini valid karena adanya renovasi di rumah pelanggan."
                       className="w-full h-80 p-8 bg-slate-50 border-2 border-slate-50 rounded-[3rem] outline-none focus:ring-[12px] focus:ring-blue-500/10 font-medium text-slate-700 text-lg leading-relaxed shadow-inner placeholder:italic placeholder:text-slate-300"
                     />
 
@@ -639,10 +637,10 @@ const App = () => {
                         onClick={saveAuditResult}
                         className="w-full bg-blue-600 text-white py-8 rounded-[2.5rem] font-black text-xl shadow-2xl shadow-blue-500/50 flex items-center justify-center gap-4 hover:bg-blue-700 hover:-translate-y-2 transition-all active:scale-95 uppercase tracking-widest"
                       >
-                        <Save size={28}/> Simpan Hasil Audit
+                        <Save size={28}/> Simpan Audit
                       </button>
                       <p className="text-center text-[10px] font-bold text-slate-300 uppercase tracking-[0.3em]">
-                         Data akan diverifikasi oleh Supervisor Lapangan
+                          Laporan akan disimpan ke Koleksi ManualAudit
                       </p>
                     </div>
                   </div>
@@ -657,7 +655,7 @@ const App = () => {
   );
 };
 
-// --- SUB-COMPONENTS UI ---
+// --- HELPER UI COMPONENTS ---
 
 const HeroStat = ({ title, val, icon, color }) => {
   const cMap = {
@@ -667,13 +665,13 @@ const HeroStat = ({ title, val, icon, color }) => {
     indigo: 'from-indigo-600 to-purple-700 shadow-indigo-100'
   };
   return (
-    <div className={`p-8 rounded-[2.5rem] bg-gradient-to-br ${cMap[color]} text-white shadow-2xl group`}>
-       <div className="flex justify-between items-start mb-6">
-         <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-md group-hover:scale-110 transition-transform">{icon}</div>
-         <TrendingUp size={16} className="opacity-40" />
-       </div>
-       <div className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60 mb-2">{title}</div>
-       <div className="text-3xl font-black tracking-tighter leading-none">{val}</div>
+    <div className={`p-8 rounded-[2.5rem] bg-gradient-to-br ${cMap[color]} text-white shadow-2xl group transition-all hover:scale-[1.02]`}>
+        <div className="flex justify-between items-start mb-6">
+          <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-md group-hover:scale-110 transition-transform">{icon}</div>
+          <TrendingUp size={16} className="opacity-40" />
+        </div>
+        <div className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60 mb-2">{title}</div>
+        <div className="text-3xl font-black tracking-tighter leading-none">{val}</div>
     </div>
   );
 };
@@ -685,10 +683,10 @@ const TableRow = ({ label, val, vol, count, pct }) => (
     <td className="px-10 py-6 text-right font-mono font-bold text-blue-600">{vol}</td>
     <td className="px-10 py-6 text-right font-mono font-bold text-slate-500">{count}</td>
     <td className="px-10 py-6 text-right">
-       <span className="bg-emerald-100 text-emerald-700 px-4 py-1.5 rounded-full text-xs font-black border border-emerald-200">{pct}</span>
+        <span className="bg-emerald-100 text-emerald-700 px-4 py-1.5 rounded-full text-[10px] font-black border border-emerald-200">{pct}</span>
     </td>
     <td className="px-10 py-6 text-center">
-       <div className="flex justify-center"><ChevronRight size={18} className="text-slate-300 group-hover:text-blue-600 transition-all group-hover:translate-x-1" /></div>
+        <div className="flex justify-center"><ChevronRight size={18} className="text-slate-300 group-hover:text-blue-600 transition-all group-hover:translate-x-1" /></div>
     </td>
   </tr>
 );
@@ -702,8 +700,8 @@ const MiniStat = ({ label, val, color }) => {
   };
   return (
     <div className={`p-8 rounded-3xl border-2 ${cMap[color]} text-center shadow-sm`}>
-       <div className="text-4xl font-black mb-2 tracking-tighter">{val}</div>
-       <div className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70">{label}</div>
+        <div className="text-4xl font-black mb-2 tracking-tighter">{val}</div>
+        <div className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70">{label}</div>
     </div>
   );
 };
@@ -712,9 +710,9 @@ const StatusCard = ({ label, val, color, sub }) => {
   const cMap = { rose: 'text-rose-600', emerald: 'text-emerald-600', blue: 'text-blue-600' };
   return (
     <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 text-center shadow-inner group hover:bg-white hover:shadow-xl transition-all">
-       <div className={`text-5xl font-black mb-3 tracking-tighter ${cMap[color]}`}>{val}</div>
-       <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">{label}</div>
-       {sub && <p className="text-[9px] font-bold text-slate-300 uppercase italic tracking-tighter">{sub}</p>}
+        <div className={`text-5xl font-black mb-3 tracking-tighter ${cMap[color]}`}>{val?.toLocaleString() || 0}</div>
+        <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">{label}</div>
+        {sub && <p className="text-[9px] font-bold text-slate-300 uppercase italic tracking-tighter">{sub}</p>}
     </div>
   );
 };
@@ -724,9 +722,9 @@ const DetailBox = ({ title, icon, val, sub }) => (
      <div className="bg-blue-50 p-5 rounded-3xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
         {icon}
      </div>
-     <div>
+     <div className="flex-1 min-w-0">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{title}</p>
-        <p className="text-2xl font-black text-slate-900 tracking-tighter">{val}</p>
+        <p className="text-2xl font-black text-slate-900 tracking-tighter truncate">{val}</p>
         <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-tighter">{sub}</p>
      </div>
   </div>
@@ -745,25 +743,33 @@ const RankList = ({ title, type, data, loading }) => {
     return 'text-blue-600';
   };
 
+  const getSubtitle = (item, type) => {
+    if (type === 'premium') return `${item.ontime_count}x Bayar Tepat Waktu`;
+    if (type === 'debt') return `Tunggakan: ${item.UMUR_TUNGGAKAN || '0'} Hari`;
+    if (type === 'unpaid-current') return `Jatuh Tempo: ${item.TGL_JATUH_TEMPO || '-'}`;
+    if (type === 'unpaid-debt') return `Umur: ${item.UMUR_TUNGGAKAN || '0'} Hari`;
+    return '-';
+  };
+
   const getValue = (item, type) => {
-    if (type === 'premium') return `${item.ontime_count}x Tepat Waktu`;
-    if (type === 'debt') return `Rp ${item.debt_amount} JT`;
-    if (type === 'unpaid-current') return `Rp ${item.outstanding} JT`;
-    if (type === 'unpaid-debt') return `Rp ${item.unpaid_debt} JT`;
+    if (type === 'premium') return `Rp ${item.total_paid || 0} JT`;
+    if (type === 'debt') return `Rp ${item.debt_amount || 0} JT`;
+    if (type === 'unpaid-current') return `Rp ${item.outstanding || 0} JT`;
+    if (type === 'unpaid-debt') return `Rp ${item.unpaid_debt || 0} JT`;
     return '-';
   };
 
   return (
-    <div className="bg-white rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden group">
+    <div className="bg-white rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden flex flex-col h-full">
       <div className={`p-10 flex justify-between items-center ${getColorClass(type)}`}>
         <h3 className="font-black text-xl uppercase tracking-tighter leading-none">{title}</h3>
         <PieChart size={24} className="opacity-40" />
       </div>
       <div className="divide-y divide-slate-50 p-4 max-h-[600px] overflow-y-auto">
         {loading ? (
-          <div className="p-10 text-center text-slate-400 italic">Loading...</div>
+          <div className="p-10 text-center"><RefreshCw className="animate-spin mx-auto text-slate-200" /></div>
         ) : data && data.length > 0 ? (
-          data.slice(0, 100).map((item, i) => (
+          data.map((item, i) => (
             <div key={i} className="p-6 flex items-center justify-between hover:bg-slate-50 rounded-2xl transition-all group/item">
               <div className="flex items-center gap-6">
                 <span className="text-3xl font-black text-slate-100 italic group-hover/item:text-blue-200 transition-colors">#{i+1}</span>
@@ -772,7 +778,7 @@ const RankList = ({ title, type, data, loading }) => {
                     {item.name || item.NAMA || `PELANGGAN ${i+1}`}
                   </div>
                   <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2">
-                    Nomen: {item.nomen || item.NOMEN || '-'}
+                    {getSubtitle(item, type)}
                   </div>
                 </div>
               </div>
@@ -782,7 +788,7 @@ const RankList = ({ title, type, data, loading }) => {
             </div>
           ))
         ) : (
-          <div className="p-10 text-center text-slate-400 italic">Tidak ada data</div>
+          <div className="p-10 text-center text-slate-300 font-bold italic">Tidak ada data terdeteksi</div>
         )}
       </div>
     </div>
