@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Import fungsi-fungsi dari utils.py
+# Pastikan file utils.py ada di folder yang sama
 from utils import (
     init_db, 
     clean_dataframe, 
@@ -37,6 +38,30 @@ with app.app_context():
         init_db()
     except Exception as e:
         print(f"Warning: Database initialization failed: {e}")
+
+# --- NEW: ROOT ROUTES TO FIX 404 ERRORS ---
+@app.route('/')
+def index():
+    """Halaman utama untuk memastikan server berjalan"""
+    return jsonify({
+        "message": "PAM DSS Backend is Running!",
+        "version": "2.0",
+        "check_status": "/api/status"
+    })
+
+@app.route('/api')
+def api_root():
+    """Root API endpoint info"""
+    return jsonify({
+        "message": "Welcome to PAM DSS API",
+        "available_endpoints": [
+            "/api/status",
+            "/api/upload-and-analyze",
+            "/api/summary",
+            "/api/collection/detailed",
+            "/api/detective/<nomen>"
+        ]
+    })
 
 # --- 1. STATUS ENDPOINT ---
 
