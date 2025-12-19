@@ -6,9 +6,10 @@ from flask_cors import CORS
 from datetime import datetime
 from dotenv import load_dotenv
 
+# Memuat variabel lingkungan dari file .env
 load_dotenv()
 
-# Import improved utils
+# Import fungsi-fungsi dari utils.py
 from utils import (
     init_db, 
     clean_dataframe, 
@@ -27,10 +28,15 @@ from utils import (
 )
 
 app = Flask(__name__)
+# Mengizinkan CORS agar frontend (React/Vite) bisa mengakses API
 CORS(app)
 
+# Inisialisasi Database saat aplikasi dimulai
 with app.app_context():
-    init_db()
+    try:
+        init_db()
+    except Exception as e:
+        print(f"Warning: Database initialization failed: {e}")
 
 # --- 1. STATUS ENDPOINT ---
 
@@ -61,18 +67,19 @@ def upload_and_analyze():
     try:
         filename_upper = file.filename.upper()
         
-        # Membaca Data
+        # Membaca Data (CSV, TXT, atau Excel)
         if filename_upper.endswith('.CSV') or filename_upper.endswith('.TXT'):
             content = file.read().decode('utf-8', errors='ignore')
+            # Deteksi delimiter otomatis
             delimiter = '|' if '|' in content[:1000] else (';' if ';' in content[:1000] else ',')
             df = pd.read_csv(io.StringIO(content), sep=delimiter, engine='python')
         else:
             df = pd.read_excel(file)
 
-        # Standarisasi Header
+        # Standarisasi Header ke uppercase
         df.columns = [str(col).strip().upper() for col in df.columns]
 
-        # DETEKSI & DISPATCH
+        # --- DETEKSI JENIS DATA & PROSES ---
 
         # 1. METER READING (SBRS)
         if 'CMR_ACCOUNT' in df.columns or 'CMR_READING' in df.columns:
@@ -141,13 +148,7 @@ def upload_and_analyze():
 
 @app.route('/api/summary', methods=['GET'])
 def api_get_summary():
-    """
-    ✅ IMPROVED: Summarizing dengan multi-dimensi
-    Query params:
-    - target: mc, mb, ardebt, mainbill, coll
-    - dimension: RAYON, PC, PCEZ, TARIF, METER
-    - rayon: filter by rayon (optional)
-    """
+    """Summarizing dengan multi-dimensi (RAYON, PC, TARIF, dll)"""
     target = request.args.get('target', 'mc').lower()
     dimension = request.args.get('dimension', 'RAYON').upper()
     rayon_filter = request.args.get('rayon', None)
@@ -162,11 +163,8 @@ def api_get_summary():
 
 @app.route('/api/collection/detailed', methods=['GET'])
 def api_get_collection_detailed():
-    """
-    ✅ NEW: Analisa collection dengan kategori UNDUE, CURRENT, ARREARS
-    """
+    """Analisa penagihan mendalam"""
     rayon = request.args.get('rayon', None)
-    
     try:
         data = get_collection_detailed_analysis(rayon)
         return jsonify({"status": "success", "data": data})
@@ -175,11 +173,8 @@ def api_get_collection_detailed():
 
 @app.route('/api/collection/payment-status', methods=['GET'])
 def api_get_payment_status():
-    """
-    ✅ NEW: Status pembayaran pelanggan (tunggakan, sudah bayar, belum bayar)
-    """
+    """Status pembayaran pelanggan (tunggakan vs lancar)"""
     rayon = request.args.get('rayon', None)
-    
     try:
         data = get_customer_payment_status(rayon)
         return jsonify({"status": "success", "data": data})
@@ -190,14 +185,7 @@ def api_get_payment_status():
 
 @app.route('/api/history/usage', methods=['GET'])
 def api_get_usage_history():
-    """
-    ✅ NEW: History kubikasi
-    Query params:
-    - dimension: CUSTOMER, RAYON, PC, PCEZ, TARIF, METER
-    - identifier: nomen (for CUSTOMER dimension)
-    - rayon: filter by rayon
-    - months: number of months (default: 12)
-    """
+    """Riwayat pemakaian kubikasi"""
     dimension = request.args.get('dimension', 'CUSTOMER').upper()
     identifier = request.args.get('identifier', None)
     rayon = request.args.get('rayon', None)
@@ -211,14 +199,7 @@ def api_get_usage_history():
 
 @app.route('/api/history/payment', methods=['GET'])
 def api_get_payment_hist():
-    """
-    ✅ NEW: History pembayaran
-    Query params:
-    - nomen: customer nomen
-    - type: ALL, UNDUE, CURRENT
-    - rayon: filter by rayon
-    - months: number of months (default: 12)
-    """
+    """Riwayat pembayaran pelanggan"""
     nomen = request.args.get('nomen', None)
     payment_type = request.args.get('type', 'ALL').upper()
     rayon = request.args.get('rayon', None)
@@ -234,11 +215,7 @@ def api_get_payment_hist():
 
 @app.route('/api/top100/premium', methods=['GET'])
 def api_top_premium():
-    """
-    ✅ IMPROVED: Top 100 pelanggan premium (selalu bayar tepat waktu)
-    """
     rayon = request.args.get('rayon', '34')
-    
     try:
         data = get_top_100_premium(rayon)
         return jsonify({"status": "success", "data": data})
@@ -247,11 +224,7 @@ def api_top_premium():
 
 @app.route('/api/top100/unpaid-current', methods=['GET'])
 def api_top_unpaid_current():
-    """
-    ✅ NEW: Top 100 belum bayar current
-    """
     rayon = request.args.get('rayon', '34')
-    
     try:
         data = get_top_100_unpaid_current(rayon)
         return jsonify({"status": "success", "data": data})
@@ -260,11 +233,7 @@ def api_top_unpaid_current():
 
 @app.route('/api/top100/debt', methods=['GET'])
 def api_top_debt():
-    """
-    ✅ IMPROVED: Top 100 pelanggan tunggakan
-    """
     rayon = request.args.get('rayon', '34')
-    
     try:
         data = get_top_100_debt(rayon)
         return jsonify({"status": "success", "data": data})
@@ -273,11 +242,7 @@ def api_top_debt():
 
 @app.route('/api/top100/unpaid-debt', methods=['GET'])
 def api_top_unpaid_debt():
-    """
-    ✅ NEW: Top 100 belum bayar tunggakan
-    """
     rayon = request.args.get('rayon', '34')
-    
     try:
         data = get_top_100_unpaid_debt(rayon)
         return jsonify({"status": "success", "data": data})
@@ -288,9 +253,7 @@ def api_top_unpaid_debt():
 
 @app.route('/api/detective/<nomen>', methods=['GET'])
 def api_get_detective(nomen):
-    """
-    ✅ IMPROVED: Data lengkap untuk detective mode
-    """
+    """Data lengkap untuk investigasi pelanggan tertentu"""
     try:
         data = get_audit_detective_data(nomen)
         return jsonify({"status": "success", "data": data})
@@ -299,11 +262,8 @@ def api_get_detective(nomen):
 
 @app.route('/api/audit/save', methods=['POST'])
 def api_save_audit():
-    """
-    Menyimpan hasil audit manual
-    """
+    """Menyimpan hasil audit manual"""
     req = request.json
-    
     try:
         result = save_manual_audit(
             req.get('nomen'), 
@@ -311,12 +271,10 @@ def api_save_audit():
             req.get('user', 'ADMIN_PAM'), 
             req.get('status', 'AUDITED')
         )
-        
         if result:
             return jsonify({"status": "success", "message": "Hasil analisa berhasil disimpan."})
         else:
             return jsonify({"status": "error", "message": "Gagal menyimpan data."}), 500
-            
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -324,9 +282,7 @@ def api_save_audit():
 
 @app.route('/api/dimensions', methods=['GET'])
 def api_get_dimensions():
-    """
-    ✅ NEW: Mendapatkan list dimensi yang tersedia
-    """
+    """Mendapatkan daftar dimensi yang tersedia di sistem"""
     return jsonify({
         "status": "success",
         "dimensions": {
@@ -337,4 +293,8 @@ def api_get_dimensions():
     })
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Konfigurasi Port untuk VPS
+    port = int(os.environ.get("PORT", 5000))
+    print(f"PAM DSS Backend Version 2.0 running on port {port}...")
+    # debug=False untuk lingkungan produksi di VPS
+    app.run(host='0.0.0.0', port=port, debug=False)
