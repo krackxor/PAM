@@ -224,12 +224,14 @@ def _get_sbrs_anomalies(collection_sbrs, collection_cid):
         {'$limit': 100}
     ]
 
-    anomalies = list(collection_sbrs.aggregate(pipeline_sbrs_history))
-    
-    for doc in anomalies:
-        doc.pop('_id', None)
-        
-    return anomalies
+    try:
+        anomalies = list(collection_sbrs.aggregate(pipeline_sbrs_history))
+        for doc in anomalies:
+            doc.pop('_id', None)
+        return anomalies
+    except Exception as e:
+        print(f"Error fetching anomalies: {e}")
+        return []
 
 def _generate_distribution_schema(group_fields):
     schema = []
@@ -246,6 +248,7 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
     Fungsi agregasi yang diperbaiki untuk memastikan Konsistensi Data:
     1. Menggunakan Unique NOMEN untuk semua perhitungan jumlah pelanggan.
     2. Memprioritaskan data transaksi (MC/MB) daripada data master (CID).
+    3. FIX: Fallback VOLUME jika PEMAKAIAN kosong (Mengatasi Total Kubakis 0).
     """
     if collection is None:
         return {'totals': {'count':0, 'total_usage':0, 'total_nominal':0}, 'largest': {}, 'charts': {}, 'lists': {}}
@@ -255,6 +258,9 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
     if period and date_field:
         match_stage = {date_field: {'$regex': f"{period}"}} 
     
+    # Logic to handle the case where usage_field might be PEMAKAIAN but the data uses VOLUME
+    alt_usage_field = 'VOLUME' if usage_field == 'PEMAKAIAN' else usage_field
+    
     # 2. Base Totals (MENGGUNAKAN UNIQUE NOMEN)
     try:
         totals_pipeline = [
@@ -262,7 +268,13 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
             {'$group': {
                 '_id': None,
                 'unique_set': {'$addToSet': '$NOMEN'},
-                'total_usage': {'$sum': {'$toDouble': {'$ifNull': [f'${usage_field}', 0]}}},
+                'total_usage': {
+                    '$sum': {
+                        '$toDouble': { 
+                            '$ifNull': [f'${usage_field}', { '$ifNull': [f'${alt_usage_field}', 0] }] 
+                        }
+                    }
+                },
                 'total_nominal': {'$sum': {'$toDouble': {'$ifNull': [f'${money_field}', 0]}}}
             }},
             {'$project': {
@@ -365,7 +377,7 @@ def _aggregate_category(collection, money_field, usage_field, period, date_field
     for k in largest:
         largest[k]['total'] = largest[k].get('nominal', 0)
 
-    # 5. Top 500 Lists (Opsional, dipertahankan logicnya)
+    # 5. Top 500 Lists
     def get_top_500(rayon):
         match = match_stage.copy()
         match['$or'] = [{'RAYON': rayon}, {'KODERAYON': rayon}]
