@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 // Configuration: Adjust this to your VPS IP if deploying remotely
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'http://174.138.16.241:5000/api';
 
 const App = () => {
   // --- STATE MANAGEMENT ---
