@@ -39,15 +39,54 @@ with app.app_context():
     except Exception as e:
         print(f"Warning: Database initialization failed: {e}")
 
-# --- NEW: ROOT ROUTES TO FIX 404 ERRORS ---
+# --- NEW: ROOT ROUTE WITH HTML LANDING PAGE ---
 @app.route('/')
 def index():
-    """Halaman utama untuk memastikan server berjalan"""
-    return jsonify({
-        "message": "PAM DSS Backend is Running!",
-        "version": "2.0",
-        "check_status": "/api/status"
-    })
+    """Halaman utama HTML agar tidak terlihat 'cuma text'"""
+    return """
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>PAM DSS Server</title>
+        <style>
+            body { font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #0f172a; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+            .container { text-align: center; padding: 2.5rem; background: #1e293b; border-radius: 1.5rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); max-width: 480px; width: 90%; border: 1px solid #334155; }
+            h1 { color: #60a5fa; margin-bottom: 0.5rem; font-size: 1.8rem; font-weight: 800; letter-spacing: -0.025em; }
+            p { color: #94a3b8; margin-bottom: 2rem; line-height: 1.6; }
+            .status-box { background: #064e3b; color: #34d399; padding: 0.5rem 1rem; border-radius: 9999px; font-weight: bold; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid #059669; }
+            .status-indicator { width: 8px; height: 8px; background-color: #34d399; border-radius: 50%; box-shadow: 0 0 8px #34d399; }
+            .btn { display: inline-block; text-decoration: none; padding: 0.75rem 1.5rem; border-radius: 0.75rem; font-weight: 600; transition: all 0.2s; margin: 0 0.5rem; font-size: 0.9rem; }
+            .btn-primary { background: #2563eb; color: white; border: 1px solid #2563eb; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2); }
+            .btn-primary:hover { background: #1d4ed8; transform: translateY(-1px); }
+            .btn-secondary { background: transparent; color: #94a3b8; border: 1px solid #475569; }
+            .btn-secondary:hover { color: #fff; border-color: #64748b; background: #334155; }
+            .footer { margin-top: 2rem; border-top: 1px solid #334155; padding-top: 1rem; font-size: 0.75rem; color: #64748b; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="status-box">
+                <div class="status-indicator"></div>
+                Sistem Online
+            </div>
+            <h1>PAM DSS Backend</h1>
+            <p>
+                Server API berjalan normal pada Port 5000.<br>
+                Dashboard Visual berjalan sebagai aplikasi terpisah.
+            </p>
+            <div>
+                <a href="/api" class="btn btn-secondary">API Info</a>
+                <a href="/api/status" class="btn btn-primary">Cek Koneksi DB</a>
+            </div>
+            <div class="footer">
+                Version 2.0 • Python Flask • MongoDB Ready
+            </div>
+        </div>
+    </body>
+    </html>
+    """
 
 @app.route('/api')
 def api_root():
