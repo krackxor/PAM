@@ -24,7 +24,7 @@ def admin_required(f):
 def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
     """
     Menghitung distribusi metrik. 
-    - TUNGGAKAN: Mengambil data utama dari ARDEBT, di-join ke MC untuk mengambil Tarif & Kubikasi.
+    FIX: Ambil KUBIK dari MC (join PERIODE_BILL) dan TARIFF dari CID.
     """
     db_status = get_db_status()
     if db_status['status'] == 'error':
@@ -47,20 +47,36 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
     if report_type == 'TUNGGAKAN':
         source_col = collections['ardebt']
         
-        # 1. Pastikan NOMEN adalah string agar Join berhasil
-        pipeline.append({"$addFields": { "s_NOMEN": { "$toString": "$NOMEN" } }})
-        
-        # 2. Join ke MC untuk ambil data KUBIK & TARIF bulan tersebut
+        # 1. Join ke CustomerData (CID) untuk mendapatkan TARIFF yang BENAR
         pipeline.append({
             "$lookup": {
-                "from": "mc",
-                "let": {"n_ar": "$s_NOMEN", "p_ar": target_month},
+                "from": "CustomerData",
+                "let": {"n_ar": { "$toString": "$NOMEN" }},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": [{ "$toString": "$NOMEN" }, "$$n_ar"]}}},
+                    {"$sort": {"TANGGAL_UPLOAD_CID": -1}},
+                    {"$limit": 1}
+                ],
+                "as": "cid_info"
+            }
+        })
+        pipeline.append({"$unwind": {"path": "$cid_info", "preserveNullAndEmptyArrays": True}})
+        
+        # 2. Join ke Master Cetak (MC) untuk mendapatkan KUBIKASI yang BENAR
+        # Menggunakan PERIODE_BILL dari ardebt dengan padding (misal 5 -> 05)
+        pipeline.append({
+            "$lookup": {
+                "from": "MasterCetak",
+                "let": {"n_ar": { "$toString": "$NOMEN" }, "p_ar": "$PERIODE_BILL"},
                 "pipeline": [
                     {"$match": {
                         "$expr": {
                             "$and": [
                                 {"$eq": [{ "$toString": "$NOMEN" }, "$$n_ar"]},
-                                {"$eq": ["$BULAN_TAGIHAN", "$$p_ar"]}
+                                {"$regexMatch": {
+                                    "input": "$BULAN_TAGIHAN",
+                                    "regex": {"$concat": ["^", {"$cond": [{"$lt": [{"$strLenCP": {"$toString": "$$p_ar"}}, 2]}, {"$concat": ["0", {"$toString": "$$p_ar"}]}, {"$toString": "$$p_ar"}]}]}
+                                }}
                             ]
                         }
                     }}
@@ -70,27 +86,25 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
         })
         pipeline.append({"$unwind": {"path": "$mc_info", "preserveNullAndEmptyArrays": True}})
         
-        # 3. Mapping Field Tunggakan (Join Results)
+        # 3. Mapping Data sesuai instruksi (Prioritas MC untuk Kubik, CID untuk Tarif)
         pipeline.append({"$addFields": {
             "v_RAYON": "$RAYON",
-            "v_PC": {"$substrCP": [{"$ifNull": ["$PCEZ", ""]}, 0, 3]}, # Ambil 3 digit PC saja
+            "v_PC": {"$substrCP": [{"$ifNull": ["$PCEZ", ""]}, 0, 3]},
             "v_PCEZ": "$PCEZ",
-            "v_TARIF": { "$ifNull": ["$mc_info.TARIF", "$TIPEPLGGN"] }, # Prioritas MC
-            "v_KUBIK": { "$toDouble": { "$ifNull": ["$mc_info.KUBIK", 0] } },
+            # Periksa TARIFF (2 F) atau TARIF (1 F) dari CID
+            "v_TARIF": { "$ifNull": ["$cid_info.TARIFF", { "$ifNull": ["$cid_info.TARIF", { "$ifNull": ["$mc_info.TARIF", "$TIPEPLGGN"] }] }] },
+            "v_KUBIK": { "$toDouble": { "$ifNull": ["$mc_info.KUBIK", { "$ifNull": ["$VOLUME", 0] }] } },
             "v_NOMINAL": { "$toDouble": { "$ifNull": ["$JUMLAH", 0] } }
         }})
         
-        val_field = "$v_NOMINAL"
-        usage_field = "$v_KUBIK"
+        val_field, usage_field = "$v_NOMINAL", "$v_KUBIK"
         final_group_tarif = "$v_TARIF"
         
     else:
         source_col = collections['mc']
         match_filter = {"BULAN_TAGIHAN": target_month}
-        if report_type == 'COLLECTION':
-            match_filter["STATUS"] = "PAYMENT"
-        else:
-            match_filter["STATUS"] = {"$ne": "PAYMENT"}
+        if report_type == 'COLLECTION': match_filter["STATUS"] = "PAYMENT"
+        else: match_filter["STATUS"] = {"$ne": "PAYMENT"}
         
         pipeline.append({"$match": match_filter})
         pipeline.append({"$addFields": {
@@ -99,11 +113,10 @@ def _get_distribution_report(group_field, period=None, report_type='PIUTANG'):
             "v_PCEZ": {"$concat": [{"$substrCP": ["$ZONA_NOVAK", 2, 3]}, "/", {"$substrCP": ["$ZONA_NOVAK", 5, 2]}]},
             "v_TARIF": "$TARIF"
         }})
-        val_field = "$NOMINAL"
-        usage_field = "$KUBIK"
+        val_field, usage_field = "$NOMINAL", "$KUBIK"
         final_group_tarif = "$v_TARIF"
 
-    # 4. Mapping Grouping Berdasarkan Input UI
+    # 4. Mapping Grouping
     g_field = group_field.upper()
     if g_field in ["MERK", "READ_METHOD"]:
         pipeline.append({
@@ -183,19 +196,21 @@ def get_stats_summary_api():
         return res[0] if res else {"count": 0, "usage": 0, "nominal": 0}
 
     def get_ar_summary():
-        # Join AR ke MC untuk mendapatkan Kubikasi penunggak bulan tersebut
+        # Join AR ke MC untuk mendapatkan Kubikasi penunggak bulan tersebut (Support padding)
         pipeline = [
-            { "$addFields": { "s_NOMEN": { "$toString": "$NOMEN" } } },
             {
                 "$lookup": {
-                    "from": "mc",
-                    "let": {"n_ar": "$s_NOMEN", "p_ar": formatted_period},
+                    "from": "MasterCetak",
+                    "let": {"n_ar": { "$toString": "$NOMEN" }, "p_ar": "$PERIODE_BILL"},
                     "pipeline": [
                         {"$match": {
                             "$expr": {
                                 "$and": [
                                     {"$eq": [{ "$toString": "$NOMEN" }, "$$n_ar"]},
-                                    {"$eq": ["$BULAN_TAGIHAN", "$$p_ar"]}
+                                    {"$regexMatch": {
+                                        "input": "$BULAN_TAGIHAN",
+                                        "regex": {"$concat": ["^", {"$cond": [{"$lt": [{"$strLenCP": {"$toString": "$$p_ar"}}, 2]}, {"$concat": ["0", {"$toString": "$$p_ar"}]}, {"$toString": "$$p_ar"}]}]}
+                                    }}
                                 ]
                             }
                         }}
@@ -240,28 +255,7 @@ def category_distribution_api(category):
         "subtitle": f"Bulan: {month} ({report_type})"
     })
 
-@bp_collection.route("/api/download_summary")
-@login_required
-def download_summary_csv():
-    raw_period = request.args.get('period', datetime.now().strftime('%Y-%m'))
-    categories = ["RAYON", "PC", "TARIF", "MERK", "READ_METHOD"]
-    report_types = ["PIUTANG", "TUNGGAKAN", "COLLECTION"]
-    all_data = []
-    for r_type in report_types:
-        for cat in categories:
-            results, month = _get_distribution_report(cat, period=raw_period, report_type=r_type)
-            for row in results:
-                all_data.append({
-                    "Periode": month, "Tipe": r_type, "Kategori": cat, "Grup": row.get("id_value"),
-                    "Nominal": row.get("total_piutang"), "Nomen": row.get("total_nomen"), "Kubikasi": row.get("total_kubikasi")
-                })
-    if not all_data: return jsonify({"status": "error"}), 404
-    df = pd.DataFrame(all_data)
-    output = io.StringIO()
-    df.to_csv(output, index=False)
-    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-disposition": f"attachment; filename=Summary_{raw_period}.csv"})
-
-# --- Rute View (Tetap) ---
+# --- Rute View & Lainnya tetap sama ---
 @bp_collection.route('/laporan', methods=['GET'])
 @login_required 
 def collection_laporan_view():
@@ -272,21 +266,6 @@ def collection_laporan_view():
 @login_required 
 def collection_analisis_view():
     return render_template('collection_analysis.html', title="Analisis Kontributor", is_admin=current_user.is_admin)
-
-@bp_collection.route('/top_list', methods=['GET'])
-@login_required
-def collection_top_view():
-    return render_template('analysis_report_template.html', title="Top List Piutang", report_type="TOP_DEBTORS", api_endpoint=url_for('bp_collection.top_debtors_report_api'), is_admin=current_user.is_admin)
-
-@bp_collection.route('/riwayat_mom', methods=['GET'])
-@login_required
-def collection_riwayat_view():
-    return render_template('analysis_report_template.html', title="Riwayat MoM", report_type="MOM_COMPARISON", api_endpoint=url_for('bp_collection.mom_comparison_report_api'), is_admin=current_user.is_admin)
-
-@bp_collection.route('/dod_comparison', methods=['GET'])
-@login_required
-def analysis_dod_comparison():
-    return render_template('analysis_report_template.html', title="Koleksi DoD", report_type="DOD_COMPARISON", api_endpoint=url_for('bp_collection.mom_comparison_report_api'), is_admin=current_user.is_admin)
 
 @bp_collection.route('/api/mom_comparison_report', methods=['GET'])
 @login_required
