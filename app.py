@@ -172,32 +172,133 @@ def clean_date(val, fmt_in='%d-%m-%Y', fmt_out='%Y-%m-%d'):
 def index():
     return render_template('index.html')
 
-# API: KPI Summary
+# API: KPI Summary dengan Detail Lengkap
 @app.route('/api/kpi_data')
 def api_kpi():
     db = get_db()
     kpi = {}
+    
     try:
-        # Cari Bulan Terbaru
+        # Cari Bulan Terbaru dari Collection
         cek_tgl = db.execute("SELECT MAX(tgl_bayar) as last_date FROM collection_harian").fetchone()
         last_month = cek_tgl['last_date'][:7] if cek_tgl['last_date'] else datetime.now().strftime('%Y-%m')
         
-        kpi['cust'] = db.execute('SELECT COUNT(*) as t FROM master_pelanggan').fetchone()['t']
+        # ========================================
+        # 1. TOTAL PELANGGAN (dari MC)
+        # ========================================
+        kpi['total_pelanggan'] = db.execute('SELECT COUNT(*) as t FROM master_pelanggan').fetchone()['t']
         
-        # Collection Bulan Ini Saja
-        kpi['coll'] = db.execute(
-            "SELECT SUM(jumlah_bayar) as t FROM collection_harian WHERE strftime('%Y-%m', tgl_bayar) = ?",
-            (last_month,)
-        ).fetchone()['t'] or 0
+        # ========================================
+        # 2. TARGET MC
+        # ========================================
+        target_data = db.execute('''
+            SELECT 
+                COUNT(*) as total_nomen,
+                SUM(target_mc) as total_target
+            FROM master_pelanggan
+            WHERE target_mc > 0
+        ''').fetchone()
         
+        kpi['target'] = {
+            'total_nomen': target_data['total_nomen'],
+            'total_nominal': target_data['total_target'] or 0
+        }
+        
+        # Hitung yang sudah bayar dan belum bayar (berdasarkan Collection bulan ini)
+        bayar_target = db.execute(f'''
+            SELECT 
+                COUNT(DISTINCT c.nomen) as nomen_bayar,
+                SUM(c.jumlah_bayar) as nominal_bayar
+            FROM collection_harian c
+            WHERE strftime('%Y-%m', c.tgl_bayar) = ?
+        ''', (last_month,)).fetchone()
+        
+        kpi['target']['sudah_bayar_nomen'] = bayar_target['nomen_bayar'] or 0
+        kpi['target']['sudah_bayar_nominal'] = bayar_target['nominal_bayar'] or 0
+        kpi['target']['belum_bayar_nomen'] = kpi['target']['total_nomen'] - kpi['target']['sudah_bayar_nomen']
+        kpi['target']['belum_bayar_nominal'] = kpi['target']['total_nominal'] - kpi['target']['sudah_bayar_nominal']
+        
+        # ========================================
+        # 3. COLLECTION (Detail Current & Undue)
+        # ========================================
+        # Ambil dari MB untuk mengetahui Current vs Undue
+        # Asumsi: jika tgl_bayar di Collection = periode tagihan → Current, selain itu → Undue
+        
+        collection_total = db.execute(f'''
+            SELECT 
+                COUNT(DISTINCT nomen) as total_nomen,
+                SUM(jumlah_bayar) as total_bayar
+            FROM collection_harian
+            WHERE strftime('%Y-%m', tgl_bayar) = ?
+        ''', (last_month,)).fetchone()
+        
+        kpi['collection'] = {
+            'total_nomen': collection_total['total_nomen'] or 0,
+            'total_nominal': collection_total['total_bayar'] or 0
+        }
+        
+        # Pisahkan Current dan Undue (simplified: anggap semua current dulu)
+        # Untuk detail akurat, perlu tambah field tipe_bayar di collection_harian
+        kpi['collection']['current_nomen'] = collection_total['total_nomen'] or 0
+        kpi['collection']['current_nominal'] = collection_total['total_bayar'] or 0
+        kpi['collection']['undue_nomen'] = 0  # Perlu field tambahan
+        kpi['collection']['undue_nominal'] = 0  # Perlu field tambahan
+        
+        # ========================================
+        # 4. COLLECTION RATE
+        # ========================================
+        if kpi['target']['total_nominal'] > 0:
+            kpi['collection_rate'] = round((kpi['collection']['total_nominal'] / kpi['target']['total_nominal'] * 100), 2)
+        else:
+            kpi['collection_rate'] = 0
+        
+        # ========================================
+        # 5. TUNGGAKAN (dari Ardebt)
+        # ========================================
+        tunggakan_data = db.execute('''
+            SELECT 
+                COUNT(*) as total_nomen,
+                SUM(saldo_tunggakan) as total_tunggakan
+            FROM ardebt
+            WHERE saldo_tunggakan > 0
+        ''').fetchone()
+        
+        kpi['tunggakan'] = {
+            'total_nomen': tunggakan_data['total_nomen'] or 0,
+            'total_nominal': tunggakan_data['total_tunggakan'] or 0
+        }
+        
+        # Hitung tunggakan yang sudah dibayar (dari Collection Undue)
+        # Untuk sementara set 0, perlu field tipe_bayar
+        kpi['tunggakan']['sudah_bayar_nomen'] = 0
+        kpi['tunggakan']['sudah_bayar_nominal'] = 0
+        kpi['tunggakan']['belum_bayar_nomen'] = kpi['tunggakan']['total_nomen']
+        kpi['tunggakan']['belum_bayar_nominal'] = kpi['tunggakan']['total_nominal']
+        
+        # ========================================
+        # 6. ANOMALI METER
+        # ========================================
         kpi['anomali'] = db.execute('SELECT COUNT(*) as t FROM analisa_manual WHERE status != "Closed"').fetchone()['t']
         
-        target_total = db.execute('SELECT SUM(target_mc) as t FROM master_pelanggan').fetchone()['t'] or 0
-        kpi['persen'] = round((kpi['coll'] / target_total * 100), 2) if target_total > 0 else 0
+        # ========================================
+        # 7. METADATA
+        # ========================================
         kpi['periode'] = last_month
+        
     except Exception as e:
         print(f"Error KPI: {e}")
-        kpi = {'cust': 0, 'coll': 0, 'anomali': 0, 'persen': 0, 'periode': '-'}
+        import traceback
+        traceback.print_exc()
+        kpi = {
+            'total_pelanggan': 0,
+            'target': {'total_nomen': 0, 'total_nominal': 0, 'sudah_bayar_nomen': 0, 'sudah_bayar_nominal': 0, 'belum_bayar_nomen': 0, 'belum_bayar_nominal': 0},
+            'collection': {'total_nomen': 0, 'total_nominal': 0, 'current_nomen': 0, 'current_nominal': 0, 'undue_nomen': 0, 'undue_nominal': 0},
+            'collection_rate': 0,
+            'tunggakan': {'total_nomen': 0, 'total_nominal': 0, 'sudah_bayar_nomen': 0, 'sudah_bayar_nominal': 0, 'belum_bayar_nomen': 0, 'belum_bayar_nominal': 0},
+            'anomali': 0,
+            'periode': '-'
+        }
+    
     return jsonify(kpi)
 
 # API: DATA COLLECTION (SEMUA DATA BULAN TERBARU)
@@ -260,17 +361,47 @@ def api_breakdown_rayon():
     query = '''
         SELECT 
             m.rayon,
-            SUM(c.jumlah_bayar) as total_collection,
+            COUNT(DISTINCT c.nomen) as jumlah_pelanggan,
             SUM(m.target_mc) as total_target,
-            COUNT(DISTINCT c.nomen) as jumlah_pelanggan
-        FROM collection_harian c
-        LEFT JOIN master_pelanggan m ON c.nomen = m.nomen
-        WHERE strftime('%Y-%m', c.tgl_bayar) = ?
-        AND (m.rayon = '34' OR m.rayon = '35')
+            SUM(c.jumlah_bayar) as total_collection
+        FROM master_pelanggan m
+        LEFT JOIN collection_harian c ON m.nomen = c.nomen 
+            AND strftime('%Y-%m', c.tgl_bayar) = ?
+        WHERE m.rayon IN ('34', '35')
         GROUP BY m.rayon
+        ORDER BY m.rayon
     '''
     
     rows = db.execute(query, (last_month,)).fetchall()
+    data = [dict(row) for row in rows]
+    
+    return jsonify(data)
+
+# API: Tren Collection Harian (per hari dalam bulan berjalan)
+@app.route('/api/tren_harian')
+def api_tren_harian():
+    db = get_db()
+    
+    # Ambil bulan terbaru
+    cek_tgl = db.execute("SELECT MAX(tgl_bayar) as last_date FROM collection_harian").fetchone()
+    last_month = cek_tgl['last_date'][:7] if cek_tgl['last_date'] else datetime.now().strftime('%Y-%m')
+    
+    query = '''
+        SELECT 
+            c.tgl_bayar,
+            COUNT(DISTINCT c.nomen) as jumlah_nomen,
+            SUM(c.jumlah_bayar) as total_harian,
+            (SELECT SUM(jumlah_bayar) 
+             FROM collection_harian 
+             WHERE strftime('%Y-%m', tgl_bayar) = ? 
+             AND tgl_bayar <= c.tgl_bayar) as kumulatif
+        FROM collection_harian c
+        WHERE strftime('%Y-%m', c.tgl_bayar) = ?
+        GROUP BY c.tgl_bayar
+        ORDER BY c.tgl_bayar ASC
+    '''
+    
+    rows = db.execute(query, (last_month, last_month)).fetchall()
     data = [dict(row) for row in rows]
     
     return jsonify(data)
