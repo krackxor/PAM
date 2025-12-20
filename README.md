@@ -545,3 +545,354 @@ Proprietary - PAM Jaya Internal Use Only
 **Last Updated:** December 21, 2025  
 **Version:** 2.0  
 **Status:** Production Ready ✅
+
+
+# 🗺️ PANDUAN MAPPING FIELD - SUNTER DASHBOARD
+
+> **Dokumen ini dibuat berdasarkan ANALISA FILE AKTUAL** dari sistem PAM Jaya Sunter
+
+---
+
+## 📋 DAFTAR ISI
+
+1. [File MC (Master Customer)](#file-mc)
+2. [File Collection Daily](#file-collection)
+3. [File MainBill](#file-mainbill)
+4. [Relasi Antar File](#relasi)
+5. [Contoh Kasus](#contoh)
+
+---
+
+<a name="file-mc"></a>
+## 📄 1. FILE MC (Master Customer)
+
+### Informasi File
+- **Nama File:** `MC1125_AB_Sunter.xls`
+- **Format:** Excel (.xls) - Microsoft Excel 97-2003
+- **Role:** **DATA INDUK** - Wajib diupload pertama!
+
+### Kolom Wajib
+
+| Kolom | Tipe | Keterangan | Mapping DB |
+|-------|------|------------|------------|
+| `ZONA_NOVAK` | TEXT (9 digit) | Kode lokasi lengkap | → zona_novak, rayon, pc, ez, block, pcez |
+| `NOTAGIHAN` | TEXT | **KEY UTAMA** - Nomor pelanggan | → **nomen** (PRIMARY KEY) |
+| `NAMA_PEL` | TEXT | Nama pelanggan lengkap | → nama |
+| `ALM1_PEL` | TEXT | Alamat pelanggan | → alamat |
+| `REK_AIR` | NUMERIC | Target collection/tagihan | → target_mc |
+| `TARIF` | TEXT | Kode tarif pelanggan | → tarif |
+
+### Parsing ZONA_NOVAK
+
+**Format:** `350960217` (9 digit)
+
+```
+Contoh: 3 5 0 9 6 0 2 1 7
+        │ │ └─┬─┘ └─┬─┘ │ │
+        │ │   │     │   │ │
+        └─┴───┼─────┼───┼─┴─── ZONA_NOVAK (full)
+          │   │     │   │
+          │   │     │   └────── Block: 17
+          │   │     └────────── EZ: 02
+          │   └──────────────── PC: 096
+          └──────────────────── Rayon: 35
+
+PCEZ = PC/EZ = 096/02
+```
+
+**Kode Python:**
+```python
+zona = "350960217"
+rayon = zona[0:2]   # "35"
+pc    = zona[2:5]   # "096"
+ez    = zona[5:7]   # "02"
+block = zona[7:9]   # "17"
+pcez  = f"{pc}/{ez}" # "096/02"
+```
+
+### Filter Rayon
+✅ Sistem hanya memproses Rayon **34** dan **35**  
+❌ Rayon lain akan di-skip
+
+---
+
+<a name="file-collection"></a>
+## 📄 2. FILE COLLECTION DAILY (Transaksi Harian)
+
+### Informasi File
+- **Nama File:** `Collection-2025-12-01_sd_2025-12-02-02122025042156.txt`
+- **Format:** TXT (text file)
+- **Delimiter:** `|` (pipe)
+- **Encoding:** UTF-8
+
+### Kolom Yang Digunakan
+
+| Kolom | Tipe | Keterangan | Mapping DB |
+|-------|------|------------|------------|
+| `NOTAG` | TEXT | **KEY** - Link ke MC.NOTAGIHAN | → **nomen** (FOREIGN KEY) |
+| `PAY_DT` | DATE | Tanggal bayar (DD-MM-YYYY) | → tgl_bayar (YYYY-MM-DD) |
+| `AMT_COLLECT` | NUMERIC | Jumlah bayar (**MINUS!**) | → jumlah_bayar (absolute) |
+| `RAYON` | TEXT | Rayon pelanggan | → rayon_check (validasi) |
+| `NOMEN` | TEXT | Nomor induk (beda dgn NOTAG) | ❌ Tidak dipakai |
+
+### ⚠️ CATATAN PENTING
+
+#### 1. NOTAG vs NOMEN
+```
+NOTAG  = 011270295227  ← INI YANG DIPAKAI (link ke MC.NOTAGIHAN)
+NOMEN  = 40061003       ← Nomor lain, tidak dipakai
+```
+
+**Mengapa NOTAG?**
+- NOTAG di DAILY = NOTAGIHAN di MC
+- NOTAG adalah nomor tagihan yang sama antar sistem
+- NOMEN adalah ID internal yang berbeda
+
+#### 2. AMT_COLLECT Selalu Minus
+```
+File asli:   AMT_COLLECT = -846184
+Database:    jumlah_bayar = 846184  (di-abs())
+```
+
+#### 3. Format Tanggal
+```
+File asli:   PAY_DT = 01-12-2025 (DD-MM-YYYY)
+Database:    tgl_bayar = 2025-12-01 (YYYY-MM-DD)
+```
+
+### Contoh Data
+```
+NOMEN    |RAYON|NOTAG        |AMT_COLLECT|PAY_DT     
+40061003 |61   |011270295227 |-846184    |01-12-2025
+         └─────┴─────────────┴───────────┴──────────
+         Skip   KEY (pakai)  Abs()      Convert
+```
+
+---
+
+<a name="file-mainbill"></a>
+## 📄 3. FILE MAINBILL (Tagihan Bulanan)
+
+### Informasi File
+- **Nama File:** `MainBill-12-12-2025_sd_13-12-2025-13122025043303.txt`
+- **Format:** TXT (text file)
+- **Delimiter:** `;` (semicolon/titik koma)
+- **Encoding:** UTF-8
+
+### Kolom Yang Digunakan
+
+| Kolom | Tipe | Keterangan | Mapping DB |
+|-------|------|------------|------------|
+| `NOMEN` | TEXT | **KEY** - Nomor pelanggan | → **nomen** (FOREIGN KEY) |
+| `TOTAL_TAGIHAN` | NUMERIC | Total tagihan | → tagihan |
+| `FREEZE_DT` | DATE | Tanggal tagihan (DD-MM-YYYY) | → tgl_bayar (YYYY-MM-DD) |
+| `PCEZBK` | TEXT | Kode PC/EZ/Block (7 digit) | → pcezbk |
+| `CC` | TEXT | Rayon (untuk validasi) | → rayon_check |
+| `TARIF` | TEXT | Kode tarif | → tarif_check |
+
+### ⚠️ CATATAN PENTING
+
+#### 1. NOMEN di MainBill
+```
+MB.NOMEN = 60578518  ← Link ke MC.NOTAGIHAN
+```
+
+**Asumsi:** 
+- NOMEN di MainBill = NOTAGIHAN di MC
+- Jika tidak cocok, perlu mapping manual
+
+#### 2. Format PCEZBK
+```
+File asli:   PCEZBK = 1510224  (7 digit)
+Parse:       PC = 151, EZ = 02, Block = 24
+```
+
+Berbeda dengan ZONA_NOVAK di MC!
+
+---
+
+<a name="relasi"></a>
+## 🔗 4. RELASI ANTAR FILE
+
+### Diagram Relasi
+
+```
+┌─────────────────────────┐
+│  FILE MC (MASTER)       │
+│  ✅ DATA INDUK          │
+├─────────────────────────┤
+│ NOTAGIHAN (PK)         │ ←─────┐
+│ ZONA_NOVAK             │        │
+│ NAMA_PEL               │        │
+│ REK_AIR (target)       │        │
+└─────────────────────────┘        │
+                                   │
+        ┌──────────────────────────┼────────────────────┐
+        │                          │                    │
+        ↓ LINK                     ↓ LINK              ↓ LINK
+┌───────────────────┐    ┌──────────────────┐   ┌──────────────────┐
+│ FILE DAILY        │    │ FILE MAINBILL    │   │ FILE SBRS        │
+├───────────────────┤    ├──────────────────┤   ├──────────────────┤
+│ NOTAG (FK)        │    │ NOMEN (FK)       │   │ Nomen (FK)       │
+│ PAY_DT            │    │ TOTAL_TAGIHAN    │   │ Curr_Read_1      │
+│ AMT_COLLECT       │    │ FREEZE_DT        │   │ Read_date_1      │
+│ RAYON             │    │ PCEZBK           │   │ ...              │
+└───────────────────┘    └──────────────────┘   └──────────────────┘
+```
+
+### Mapping Tabel
+
+| Tabel Database | Sumber File | Key Field | Foreign Key Ke |
+|----------------|-------------|-----------|----------------|
+| `master_pelanggan` | MC | NOTAGIHAN → nomen | - (PRIMARY) |
+| `collection_harian` | DAILY | NOTAG → nomen | master_pelanggan.nomen |
+| `mainbill` | MB | NOMEN → nomen | master_pelanggan.nomen |
+
+---
+
+<a name="contoh"></a>
+## 💡 5. CONTOH KASUS NYATA
+
+### Kasus 1: Upload MC (Master)
+
+**File MC baris pertama:**
+```csv
+ZONA_NOVAK,NOTAGIHAN,NAMA_PEL,ALM1_PEL,REK_AIR,TARIF
+350960217,250450123456,PT ABC,Jl Sunter Raya,50000000,I-B
+```
+
+**Hasil di Database:**
+```sql
+INSERT INTO master_pelanggan VALUES (
+    nomen = '250450123456',        -- dari NOTAGIHAN
+    nama = 'PT ABC',               -- dari NAMA_PEL
+    alamat = 'Jl Sunter Raya',     -- dari ALM1_PEL
+    zona_novak = '350960217',      -- raw
+    rayon = '35',                  -- parsed [0:2]
+    pc = '096',                    -- parsed [2:5]
+    ez = '02',                     -- parsed [5:7]
+    block = '17',                  -- parsed [7:9]
+    pcez = '096/02',               -- PC/EZ
+    tarif = 'I-B',                 -- dari TARIF
+    target_mc = 50000000           -- dari REK_AIR
+);
+```
+
+---
+
+### Kasus 2: Upload Collection DAILY
+
+**File DAILY baris pertama:**
+```
+NOMEN|RAYON|NOTAG|AMT_COLLECT|PAY_DT
+40061003|35|250450123456|-45000000|15-12-2025
+```
+
+**Proses:**
+1. Ambil `NOTAG` = `250450123456` ← INI YANG JADI KEY
+2. Skip `NOMEN` = `40061003` (tidak dipakai)
+3. Abs `AMT_COLLECT` = `45000000` (hilangkan minus)
+4. Convert tanggal `15-12-2025` → `2025-12-15`
+
+**Hasil di Database:**
+```sql
+INSERT INTO collection_harian VALUES (
+    nomen = '250450123456',        -- dari NOTAG (link ke MC)
+    tgl_bayar = '2025-12-15',      -- dari PAY_DT (converted)
+    jumlah_bayar = 45000000,       -- dari AMT_COLLECT (abs)
+    rayon_check = '35'             -- dari RAYON (validasi)
+);
+```
+
+**Query Join:**
+```sql
+SELECT 
+    m.nama,
+    m.target_mc,
+    c.jumlah_bayar,
+    c.tgl_bayar
+FROM collection_harian c
+LEFT JOIN master_pelanggan m ON c.nomen = m.nomen
+WHERE c.nomen = '250450123456';
+```
+
+---
+
+### Kasus 3: Upload MainBill
+
+**File MB baris pertama:**
+```
+NOMEN;TOTAL_TAGIHAN;FREEZE_DT;PCEZBK;CC
+250450123456;52000000;20-12-2025;1510224;35
+```
+
+**Hasil di Database:**
+```sql
+INSERT INTO mainbill VALUES (
+    nomen = '250450123456',        -- dari NOMEN (link ke MC)
+    tagihan = 52000000,            -- dari TOTAL_TAGIHAN
+    tgl_bayar = '2025-12-20',      -- dari FREEZE_DT (converted)
+    pcezbk = '1510224',            -- dari PCEZBK
+    rayon_check = '35'             -- dari CC (validasi)
+);
+```
+
+---
+
+## ✅ CHECKLIST VALIDASI
+
+### Sebelum Upload MC
+- [ ] File punya kolom `ZONA_NOVAK`
+- [ ] File punya kolom `NOTAGIHAN`
+- [ ] File punya kolom `NAMA_PEL` (agar nama tidak kosong)
+- [ ] ZONA_NOVAK dimulai dengan 34 atau 35
+- [ ] Format file .xls atau .csv
+
+### Sebelum Upload Collection DAILY
+- [ ] File MC sudah diupload terlebih dahulu
+- [ ] File punya kolom `NOTAG` (bukan NOMEN!)
+- [ ] File punya kolom `PAY_DT`
+- [ ] File punya kolom `AMT_COLLECT`
+- [ ] Delimiter = `|` (pipe)
+- [ ] Format file .txt
+
+### Sebelum Upload MainBill
+- [ ] File MC sudah diupload terlebih dahulu
+- [ ] File punya kolom `NOMEN`
+- [ ] File punya kolom `TOTAL_TAGIHAN`
+- [ ] File punya kolom `FREEZE_DT`
+- [ ] Delimiter = `;` (titik koma)
+- [ ] Format file .txt
+
+---
+
+## 🐛 TROUBLESHOOTING
+
+### Error: "Field NOTAG tidak ditemukan"
+**Penyebab:** File Collection bukan format DAILY yang benar
+**Solusi:** Pastikan file punya kolom `NOTAG` (bukan `NOMEN`)
+
+### Error: "Tidak ada data matching antara Collection dan MC"
+**Penyebab:** NOTAG di DAILY tidak cocok dengan NOTAGIHAN di MC
+**Solusi:** 
+1. Cek apakah MC sudah diupload
+2. Bandingkan nilai NOTAG vs NOTAGIHAN di kedua file
+3. Pastikan tidak ada spasi atau karakter tersembunyi
+
+### Error: "AMT_COLLECT = 0 di database"
+**Penyebab:** Parsing field salah atau nilai memang 0
+**Solusi:** Cek nilai asli di file, pastikan kolom `AMT_COLLECT` ada
+
+---
+
+## 📞 KONTAK DEVELOPER
+
+**Tim IT PAM Jaya Sunter**
+- Email: support@pamjaya-sunter.com
+- Ext: 1234
+
+---
+
+**Last Updated:** December 21, 2025  
+**Version:** 2.0 (Berdasarkan File Aktual)  
+**Author:** Claude + Tim Analisa Data
