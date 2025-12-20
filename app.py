@@ -12,8 +12,10 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 DB_FOLDER = os.path.join(os.getcwd(), 'database')
 DB_PATH = os.path.join(DB_FOLDER, 'sunter.db')
 
+# Pastikan folder ada
 for folder in [app.config['UPLOAD_FOLDER'], DB_FOLDER]:
-    if not os.path.exists(folder): os.makedirs(folder)
+    if not os.path.exists(folder):
+        os.makedirs(folder, exist_ok=True)
 
 # --- DATABASE ENGINE ---
 def get_db():
@@ -26,7 +28,8 @@ def get_db():
 @app.teardown_appcontext
 def close_db(exception):
     db = getattr(g, '_database', None)
-    if db is not None: db.close()
+    if db is not None:
+        db.close()
 
 def init_db():
     with app.app_context():
@@ -135,8 +138,11 @@ def clean_nomen(val):
     """Membersihkan format Nomen"""
     try:
         if pd.isna(val): return None
-        # Hilangkan .0 dari Excel
-        return str(int(float(str(val))))
+        # Hilangkan .0 dari Excel dan spasi
+        val_str = str(val).strip()
+        if val_str.endswith('.0'):
+            return val_str[:-2]
+        return val_str
     except:
         return str(val).strip()
 
@@ -148,6 +154,7 @@ def parse_zona_novak(zona):
     if len(zona_str) < 9:
         zona_str = zona_str.zfill(9)  # Padding dengan 0 di depan jika kurang
     
+    # Slice string dengan aman
     return {
         'rayon': zona_str[:2],
         'pc': zona_str[2:5],
@@ -159,7 +166,9 @@ def parse_zona_novak(zona):
 def clean_date(val, fmt_in='%d-%m-%Y', fmt_out='%Y-%m-%d'):
     """Standardisasi format tanggal ke YYYY-MM-DD"""
     try:
-        return datetime.strptime(str(val).strip(), fmt_in).strftime(fmt_out)
+        val_str = str(val).strip()
+        # Coba format default
+        return datetime.strptime(val_str, fmt_in).strftime(fmt_out)
     except:
         try:
             # Coba format lain (DD/MM/YYYY)
@@ -181,10 +190,10 @@ def api_kpi():
     try:
         # Cari Bulan Terbaru dari Collection
         cek_tgl = db.execute("SELECT MAX(tgl_bayar) as last_date FROM collection_harian").fetchone()
-        last_month = cek_tgl['last_date'][:7] if cek_tgl['last_date'] else datetime.now().strftime('%Y-%m')
+        last_month = cek_tgl['last_date'][:7] if cek_tgl and cek_tgl['last_date'] else datetime.now().strftime('%Y-%m')
         
         # ========================================
-        # 1. TOTAL PELANGGAN (hanya dari MC, tidak terpengaruh upload lain)
+        # 1. TOTAL PELANGGAN
         # ========================================
         kpi['total_pelanggan'] = db.execute('SELECT COUNT(*) as t FROM master_pelanggan').fetchone()['t']
         
@@ -204,7 +213,7 @@ def api_kpi():
             'total_nominal': target_data['total_target'] or 0
         }
         
-        # Hitung yang sudah bayar dan belum bayar (berdasarkan Collection bulan ini)
+        # Hitung yang sudah bayar (Collection bulan ini)
         bayar_target = db.execute(f'''
             SELECT 
                 COUNT(DISTINCT c.nomen) as nomen_bayar,
@@ -222,14 +231,6 @@ def api_kpi():
         # ========================================
         # 3. COLLECTION (Detail Current & Undue)
         # ========================================
-        # LOGIKA BENAR:
-        # - CURRENT  = Pemakaian bulan LALU dibayar bulan INI (normal payment)
-        # - UNDUE    = Pemakaian bulan INI dibayar bulan INI (bayar lebih cepat)
-        
-        # Untuk membedakan Current vs Undue, kita perlu tahu periode tagihan
-        # Asumsi: Jika tidak ada field pembeda, kita anggap semua Current dulu
-        # Untuk implementasi penuh, perlu tambah field 'tipe_bayar' atau 'periode_tagihan' di collection_harian
-        
         collection_total = db.execute(f'''
             SELECT 
                 COUNT(DISTINCT nomen) as total_nomen,
@@ -243,14 +244,12 @@ def api_kpi():
             'total_nominal': collection_total['total_bayar'] or 0
         }
         
-        # TODO: Pisahkan Current dan Undue
-        # Untuk saat ini, anggap 90% Current, 10% Undue (placeholder)
-        # Implementasi real perlu field tambahan di database
+        # Placeholder pembagian Current/Undue
         total_coll = kpi['collection']['total_nominal']
         kpi['collection']['current_nomen'] = collection_total['total_nomen'] or 0
-        kpi['collection']['current_nominal'] = int(total_coll * 0.9)  # 90% current (placeholder)
-        kpi['collection']['undue_nomen'] = 0  # Perlu field tipe_bayar
-        kpi['collection']['undue_nominal'] = int(total_coll * 0.1)  # 10% undue (placeholder)
+        kpi['collection']['current_nominal'] = int(total_coll * 0.9) 
+        kpi['collection']['undue_nomen'] = 0 
+        kpi['collection']['undue_nominal'] = int(total_coll * 0.1)
         
         # ========================================
         # 4. COLLECTION RATE
@@ -261,7 +260,7 @@ def api_kpi():
             kpi['collection_rate'] = 0
         
         # ========================================
-        # 5. TUNGGAKAN (dari Ardebt)
+        # 5. TUNGGAKAN
         # ========================================
         tunggakan_data = db.execute('''
             SELECT 
@@ -276,8 +275,6 @@ def api_kpi():
             'total_nominal': tunggakan_data['total_tunggakan'] or 0
         }
         
-        # Hitung tunggakan yang sudah dibayar (dari Collection Undue)
-        # Untuk sementara set 0, perlu field tipe_bayar
         kpi['tunggakan']['sudah_bayar_nomen'] = 0
         kpi['tunggakan']['sudah_bayar_nominal'] = 0
         kpi['tunggakan']['belum_bayar_nomen'] = kpi['tunggakan']['total_nomen']
@@ -288,9 +285,6 @@ def api_kpi():
         # ========================================
         kpi['anomali'] = db.execute('SELECT COUNT(*) as t FROM analisa_manual WHERE status != "Closed"').fetchone()['t']
         
-        # ========================================
-        # 7. METADATA
-        # ========================================
         kpi['periode'] = last_month
         
     except Exception as e:
@@ -309,21 +303,16 @@ def api_kpi():
     
     return jsonify(kpi)
 
-# API: DATA COLLECTION (SEMUA DATA BULAN TERBARU)
+# API: DATA COLLECTION
 @app.route('/api/collection_data')
 def api_collection():
     db = get_db()
     
-    # Filter parameter (optional)
-    rayon_filter = request.args.get('rayon', 'SUNTER')  # SUNTER, 34, atau 35
+    rayon_filter = request.args.get('rayon', 'SUNTER')
     
     # Cari Bulan Terbaru
     cek_tgl = db.execute("SELECT MAX(tgl_bayar) as last_date FROM collection_harian").fetchone()
-    
-    if cek_tgl['last_date']:
-        last_month_str = cek_tgl['last_date'][:7]
-    else:
-        last_month_str = datetime.now().strftime('%Y-%m')
+    last_month_str = cek_tgl['last_date'][:7] if cek_tgl and cek_tgl['last_date'] else datetime.now().strftime('%Y-%m')
 
     # Query dengan filter rayon
     if rayon_filter == 'SUNTER':
@@ -357,14 +346,13 @@ def api_collection():
     
     return jsonify(data)
 
-# API: Breakdown per Rayon (untuk Chart)
+# API: Breakdown per Rayon
 @app.route('/api/breakdown_rayon')
 def api_breakdown_rayon():
     db = get_db()
     
-    # Ambil bulan terbaru
     cek_tgl = db.execute("SELECT MAX(tgl_bayar) as last_date FROM collection_harian").fetchone()
-    last_month = cek_tgl['last_date'][:7] if cek_tgl['last_date'] else datetime.now().strftime('%Y-%m')
+    last_month = cek_tgl['last_date'][:7] if cek_tgl and cek_tgl['last_date'] else datetime.now().strftime('%Y-%m')
     
     query = '''
         SELECT 
@@ -385,14 +373,13 @@ def api_breakdown_rayon():
     
     return jsonify(data)
 
-# API: Tren Collection Harian (per hari dalam bulan berjalan)
+# API: Tren Harian
 @app.route('/api/tren_harian')
 def api_tren_harian():
     db = get_db()
     
-    # Ambil bulan terbaru
     cek_tgl = db.execute("SELECT MAX(tgl_bayar) as last_date FROM collection_harian").fetchone()
-    last_month = cek_tgl['last_date'][:7] if cek_tgl['last_date'] else datetime.now().strftime('%Y-%m')
+    last_month = cek_tgl['last_date'][:7] if cek_tgl and cek_tgl['last_date'] else datetime.now().strftime('%Y-%m')
     
     query = '''
         SELECT 
@@ -451,81 +438,59 @@ def upload_file():
         return redirect(url_for('index'))
     
     if file:
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(file.filename))
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
         
         try:
             conn = get_db()
             
-            # Baca File
-            if filepath.endswith('.csv'):
-                try:
-                    df = pd.read_csv(filepath, sep=',', encoding='utf-8')
-                    if len(df.columns) < 2:
-                        df = pd.read_csv(filepath, sep=';', encoding='utf-8')
-                except:
-                    df = pd.read_csv(filepath, sep=';', encoding='latin-1')
-            elif filepath.endswith('.txt'):
-                # Untuk file DAILY (Collection) pakai pipe, MainBill pakai semicolon
-                try:
-                    df = pd.read_csv(filepath, sep='|', encoding='utf-8')
-                    if len(df.columns) < 2:
-                        df = pd.read_csv(filepath, sep=';', encoding='utf-8')
-                except:
-                    df = pd.read_csv(filepath, sep=';', encoding='utf-8')
-            else:
-                # Excel - baca langsung, biarkan pandas handle
-                df = pd.read_excel(filepath)
+            # Baca File dengan handling delimiter
+            try:
+                if filepath.endswith('.csv') or filepath.endswith('.txt'):
+                    try:
+                        df = pd.read_csv(filepath, sep=',', encoding='utf-8', on_bad_lines='skip')
+                        if len(df.columns) < 2:
+                            df = pd.read_csv(filepath, sep=';', encoding='utf-8', on_bad_lines='skip')
+                        if len(df.columns) < 2:
+                            df = pd.read_csv(filepath, sep='|', encoding='utf-8', on_bad_lines='skip')
+                    except:
+                        df = pd.read_csv(filepath, sep=';', encoding='latin-1', on_bad_lines='skip')
+                else:
+                    df = pd.read_excel(filepath)
+            except Exception as e:
+                flash(f'Gagal membaca file: {e}', 'danger')
+                return redirect(url_for('index'))
 
             # Normalize column names
             df.columns = df.columns.str.upper().str.strip()
 
             # --- UPLOAD MASTER (MC) ---
             if tipe == 'master':
-                # Validasi kolom wajib
                 if 'ZONA_NOVAK' not in df.columns:
                     flash('❌ Format MC salah! Wajib ada kolom ZONA_NOVAK', 'danger')
                     return redirect(url_for('index'))
                 
                 if 'NOTAGIHAN' not in df.columns:
-                    flash('❌ Format MC salah! Wajib ada kolom NOTAGIHAN (ini KEY UTAMA)', 'danger')
+                    flash('❌ Format MC salah! Wajib ada kolom NOTAGIHAN', 'danger')
                     return redirect(url_for('index'))
 
-                # Mapping field MC
-                rename_dict = {}
+                rename_dict = {'NOTAGIHAN': 'nomen'}
+                if 'NAMA_PEL' in df.columns: rename_dict['NAMA_PEL'] = 'nama'
+                elif 'NAMA' in df.columns: rename_dict['NAMA'] = 'nama'
                 
-                # Field NOMEN dari NOTAGIHAN (MC) - INI DATA INDUK!
-                rename_dict['NOTAGIHAN'] = 'nomen'
+                if 'ALM1_PEL' in df.columns: rename_dict['ALM1_PEL'] = 'alamat'
+                elif 'ALAMAT' in df.columns: rename_dict['ALAMAT'] = 'alamat'
                 
-                # Field NAMA
-                if 'NAMA_PEL' in df.columns:
-                    rename_dict['NAMA_PEL'] = 'nama'
-                elif 'NAMA' in df.columns:
-                    rename_dict['NAMA'] = 'nama'
+                if 'TARIF' in df.columns: rename_dict['TARIF'] = 'tarif'
+                elif 'KODETARIF' in df.columns: rename_dict['KODETARIF'] = 'tarif'
                 
-                # Field ALAMAT
-                if 'ALM1_PEL' in df.columns:
-                    rename_dict['ALM1_PEL'] = 'alamat'
-                elif 'ALAMAT' in df.columns:
-                    rename_dict['ALAMAT'] = 'alamat'
-                
-                # Field TARIF
-                if 'TARIF' in df.columns:
-                    rename_dict['TARIF'] = 'tarif'
-                elif 'KODETARIF' in df.columns:
-                    rename_dict['KODETARIF'] = 'tarif'
-                
-                # Field TARGET (REK_AIR)
-                if 'REK_AIR' in df.columns:
-                    rename_dict['REK_AIR'] = 'target_mc'
-                elif 'TARGET' in df.columns:
-                    rename_dict['TARGET'] = 'target_mc'
-                elif 'TAGIHAN' in df.columns:
-                    rename_dict['TAGIHAN'] = 'target_mc'
+                if 'REK_AIR' in df.columns: rename_dict['REK_AIR'] = 'target_mc'
+                elif 'TARGET' in df.columns: rename_dict['TARGET'] = 'target_mc'
+                elif 'TAGIHAN' in df.columns: rename_dict['TAGIHAN'] = 'target_mc'
                 
                 df = df.rename(columns=rename_dict)
                 
-                # Clean nomen
                 df['nomen'] = df['nomen'].apply(clean_nomen)
                 df = df.dropna(subset=['nomen'])
                 
@@ -539,24 +504,19 @@ def upload_file():
                 df['block'] = zona_parsed.apply(lambda x: x['block'])
                 df['pcez'] = zona_parsed.apply(lambda x: x['pcez'])
                 
-                # Filter hanya Rayon 34 dan 35
                 df = df[df['rayon'].isin(['34', '35'])]
                 
                 if len(df) == 0:
                     flash('Tidak ada data Rayon 34/35 dalam file MC', 'warning')
                     return redirect(url_for('index'))
                 
-                # Set default values
                 for col in ['nama', 'alamat', 'tarif']:
-                    if col not in df.columns:
-                        df[col] = ''
+                    if col not in df.columns: df[col] = ''
                 
-                if 'target_mc' not in df.columns:
-                    df['target_mc'] = 0
+                if 'target_mc' not in df.columns: df['target_mc'] = 0
                 
                 df['periode'] = datetime.now().strftime('%Y-%m')
                 
-                # Insert data
                 cols_db = ['nomen', 'nama', 'alamat', 'rayon', 'pc', 'ez', 'pcez', 'block', 'zona_novak', 'tarif', 'target_mc', 'periode']
                 df[cols_db].to_sql('master_pelanggan', conn, if_exists='replace', index=False)
                 
@@ -564,64 +524,42 @@ def upload_file():
 
             # --- UPLOAD COLLECTION DAILY ---
             elif tipe == 'collection':
-                # Field mapping untuk DAILY
                 rename_dict = {}
-                
-                # Field NOMEN dari NOTAG (DAILY) - PENTING!
-                # NOTAG di DAILY = NOTAGIHAN di MC
-                if 'NOTAG' in df.columns:
-                    rename_dict['NOTAG'] = 'nomen'
-                elif 'NO_SAMBUNGAN' in df.columns:
-                    rename_dict['NO_SAMBUNGAN'] = 'nomen'
+                if 'NOTAG' in df.columns: rename_dict['NOTAG'] = 'nomen'
+                elif 'NO_SAMBUNGAN' in df.columns: rename_dict['NO_SAMBUNGAN'] = 'nomen'
                 else:
                     flash('❌ Format Collection salah! Butuh kolom NOTAG', 'danger')
                     return redirect(url_for('index'))
                 
-                # Field TANGGAL dari PAY_DT (DAILY)
-                if 'PAY_DT' in df.columns:
-                    rename_dict['PAY_DT'] = 'tgl_bayar'
-                elif 'TGL_BAYAR' in df.columns:
-                    rename_dict['TGL_BAYAR'] = 'tgl_bayar'
+                if 'PAY_DT' in df.columns: rename_dict['PAY_DT'] = 'tgl_bayar'
+                elif 'TGL_BAYAR' in df.columns: rename_dict['TGL_BAYAR'] = 'tgl_bayar'
                 
-                # Field JUMLAH dari AMT_COLLECT
-                if 'AMT_COLLECT' in df.columns:
-                    rename_dict['AMT_COLLECT'] = 'jumlah_bayar'
-                elif 'JUMLAH' in df.columns:
-                    rename_dict['JUMLAH'] = 'jumlah_bayar'
-                
-                # Field RAYON untuk validasi
-                if 'RAYON' in df.columns:
-                    rename_dict['RAYON'] = 'rayon_check'
+                if 'AMT_COLLECT' in df.columns: rename_dict['AMT_COLLECT'] = 'jumlah_bayar'
+                elif 'JUMLAH' in df.columns: rename_dict['JUMLAH'] = 'jumlah_bayar'
                 
                 df = df.rename(columns=rename_dict)
-                
-                # Clean data
                 df['nomen'] = df['nomen'].apply(clean_nomen)
                 df = df.dropna(subset=['nomen'])
                 
-                # Clean tanggal
                 if 'tgl_bayar' in df.columns:
                     df['tgl_bayar'] = df['tgl_bayar'].apply(lambda x: clean_date(x))
                 else:
                     df['tgl_bayar'] = datetime.now().strftime('%Y-%m-%d')
                 
-                # Clean jumlah (hilangkan minus dari SAP)
                 if 'jumlah_bayar' in df.columns:
                     df['jumlah_bayar'] = df['jumlah_bayar'].apply(lambda x: abs(float(x)) if pd.notna(x) else 0)
                 else:
                     df['jumlah_bayar'] = 0
                 
-                df['sumber_file'] = file.filename
+                df['sumber_file'] = filename
                 
-                # VALIDASI CEPAT: Ambil semua nomen MC sekali saja (tanpa loop!)
                 mc_nomens_result = conn.execute("SELECT nomen FROM master_pelanggan").fetchall()
                 mc_nomen_set = set([str(row['nomen']).strip() for row in mc_nomens_result])
                 
-                if len(mc_nomen_set) == 0:
+                if not mc_nomen_set:
                     flash('⚠️ MC kosong. Upload MC terlebih dahulu!', 'warning')
                     return redirect(url_for('index'))
                 
-                # Clean dan filter dengan set operation (super cepat!)
                 df['nomen'] = df['nomen'].astype(str).str.strip()
                 df_valid = df[df['nomen'].isin(mc_nomen_set)].copy()
                 
@@ -629,47 +567,28 @@ def upload_file():
                     flash('⚠️ Tidak ada data Collection yang cocok dengan MC.', 'warning')
                     return redirect(url_for('index'))
                 
-                # Insert langsung (pandas to_sql sudah optimal)
                 cols = ['nomen', 'tgl_bayar', 'jumlah_bayar', 'sumber_file']
                 df_valid[cols].to_sql('collection_harian', conn, if_exists='append', index=False)
                 
-                skipped = len(df) - len(df_valid)
-                msg = f'✅ Collection: {len(df_valid):,} transaksi'
-                if skipped > 0:
-                    msg += f' ({skipped:,} skip)'
-                flash(msg, 'success')
+                flash(f'✅ Collection: {len(df_valid):,} transaksi', 'success')
             
-            # --- UPLOAD MB (MASTER BAYAR - Pembayaran Bulan Lalu) ---
+            # --- UPLOAD MB ---
             elif tipe == 'mb':
-                # Field mapping untuk MB
                 rename_dict = {}
-                
-                # Field NOMEN dari NOTAGIHAN (MB)
-                if 'NOTAGIHAN' in df.columns:
-                    rename_dict['NOTAGIHAN'] = 'nomen'
-                elif 'NOMEN' in df.columns:
-                    rename_dict['NOMEN'] = 'nomen'
+                if 'NOTAGIHAN' in df.columns: rename_dict['NOTAGIHAN'] = 'nomen'
+                elif 'NOMEN' in df.columns: rename_dict['NOMEN'] = 'nomen'
                 else:
-                    flash('❌ Format MB salah! Butuh kolom NOTAGIHAN atau NOMEN', 'danger')
+                    flash('❌ Format MB salah! Butuh kolom NOTAGIHAN', 'danger')
                     return redirect(url_for('index'))
                 
-                # Field TANGGAL dari TGL_BAYAR (MB)
-                if 'TGL_BAYAR' in df.columns:
-                    rename_dict['TGL_BAYAR'] = 'tgl_bayar'
-                elif 'TANGGAL' in df.columns:
-                    rename_dict['TANGGAL'] = 'tgl_bayar'
+                if 'TGL_BAYAR' in df.columns: rename_dict['TGL_BAYAR'] = 'tgl_bayar'
+                elif 'TANGGAL' in df.columns: rename_dict['TANGGAL'] = 'tgl_bayar'
                 
-                # Field JUMLAH BAYAR
-                if 'BAYAR' in df.columns:
-                    rename_dict['BAYAR'] = 'jumlah_bayar'
-                elif 'JUMLAH_BAYAR' in df.columns:
-                    rename_dict['JUMLAH_BAYAR'] = 'jumlah_bayar'
-                elif 'JUMLAH' in df.columns:
-                    rename_dict['JUMLAH'] = 'jumlah_bayar'
+                if 'BAYAR' in df.columns: rename_dict['BAYAR'] = 'jumlah_bayar'
+                elif 'JUMLAH_BAYAR' in df.columns: rename_dict['JUMLAH_BAYAR'] = 'jumlah_bayar'
+                elif 'JUMLAH' in df.columns: rename_dict['JUMLAH'] = 'jumlah_bayar'
                 
                 df = df.rename(columns=rename_dict)
-                
-                # Clean data
                 df['nomen'] = df['nomen'].apply(clean_nomen)
                 df = df.dropna(subset=['nomen'])
                 
@@ -678,24 +597,21 @@ def upload_file():
                 else:
                     df['tgl_bayar'] = ''
                 
-                if 'jumlah_bayar' not in df.columns:
-                    df['jumlah_bayar'] = 0
-                else:
-                    # Pastikan positif
+                if 'jumlah_bayar' in df.columns:
                     df['jumlah_bayar'] = df['jumlah_bayar'].apply(lambda x: abs(float(x)) if pd.notna(x) else 0)
+                else:
+                    df['jumlah_bayar'] = 0
                 
                 df['periode'] = datetime.now().strftime('%Y-%m')
-                df['sumber_file'] = file.filename
+                df['sumber_file'] = filename
                 
-                # VALIDASI CEPAT tanpa loop
                 mc_nomens_result = conn.execute("SELECT nomen FROM master_pelanggan").fetchall()
                 mc_nomen_set = set([str(row['nomen']).strip() for row in mc_nomens_result])
                 
-                if len(mc_nomen_set) == 0:
+                if not mc_nomen_set:
                     flash('⚠️ MC kosong. Upload MC terlebih dahulu!', 'warning')
                     return redirect(url_for('index'))
                 
-                # Clean dan filter
                 df['nomen'] = df['nomen'].astype(str).str.strip()
                 df_valid = df[df['nomen'].isin(mc_nomen_set)].copy()
                 
@@ -703,97 +619,29 @@ def upload_file():
                     flash('⚠️ Tidak ada data MB yang cocok dengan MC.', 'warning')
                     return redirect(url_for('index'))
                 
-                # Insert MB
                 cols = ['nomen', 'tgl_bayar', 'jumlah_bayar', 'periode', 'sumber_file']
                 df_valid[cols].to_sql('master_bayar', conn, if_exists='append', index=False)
                 
-                skipped = len(df) - len(df_valid)
-                msg = f'✅ MB: {len(df_valid):,} transaksi'
-                if skipped > 0:
-                    msg += f' ({skipped:,} skip)'
-                flash(msg, 'success')
+                flash(f'✅ MB: {len(df_valid):,} transaksi', 'success')
             
-            # --- UPLOAD MAINBILL (Tagihan Bulan Depan) ---
+            # --- UPLOAD MAINBILL ---
             elif tipe == 'mainbill':
-                # Field mapping untuk MB
                 rename_dict = {}
-                
-                # Field NOMEN dari NOMEN (MB) - langsung
-                if 'NOMEN' in df.columns:
-                    rename_dict['NOMEN'] = 'nomen'
+                if 'NOMEN' in df.columns: rename_dict['NOMEN'] = 'nomen'
                 else:
                     flash('❌ Format MainBill salah! Butuh kolom NOMEN', 'danger')
                     return redirect(url_for('index'))
                 
-                # Field TANGGAL dari FREEZE_DT (MB)
-                if 'FREEZE_DT' in df.columns:
-                    rename_dict['FREEZE_DT'] = 'tgl_bayar'
-                elif 'TGL_BAYAR' in df.columns:
-                    rename_dict['TGL_BAYAR'] = 'tgl_bayar'
+                if 'FREEZE_DT' in df.columns: rename_dict['FREEZE_DT'] = 'tgl_tagihan'
+                elif 'TGL_TAGIHAN' in df.columns: rename_dict['TGL_TAGIHAN'] = 'tgl_tagihan'
                 
-                # Field TAGIHAN dari TOTAL_TAGIHAN
-                if 'TOTAL_TAGIHAN' in df.columns:
-                    rename_dict['TOTAL_TAGIHAN'] = 'tagihan'
-                elif 'TAGIHAN' in df.columns:
-                    rename_dict['TAGIHAN'] = 'tagihan'
+                if 'TOTAL_TAGIHAN' in df.columns: rename_dict['TOTAL_TAGIHAN'] = 'total_tagihan'
+                elif 'TAGIHAN' in df.columns: rename_dict['TAGIHAN'] = 'total_tagihan'
                 
-                # Field PCEZBK untuk informasi tambahan
-                if 'PCEZBK' in df.columns:
-                    rename_dict['PCEZBK'] = 'pcezbk'
-                
-                # Field CC (Rayon) untuk validasi
-                if 'CC' in df.columns:
-                    rename_dict['CC'] = 'rayon_check'
+                if 'PCEZBK' in df.columns: rename_dict['PCEZBK'] = 'pcezbk'
+                if 'TARIF' in df.columns: rename_dict['TARIF'] = 'tarif'
                 
                 df = df.rename(columns=rename_dict)
-                
-                # Clean data
-                df['nomen'] = df['nomen'].apply(clean_nomen)
-                df = df.dropna(subset=['nomen'])
-                
-                if 'tgl_bayar' in df.columns:
-                    df['tgl_bayar'] = df['tgl_bayar'].apply(lambda x: clean_date(x))
-                else:
-                    df['tgl_bayar'] = ''
-                
-                if 'tagihan' not in df.columns:
-                    df['tagihan'] = 0
-                
-            # --- UPLOAD MAINBILL (Tagihan Bulan Depan) ---
-            elif tipe == 'mainbill':
-                # Field mapping untuk MainBill
-                rename_dict = {}
-                
-                # Field NOMEN dari NOMEN (MainBill) - langsung
-                if 'NOMEN' in df.columns:
-                    rename_dict['NOMEN'] = 'nomen'
-                else:
-                    flash('❌ Format MainBill salah! Butuh kolom NOMEN', 'danger')
-                    return redirect(url_for('index'))
-                
-                # Field TANGGAL dari FREEZE_DT (MainBill)
-                if 'FREEZE_DT' in df.columns:
-                    rename_dict['FREEZE_DT'] = 'tgl_tagihan'
-                elif 'TGL_TAGIHAN' in df.columns:
-                    rename_dict['TGL_TAGIHAN'] = 'tgl_tagihan'
-                
-                # Field TAGIHAN dari TOTAL_TAGIHAN
-                if 'TOTAL_TAGIHAN' in df.columns:
-                    rename_dict['TOTAL_TAGIHAN'] = 'total_tagihan'
-                elif 'TAGIHAN' in df.columns:
-                    rename_dict['TAGIHAN'] = 'total_tagihan'
-                
-                # Field PCEZBK untuk informasi tambahan
-                if 'PCEZBK' in df.columns:
-                    rename_dict['PCEZBK'] = 'pcezbk'
-                
-                # Field TARIF
-                if 'TARIF' in df.columns:
-                    rename_dict['TARIF'] = 'tarif'
-                
-                df = df.rename(columns=rename_dict)
-                
-                # Clean data
                 df['nomen'] = df['nomen'].apply(clean_nomen)
                 df = df.dropna(subset=['nomen'])
                 
@@ -802,101 +650,69 @@ def upload_file():
                 else:
                     df['tgl_tagihan'] = ''
                 
-                if 'total_tagihan' not in df.columns:
-                    df['total_tagihan'] = 0
-                else:
+                if 'total_tagihan' in df.columns:
                     df['total_tagihan'] = df['total_tagihan'].apply(lambda x: abs(float(x)) if pd.notna(x) else 0)
+                else:
+                    df['total_tagihan'] = 0
                 
                 df['periode'] = datetime.now().strftime('%Y-%m')
                 
-                # VALIDASI CEPAT
                 mc_nomens_result = conn.execute("SELECT nomen FROM master_pelanggan").fetchall()
                 mc_nomen_set = set([str(row['nomen']).strip() for row in mc_nomens_result])
                 
-                if len(mc_nomen_set) == 0:
+                if not mc_nomen_set:
                     flash('⚠️ MC kosong. Upload MC terlebih dahulu!', 'warning')
                     return redirect(url_for('index'))
                 
-                # Filter
                 df['nomen'] = df['nomen'].astype(str).str.strip()
                 df_valid = df[df['nomen'].isin(mc_nomen_set)].copy()
                 
-                if len(df_valid) == 0:
-                    flash('⚠️ Tidak ada data MainBill yang cocok dengan MC.', 'warning')
-                    return redirect(url_for('index'))
-                
-                # Insert/Update MainBill
                 cols = ['nomen', 'tgl_tagihan', 'total_tagihan', 'pcezbk', 'tarif', 'periode']
-                available_cols = [c for c in cols if c in df_valid.columns]
-                df_valid[available_cols].to_sql('mainbill', conn, if_exists='replace', index=False)
+                available = [c for c in cols if c in df_valid.columns]
+                df_valid[available].to_sql('mainbill', conn, if_exists='replace', index=False)
                 
-                skipped = len(df) - len(df_valid)
-                msg = f'✅ MainBill: {len(df_valid):,} data'
-                if skipped > 0:
-                    msg += f' ({skipped:,} skip)'
-                flash(msg, 'success')
-            
-            # --- UPLOAD ARDEBT (Tunggakan) ---
+                flash(f'✅ MainBill: {len(df_valid):,} data', 'success')
+
+            # --- UPLOAD ARDEBT ---
             elif tipe == 'ardebt':
-                # Field mapping untuk Ardebt
                 rename_dict = {}
-                
-                # Field NOMEN
-                if 'NOMEN' in df.columns:
-                    rename_dict['NOMEN'] = 'nomen'
-                elif 'NOTAGIHAN' in df.columns:
-                    rename_dict['NOTAGIHAN'] = 'nomen'
+                if 'NOMEN' in df.columns: rename_dict['NOMEN'] = 'nomen'
+                elif 'NOTAGIHAN' in df.columns: rename_dict['NOTAGIHAN'] = 'nomen'
                 else:
                     flash('❌ Format Ardebt salah! Butuh kolom NOMEN', 'danger')
                     return redirect(url_for('index'))
                 
-                # Field TUNGGAKAN
-                if 'SumOfJUMLAH' in df.columns:
-                    rename_dict['SumOfJUMLAH'] = 'saldo_tunggakan'
-                elif 'TUNGGAKAN' in df.columns:
-                    rename_dict['TUNGGAKAN'] = 'saldo_tunggakan'
-                elif 'SALDO' in df.columns:
-                    rename_dict['SALDO'] = 'saldo_tunggakan'
+                if 'SumOfJUMLAH' in df.columns: rename_dict['SumOfJUMLAH'] = 'saldo_tunggakan'
+                elif 'TUNGGAKAN' in df.columns: rename_dict['TUNGGAKAN'] = 'saldo_tunggakan'
+                elif 'SALDO' in df.columns: rename_dict['SALDO'] = 'saldo_tunggakan'
+                elif 'JUMLAH' in df.columns: rename_dict['JUMLAH'] = 'saldo_tunggakan'
                 
                 df = df.rename(columns=rename_dict)
-                
-                # Clean data
                 df['nomen'] = df['nomen'].apply(clean_nomen)
                 df = df.dropna(subset=['nomen'])
                 
-                if 'saldo_tunggakan' not in df.columns:
-                    df['saldo_tunggakan'] = 0
-                else:
+                if 'saldo_tunggakan' in df.columns:
                     df['saldo_tunggakan'] = df['saldo_tunggakan'].apply(lambda x: abs(float(x)) if pd.notna(x) else 0)
+                else:
+                    df['saldo_tunggakan'] = 0
                 
                 df['periode'] = datetime.now().strftime('%Y-%m')
                 
-                # VALIDASI CEPAT
-                mc_nomens = conn.execute("SELECT nomen FROM master_pelanggan").fetchall()
-                mc_nomen_set = set([str(row['nomen']).strip() for row in mc_nomens])
+                mc_nomens_result = conn.execute("SELECT nomen FROM master_pelanggan").fetchall()
+                mc_nomen_set = set([str(row['nomen']).strip() for row in mc_nomens_result])
                 
-                if len(mc_nomen_set) == 0:
+                if not mc_nomen_set:
                     flash('⚠️ MC kosong. Upload MC terlebih dahulu!', 'warning')
                     return redirect(url_for('index'))
                 
-                # Clean dan filter
                 df['nomen'] = df['nomen'].astype(str).str.strip()
                 df_valid = df[df['nomen'].isin(mc_nomen_set)].copy()
                 
-                if len(df_valid) == 0:
-                    flash('⚠️ Tidak ada data Ardebt yang cocok dengan MC.', 'warning')
-                    return redirect(url_for('index'))
-                
-                # Insert/Update Ardebt
                 cols = ['nomen', 'saldo_tunggakan', 'periode']
                 df_valid[cols].to_sql('ardebt', conn, if_exists='replace', index=False)
                 
-                skipped = len(df) - len(df_valid)
-                msg = f'✅ Ardebt: {len(df_valid):,} data'
-                if skipped > 0:
-                    msg += f' ({skipped:,} skip)'
-                flash(msg, 'success')
-
+                flash(f'✅ Ardebt: {len(df_valid):,} data', 'success')
+        
         except Exception as e:
             flash(f'❌ Gagal Upload: {e}', 'danger')
             print(f"Error Upload: {e}")
@@ -913,19 +729,6 @@ def auth_bypass():
 if __name__ == '__main__':
     if not os.path.exists(DB_PATH):
         init_db()
-    print("🚀 APLIKASI SUNTER SIAP! (FIELD MAPPING LENGKAP)")
-    print("="*60)
-    print("📌 MC         : NOTAGIHAN → nomen (DATA INDUK)")
-    print("📌 COLLECTION : NOTAG → nomen, PAY_DT → tgl_bayar")
-    print("📌 MB         : NOTAGIHAN → nomen, TGL_BAYAR → tgl_bayar")
-    print("📌 MAINBILL   : NOMEN → nomen, FREEZE_DT → tgl_tagihan")
-    print("📌 ARDEBT     : NOMEN → nomen, SumOfJUMLAH → saldo_tunggakan")
-    print("="*60)
-    print("🎯 URUTAN UPLOAD:")
-    print("   1. MC (Master Customer) - WAJIB PERTAMA")
-    print("   2. Collection (Transaksi Current+Undue)")
-    print("   3. MB (Master Bayar bulan lalu)")
-    print("   4. MainBill (Tagihan bulan depan)")
-    print("   5. Ardebt (Tunggakan)")
-    print("="*60)
+    
+    print("🚀 APLIKASI SUNTER SIAP!")
     app.run(host='0.0.0.0', port=5000, debug=True)
