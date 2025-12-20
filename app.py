@@ -1,10 +1,10 @@
 import os
 import sqlite3
-from flask import Flask, render_template, g
+from flask import Flask, render_template, g, request, session, redirect, url_for, flash
 
 # --- KONFIGURASI ---
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'kunci-rahasia-sunter-dashboard-123' # Ganti nanti
+app.config['SECRET_KEY'] = 'kunci-rahasia-sunter-dashboard-123' # Wajib ada untuk Session/Login
 DB_FOLDER = os.path.join(os.getcwd(), 'database')
 DB_PATH = os.path.join(DB_FOLDER, 'sunter.db')
 
@@ -55,7 +55,7 @@ def init_db():
             )
         ''')
 
-        # 3. Tabel Analisa Manual (Penting untuk user)
+        # 3. Tabel Analisa Manual
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS analisa_manual (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,28 +70,55 @@ def init_db():
         db.commit()
         print(f"✅ Database siap di: {DB_PATH}")
 
-# --- ROUTING (HALAMAN) ---
+# --- ROUTING LOGIN & LOGOUT (YANG SEBELUMNYA HILANG) ---
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        
+        # Cek Password Hardcoded (Bisa diganti database nanti)
+        if username == 'admin' and password == 'admin123':
+            session['user_logged_in'] = True
+            session['username'] = username
+            flash('Berhasil Login!', 'success')
+            return redirect(url_for('index'))
+        else:
+            flash('Username atau Password salah!', 'danger')
+            return redirect(url_for('login'))
+            
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear() # Hapus sesi login
+    flash('Anda telah keluar.', 'info')
+    return redirect(url_for('login'))
+
+# --- ROUTING UTAMA ---
 
 @app.route('/')
 def index():
-    # Contoh query data ringkasan untuk Dashboard
+    # CEK KEAMANAN: Jika belum login, tendang ke halaman login
+    if not session.get('user_logged_in'):
+        return redirect(url_for('login'))
+
+    # Query Data Dashboard
     db = get_db()
-    
-    # Hitung Total Pelanggan
     cust_count = db.execute('SELECT COUNT(*) as total FROM master_pelanggan').fetchone()['total']
-    
-    # Hitung Total Collection (Gabungan Rayon 34 & 35 / SUNTER)
     total_coll = db.execute('SELECT SUM(jumlah_bayar) as total FROM collection_harian').fetchone()['total'] or 0
     
     return render_template('index.html', cust_count=cust_count, total_coll=total_coll)
 
 @app.route('/collection')
 def collection():
+    if not session.get('user_logged_in'):
+        return redirect(url_for('login'))
     return "Halaman Collection (Excel Style)"
 
 # --- MAIN EXECUTION ---
 if __name__ == '__main__':
-    # Cek & Buat DB saat aplikasi start
     if not os.path.exists(DB_PATH):
         print("⚡ Database belum ada, menginisialisasi...")
         init_db()
@@ -99,5 +126,4 @@ if __name__ == '__main__':
     print("🚀 Sistem SUNTER DASHBOARD Berjalan...")
     print("👉 Buka di browser: http://localhost:5000")
     
-    # Debug=True agar auto-reload saat edit coding
     app.run(host='0.0.0.0', port=5000, debug=True)
