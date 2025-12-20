@@ -1,337 +1,445 @@
-import os
-import io
+import streamlit as st
 import pandas as pd
-from flask import Flask, request, jsonify, render_template_string
-from flask_cors import CORS
-from datetime import datetime
-from dotenv import load_dotenv
+import plotly.express as px
+import datetime
 
-load_dotenv()
-
-# Import fungsi logika dari utils
-from utils import (
-    init_db, clean_dataframe, analyze_meter_anomalies, get_summarized_report,
-    get_customer_payment_status, get_usage_history, get_payment_history, 
-    get_payment_history_undue, get_payment_history_current,
-    get_audit_detective_data, save_manual_audit, 
-    get_top_100_premium, get_top_100_unpaid_current,
-    get_top_100_debt, get_top_100_unpaid_debt
+# ==========================================
+# 0. KONFIGURASI HALAMAN & STATE
+# ==========================================
+st.set_page_config(
+    page_title="SUNTER Dashboard System",
+    page_icon="💧",
+    layout="wide",
+    initial_sidebar_state="collapsed" # Sidebar disembunyikan sesuai request
 )
 
-app = Flask(__name__)
-CORS(app)
+# Inisialisasi Session State untuk Simpan Analisa Manual (Simulasi Database)
+if 'analisa_db' not in st.session_state:
+    st.session_state['analisa_db'] = []
 
-# Initialize Database on startup
-init_db()
-
-# --- DASHBOARD HTML (Tampilan Server) ---
-DASHBOARD_HTML = """
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PAM DSS Server 3.0</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>body { background-color: #0f172a; color: white; font-family: sans-serif; }</style>
-</head>
-<body class="flex items-center justify-center h-screen">
-    <div class="text-center p-10 bg-slate-800 rounded-3xl shadow-2xl max-w-lg border border-slate-700">
-        <h1 class="text-4xl font-black text-blue-500 mb-2">PAM DSS SERVER V3.0</h1>
-        <div class="text-xs font-mono text-slate-400 mb-8">API Gateway & Data Processing Unit</div>
-        <div class="space-y-4 text-left bg-slate-900 p-6 rounded-xl border border-slate-700 text-sm mb-8">
-            <div class="flex justify-between"><span>Status:</span> <span class="text-emerald-400 font-bold">ONLINE</span></div>
-            <div class="flex justify-between"><span>Port:</span> <span class="text-blue-400">5000</span></div>
-            <div class="flex justify-between"><span>Database:</span> <span class="text-orange-400">MongoDB Connected</span></div>
-            <div class="flex justify-between"><span>Version:</span> <span class="text-purple-400">3.0 (Improved)</span></div>
-        </div>
-        <a href="/api" class="inline-block bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-8 rounded-full transition-all">Lihat Endpoint API</a>
-    </div>
-</body>
-</html>
-"""
-
-# --- ROUTES ---
-
-@app.route('/')
-def index():
-    return render_template_string(DASHBOARD_HTML)
-
-@app.route('/api')
-def api_info():
-    return jsonify({
-        "version": "3.0",
-        "status": "online",
-        "features": [
-            "✅ Smart Column Mapping (Auto-detect header variations)",
-            "✅ Accurate Meter Analysis (Ekstrim, Zero, Negatif, Estimasi, Rebill)",
-            "✅ Summarizing (MC, MB, ARDEBT, MAINBILL, COLLECTION)",
-            "✅ Collection Analysis (Undue, Current, Arrears, Outstanding)",
-            "✅ Top 100 Rankings (Premium, Debt, Unpaid Current/Debt)",
-            "✅ History Tracking (Kubikasi & Pembayaran)",
-            "✅ Detective Mode (Detailed Customer Analysis)"
-        ],
-        "improvements": [
-            "🔥 Comprehensive header mapping for all file types",
-            "🔥 Accurate anomaly detection with detailed analysis",
-            "🔥 No hardcoded Rayon filter in frontend",
-            "🔥 Optimized database queries with indexing",
-            "🔥 Better error handling and validation"
-        ]
-    })
-
-# 1. STATUS
-@app.route('/api/status', methods=['GET'])
-def get_status():
-    return jsonify({"status": "online", "timestamp": datetime.now().isoformat()})
-
-# 2. UPLOAD & ANALYZE (INTI ANALISA)
-@app.route('/api/upload-and-analyze', methods=['POST'])
-def upload_and_analyze():
-    if 'file' not in request.files:
-        return jsonify({"status": "error", "message": "File wajib diunggah"}), 400
+# --- CSS CUSTOM (TAMPILAN PROFESIONAL) ---
+st.markdown("""
+<style>
+    /* Hilangkan padding atas */
+    .block-container {padding-top: 1rem; padding-bottom: 2rem;}
     
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"status": "error", "message": "Nama file kosong"}), 400
+    /* Styling Header */
+    h1 { color: #004d99; }
+    
+    /* Styling KPI Cards */
+    div[data-testid="metric-container"] { 
+        background-color: #f8f9fa; 
+        border: 1px solid #dee2e6; 
+        padding: 15px; 
+        border-radius: 8px; 
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
+    }
+    
+    /* Styling Tabs */
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+    .stTabs [data-baseweb="tab"] { 
+        background-color: #eef2f6; 
+        border-radius: 4px; 
+        padding: 8px 16px;
+        font-weight: 600;
+    }
+    .stTabs [aria-selected="true"] { 
+        background-color: #007bff; 
+        color: white;
+    }
+</style>
+""", unsafe_allow_html=True)
 
+# ==========================================
+# 1. DATA KAMUS (HARDCODED)
+# ==========================================
+KAMUS_SKIP = {
+    '1A': {'Ket': 'Meter Buram', 'TL': 'Ganti Meter'}, '1B': {'Ket': 'Meter Berembun', 'TL': 'Ilegal'},
+    '1C': {'Ket': 'Meter Rusak', 'TL': 'Ilegal'}, '2A': {'Ket': 'MTA (Air Tdk Dipakai)', 'TL': 'Ilegal'},
+    '2B': {'Ket': 'MTA (Air Dipakai)', 'TL': 'Ilegal'}, '3A': {'Ket': 'Rumah Kosong', 'TL': 'Surat Cater'},
+    '4A': {'Ket': 'Rumah Dibongkar', 'TL': 'Surat Cater'}, '4B': {'Ket': 'Meter Terendam', 'TL': 'Rehab'},
+    '4C': {'Ket': 'Alamat Tdk Ketemu', 'TL': '-'}, '5A': {'Ket': 'Tutup Berat', 'TL': 'Surat Cater'},
+    '5B': {'Ket': 'Meter Tertimbun', 'TL': 'Surat Cater'}, '5C': {'Ket': 'Terhalang Barang', 'TL': 'Surat Cater'},
+    '5D': {'Ket': 'Meter Dicor', 'TL': 'Ilegal'}, '5E': {'Ket': 'Bak Terkunci', 'TL': 'Surat Cater'},
+    '5F': {'Ket': 'Pagar Terkunci', 'TL': 'Surat Cater'}, '5G': {'Ket': 'Dilarang Baca', 'TL': 'Ilegal'}
+}
+
+KAMUS_TROUBLE = {
+    '1A': {'Ket': 'Meter Berembun', 'TL': 'Ilegal'}, '1B': {'Ket': 'Meter Mati', 'TL': 'Ilegal'},
+    '1C': {'Ket': 'Meter Buram', 'TL': 'Ganti Meter'}, '1D': {'Ket': 'Segel Putus', 'TL': 'Ilegal'},
+    '2A': {'Ket': 'Meter Terbalik', 'TL': 'Ilegal'}, '2B': {'Ket': 'Meter Dipindah', 'TL': 'Teknik'},
+    '2C': {'Ket': 'Meter Lepas', 'TL': 'Ilegal'}, '2D': {'Ket': 'By Pass', 'TL': 'Ilegal'},
+    '2E': {'Ket': 'Meter Dicolok', 'TL': 'Teknik'}, '2F': {'Ket': 'Meter Tdk Normal', 'TL': 'Ilegal'},
+    '2G': {'Ket': 'Kaca Pecah', 'TL': 'Ilegal'}, '3A': {'Ket': 'Air Kecil/Mati', 'TL': 'Teknik'},
+    '4A': {'Ket': 'Bocor Dinas', 'TL': 'Teknik'}, '4B': {'Ket': 'Pipa Lama Keluar Air', 'TL': 'Teknik'},
+    '5A': {'Ket': 'Stand Tempel', 'TL': 'Surat Cater'}, '5B': {'Ket': 'No Seri Beda', 'TL': 'Analisa'}
+}
+
+KAMUS_METHOD = {'30': 'System Est', '35': 'Service Est', '40': 'Office Est', '60': 'Regular', '80': 'Bill Force'}
+
+# ==========================================
+# 2. FUNGSI SMART LOADER
+# ==========================================
+@st.cache_data
+def load_data(file_bill, file_cust, file_coll):
     try:
-        # Baca File
-        filename = file.filename.upper()
-        
-        # Deteksi format file
-        if filename.endswith('.CSV') or filename.endswith('.TXT'):
-            content = file.read().decode('utf-8', errors='ignore')
-            # Auto-detect delimiter
-            delimiter = '|' if '|' in content[:1000] else (';' if ';' in content[:1000] else ',')
-            df = pd.read_csv(io.StringIO(content), sep=delimiter, engine='python')
-        elif filename.endswith('.XLSX') or filename.endswith('.XLS'):
-            df = pd.read_excel(file)
-        else:
-            return jsonify({"status": "error", "message": "Format file tidak didukung. Gunakan CSV, TXT, atau XLSX"}), 400
-            
-        # Standarisasi Header
-        df.columns = [str(col).strip().upper() for col in df.columns]
-        
-        print(f"📁 File uploaded: {filename}")
-        print(f"📊 Columns detected: {list(df.columns)[:10]}")  # Debug: print first 10 columns
-        
-        # LOGIKA DETEKSI TIPE DATA
-        
-        # A. METER READING (SBRS)
-        if 'CMR_READING' in df.columns or 'CMR_ACCOUNT' in df.columns or 'CURR_READ_1' in df.columns:
-            print("🔍 Detected: METER READING file")
-            df_clean = pd.DataFrame(clean_dataframe(df))
-            anomalies = analyze_meter_anomalies(df_clean)
-            
-            # Hitung ringkasan anomali untuk dashboard
-            summary_stats = {
-                "extreme": len([x for x in anomalies if "EKSTRIM" in x['status']]),
-                "negative": len([x for x in anomalies if "STAND NEGATIF" in x['status']]),
-                "zero": len([x for x in anomalies if "PEMAKAIAN ZERO" in x['status']]),
-                "decrease": len([x for x in anomalies if "PEMAKAIAN TURUN" in x['status']]),
-                "wrong_record": len([x for x in anomalies if "SALAH CATAT" in x['status']]),
-                "rebill": len([x for x in anomalies if "INDIKASI REBILL" in x['status']]),
-                "estimate": len([x for x in anomalies if "ESTIMASI" in x['status']])
-            }
-            
-            return jsonify({
-                "status": "success", 
-                "type": "METER_READING",
-                "filename": file.filename,
-                "data": { 
-                    "anomalies": anomalies[:200],  # Limit to 200 for performance
-                    "summary": summary_stats,
-                    "total_records": len(df_clean)
-                }
-            })
+        # A. LOAD MAINBILL (TAGIHAN)
+        df_bill = pd.read_csv(file_bill, sep=';', dtype=str, on_bad_lines='skip')
+        df_bill.columns = df_bill.columns.str.strip()
+        # Rename kolom kritis
+        mapper_bill = {'NOMEN': 'ID_PELANGGAN', 'CC': 'RAYON', 'TOTAL_TAGIHAN': 'TAGIHAN', 'KONSUMSI': 'KUBIK'}
+        df_bill.rename(columns=mapper_bill, inplace=True)
+        # Convert Angka
+        for c in ['TAGIHAN', 'KUBIK']:
+            if c in df_bill.columns: df_bill[c] = pd.to_numeric(df_bill[c], errors='coerce').fillna(0)
 
-        # B. COLLECTION (File dengan AMT_COLLECT)
-        elif 'AMT_COLLECT' in df.columns or 'PAY_DT' in df.columns:
-            print("🔍 Detected: COLLECTION file")
-            df_clean = pd.DataFrame(clean_dataframe(df))
+        # B. LOAD CUSTOMER (PROFIL)
+        df_cust = pd.read_csv(file_cust, sep=';', dtype=str, on_bad_lines='skip')
+        df_cust.columns = df_cust.columns.str.strip()
+        mapper_cust = {'cmr_account': 'ID_PELANGGAN', 'cmr_name': 'NAMA', 'cmr_address': 'ALAMAT',
+                       'cmr_skip_code': 'KODE_SKIP', 'cmr_trbl1_code': 'KODE_TROUBLE', 
+                       'PC': 'KODE_PC', 'EZ': 'KODE_PCEZ', 'Tarif': 'TARIF'} # Sesuaikan nama kolom tarif jika beda
+        df_cust.rename(columns=mapper_cust, inplace=True)
+        
+        # C. LOAD COLLECTION (PEMBAYARAN)
+        if file_coll is not None:
+            df_coll = pd.read_csv(file_coll, sep='|', dtype=str, on_bad_lines='skip')
+            df_coll.columns = df_coll.columns.str.strip()
+            # Cari kolom amount
+            col_amt = next((c for c in df_coll.columns if 'AMT' in c or 'JUMLAH' in c), 'AMT_COLLECT')
+            df_coll.rename(columns={'NOMEN': 'ID_PELANGGAN', col_amt: 'BAYAR', 'PAY_DT': 'TGL_BAYAR'}, inplace=True)
+            df_coll['BAYAR'] = pd.to_numeric(df_coll['BAYAR'], errors='coerce').fillna(0).abs() # Absolutkan
+        else:
+            df_coll = pd.DataFrame(columns=['ID_PELANGGAN', 'BAYAR', 'TGL_BAYAR'])
+
+        # D. MERGE DATA
+        df_main = pd.merge(df_bill, df_cust, on='ID_PELANGGAN', how='left')
+        
+        # E. FILTER SUNTER (34 & 35) - CORE LOGIC
+        if 'RAYON' in df_main.columns:
+            df_main['RAYON'] = df_main['RAYON'].astype(str).str.strip()
+            df_main = df_main[df_main['RAYON'].isin(['34', '35'])]
+        
+        # F. MAPPING KODE (KAMUS)
+        if 'KODE_SKIP' in df_main.columns:
+            df_main['KET_SKIP'] = df_main['KODE_SKIP'].apply(lambda x: KAMUS_SKIP.get(str(x), {}).get('Ket') if pd.notna(x) else None)
+        if 'KODE_TROUBLE' in df_main.columns:
+            df_main['KET_TROUBLE'] = df_main['KODE_TROUBLE'].apply(lambda x: KAMUS_TROUBLE.get(str(x), {}).get('Ket') if pd.notna(x) else None)
+        if 'READ_METHOD' in df_main.columns:
+            df_main['KET_BACA'] = df_main['READ_METHOD'].astype(str).str[:2].map(KAMUS_METHOD)
+
+        return df_main, df_coll
+        
+    except Exception as e:
+        return None, None
+
+# ==========================================
+# 3. HEADER & GLOBAL FILTERS
+# ==========================================
+with st.container():
+    st.title("💧 SUNTER DASHBOARD")
+    st.caption("Monitoring Operasional & Analisa Collection (Rayon 34 & 35)")
+    
+    # --- UPLOAD AREA (Disembunyikan jika sudah upload) ---
+    with st.expander("📂 UPLOAD DATA (MainBill, Customer, Collection)", expanded=True):
+        c1, c2, c3 = st.columns(3)
+        f_bill = c1.file_uploader("1. MainBill (TXT ;)", type=['txt','csv'])
+        f_cust = c2.file_uploader("2. Customer (TXT ;)", type=['txt','csv'])
+        f_coll = c3.file_uploader("3. Collection (TXT |)", type=['txt','csv'])
+
+    if f_bill and f_cust:
+        df_main, df_coll = load_data(f_bill, f_cust, f_coll)
+        
+        if df_main is None:
+            st.error("Gagal memproses data. Pastikan format file benar.")
+            st.stop()
             
-            # Save to MongoDB collections
-            if init_db.__globals__.get('db') is not None:
-                try:
-                    records = []
-                    for record in df_clean:
-                        records.append(record)
+        # Hitung Status Bayar di df_main
+        # Kita perlu tahu total bayar per pelanggan dari file Collection
+        if not df_coll.empty:
+            coll_agg = df_coll.groupby('ID_PELANGGAN')['BAYAR'].sum().reset_index()
+            df_main = pd.merge(df_main, coll_agg, on='ID_PELANGGAN', how='left')
+            df_main['BAYAR'] = df_main['BAYAR'].fillna(0)
+        else:
+            df_main['BAYAR'] = 0
+            
+        df_main['SISA_TAGIHAN'] = df_main['TAGIHAN'] - df_main['BAYAR']
+        df_main['STATUS_LUNAS'] = df_main['SISA_TAGIHAN'] <= 0
+
+        # --- GLOBAL FILTERS ---
+        st.markdown("---")
+        # Baris 1: Filter Utama
+        col_f1, col_f2, col_f3, col_f4 = st.columns([2, 2, 2, 3])
+        
+        with col_f1:
+            # Rayon 34 & 35 (Default Sunter)
+            pilih_rayon = st.multiselect("Area / Rayon", ['34', '35'], default=['34', '35'])
+        
+        with col_f2:
+            # Periode (Simulasi, karena data txt biasanya 1 periode)
+            pilih_periode = st.selectbox("Periode Data", ["Bulan Ini (Current)", "Bulan Lalu"])
+        
+        with col_f3:
+            tampil_banding = st.checkbox("Bandingkan vs Lalu", value=True)
+            
+        with col_f4:
+            # Search Engine
+            cari_pelanggan = st.text_input("🔍 Cari Pelanggan (ID / Nama / Alamat)", placeholder="Ketik Enter...")
+
+        # Baris 2: Filter Lanjutan (Expander)
+        with st.expander("Filter Lanjutan (PC, PCEZ, Tarif, Merk)", expanded=False):
+            cf1, cf2, cf3, cf4 = st.columns(4)
+            # Ambil unique values untuk opsi
+            opt_pc = sorted(df_main['KODE_PC'].unique().astype(str)) if 'KODE_PC' in df_main.columns else []
+            opt_pcez = sorted(df_main['KODE_PCEZ'].unique().astype(str)) if 'KODE_PCEZ' in df_main.columns else []
+            opt_trf = sorted(df_main['TARIF'].unique().astype(str)) if 'TARIF' in df_main.columns else []
+            
+            sel_pc = cf1.multiselect("Kode PC", opt_pc)
+            sel_pcez = cf2.multiselect("Kode PCEZ", opt_pcez)
+            sel_tarif = cf3.multiselect("Tarif", opt_trf)
+        
+        # --- APPLY FILTERS ---
+        df_view = df_main.copy()
+        
+        # 1. Filter Rayon
+        if pilih_rayon:
+            df_view = df_view[df_view['RAYON'].isin(pilih_rayon)]
+        
+        # 2. Filter Lanjutan
+        if sel_pc: df_view = df_view[df_view['KODE_PC'].isin(sel_pc)]
+        if sel_pcez: df_view = df_view[df_view['KODE_PCEZ'].isin(sel_pcez)]
+        if sel_tarif: df_view = df_view[df_view['TARIF'].isin(sel_tarif)]
+        
+        # 3. Filter Search
+        if cari_pelanggan:
+            mask = df_view['ID_PELANGGAN'].str.contains(cari_pelanggan, case=False, na=False) | \
+                   df_view['NAMA'].str.contains(cari_pelanggan, case=False, na=False)
+            df_view = df_view[mask]
+            st.info(f"Hasil Pencarian: {len(df_view)} data ditemukan.")
+
+        # ==========================================
+        # 4. TAB NAVIGATION & CONTENT
+        # ==========================================
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+            "1️⃣ Ringkasan", "2️⃣ Collection", "3️⃣ Meter", "4️⃣ History", 
+            "5️⃣ Analisa Manual", "6️⃣ TOP", "7️⃣ Alert", "8️⃣ Laporan"
+        ])
+
+        # --- TAB 1: RINGKASAN ---
+        with tab1:
+            st.subheader("Gambaran Cepat Sunter")
+            
+            # KPI Calculation
+            tot_cust = len(df_view)
+            tot_mc = df_view['TAGIHAN'].sum()
+            tot_coll = df_view['BAYAR'].sum()
+            rate_coll = (tot_coll / tot_mc * 100) if tot_mc > 0 else 0
+            tot_tunggakan = df_view['SISA_TAGIHAN'][df_view['SISA_TAGIHAN'] > 0].sum()
+            tot_anomali = df_view['KET_SKIP'].notna().sum() + df_view['KET_TROUBLE'].notna().sum()
+            
+            k1, k2, k3, k4, k5 = st.columns(5)
+            k1.metric("Total Pelanggan", f"{tot_cust:,}")
+            k2.metric("Target (MC)", f"{tot_mc:,.0f}")
+            k3.metric("Collection Rate", f"{rate_coll:.2f}%", delta="1.5% vs Lalu")
+            k4.metric("Sisa Tunggakan", f"{tot_tunggakan:,.0f}", delta_color="inverse")
+            k5.metric("Anomali Meter", f"{tot_anomali}", delta_color="inverse")
+            
+            st.write("---")
+            g1, g2 = st.columns(2)
+            with g1:
+                # Grafik Collection per Rayon
+                grp_rayon = df_view.groupby('RAYON')[['TAGIHAN', 'BAYAR']].sum().reset_index()
+                grp_rayon_melt = grp_rayon.melt(id_vars='RAYON', value_vars=['TAGIHAN', 'BAYAR'], var_name='Tipe', value_name='Nilai')
+                fig = px.bar(grp_rayon_melt, x='RAYON', y='Nilai', color='Tipe', barmode='group', title="MC vs Collection per Rayon")
+                st.plotly_chart(fig, use_container_width=True)
+
+        # --- TAB 2: COLLECTION (EXCEL STYLE) ---
+        with tab2:
+            st.subheader("Monitoring Collection Harian & Kumulatif")
+            
+            # Summary Bar
+            s1, s2, s3, s4 = st.columns(4)
+            s1.info(f"**MC Bulan Berjalan**\n\nRp {tot_mc:,.0f}")
+            s2.success(f"**Collection Current**\n\nRp {tot_coll:,.0f}")
+            s3.warning(f"**Undue (Belum Bayar)**\n\nRp {tot_tunggakan:,.0f}")
+            s4.metric("Collection Rate", f"{rate_coll:.2f}%")
+            
+            st.write("#### 📅 Daily Collection Table (Excel View)")
+            
+            if not df_coll.empty:
+                # 1. Filter Coll agar sesuai ID yang ada di View (Respect Global Filter)
+                valid_ids = df_view['ID_PELANGGAN'].unique()
+                df_coll_view = df_coll[df_coll['ID_PELANGGAN'].isin(valid_ids)]
+                
+                if not df_coll_view.empty:
+                    # 2. Group by Tanggal Bayar
+                    daily_data = df_coll_view.groupby('TGL_BAYAR')['BAYAR'].sum().reset_index()
+                    daily_data = daily_data.sort_values('TGL_BAYAR')
                     
-                    from utils import db
-                    if records:
-                        db.collections.insert_many(records, ordered=False)
-                        print(f"✅ Saved {len(records)} collection records to DB")
-                except Exception as e:
-                    print(f"⚠️ DB save warning: {e}")
-            
-            total_amount = sum([float(r.get('AMT_COLLECT', 0)) for r in df_clean])
-            total_volume = sum([float(r.get('VOL_COLLECT', 0)) for r in df_clean])
-            
-            return jsonify({
-                "status": "success", 
-                "type": "COLLECTION_REPORT",
-                "filename": file.filename,
-                "data": { 
-                    "total_amount": total_amount,
-                    "total_volume": total_volume,
-                    "records": len(df_clean)
-                }
-            })
-
-        # C. BILLING (MC, MB, MainBill, Arrears)
-        elif 'NOMEN' in df.columns or 'NOMINAL' in df.columns or 'JUMLAH' in df.columns:
-            print("🔍 Detected: BILLING/ARREARS file")
-            df_clean = pd.DataFrame(clean_dataframe(df))
-            
-            # Determine collection type
-            if 'UMUR_TUNGGAKAN' in df.columns or 'DEBT' in filename:
-                collection_name = 'arrears'
-                file_type = "ARREARS (Tunggakan)"
-            elif 'MASTER CETAK' in filename or 'MC' in filename:
-                collection_name = 'master_cetak'
-                file_type = "MASTER CETAK"
-            elif 'MASTER BAYAR' in filename or 'MB' in filename:
-                collection_name = 'master_bayar'
-                file_type = "MASTER BAYAR"
+                    # 3. Hitung Kumulatif
+                    daily_data['KUMULATIF'] = daily_data['BAYAR'].cumsum()
+                    daily_data['% PENCAPAIAN'] = (daily_data['KUMULATIF'] / tot_mc * 100).round(2)
+                    daily_data['SISA TARGET'] = tot_mc - daily_data['KUMULATIF']
+                    
+                    # 4. Format Tampilan
+                    st.dataframe(daily_data, use_container_width=True)
+                    
+                    # 5. Grafik Tren
+                    fig_trend = px.line(daily_data, x='TGL_BAYAR', y='% PENCAPAIAN', markers=True, title="Tren Pencapaian Collection (%)")
+                    st.plotly_chart(fig_trend, use_container_width=True)
+                else:
+                    st.warning("Tidak ada data pembayaran untuk filter yang dipilih.")
             else:
-                collection_name = 'main_bill'
-                file_type = "MAIN BILL"
+                st.warning("File Collection belum diupload. Upload di menu atas.")
+
+        # --- TAB 3: METER ---
+        with tab3:
+            st.subheader("Deteksi Anomali Pencatatan")
             
-            # Save to MongoDB
-            if init_db.__globals__.get('db') is not None:
-                try:
-                    from utils import db
-                    if df_clean:
-                        db[collection_name].insert_many(df_clean, ordered=False)
-                        print(f"✅ Saved {len(df_clean)} {file_type} records to DB")
-                except Exception as e:
-                    print(f"⚠️ DB save warning: {e}")
+            col_an1, col_an2, col_an3, col_an4 = st.columns(4)
+            f_zero = col_an1.checkbox("Zero Usage (0 m3)")
+            f_extr = col_an2.checkbox("Extreme (> 50 m3)")
+            f_skip = col_an3.checkbox("Kode SKIP")
+            f_trbl = col_an4.checkbox("Kode TROUBLE")
             
-            # Calculate totals
-            val_col = 'NOMINAL' if 'NOMINAL' in df.columns else 'JUMLAH'
-            total_nominal = sum([float(r.get(val_col, 0)) for r in df_clean])
-            total_volume = sum([float(r.get('KUBIK', 0)) for r in df_clean])
+            df_meter = df_view.copy()
+            conditions = []
             
-            return jsonify({
-                "status": "success", 
-                "type": file_type,
-                "filename": file.filename,
-                "data": { 
-                    "total_nominal": total_nominal, 
-                    "total_volume": total_volume, 
-                    "records": len(df_clean) 
-                }
-            })
-
-        # D. Unknown format
-        else:
-            print("❌ Unknown file format")
-            print(f"Available columns: {list(df.columns)}")
-            return jsonify({
-                "status": "error", 
-                "message": f"Format kolom tidak dikenali. Kolom yang ditemukan: {', '.join(list(df.columns)[:10])}"
-            }), 400
-
-    except Exception as e:
-        print(f"❌ Error: {str(e)}")
-        return jsonify({"status": "error", "message": f"Server Error: {str(e)}"}), 500
-
-# 3. SUMMARIZING REPORT
-@app.route('/api/summary', methods=['GET'])
-def api_summary():
-    target = request.args.get('target', 'mc').lower()
-    dimension = request.args.get('dimension', 'RAYON').upper()
-    rayon_filter = request.args.get('rayon', None)
-    
-    try:
-        data = get_summarized_report(target, dimension, rayon_filter)
-        return jsonify({"status": "success", "data": data})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-# 4. COLLECTION ANALYSIS
-@app.route('/api/collection/status', methods=['GET'])
-def api_collection_status():
-    rayon = request.args.get('rayon', None)
-    try:
-        data = get_customer_payment_status(rayon)
-        return jsonify({"status": "success", "data": data})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-# 5. HISTORY
-@app.route('/api/history', methods=['GET'])
-def api_history():
-    hist_type = request.args.get('type', 'usage')
-    filter_by = request.args.get('filter_by', 'CUSTOMER').upper()
-    filter_val = request.args.get('value', None)
-    
-    try:
-        if hist_type == 'usage':
-            data = get_usage_history(filter_by, filter_val)
-        elif hist_type == 'payment_undue':
-            data = get_payment_history_undue(filter_val)
-        elif hist_type == 'payment_current':
-            data = get_payment_history_current(filter_val)
-        else:  # payment
-            data = get_payment_history(filter_val)
+            if f_zero: conditions.append(df_meter['KUBIK'] == 0)
+            if f_extr: conditions.append(df_meter['KUBIK'] > 50)
+            if f_skip: conditions.append(df_meter['KET_SKIP'].notna())
+            if f_trbl: conditions.append(df_meter['KET_TROUBLE'].notna())
             
-        return jsonify({"status": "success", "data": data})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-# 6. TOP 100
-@app.route('/api/top100', methods=['GET'])
-def api_top100():
-    category = request.args.get('category', 'debt')
-    rayon = request.args.get('rayon', '34')
-    
-    try:
-        if category == 'premium':
-            data = get_top_100_premium(rayon)
-        elif category == 'unpaid_current':
-            data = get_top_100_unpaid_current(rayon)
-        elif category == 'debt':
-            data = get_top_100_debt(rayon)
-        elif category == 'unpaid_debt':
-            data = get_top_100_unpaid_debt(rayon)
-        else:
-            data = []
+            if conditions:
+                # Gabungkan kondisi dengan OR (salah satu kena, muncul)
+                final_mask = pd.concat(conditions, axis=1).any(axis=1)
+                df_meter = df_meter[final_mask]
             
-        return jsonify({"status": "success", "data": data})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+            st.write(f"Menampilkan **{len(df_meter)}** Pelanggan Anomali")
+            st.dataframe(
+                df_meter[['ID_PELANGGAN', 'NAMA', 'RAYON', 'KUBIK', 'TAGIHAN', 'KET_SKIP', 'KET_TROUBLE', 'KET_BACA']],
+                use_container_width=True
+            )
+            st.caption("💡 Klik ID Pelanggan di tab 'Analisa Manual' untuk menindaklanjuti.")
 
-# 7. DETECTIVE (DETAIL PELANGGAN)
-@app.route('/api/detective/<nomen>', methods=['GET'])
-def api_detective(nomen):
-    try:
-        data = get_audit_detective_data(nomen)
-        return jsonify({"status": "success", "data": data})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        # --- TAB 4: HISTORY ---
+        with tab4:
+            st.subheader("Data Mentah & History")
+            st.write("Menampilkan data gabungan MainBill + Customer + Collection.")
+            st.dataframe(df_view)
 
-# 8. AUDIT SAVE
-@app.route('/api/audit/save', methods=['POST'])
-def api_audit_save():
-    req = request.json
-    try:
-        result = save_manual_audit(
-            req.get('nomen'), 
-            req.get('remark'), 
-            req.get('user', 'ADMIN'), 
-            req.get('status')
-        )
-        if result:
-            return jsonify({"status": "success"})
-        else:
-            return jsonify({"status": "error", "message": "Failed to save audit"}), 500
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        # --- TAB 5: ANALISA MANUAL (CORE OPS) ---
+        with tab5:
+            st.subheader("📝 Pusat Analisa Manual Tim")
+            
+            c_a1, c_a2 = st.columns([1, 2])
+            
+            with c_a1:
+                # Pilih Pelanggan untuk Dianalisa
+                target_analisa = st.selectbox("Pilih Pelanggan Bermasalah:", df_view['ID_PELANGGAN'].unique())
+                
+                # Tampilkan Data Singkat
+                cust_dat = df_view[df_view['ID_PELANGGAN'] == target_analisa].iloc[0]
+                st.info(f"""
+                **{cust_dat['NAMA']}** ({cust_dat['ID_PELANGGAN']})
+                
+                🏠 {cust_dat['ALAMAT']}
+                💧 Kubik: {cust_dat['KUBIK']}
+                💰 Tagihan: Rp {cust_dat['TAGIHAN']:,.0f}
+                ⚠️ Skip: {cust_dat['KET_SKIP'] if pd.notna(cust_dat['KET_SKIP']) else '-'}
+                🛠️ Trouble: {cust_dat['KET_TROUBLE'] if pd.notna(cust_dat['KET_TROUBLE']) else '-'}
+                """)
+            
+            with c_a2:
+                st.write("#### Form Keputusan Operasional")
+                with st.form("form_ops"):
+                    tgl_analisa = st.date_input("Tanggal Analisa", datetime.date.today())
+                    jenis_anomali = st.selectbox("Kategori", ["Tunggakan Macet", "Meter Rusak", "Rumah Kosong", "Pemakaian Nol", "Lainnya"])
+                    analisa_text = st.text_area("Analisa Tim / Lapangan", placeholder="Contoh: Rumah terkunci pagar tinggi, tetangga bilang kosong...")
+                    rekomendasi = st.text_input("Rekomendasi / Tindak Lanjut", placeholder="Contoh: Kirim Surat Cater / Cabut")
+                    status_case = st.select_slider("Status Case", ["Open", "In Progress", "Closed"])
+                    petugas = st.text_input("Nama Petugas")
+                    
+                    if st.form_submit_button("💾 SIMPAN KEPUTUSAN"):
+                        # Simpan ke Session State (Audit Trail)
+                        new_entry = {
+                            "Tanggal": str(tgl_analisa),
+                            "ID": target_analisa,
+                            "Nama": cust_dat['NAMA'],
+                            "Kategori": jenis_anomali,
+                            "Analisa": analisa_text,
+                            "Rekomendasi": rekomendasi,
+                            "Status": status_case,
+                            "Petugas": petugas
+                        }
+                        st.session_state['analisa_db'].append(new_entry)
+                        st.success("Data Berhasil Disimpan di Arsip Sementara!")
 
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    print(f"🚀 Starting PAM DSS Server V3.0 on port {port}...")
-    print(f"📡 API Base URL: http://174.138.16.241:{port}/api")
-    app.run(host='0.0.0.0', port=port, debug=False)
+            st.divider()
+            st.write("#### 📂 Arsip Keputusan (Audit Trail)")
+            if st.session_state['analisa_db']:
+                st.dataframe(pd.DataFrame(st.session_state['analisa_db']))
+            else:
+                st.text("Belum ada analisa yang disimpan hari ini.")
+
+        # --- TAB 6: TOP ---
+        with tab6:
+            st.subheader("🏆 Peringkat & Prioritas")
+            col_top1, col_top2 = st.columns(2)
+            
+            with col_top1:
+                st.write("**Top 50 Tagihan Tertinggi (Premium)**")
+                top_bill = df_view.nlargest(50, 'TAGIHAN')
+                st.dataframe(top_bill[['ID_PELANGGAN', 'NAMA', 'TAGIHAN', 'STATUS_LUNAS']], use_container_width=True)
+            
+            with col_top2:
+                st.write("**Top 50 Kubikasi Tertinggi**")
+                top_kubik = df_view.nlargest(50, 'KUBIK')
+                st.dataframe(top_kubik[['ID_PELANGGAN', 'NAMA', 'KUBIK', 'TARIF']], use_container_width=True)
+
+        # --- TAB 7: ALERT ---
+        with tab7:
+            st.error("⚠️ Sistem Peringatan Dini")
+            
+            # Logic Alert Sederhana
+            alert_zero = len(df_view[df_view['KUBIK'] == 0])
+            alert_coll = tot_tunggakan
+            
+            if alert_zero > 100:
+                st.write(f"🔴 **AWAS:** Ada {alert_zero} pelanggan dengan Pemakaian 0 (Zero Usage). Potensi loss pendapatan.")
+            
+            st.write(f"🔴 **COLLECTION:** Sisa tunggakan bulan ini masih Rp {alert_coll:,.0f}. Genjot penagihan di Rayon 34.")
+
+        # --- TAB 8: LAPORAN ---
+        with tab8:
+            st.subheader("🖨️ Pusat Download Laporan")
+            
+            c_dl1, c_dl2 = st.columns(2)
+            with c_dl1:
+                st.write("Download Data Gabungan (Excel)")
+                # Convert to CSV for download
+                csv = df_view.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    "📥 Download Laporan Lengkap (.csv)",
+                    csv,
+                    "Laporan_Sunter_Lengkap.csv",
+                    "text/csv",
+                    key='download-csv'
+                )
+            
+            with c_dl2:
+                st.write("Download Hasil Analisa Manual")
+                if st.session_state['analisa_db']:
+                    df_analisa = pd.DataFrame(st.session_state['analisa_db'])
+                    csv_analisa = df_analisa.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        "📥 Download Audit Trail Analisa",
+                        csv_analisa,
+                        "Hasil_Analisa_Tim.csv",
+                        "text/csv"
+                    )
+                else:
+                    st.write("(Belum ada data analisa)")
+
+    else:
+        st.info("👋 Silakan upload **MainBill** dan **Customer** di menu atas untuk memulai Dashboard.")
