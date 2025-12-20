@@ -9,12 +9,22 @@ def get_filename(filepath):
     return os.path.basename(filepath)
 
 def clean_nomen(val):
-    """Membersihkan format Nomen (hilangkan .0 jika dari Excel)"""
-    try:
-        if pd.isna(val): return None
-        return str(int(float(str(val))))
-    except:
-        return str(val).strip()
+    """Membersihkan format Nomen (hilangkan .0, spasi, jadi string murni)"""
+    if pd.isna(val):
+        return None
+    
+    # Ubah ke string dan strip spasi
+    s = str(val).strip()
+    
+    # Hapus desimal .0 (artifact Excel)
+    if s.endswith('.0'):
+        s = s[:-2]
+        
+    # Validasi panjang (opsional, sesuaikan kebutuhan)
+    if not s: 
+        return None
+        
+    return s
 
 def clean_date(val, fmt_in='%d-%m-%Y', fmt_out='%Y-%m-%d'):
     """Standardisasi format tanggal ke YYYY-MM-DD"""
@@ -27,22 +37,40 @@ def clean_date(val, fmt_in='%d-%m-%Y', fmt_out='%Y-%m-%d'):
 # 1. MODUL MASTER CUSTOMER (MC)
 # ==========================================
 def process_mc(filepath, cursor):
-    # Format: CSV (Koma), Header: PC, NOMEN, NAMA_PEL, REK_AIR
-    df = pd.read_csv(filepath, dtype=str)
+    # Format: CSV (Koma), Header biasanya: NOMEN, NAMA_PEL, ALM1_PEL, REK_AIR, dll
+    df = pd.read_csv(filepath, dtype=str, low_memory=False)
+    
+    # Standardisasi Header (Huruf besar & tanpa spasi)
+    df.columns = df.columns.str.strip().str.upper()
     
     data_list = []
+    
+    # Mapping nama kolom agar fleksibel
+    # Cari kolom yang sesuai dengan prioritas nama
+    col_nomen = 'NOMEN'
+    col_nama = next((c for c in ['NAMA_PEL', 'NAMA'] if c in df.columns), 'NAMA_PEL')
+    col_alamat = next((c for c in ['ALM1_PEL', 'ALAMAT'] if c in df.columns), 'ALM1_PEL')
+    col_tarif = next((c for c in ['TARIF', 'GOL_TARIF'] if c in df.columns), 'TARIF')
+    col_target = next((c for c in ['REK_AIR', 'TAGIHAN', 'TARGET'] if c in df.columns), 'REK_AIR')
+    col_rayon = next((c for c in ['ZONA_NOVAK', 'PC', 'RAYON'] if c in df.columns), 'ZONA_NOVAK')
+
     for _, row in df.iterrows():
-        nomen = clean_nomen(row.get('NOMEN'))
+        nomen = clean_nomen(row.get(col_nomen))
         if not nomen: continue
         
-        target = float(row.get('REK_AIR', 0) or 0)
+        # Bersihkan target (Rp)
+        try:
+            raw_target = row.get(col_target, '0')
+            target = float(str(raw_target).replace(',', '').replace(' ', '') or 0)
+        except:
+            target = 0
         
         data_list.append((
             nomen,
-            str(row.get('NAMA_PEL', '')),
-            str(row.get('ALM1_PEL', '')),
-            str(row.get('PC', '')), # PC sebagai Rayon
-            str(row.get('TARIF', '')),
+            str(row.get(col_nama, '')),
+            str(row.get(col_alamat, '')),
+            str(row.get(col_rayon, '')), # Menggunakan ZONA_NOVAK jika PC tidak ada
+            str(row.get(col_tarif, '')),
             target,
             datetime.now().strftime('%Y-%m')
         ))
@@ -64,26 +92,30 @@ def process_mc(filepath, cursor):
 # ==========================================
 def process_collection(filepath, cursor):
     filename = get_filename(filepath)
-    # Format: TXT (Pipa |), Header: NOMEN|AMT_COLLECT|PAY_DT
-    df = pd.read_csv(filepath, sep='|', dtype=str)
+    # Format: TXT/CSV (Pipa |)
+    df = pd.read_csv(filepath, sep='|', dtype=str, low_memory=False)
+    df.columns = df.columns.str.strip().str.upper()
     
-    # Hapus data lama dari file yang sama (Re-upload protection)
+    # Hapus data lama dari file yang sama
     cursor.execute("DELETE FROM collection_harian WHERE sumber_file = ?", (filename,))
     
     data_list = []
+    
+    col_nomen = 'NOMEN'
+    col_amt = 'AMT_COLLECT'
+    col_date = 'PAY_DT'
+
     for _, row in df.iterrows():
-        nomen = clean_nomen(row.get('NOMEN'))
+        nomen = clean_nomen(row.get(col_nomen))
         if not nomen: continue
         
-        # Bersihkan Nilai Uang (SAP pakai minus)
         try:
-            raw_amt = row.get('AMT_COLLECT', '0')
-            amount = abs(float(raw_amt))
+            raw_amt = row.get(col_amt, '0')
+            amount = abs(float(str(raw_amt).replace(',', '')))
         except:
             amount = 0
         
-        # Format Tanggal 01-12-2025 -> 2025-12-01
-        tgl_fix = clean_date(row.get('PAY_DT', ''), '%d-%m-%Y')
+        tgl_fix = clean_date(row.get(col_date, ''), '%d-%m-%Y')
         
         # Pastikan Nomen ada di Master (Integrity)
         cursor.execute("INSERT OR IGNORE INTO master_pelanggan (nomen) VALUES (?)", (nomen,))
@@ -100,17 +132,20 @@ def process_collection(filepath, cursor):
 # 3. MODUL SBRS (METER READING)
 # ==========================================
 def process_sbrs(filepath, cursor):
-    # Format: CSV (Koma), Header: Nomen, Curr_Read_1, Read_date_1
-    df = pd.read_csv(filepath, dtype=str)
+    df = pd.read_csv(filepath, dtype=str, low_memory=False)
+    df.columns = df.columns.str.strip().str.upper()
     
     data_list = []
+    col_nomen = 'NOMEN'
+    col_read = next((c for c in ['CURR_READ_1', 'STAND_AKHIR'] if c in df.columns), 'CURR_READ_1')
+    col_date = next((c for c in ['READ_DATE_1', 'TGL_BACA'] if c in df.columns), 'READ_DATE_1')
+
     for _, row in df.iterrows():
-        nomen = clean_nomen(row.get('Nomen'))
+        nomen = clean_nomen(row.get(col_nomen))
         if not nomen: continue
         
-        stand = row.get('Curr_Read_1', 0)
-        # Format Tanggal 11/12/2025 -> 2025-12-11
-        tgl = clean_date(row.get('Read_date_1', ''), '%d/%m/%Y')
+        stand = row.get(col_read, 0)
+        tgl = clean_date(row.get(col_date, ''), '%d/%m/%Y')
         
         data_list.append(('SUDAH BACA', stand, tgl, nomen))
         
@@ -127,8 +162,8 @@ def process_sbrs(filepath, cursor):
 # 4. MODUL MAINBILL (TAGIHAN FINAL)
 # ==========================================
 def process_mainbill(filepath, cursor):
-    # Format: TXT (Titik Koma ;), Header: NOMEN;TOTAL_TAGIHAN;BILL_CYCLE
-    df = pd.read_csv(filepath, sep=';', dtype=str)
+    df = pd.read_csv(filepath, sep=';', dtype=str, low_memory=False)
+    df.columns = df.columns.str.strip().str.upper()
     
     data_list = []
     for _, row in df.iterrows():
@@ -136,7 +171,7 @@ def process_mainbill(filepath, cursor):
         if not nomen: continue
         
         try:
-            tagihan = float(row.get('TOTAL_TAGIHAN', '0').replace(',', '.'))
+            tagihan = float(str(row.get('TOTAL_TAGIHAN', '0')).replace(',', '.'))
         except:
             tagihan = 0
             
@@ -156,26 +191,59 @@ def process_mainbill(filepath, cursor):
 # 5. MODUL ARDEBT (TUNGGAKAN)
 # ==========================================
 def process_ardebt(filepath, cursor):
-    # Format: CSV, Header: NOMEN, RAYON, SumOfJUMLAH
-    df = pd.read_csv(filepath, dtype=str)
+    # Format: CSV, Header: NOMEN, RAYON, JUMLAH (Bukan SumOfJUMLAH)
+    df = pd.read_csv(filepath, dtype=str, low_memory=False)
+    df.columns = df.columns.str.strip().str.upper()
     
-    data_list = []
-    for _, row in df.iterrows():
-        nomen = clean_nomen(row.get('NOMEN'))
-        if not nomen: continue
-        
-        saldo = float(row.get('SumOfJUMLAH', 0) or 0)
-        
-        # Buat dummy master jika belum ada
-        cursor.execute("INSERT OR IGNORE INTO master_pelanggan (nomen, rayon) VALUES (?, ?)", 
-                       (nomen, row.get('RAYON')))
-        
-        data_list.append((saldo, nomen))
+    # 1. Bersihkan Nomen terlebih dahulu
+    df['NOMEN_CLEAN'] = df['NOMEN'].apply(clean_nomen)
+    df = df.dropna(subset=['NOMEN_CLEAN']) # Hapus yg nomennya kosong
+    
+    # 2. Pastikan kolom JUMLAH terhandle dengan benar (bisa 'JUMLAH' atau 'TAGIHAN')
+    col_jumlah = next((c for c in ['JUMLAH', 'TAGIHAN', 'SALDO'] if c in df.columns), None)
+    
+    if not col_jumlah:
+        raise ValueError(f"Kolom JUMLAH tidak ditemukan. Kolom yang ada: {list(df.columns)}")
 
+    # Convert Jumlah ke Float
+    df['JUMLAH_CLEAN'] = pd.to_numeric(df[col_jumlah], errors='coerce').fillna(0)
+    
+    # 3. GROUP BY NOMEN (PENTING! Agar tunggakan dijumlahkan per user)
+    # Jika user punya 3 bulan tunggakan, kita mau totalnya.
+    grouped = df.groupby('NOMEN_CLEAN')['JUMLAH_CLEAN'].sum().reset_index()
+    
+    # Ambil Rayon (ambil yang pertama aja per nomen)
+    rayon_map = {}
+    if 'RAYON' in df.columns:
+        rayon_map = df.drop_duplicates('NOMEN_CLEAN').set_index('NOMEN_CLEAN')['RAYON'].to_dict()
+
+    update_list = []
+    insert_dummy_list = []
+
+    for _, row in grouped.iterrows():
+        nomen = str(row['NOMEN_CLEAN'])
+        total_saldo = float(row['JUMLAH_CLEAN'])
+        rayon = str(rayon_map.get(nomen, ''))
+
+        # Siapkan data untuk insert dummy master jika belum ada
+        insert_dummy_list.append((nomen, rayon))
+        
+        # Siapkan data untuk update saldo
+        update_list.append((total_saldo, nomen))
+
+    # Eksekusi Database
+    # A. Pastikan Master Ada (Insert or Ignore)
+    cursor.executemany('''
+        INSERT OR IGNORE INTO master_pelanggan (nomen, rayon) 
+        VALUES (?, ?)
+    ''', insert_dummy_list)
+
+    # B. Update Saldo Ardebt
     cursor.executemany('''
         UPDATE master_pelanggan SET saldo_ardebt = ? WHERE nomen = ?
-    ''', data_list)
-    return len(data_list)
+    ''', update_list)
+    
+    return len(update_list)
 
 # ==========================================
 # DISPATCHER UTAMA
@@ -183,7 +251,6 @@ def process_ardebt(filepath, cursor):
 def process_file(filepath, jenis_file):
     """
     Fungsi Utama yang dipanggil oleh app.py.
-    Hanya bertugas membuka koneksi DB dan mengarahkan ke fungsi spesifik.
     """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -193,7 +260,6 @@ def process_file(filepath, jenis_file):
     rows_affected = 0
 
     try:
-        # Arahkan ke fungsi sesuai jenis file
         if jenis_file == FILE_TYPE_MC:
             rows_affected = process_mc(filepath, cursor)
         elif jenis_file == FILE_TYPE_COLLECTION:
@@ -207,7 +273,6 @@ def process_file(filepath, jenis_file):
         else:
             raise ValueError(f"Jenis file tidak dikenali: {jenis_file}")
 
-        # Commit & Log Audit
         conn.commit()
         
         log_msg = f"Upload {jenis_file} - {filename} ({rows_affected} rows)"
