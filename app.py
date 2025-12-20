@@ -1,163 +1,103 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 import os
 import sqlite3
-from datetime import datetime
+from flask import Flask, render_template, g
 
-# Import modul buatan sendiri
-from config import UPLOAD_FOLDER
-from database import init_db, get_db, close_db
-from processor import process_file
-
+# --- KONFIGURASI ---
 app = Flask(__name__)
-app.secret_key = 'sunter_dashboard_secret_key' # Diperlukan untuk flash message
+app.config['SECRET_KEY'] = 'kunci-rahasia-sunter-dashboard-123' # Ganti nanti
+DB_FOLDER = os.path.join(os.getcwd(), 'database')
+DB_PATH = os.path.join(DB_FOLDER, 'sunter.db')
 
-# 1. SETUP DATABASE
-# Menutup koneksi database otomatis saat request selesai
-app.teardown_appcontext(close_db)
+# Pastikan folder database ada
+if not os.path.exists(DB_FOLDER):
+    os.makedirs(DB_FOLDER)
 
-# Inisialisasi database (Buat tabel) saat aplikasi pertama kali dijalankan
-init_db(app)
+# --- FUNGSI DATABASE (SQLite) ---
+def get_db():
+    db = getattr(g, '_database', None)
+    if db is None:
+        db = g._database = sqlite3.connect(DB_PATH)
+        db.row_factory = sqlite3.Row 
+    return db
 
-# --- ROUTES (ALUR WEBSITE) ---
+@app.teardown_appcontext
+def close_db(exception):
+    db = getattr(g, '_database', None)
+    if db is not None:
+        db.close()
+
+def init_db():
+    """Membuat tabel jika belum ada (Auto-setup saat pertama kali run)"""
+    with app.app_context():
+        db = get_db()
+        cursor = db.cursor()
+        
+        # 1. Tabel Master Pelanggan
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS master_pelanggan (
+                nomen TEXT PRIMARY KEY,
+                nama TEXT,
+                rayon TEXT,
+                tarif TEXT,
+                target_mc REAL DEFAULT 0,
+                saldo_ardebt REAL DEFAULT 0
+            )
+        ''')
+        
+        # 2. Tabel Collection
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS collection_harian (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nomen TEXT,
+                tgl_bayar TEXT,
+                jumlah_bayar REAL,
+                FOREIGN KEY(nomen) REFERENCES master_pelanggan(nomen)
+            )
+        ''')
+
+        # 3. Tabel Analisa Manual (Penting untuk user)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS analisa_manual (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nomen TEXT,
+                jenis_anomali TEXT,
+                catatan TEXT,
+                status TEXT DEFAULT 'Open',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        db.commit()
+        print(f"✅ Database siap di: {DB_PATH}")
+
+# --- ROUTING (HALAMAN) ---
 
 @app.route('/')
 def index():
-    """
-    Halaman Utama Dashboard (Single Page).
-    Mengambil data ringkasan dan grafik untuk ditampilkan.
-    """
+    # Contoh query data ringkasan untuk Dashboard
     db = get_db()
     
-    # --- A. QUERY STATISTIK UTAMA (RINGKASAN) ---
+    # Hitung Total Pelanggan
+    cust_count = db.execute('SELECT COUNT(*) as total FROM master_pelanggan').fetchone()['total']
     
-    # 1. Ambil Data Master (Target MC & Saldo Ardebt & Jumlah Pelanggan)
-    # Kita menggunakan COALESCE agar jika data kosong, hasilnya 0 (bukan None)
-    master_query = db.execute('''
-        SELECT 
-            COUNT(nomen) as total_cust, 
-            SUM(target_mc) as total_mc, 
-            SUM(saldo_ardebt) as total_debt 
-        FROM master_pelanggan
-    ''').fetchone()
+    # Hitung Total Collection (Gabungan Rayon 34 & 35 / SUNTER)
+    total_coll = db.execute('SELECT SUM(jumlah_bayar) as total FROM collection_harian').fetchone()['total'] or 0
     
-    # 2. Ambil Realisasi Collection (Total uang masuk dari semua file collection)
-    coll_query = db.execute('''
-        SELECT SUM(jumlah_bayar) as total_coll 
-        FROM collection_harian
-    ''').fetchone()
+    return render_template('index.html', cust_count=cust_count, total_coll=total_coll)
 
-    # Bersihkan nilai (Handle jika None)
-    total_pelanggan = master_query['total_cust'] or 0
-    target_mc = master_query['total_mc'] or 0
-    saldo_ardebt = master_query['total_debt'] or 0
-    realisasi_coll = coll_query['total_coll'] or 0
-    
-    # Hitung Persentase (Collection Rate)
-    # Hindari pembagian dengan nol
-    if target_mc > 0:
-        coll_rate = (realisasi_coll / target_mc) * 100
-    else:
-        coll_rate = 0
+@app.route('/collection')
+def collection():
+    return "Halaman Collection (Excel Style)"
 
-    # Bungkus dalam dictionary 'stats' untuk dikirim ke HTML
-    stats = {
-        'total_pelanggan': total_pelanggan,
-        'target_mc': target_mc,
-        'saldo_ardebt': saldo_ardebt,
-        'realisasi_coll': realisasi_coll,
-        'coll_rate': coll_rate
-    }
-
-    # --- B. QUERY UNTUK GRAFIK & TABEL (Collection Harian) ---
-    
-    # Mengambil data collection dikelompokkan per tanggal
-    daily_chart_query = db.execute('''
-        SELECT 
-            tgl_bayar, 
-            SUM(jumlah_bayar) as harian
-        FROM collection_harian 
-        GROUP BY tgl_bayar 
-        ORDER BY tgl_bayar ASC
-    ''').fetchall()
-
-    # Format data agar mudah dibaca Chart.js & Tabel HTML
-    chart_data = []
-    kumulatif = 0 # Variabel bantu untuk hitung kumulatif
-    
-    for row in daily_chart_query:
-        harian = row['harian']
-        kumulatif += harian # Tambahkan harian ke total berjalan
-        
-        # Hitung % progress harian terhadap target MC
-        persen_progress = 0
-        if target_mc > 0:
-            persen_progress = (kumulatif / target_mc) * 100
-
-        chart_data.append({
-            'tgl': row['tgl_bayar'],
-            'total': harian,          # Untuk grafik garis/batang harian
-            'kumulatif': kumulatif,   # Untuk kolom kumulatif di tabel
-            'progress': persen_progress # Untuk kolom % di tabel
-        })
-
-    # Render Template HTML dengan membawa data stats & chart
-    return render_template('dashboard.html', stats=stats, chart_data=chart_data)
-
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    """
-    Route khusus untuk menerima file Upload dari Modal di Dashboard.
-    """
-    # 1. Cek apakah ada file yang dikirim
-    if 'file' not in request.files:
-        flash('Tidak ada file yang dipilih', 'error')
-        return redirect(url_for('index'))
-    
-    file = request.files['file']
-    jenis_file = request.form.get('jenis_file') # MC, COLLECTION, ARDEBT, dll
-    
-    # 2. Cek nama file
-    if file.filename == '':
-        flash('Nama file kosong', 'error')
-        return redirect(url_for('index'))
-
-    # 3. Simpan & Proses
-    if file:
-        # Pastikan folder upload ada
-        if not os.path.exists(UPLOAD_FOLDER):
-            os.makedirs(UPLOAD_FOLDER)
-            
-        filepath = os.path.join(UPLOAD_FOLDER, file.filename)
-        file.save(filepath)
-        
-        try:
-            # Panggil fungsi 'otak' di processor.py
-            process_file(filepath, jenis_file)
-            flash(f'Berhasil memproses file {jenis_file}!', 'success')
-        except Exception as e:
-            flash(f'Gagal memproses file: {str(e)}', 'error')
-            print(f"Error: {e}")
-        
-        return redirect(url_for('index'))
-
-@app.route('/api/analisa', methods=['POST'])
-def simpan_analisa():
-    """
-    (Opsional) Endpoint API jika nanti ingin menyimpan Analisa Manual
-    tanpa reload halaman (AJAX).
-    """
-    data = request.json
-    db = get_db()
-    try:
-        db.execute('''
-            INSERT INTO analisa_manual (nomen, jenis_anomali, catatan, rekomendasi, status)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (data['nomen'], data['jenis'], data['catatan'], data['rekomendasi'], 'Open'))
-        db.commit()
-        return jsonify({'status': 'success', 'message': 'Analisa tersimpan'})
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-# Jalankan Aplikasi
+# --- MAIN EXECUTION ---
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # Cek & Buat DB saat aplikasi start
+    if not os.path.exists(DB_PATH):
+        print("⚡ Database belum ada, menginisialisasi...")
+        init_db()
+    
+    print("🚀 Sistem SUNTER DASHBOARD Berjalan...")
+    print("👉 Buka di browser: http://localhost:5000")
+    
+    # Debug=True agar auto-reload saat edit coding
+    app.run(host='0.0.0.0', port=5000, debug=True)
