@@ -23,32 +23,40 @@
             box-shadow: 0 4px 20px rgba(0,0,0,0.3);
             padding: 15px 25px;
         }
-        .upload-card {
+        .kpi-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
             transition: all 0.3s;
-            cursor: pointer;
-            border: 2px solid transparent;
         }
-        .upload-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        .kpi-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
         }
-        .upload-card input[type="radio"]:checked ~ .card-body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white !important;
-            border-color: #667eea !important;
-        }
-        .upload-card input[type="radio"]:checked ~ .card-body * {
-            color: white !important;
-        }
-        .file-type-badge {
+        .kpi-number {
             font-size: 2rem;
-            opacity: 0.8;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .kpi-detail {
+            font-size: 0.85rem;
+            padding: 8px;
+            margin-top: 10px;
+            border-radius: 5px;
+            background: #f8f9fa;
+        }
+        .badge-custom {
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.75rem;
         }
     </style>
 </head>
 <body>
 
-<!-- GLOBAL HEADER -->
+<!-- HEADER -->
 <header class="global-header">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div class="d-flex align-items-center">
@@ -82,7 +90,7 @@
         </div>
         <div class="col-md-5">
              <div class="alert alert-warning py-2 px-3 mb-0 small text-center fw-bold shadow-sm border-0">
-                <i class="fas fa-calendar-alt me-1"></i> Periode Data: <span id="labelPeriode" class="badge bg-dark">-</span>
+                <i class="fas fa-calendar-alt me-1"></i> Periode: <span id="labelPeriode" class="badge bg-dark">-</span>
              </div>
         </div>
         <div class="col-md-4">
@@ -90,9 +98,9 @@
                 <span class="input-group-text bg-white border-0">
                     <i class="fas fa-search text-primary"></i>
                 </span>
-                <input type="text" class="form-control border-0 shadow-sm" id="globalSearch" placeholder="🔍 Cari Nomen / Nama Pelanggan...">
+                <input type="text" class="form-control border-0 shadow-sm" id="globalSearch" placeholder="🔍 Cari Nomen / Nama...">
                 <button class="btn btn-primary shadow-sm" onclick="cariPelanggan()">
-                    <i class="fas fa-search-plus me-1"></i> ANALISA
+                    <i class="fas fa-search-plus me-1"></i> CARI
                 </button>
             </div>
         </div>
@@ -108,13 +116,9 @@
             {% for category, message in messages %}
                 <div class="alert alert-{{ category }} alert-dismissible fade show mt-2 shadow-sm">
                     <strong>
-                        {% if category == 'success' %}
-                            <i class="fas fa-check-circle me-2"></i>
-                        {% elif category == 'danger' %}
-                            <i class="fas fa-exclamation-circle me-2"></i>
-                        {% else %}
-                            <i class="fas fa-info-circle me-2"></i>
-                        {% endif %}
+                        {% if category == 'success' %}<i class="fas fa-check-circle me-2"></i>
+                        {% elif category == 'danger' %}<i class="fas fa-exclamation-circle me-2"></i>
+                        {% else %}<i class="fas fa-info-circle me-2"></i>{% endif %}
                     </strong>
                     {{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
@@ -123,8 +127,8 @@
         {% endif %}
     {% endwith %}
 
-    <!-- NAVIGATION TABS -->
-    <ul class="nav nav-tabs nav-fill shadow-sm bg-white rounded-top" id="mainTab" role="tablist">
+    <!-- TABS -->
+    <ul class="nav nav-tabs nav-fill shadow-sm bg-white rounded-top" id="mainTab">
         <li class="nav-item">
             <button class="nav-link active py-3" data-bs-toggle="tab" data-bs-target="#tab-ringkasan">
                 <i class="fas fa-chart-pie me-2"></i> RINGKASAN
@@ -135,36 +139,150 @@
                 <i class="fas fa-table me-2"></i> COLLECTION
             </button>
         </li>
-        <li class="nav-item">
-            <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#tab-analisa">
-                <i class="fas fa-clipboard-check me-2"></i> ANALISA
-            </button>
-        </li>
     </ul>
 
     <!-- TAB CONTENT -->
-    <div class="tab-content bg-white shadow-sm p-4 rounded-bottom" style="min-height: 500px;">
+    <div class="tab-content bg-white shadow-sm p-4 rounded-bottom" style="min-height: 600px;">
         
         <!-- TAB: RINGKASAN -->
         <div class="tab-pane fade show active" id="tab-ringkasan">
-            <div class="row g-4">
-                <div class="col-md-3">
-                    <div class="card border-0 shadow-sm h-100">
-                        <div class="card-body">
-                            <h6 class="text-muted mb-2">Total Pelanggan</h6>
-                            <h2 class="text-primary fw-bold" id="kpi-cust">0</h2>
-                        </div>
+            
+            <!-- Row 1: Total Pelanggan -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="kpi-card border-start border-primary border-5">
+                        <h6 class="text-muted text-uppercase"><i class="fas fa-users me-2"></i>Total Pelanggan (dari MC)</h6>
+                        <div class="kpi-number text-primary" id="kpi-total-pelanggan">0</div>
+                        <small class="text-muted">Total nomen dalam Master Customer</small>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card border-0 shadow-sm h-100">
-                        <div class="card-body">
-                            <h6 class="text-muted mb-2">Collection</h6>
-                            <h2 class="text-success fw-bold" id="kpi-coll">Rp 0</h2>
+            </div>
+
+            <!-- Row 2: Target MC -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="kpi-card border-start border-info border-5">
+                        <h6 class="text-muted text-uppercase"><i class="fas fa-bullseye me-2"></i>Target MC</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <small class="text-muted d-block">Total Target</small>
+                                    <div class="kpi-number text-info" id="kpi-target-total" style="font-size: 1.5rem;">Rp 0</div>
+                                    <span class="badge badge-custom bg-info" id="kpi-target-nomen-total">0 nomen</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <small class="text-success d-block">✓ Sudah Bayar</small>
+                                    <div class="kpi-number text-success" id="kpi-target-bayar" style="font-size: 1.5rem;">Rp 0</div>
+                                    <span class="badge badge-custom bg-success" id="kpi-target-nomen-bayar">0 nomen</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <small class="text-danger d-block">✗ Belum Bayar</small>
+                                    <div class="kpi-number text-danger" id="kpi-target-belum" style="font-size: 1.5rem;">Rp 0</div>
+                                    <span class="badge badge-custom bg-danger" id="kpi-target-nomen-belum">0 nomen</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <!-- Row 3: Collection -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="kpi-card border-start border-success border-5">
+                        <h6 class="text-muted text-uppercase"><i class="fas fa-money-bill-wave me-2"></i>Collection</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <small class="text-muted d-block">Total Collection</small>
+                                    <div class="kpi-number text-success" id="kpi-coll-total" style="font-size: 1.5rem;">Rp 0</div>
+                                    <span class="badge badge-custom bg-success" id="kpi-coll-nomen-total">0 nomen</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <small class="text-primary d-block">Current (Bulan Ini)</small>
+                                    <div class="kpi-number text-primary" id="kpi-coll-current" style="font-size: 1.5rem;">Rp 0</div>
+                                    <span class="badge badge-custom bg-primary" id="kpi-coll-nomen-current">0 nomen</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <small class="text-warning d-block">Undue (Tunggakan)</small>
+                                    <div class="kpi-number text-warning" id="kpi-coll-undue" style="font-size: 1.5rem;">Rp 0</div>
+                                    <span class="badge badge-custom bg-warning" id="kpi-coll-nomen-undue">0 nomen</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 4: Collection Rate -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="kpi-card border-start border-warning border-5">
+                        <h6 class="text-muted text-uppercase"><i class="fas fa-percent me-2"></i>Collection Rate</h6>
+                        <div class="kpi-number text-warning" id="kpi-rate">0%</div>
+                        <div class="progress" style="height: 25px;">
+                            <div class="progress-bar bg-warning" id="kpi-rate-bar" style="width: 0%">0%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 5: Tunggakan -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="kpi-card border-start border-danger border-5">
+                        <h6 class="text-muted text-uppercase"><i class="fas fa-exclamation-triangle me-2"></i>Tunggakan (Ardebt)</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <small class="text-muted d-block">Total Tunggakan</small>
+                                    <div class="kpi-number text-danger" id="kpi-tunggakan-total" style="font-size: 1.5rem;">Rp 0</div>
+                                    <span class="badge badge-custom bg-danger" id="kpi-tunggakan-nomen-total">0 nomen</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <small class="text-success d-block">✓ Sudah Bayar</small>
+                                    <div class="kpi-number text-success" id="kpi-tunggakan-bayar" style="font-size: 1.5rem;">Rp 0</div>
+                                    <span class="badge badge-custom bg-success" id="kpi-tunggakan-nomen-bayar">0 nomen</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <small class="text-danger d-block">✗ Belum Bayar</small>
+                                    <div class="kpi-number text-danger" id="kpi-tunggakan-belum" style="font-size: 1.5rem;">Rp 0</div>
+                                    <span class="badge badge-custom bg-danger" id="kpi-tunggakan-nomen-belum">0 nomen</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 6: Grafik -->
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <div class="kpi-card">
+                        <h6 class="text-muted text-uppercase"><i class="fas fa-chart-bar me-2"></i>Collection Rayon 34 vs 35</h6>
+                        <canvas id="chartRayon" height="200"></canvas>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <div class="kpi-card">
+                        <h6 class="text-muted text-uppercase"><i class="fas fa-chart-line me-2"></i>Tren Collection Harian</h6>
+                        <canvas id="chartTren" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
         <!-- TAB: COLLECTION -->
@@ -188,137 +306,72 @@
                 <tbody></tbody>
             </table>
         </div>
-
-        <!-- TAB: ANALISA -->
-        <div class="tab-pane fade" id="tab-analisa">
-            <p class="text-muted">Modul analisa manual</p>
-        </div>
     </div>
 </div>
 
-<!-- MODAL UPLOAD -->
+<!-- MODAL UPLOAD (sama seperti sebelumnya) -->
 <div class="modal fade" id="modalUpload" tabindex="-1">
     <div class="modal-dialog modal-xl">
         <form action="/upload" method="POST" enctype="multipart/form-data" class="modal-content">
             <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title"><i class="fas fa-cloud-upload-alt me-2"></i> Upload Data Sistem</h5>
+                <h5 class="modal-title"><i class="fas fa-cloud-upload-alt me-2"></i> Upload Data</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                
-                <!-- ALERT INFO -->
-                <div class="alert alert-info border-0 shadow-sm mb-4">
-                    <h6 class="fw-bold"><i class="fas fa-info-circle me-2"></i> Urutan Upload yang Benar:</h6>
-                    <ol class="mb-0 small">
-                        <li><strong>MC (Master Customer)</strong> - Wajib upload pertama!</li>
-                        <li><strong>Collection</strong> - Transaksi pembayaran (Current + Undue)</li>
-                        <li><strong>MB (Master Bayar)</strong> - History pembayaran bulan lalu</li>
-                        <li><strong>MainBill</strong> - Tagihan untuk bulan depan</li>
-                        <li><strong>Ardebt</strong> - Data tunggakan</li>
-                    </ol>
-                </div>
-
-                <h6 class="fw-bold mb-3">Pilih Jenis File:</h6>
-                
                 <div class="row g-3">
-                    <!-- MC -->
                     <div class="col-md-4">
-                        <div class="upload-card">
-                            <input type="radio" name="tipe_upload" id="type-mc" value="master" class="d-none" checked>
-                            <label for="type-mc" class="w-100 m-0">
-                                <div class="card-body text-center p-4 border rounded">
-                                    <div class="file-type-badge text-primary mb-2">
-                                        <i class="fas fa-users"></i>
-                                    </div>
-                                    <h6 class="fw-bold">MC (Master Customer)</h6>
-                                    <small class="text-muted d-block">Data induk pelanggan + target</small>
-                                    <div class="badge bg-danger mt-2">WAJIB PERTAMA</div>
-                                </div>
-                            </label>
-                        </div>
+                        <input type="radio" name="tipe_upload" id="type-mc" value="master" class="d-none" checked>
+                        <label for="type-mc" class="w-100 m-0 cursor-pointer">
+                            <div class="card text-center p-3 border">
+                                <i class="fas fa-users fa-3x text-primary mb-2"></i>
+                                <h6>MC (Master)</h6>
+                            </div>
+                        </label>
                     </div>
-
-                    <!-- COLLECTION -->
                     <div class="col-md-4">
-                        <div class="upload-card">
-                            <input type="radio" name="tipe_upload" id="type-coll" value="collection" class="d-none">
-                            <label for="type-coll" class="w-100 m-0">
-                                <div class="card-body text-center p-4 border rounded">
-                                    <div class="file-type-badge text-success mb-2">
-                                        <i class="fas fa-money-bill-wave"></i>
-                                    </div>
-                                    <h6 class="fw-bold">COLLECTION</h6>
-                                    <small class="text-muted d-block">Transaksi Current + Undue</small>
-                                    <div class="badge bg-secondary mt-2">DAILY</div>
-                                </div>
-                            </label>
-                        </div>
+                        <input type="radio" name="tipe_upload" id="type-coll" value="collection" class="d-none">
+                        <label for="type-coll" class="w-100 m-0 cursor-pointer">
+                            <div class="card text-center p-3 border">
+                                <i class="fas fa-money-bill-wave fa-3x text-success mb-2"></i>
+                                <h6>COLLECTION</h6>
+                            </div>
+                        </label>
                     </div>
-
-                    <!-- MB -->
                     <div class="col-md-4">
-                        <div class="upload-card">
-                            <input type="radio" name="tipe_upload" id="type-mb" value="mb" class="d-none">
-                            <label for="type-mb" class="w-100 m-0">
-                                <div class="card-body text-center p-4 border rounded">
-                                    <div class="file-type-badge text-warning mb-2">
-                                        <i class="fas fa-history"></i>
-                                    </div>
-                                    <h6 class="fw-bold">MB (Master Bayar)</h6>
-                                    <small class="text-muted d-block">Pembayaran bulan lalu</small>
-                                    <div class="badge bg-secondary mt-2">HISTORY</div>
-                                </div>
-                            </label>
-                        </div>
+                        <input type="radio" name="tipe_upload" id="type-mb" value="mb" class="d-none">
+                        <label for="type-mb" class="w-100 m-0 cursor-pointer">
+                            <div class="card text-center p-3 border">
+                                <i class="fas fa-history fa-3x text-warning mb-2"></i>
+                                <h6>MB (Master Bayar)</h6>
+                            </div>
+                        </label>
                     </div>
-
-                    <!-- MAINBILL -->
                     <div class="col-md-4">
-                        <div class="upload-card">
-                            <input type="radio" name="tipe_upload" id="type-mainbill" value="mainbill" class="d-none">
-                            <label for="type-mainbill" class="w-100 m-0">
-                                <div class="card-body text-center p-4 border rounded">
-                                    <div class="file-type-badge text-info mb-2">
-                                        <i class="fas fa-file-invoice-dollar"></i>
-                                    </div>
-                                    <h6 class="fw-bold">MAINBILL</h6>
-                                    <small class="text-muted d-block">Tagihan bulan depan</small>
-                                    <div class="badge bg-secondary mt-2">BILL</div>
-                                </div>
-                            </label>
-                        </div>
+                        <input type="radio" name="tipe_upload" id="type-mainbill" value="mainbill" class="d-none">
+                        <label for="type-mainbill" class="w-100 m-0 cursor-pointer">
+                            <div class="card text-center p-3 border">
+                                <i class="fas fa-file-invoice fa-3x text-info mb-2"></i>
+                                <h6>MAINBILL</h6>
+                            </div>
+                        </label>
                     </div>
-
-                    <!-- ARDEBT -->
                     <div class="col-md-4">
-                        <div class="upload-card">
-                            <input type="radio" name="tipe_upload" id="type-ardebt" value="ardebt" class="d-none">
-                            <label for="type-ardebt" class="w-100 m-0">
-                                <div class="card-body text-center p-4 border rounded">
-                                    <div class="file-type-badge text-danger mb-2">
-                                        <i class="fas fa-exclamation-triangle"></i>
-                                    </div>
-                                    <h6 class="fw-bold">ARDEBT</h6>
-                                    <small class="text-muted d-block">Data tunggakan</small>
-                                    <div class="badge bg-secondary mt-2">DEBT</div>
-                                </div>
-                            </label>
-                        </div>
+                        <input type="radio" name="tipe_upload" id="type-ardebt" value="ardebt" class="d-none">
+                        <label for="type-ardebt" class="w-100 m-0 cursor-pointer">
+                            <div class="card text-center p-3 border">
+                                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-2"></i>
+                                <h6>ARDEBT</h6>
+                            </div>
+                        </label>
                     </div>
                 </div>
-
-                <!-- FILE INPUT -->
-                <div class="mt-4">
-                    <label class="form-label fw-bold">Pilih File:</label>
-                    <input type="file" name="file" class="form-control form-control-lg" required accept=".txt,.csv,.xls,.xlsx">
-                    <small class="text-muted">Format: .txt, .csv, .xls, .xlsx</small>
+                <div class="mt-3">
+                    <input type="file" name="file" class="form-control" required>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                <button type="submit" class="btn btn-primary px-4">
-                    <i class="fas fa-upload me-2"></i> UPLOAD
-                </button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-upload me-2"></i> UPLOAD</button>
             </div>
         </form>
     </div>
@@ -328,13 +381,113 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
+    let chartRayon, chartTren;
+    
+    function formatRupiah(angka) {
+        return 'Rp ' + new Intl.NumberFormat('id-ID').format(angka);
+    }
+    
     function updateKPI() {
         $.get('/api/kpi_data', function(data) {
-            $('#kpi-cust').text(new Intl.NumberFormat('id-ID').format(data.cust));
-            $('#kpi-coll').text('Rp ' + new Intl.NumberFormat('id-ID').format(data.coll));
+            console.log('KPI Data:', data);
+            
+            // Total Pelanggan
+            $('#kpi-total-pelanggan').text(new Intl.NumberFormat('id-ID').format(data.total_pelanggan));
+            
+            // Target MC
+            $('#kpi-target-total').text(formatRupiah(data.target.total_nominal));
+            $('#kpi-target-nomen-total').text(data.target.total_nomen + ' nomen');
+            $('#kpi-target-bayar').text(formatRupiah(data.target.sudah_bayar_nominal));
+            $('#kpi-target-nomen-bayar').text(data.target.sudah_bayar_nomen + ' nomen');
+            $('#kpi-target-belum').text(formatRupiah(data.target.belum_bayar_nominal));
+            $('#kpi-target-nomen-belum').text(data.target.belum_bayar_nomen + ' nomen');
+            
+            // Collection
+            $('#kpi-coll-total').text(formatRupiah(data.collection.total_nominal));
+            $('#kpi-coll-nomen-total').text(data.collection.total_nomen + ' nomen');
+            $('#kpi-coll-current').text(formatRupiah(data.collection.current_nominal));
+            $('#kpi-coll-nomen-current').text(data.collection.current_nomen + ' nomen');
+            $('#kpi-coll-undue').text(formatRupiah(data.collection.undue_nominal));
+            $('#kpi-coll-nomen-undue').text(data.collection.undue_nomen + ' nomen');
+            
+            // Collection Rate
+            $('#kpi-rate').text(data.collection_rate + '%');
+            $('#kpi-rate-bar').css('width', data.collection_rate + '%').text(data.collection_rate + '%');
+            
+            // Tunggakan
+            $('#kpi-tunggakan-total').text(formatRupiah(data.tunggakan.total_nominal));
+            $('#kpi-tunggakan-nomen-total').text(data.tunggakan.total_nomen + ' nomen');
+            $('#kpi-tunggakan-bayar').text(formatRupiah(data.tunggakan.sudah_bayar_nominal));
+            $('#kpi-tunggakan-nomen-bayar').text(data.tunggakan.sudah_bayar_nomen + ' nomen');
+            $('#kpi-tunggakan-belum').text(formatRupiah(data.tunggakan.belum_bayar_nominal));
+            $('#kpi-tunggakan-nomen-belum').text(data.tunggakan.belum_bayar_nomen + ' nomen');
+            
+            // Periode
             $('#labelPeriode').text(data.periode);
+        });
+    }
+    
+    function loadChartRayon() {
+        $.get('/api/breakdown_rayon', function(data) {
+            const ctx = document.getElementById('chartRayon');
+            if (chartRayon) chartRayon.destroy();
+            
+            chartRayon = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => 'Rayon ' + d.rayon),
+                    datasets: [{
+                        label: 'Collection (Rp)',
+                        data: data.map(d => d.total_collection || 0),
+                        backgroundColor: ['#0d6efd', '#198754']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        });
+    }
+    
+    function loadChartTren() {
+        $.get('/api/tren_harian', function(data) {
+            const ctx = document.getElementById('chartTren');
+            if (chartTren) chartTren.destroy();
+            
+            chartTren = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.map(d => d.tgl_bayar),
+                    datasets: [{
+                        label: 'Harian',
+                        data: data.map(d => d.total_harian),
+                        borderColor: '#198754',
+                        backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                        fill: true
+                    }, {
+                        label: 'Kumulatif',
+                        data: data.map(d => d.kumulatif),
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
         });
     }
 
@@ -365,13 +518,9 @@
 
     $(document).ready(function() {
         updateKPI();
+        loadChartRayon();
+        loadChartTren();
         loadCollectionData();
-    });
-
-    // Radio button effect
-    $('input[name="tipe_upload"]').change(function() {
-        $('.upload-card').removeClass('border-primary');
-        $(this).closest('.upload-card').addClass('border-primary');
     });
 </script>
 
