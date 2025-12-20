@@ -1,301 +1,163 @@
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-import datetime
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 import os
+import sqlite3
+from datetime import datetime
 
-# ==========================================
-# 0. KONFIGURASI HALAMAN
-# ==========================================
-st.set_page_config(
-    page_title="SUNTER Dashboard System",
-    page_icon="💧",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+# Import modul buatan sendiri
+from config import UPLOAD_FOLDER
+from database import init_db, get_db, close_db
+from processor import process_file
 
-# --- CSS CUSTOM ---
-st.markdown("""
-<style>
-    .block-container {padding-top: 1rem; padding-bottom: 2rem;}
-    h1 { color: #004d99; }
-    div[data-testid="metric-container"] { 
-        background-color: #f8f9fa; border: 1px solid #dee2e6; 
-        padding: 15px; border-radius: 8px; 
-    }
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-    .stTabs [data-baseweb="tab"] { 
-        background-color: #eef2f6; border-radius: 4px; padding: 8px 16px; font-weight: 600;
-    }
-    .stTabs [aria-selected="true"] { 
-        background-color: #007bff; color: white;
-    }
-</style>
-""", unsafe_allow_html=True)
+app = Flask(__name__)
+app.secret_key = 'sunter_dashboard_secret_key' # Diperlukan untuk flash message
 
-# ==========================================
-# 1. KAMUS KODE (HARDCODED)
-# ==========================================
-KAMUS_SKIP = {
-    '1A': 'Meter Buram', '1B': 'Meter Berembun', '1C': 'Meter Rusak', 
-    '2A': 'MTA (Air Tdk Dipakai)', '2B': 'MTA (Air Dipakai)', '3A': 'Rumah Kosong',
-    '4A': 'Rumah Dibongkar', '4B': 'Meter Terendam', '4C': 'Alamat Tdk Ketemu',
-    '5A': 'Tutup Berat', '5B': 'Meter Tertimbun', '5C': 'Terhalang Barang',
-    '5D': 'Meter Dicor', '5E': 'Bak Terkunci', '5F': 'Pagar Terkunci', '5G': 'Dilarang Baca'
-}
-KAMUS_TROUBLE = {
-    '1A': 'Meter Berembun', '1B': 'Meter Mati', '1C': 'Meter Buram', '1D': 'Segel Putus',
-    '2A': 'Meter Terbalik', '2B': 'Meter Dipindah', '2C': 'Meter Lepas', '2D': 'By Pass',
-    '2E': 'Meter Dicolok', '2F': 'Meter Tdk Normal', '2G': 'Kaca Pecah', '3A': 'Air Kecil/Mati',
-    '4A': 'Bocor Dinas', '4B': 'Pipa Lama Keluar Air', '5A': 'Stand Tempel', '5B': 'No Seri Beda'
-}
-KAMUS_METHOD = {'30': 'System Est', '35': 'Service Est', '40': 'Office Est', '60': 'Regular', '80': 'Bill Force'}
+# 1. SETUP DATABASE
+# Menutup koneksi database otomatis saat request selesai
+app.teardown_appcontext(close_db)
 
-# ==========================================
-# 2. FUNGSI LOAD DATA (SMART READER)
-# ==========================================
-@st.cache_data
-def load_data(file_bill, file_cust, file_coll):
+# Inisialisasi database (Buat tabel) saat aplikasi pertama kali dijalankan
+init_db(app)
+
+# --- ROUTES (ALUR WEBSITE) ---
+
+@app.route('/')
+def index():
+    """
+    Halaman Utama Dashboard (Single Page).
+    Mengambil data ringkasan dan grafik untuk ditampilkan.
+    """
+    db = get_db()
     
-    # --- FUNGSI BACA FILE PINTAR (TXT / EXCEL) ---
-    def read_smart(uploaded, file_type):
-        try:
-            filename = uploaded.name.lower()
-            # 1. JIKA EXCEL (.xlsx / .xls)
-            if filename.endswith(('.xlsx', '.xls')):
-                df = pd.read_excel(uploaded, dtype=str)
-            # 2. JIKA TXT / CSV
-            else:
-                # Tentukan pemisah berdasarkan jenis file sistem
-                separator = ';' 
-                if file_type == 'coll': separator = '|'
-                
-                df = pd.read_csv(uploaded, sep=separator, dtype=str, on_bad_lines='skip')
-            
-            # Bersihkan spasi di nama kolom
-            df.columns = df.columns.str.strip()
-            return df
-        except Exception as e:
-            st.error(f"Error membaca file {uploaded.name}: {e}")
-            return pd.DataFrame()
-
-    try:
-        # A. LOAD MAINBILL (TAGIHAN)
-        df_bill = read_smart(file_bill, 'bill')
-        # Mapping Kolom
-        map_bill = {'NOMEN': 'ID_PELANGGAN', 'CC': 'RAYON', 'TOTAL_TAGIHAN': 'TAGIHAN', 'KONSUMSI': 'KUBIK'}
-        df_bill.rename(columns=map_bill, inplace=True)
-        # Convert Angka
-        for c in ['TAGIHAN', 'KUBIK']:
-            if c in df_bill.columns: df_bill[c] = pd.to_numeric(df_bill[c], errors='coerce').fillna(0)
-
-        # B. LOAD CUSTOMER (PROFIL)
-        df_cust = read_smart(file_cust, 'cust')
-        map_cust = {'cmr_account': 'ID_PELANGGAN', 'cmr_name': 'NAMA', 'cmr_address': 'ALAMAT',
-                    'cmr_skip_code': 'KODE_SKIP', 'cmr_trbl1_code': 'KODE_TROUBLE', 
-                    'PC': 'KODE_PC', 'EZ': 'KODE_PCEZ', 'Tarif': 'TARIF'} 
-        df_cust.rename(columns=map_cust, inplace=True)
-        # Jika user upload Excel Customer yang headernya beda, coba mapping cadangan
-        if 'NOMEN' in df_cust.columns: df_cust.rename(columns={'NOMEN': 'ID_PELANGGAN'}, inplace=True)
-
-        # C. LOAD COLLECTION (PEMBAYARAN)
-        if file_coll is not None:
-            df_coll = read_smart(file_coll, 'coll')
-            # Cari kolom amount fleksibel
-            col_amt = next((c for c in df_coll.columns if 'AMT' in c or 'JUMLAH' in c), 'AMT_COLLECT')
-            df_coll.rename(columns={'NOMEN': 'ID_PELANGGAN', col_amt: 'BAYAR', 'PAY_DT': 'TGL_BAYAR'}, inplace=True)
-            df_coll['BAYAR'] = pd.to_numeric(df_coll['BAYAR'], errors='coerce').fillna(0).abs()
-        else:
-            df_coll = pd.DataFrame(columns=['ID_PELANGGAN', 'BAYAR', 'TGL_BAYAR'])
-
-        # D. MERGE DATA
-        df_main = pd.merge(df_bill, df_cust, on='ID_PELANGGAN', how='left')
-        
-        # E. FILTER SUNTER (34 & 35)
-        if 'RAYON' in df_main.columns:
-            df_main['RAYON'] = df_main['RAYON'].astype(str).str.strip()
-            df_main = df_main[df_main['RAYON'].isin(['34', '35'])]
-        
-        # F. TERJEMAHKAN KODE
-        if 'KODE_SKIP' in df_main.columns:
-            df_main['KET_SKIP'] = df_main['KODE_SKIP'].apply(lambda x: KAMUS_SKIP.get(str(x)) if pd.notna(x) else None)
-        if 'KODE_TROUBLE' in df_main.columns:
-            df_main['KET_TROUBLE'] = df_main['KODE_TROUBLE'].apply(lambda x: KAMUS_TROUBLE.get(str(x)) if pd.notna(x) else None)
-        if 'READ_METHOD' in df_main.columns:
-            df_main['KET_BACA'] = df_main['READ_METHOD'].astype(str).str[:2].map(KAMUS_METHOD)
-
-        return df_main, df_coll
-        
-    except Exception as e:
-        st.error(f"Gagal memproses data: {e}")
-        return None, None
-
-# ==========================================
-# 3. HEADER & UPLOAD
-# ==========================================
-with st.container():
-    st.title("💧 SUNTER DASHBOARD")
-    st.caption("Monitoring Operasional & Analisa Collection (Rayon 34 & 35)")
+    # --- A. QUERY STATISTIK UTAMA (RINGKASAN) ---
     
-    # --- UPLOAD AREA (Update: Support Excel) ---
-    with st.expander("📂 UPLOAD DATA (Support: .TXT, .CSV, .XLSX)", expanded=True):
-        c1, c2, c3 = st.columns(3)
-        # Type list ditambah 'xlsx' dan 'xls'
-        f_bill = c1.file_uploader("1. MainBill", type=['txt','csv','xlsx','xls'])
-        f_cust = c2.file_uploader("2. Customer", type=['txt','csv','xlsx','xls'])
-        f_coll = c3.file_uploader("3. Collection", type=['txt','csv','xlsx','xls'])
+    # 1. Ambil Data Master (Target MC & Saldo Ardebt & Jumlah Pelanggan)
+    # Kita menggunakan COALESCE agar jika data kosong, hasilnya 0 (bukan None)
+    master_query = db.execute('''
+        SELECT 
+            COUNT(nomen) as total_cust, 
+            SUM(target_mc) as total_mc, 
+            SUM(saldo_ardebt) as total_debt 
+        FROM master_pelanggan
+    ''').fetchone()
+    
+    # 2. Ambil Realisasi Collection (Total uang masuk dari semua file collection)
+    coll_query = db.execute('''
+        SELECT SUM(jumlah_bayar) as total_coll 
+        FROM collection_harian
+    ''').fetchone()
 
-    if f_bill and f_cust:
-        df_main, df_coll = load_data(f_bill, f_cust, f_coll)
-        
-        if df_main is None or df_main.empty:
-            st.warning("Data kosong / Format kolom tidak dikenali. Pastikan file Excel/Txt sesuai standar.")
-            st.stop()
-            
-        # Hitung Status Bayar
-        if not df_coll.empty:
-            coll_agg = df_coll.groupby('ID_PELANGGAN')['BAYAR'].sum().reset_index()
-            df_main = pd.merge(df_main, coll_agg, on='ID_PELANGGAN', how='left')
-            df_main['BAYAR'] = df_main['BAYAR'].fillna(0)
-        else:
-            df_main['BAYAR'] = 0
-            
-        df_main['SISA_TAGIHAN'] = df_main['TAGIHAN'] - df_main['BAYAR']
-        
-        # --- GLOBAL FILTERS ---
-        st.markdown("---")
-        col_f1, col_f2, col_f3 = st.columns([2, 1, 3])
-        
-        with col_f1:
-            opsi_rayon = sorted(df_main['RAYON'].unique()) if 'RAYON' in df_main.columns else []
-            pilih_rayon = st.multiselect("Area / Rayon", opsi_rayon, default=opsi_rayon)
-        
-        with col_f2:
-            st.metric("Total Data", f"{len(df_main):,} Plg")
-            
-        with col_f3:
-            cari_pelanggan = st.text_input("🔍 Cari Pelanggan (ID / Nama)", placeholder="Ketik ID atau Nama lalu Enter...")
-
-        with st.expander("Filter Lanjutan (PC, Tarif, Anomali)", expanded=False):
-            cf1, cf2, cf3 = st.columns(3)
-            sel_pc = cf1.multiselect("Kode PC", sorted(df_main['KODE_PC'].unique().astype(str)) if 'KODE_PC' in df_main.columns else [])
-            sel_tarif = cf2.multiselect("Tarif", sorted(df_main['TARIF'].unique().astype(str)) if 'TARIF' in df_main.columns else [])
-        
-        # --- APPLY FILTERS ---
-        df_view = df_main.copy()
-        if pilih_rayon: df_view = df_view[df_view['RAYON'].isin(pilih_rayon)]
-        if sel_pc: df_view = df_view[df_view['KODE_PC'].isin(sel_pc)]
-        if sel_tarif: df_view = df_view[df_view['TARIF'].isin(sel_tarif)]
-        if cari_pelanggan:
-            mask = df_view['ID_PELANGGAN'].str.contains(cari_pelanggan, case=False, na=False) | \
-                   df_view['NAMA'].str.contains(cari_pelanggan, case=False, na=False)
-            df_view = df_view[mask]
-            st.info(f"Hasil Pencarian: {len(df_view)} data ditemukan.")
-
-        # ==========================================
-        # 4. TAB CONTENT
-        # ==========================================
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-            "1️⃣ Ringkasan", "2️⃣ Collection", "3️⃣ Meter", "4️⃣ History", 
-            "5️⃣ Analisa Manual", "6️⃣ TOP", "7️⃣ Laporan"
-        ])
-
-        with tab1:
-            tot_mc = df_view['TAGIHAN'].sum()
-            tot_coll = df_view['BAYAR'].sum()
-            rate_coll = (tot_coll / tot_mc * 100) if tot_mc > 0 else 0
-            tot_tunggakan = tot_mc - tot_coll
-            
-            k1, k2, k3, k4 = st.columns(4)
-            k1.metric("Target (MC)", f"Rp {tot_mc:,.0f}")
-            k2.metric("Collection Current", f"Rp {tot_coll:,.0f}")
-            k3.metric("Rate (%)", f"{rate_coll:.2f}%")
-            k4.metric("Sisa Tunggakan", f"Rp {tot_tunggakan:,.0f}", delta_color="inverse")
-            
-            st.write("---")
-            if 'RAYON' in df_view.columns:
-                grp_rayon = df_view.groupby('RAYON')[['TAGIHAN', 'BAYAR']].sum().reset_index()
-                fig = px.bar(grp_rayon, x='RAYON', y=['TAGIHAN', 'BAYAR'], barmode='group', title="Perbandingan Rayon")
-                st.plotly_chart(fig, use_container_width=True)
-
-        with tab2:
-            st.subheader("📅 Daily Collection Matrix")
-            if not df_coll.empty:
-                valid_ids = df_view['ID_PELANGGAN'].unique()
-                df_coll_view = df_coll[df_coll['ID_PELANGGAN'].isin(valid_ids)]
-                if not df_coll_view.empty:
-                    daily = df_coll_view.groupby('TGL_BAYAR')['BAYAR'].sum().reset_index().sort_values('TGL_BAYAR')
-                    daily['KUMULATIF'] = daily['BAYAR'].cumsum()
-                    daily['% CAPAI'] = (daily['KUMULATIF'] / tot_mc * 100).round(2)
-                    st.dataframe(daily, use_container_width=True)
-                    st.plotly_chart(px.line(daily, x='TGL_BAYAR', y='% CAPAI', markers=True, title="Tren Pencapaian"), use_container_width=True)
-                else:
-                    st.warning("Tidak ada transaksi bayar untuk filter ini.")
-            else:
-                st.warning("File Collection belum diupload.")
-
-        with tab3:
-            st.subheader("Anomali Meter")
-            c1, c2, c3 = st.columns(3)
-            f_zero = c1.checkbox("Zero Usage (0 m3)")
-            f_skip = c2.checkbox("Kode SKIP")
-            f_trbl = c3.checkbox("Kode TROUBLE")
-            
-            df_m = df_view.copy()
-            conds = []
-            if f_zero: conds.append(df_m['KUBIK'] == 0)
-            if f_skip: conds.append(df_m['KET_SKIP'].notna())
-            if f_trbl: conds.append(df_m['KET_TROUBLE'].notna())
-            
-            if conds:
-                mask = pd.concat(conds, axis=1).any(axis=1)
-                df_m = df_m[mask]
-                
-            st.write(f"Ditemukan {len(df_m)} Anomali")
-            st.dataframe(df_m[['ID_PELANGGAN', 'NAMA', 'ALAMAT', 'KUBIK', 'KET_SKIP', 'KET_TROUBLE']], use_container_width=True)
-
-        with tab4:
-            st.dataframe(df_view)
-
-        with tab5:
-            st.subheader("📝 Pusat Analisa Manual Tim (Database VPS)")
-            DB_FILE = 'database_analisa.csv'
-            if os.path.exists(DB_FILE):
-                try: df_hist = pd.read_csv(DB_FILE)
-                except: df_hist = pd.DataFrame(columns=["Tanggal", "ID", "Nama", "Kategori", "Analisa", "Petugas"])
-            else:
-                df_hist = pd.DataFrame(columns=["Tanggal", "ID", "Nama", "Kategori", "Analisa", "Petugas"])
-
-            col_form, col_data = st.columns([1, 2])
-            with col_form:
-                tgt_id = st.selectbox("Pilih ID:", df_view['ID_PELANGGAN'].unique())
-                info_plg = df_view[df_view['ID_PELANGGAN'] == tgt_id].iloc[0]
-                st.info(f"**{info_plg['NAMA']}**\nTagihan: {info_plg['TAGIHAN']:,.0f}")
-                with st.form("save_analisa"):
-                    tgl = st.date_input("Tanggal", datetime.date.today())
-                    kat = st.selectbox("Masalah", ["Rumah Kosong", "Meter Rusak", "Tunggakan", "Lainnya"])
-                    desc = st.text_area("Analisa")
-                    petugas = st.text_input("Petugas")
-                    if st.form_submit_button("💾 SIMPAN PERMANEN"):
-                        new_row = pd.DataFrame([{ "Tanggal": tgl, "ID": tgt_id, "Nama": info_plg['NAMA'], "Kategori": kat, "Analisa": desc, "Petugas": petugas }])
-                        hdr = not os.path.exists(DB_FILE)
-                        new_row.to_csv(DB_FILE, mode='a', header=hdr, index=False)
-                        st.success("Tersimpan!"); st.rerun()
-
-            with col_data:
-                st.write("#### 📂 Riwayat Analisa")
-                if not df_hist.empty:
-                    st.dataframe(df_hist.sort_index(ascending=False), use_container_width=True)
-                    st.download_button("Download Database", df_hist.to_csv(index=False), "db_analisa.csv")
-
-        with tab6:
-            c1, c2 = st.columns(2)
-            c1.write("**Top 50 Tagihan**")
-            c1.dataframe(df_view.nlargest(50, 'TAGIHAN')[['ID_PELANGGAN', 'NAMA', 'TAGIHAN']])
-            c2.write("**Top 50 Kubik**")
-            c2.dataframe(df_view.nlargest(50, 'KUBIK')[['ID_PELANGGAN', 'NAMA', 'KUBIK']])
-            
-        with tab7:
-            st.download_button("Download Laporan Excel/CSV", df_view.to_csv(index=False), "laporan_sunter.csv")
+    # Bersihkan nilai (Handle jika None)
+    total_pelanggan = master_query['total_cust'] or 0
+    target_mc = master_query['total_mc'] or 0
+    saldo_ardebt = master_query['total_debt'] or 0
+    realisasi_coll = coll_query['total_coll'] or 0
+    
+    # Hitung Persentase (Collection Rate)
+    # Hindari pembagian dengan nol
+    if target_mc > 0:
+        coll_rate = (realisasi_coll / target_mc) * 100
     else:
-        st.info("👋 Silakan Upload Data MainBill dan Customer (Format .txt, .csv, atau .xlsx)")
+        coll_rate = 0
+
+    # Bungkus dalam dictionary 'stats' untuk dikirim ke HTML
+    stats = {
+        'total_pelanggan': total_pelanggan,
+        'target_mc': target_mc,
+        'saldo_ardebt': saldo_ardebt,
+        'realisasi_coll': realisasi_coll,
+        'coll_rate': coll_rate
+    }
+
+    # --- B. QUERY UNTUK GRAFIK & TABEL (Collection Harian) ---
+    
+    # Mengambil data collection dikelompokkan per tanggal
+    daily_chart_query = db.execute('''
+        SELECT 
+            tgl_bayar, 
+            SUM(jumlah_bayar) as harian
+        FROM collection_harian 
+        GROUP BY tgl_bayar 
+        ORDER BY tgl_bayar ASC
+    ''').fetchall()
+
+    # Format data agar mudah dibaca Chart.js & Tabel HTML
+    chart_data = []
+    kumulatif = 0 # Variabel bantu untuk hitung kumulatif
+    
+    for row in daily_chart_query:
+        harian = row['harian']
+        kumulatif += harian # Tambahkan harian ke total berjalan
+        
+        # Hitung % progress harian terhadap target MC
+        persen_progress = 0
+        if target_mc > 0:
+            persen_progress = (kumulatif / target_mc) * 100
+
+        chart_data.append({
+            'tgl': row['tgl_bayar'],
+            'total': harian,          # Untuk grafik garis/batang harian
+            'kumulatif': kumulatif,   # Untuk kolom kumulatif di tabel
+            'progress': persen_progress # Untuk kolom % di tabel
+        })
+
+    # Render Template HTML dengan membawa data stats & chart
+    return render_template('dashboard.html', stats=stats, chart_data=chart_data)
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    """
+    Route khusus untuk menerima file Upload dari Modal di Dashboard.
+    """
+    # 1. Cek apakah ada file yang dikirim
+    if 'file' not in request.files:
+        flash('Tidak ada file yang dipilih', 'error')
+        return redirect(url_for('index'))
+    
+    file = request.files['file']
+    jenis_file = request.form.get('jenis_file') # MC, COLLECTION, ARDEBT, dll
+    
+    # 2. Cek nama file
+    if file.filename == '':
+        flash('Nama file kosong', 'error')
+        return redirect(url_for('index'))
+
+    # 3. Simpan & Proses
+    if file:
+        # Pastikan folder upload ada
+        if not os.path.exists(UPLOAD_FOLDER):
+            os.makedirs(UPLOAD_FOLDER)
+            
+        filepath = os.path.join(UPLOAD_FOLDER, file.filename)
+        file.save(filepath)
+        
+        try:
+            # Panggil fungsi 'otak' di processor.py
+            process_file(filepath, jenis_file)
+            flash(f'Berhasil memproses file {jenis_file}!', 'success')
+        except Exception as e:
+            flash(f'Gagal memproses file: {str(e)}', 'error')
+            print(f"Error: {e}")
+        
+        return redirect(url_for('index'))
+
+@app.route('/api/analisa', methods=['POST'])
+def simpan_analisa():
+    """
+    (Opsional) Endpoint API jika nanti ingin menyimpan Analisa Manual
+    tanpa reload halaman (AJAX).
+    """
+    data = request.json
+    db = get_db()
+    try:
+        db.execute('''
+            INSERT INTO analisa_manual (nomen, jenis_anomali, catatan, rekomendasi, status)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (data['nomen'], data['jenis'], data['catatan'], data['rekomendasi'], 'Open'))
+        db.commit()
+        return jsonify({'status': 'success', 'message': 'Analisa tersimpan'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# Jalankan Aplikasi
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
