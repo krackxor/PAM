@@ -1,102 +1,141 @@
 /**
- * DASHBOARD LOGIC
- * File ini menangani semua interaksi, grafik, dan update data.
+ * SUNTER DASHBOARD - MAIN LOGIC
+ * Mengelola pembaruan data real-time, grafik, dan tabel.
  */
 
-let chartRayonInstance = null;
-let chartTrenInstance = null;
-let tableCollectionInstance = null;
+let chartRayon, chartTren, tableColl;
 
-// --- FORMATTER ---
-const formatRupiah = (angka) => {
-    return 'Rp ' + new Intl.NumberFormat('id-ID').format(angka);
+// --- FORMATTER HELPERS ---
+const formatRp = (val) => {
+    return 'Rp ' + new Intl.NumberFormat('id-ID', {
+        maximumFractionDigits: 0
+    }).format(val || 0);
+};
+
+const formatNum = (val) => {
+    return new Intl.NumberFormat('id-ID').format(val || 0);
 };
 
 // --- CORE FUNCTIONS ---
 
-// 1. Update KPI Cards (Header Ringkasan)
+/**
+ * Update semua angka KPI di halaman Ringkasan
+ */
 function updateKPI() {
-    $.get('/api/kpi_data', function(data) {
-        console.log("KPI Data:", data);
-
-        // Update Text Elements
-        $('#kpi-total-pelanggan').text(new Intl.NumberFormat('id-ID').format(data.total_pelanggan));
-        $('#labelPeriode').text(data.periode);
-
-        // Target
-        $('#kpi-target-total').text(formatRupiah(data.target.total_nominal));
-        $('#kpi-target-nomen-total').text(data.target.total_nomen + ' nomen');
-        $('#kpi-target-bayar').text(formatRupiah(data.target.sudah_bayar_nominal));
-        $('#kpi-target-nomen-bayar').text(data.target.sudah_bayar_nomen + ' nomen');
-        $('#kpi-target-belum').text(formatRupiah(data.target.belum_bayar_nominal));
-        $('#kpi-target-nomen-belum').text(data.target.belum_bayar_nomen + ' nomen');
-
-        // Collection
-        $('#kpi-coll-total').text(formatRupiah(data.collection.total_nominal));
-        $('#kpi-coll-nomen-total').text(data.collection.total_nomen + ' nomen');
-        $('#kpi-coll-current').text(formatRupiah(data.collection.current_nominal));
-        $('#kpi-coll-nomen-current').text(data.collection.current_nomen + ' nomen');
-        $('#kpi-coll-undue').text(formatRupiah(data.collection.undue_nominal));
-        $('#kpi-coll-nomen-undue').text(data.collection.undue_nomen + ' nomen');
-
-        // Rate
-        $('#kpi-rate').text(data.collection_rate + '%');
-        $('#kpi-rate-bar').css('width', data.collection_rate + '%');
-
-        // Tunggakan
-        $('#kpi-tunggakan-total').text(formatRupiah(data.tunggakan.total_nominal));
-        $('#kpi-tunggakan-nomen-total').text(data.tunggakan.total_nomen + ' nomen');
-        $('#kpi-tunggakan-bayar').text(formatRupiah(data.tunggakan.sudah_bayar_nominal));
-        $('#kpi-tunggakan-nomen-bayar').text(data.tunggakan.sudah_bayar_nomen + ' nomen');
-        $('#kpi-tunggakan-belum').text(formatRupiah(data.tunggakan.belum_bayar_nominal));
-        $('#kpi-tunggakan-nomen-belum').text(data.tunggakan.belum_bayar_nomen + ' nomen');
-
-    }).fail(function(err) {
-        console.error("Gagal ambil KPI:", err);
+    $.get('/api/kpi_data', function(d) {
+        // Total Pelanggan
+        $('#kpi-total-pelanggan').text(formatNum(d.total_pelanggan));
+        
+        // Collection Rate
+        $('#kpi-rate').text(d.collection_rate + '%');
+        $('#kpi-rate-bar').css('width', d.collection_rate + '%').text(d.collection_rate + '%');
+        
+        // Tunggakan (Ardebt)
+        $('#kpi-tunggakan-total').text(formatRp(d.tunggakan.total_nominal));
+        
+        // Analisa Target vs Realisasi
+        $('#kpi-target-total').text(formatRp(d.target.total_nominal));
+        $('#kpi-target-nomen-total').text(formatNum(d.target.total_nomen) + ' Lbr');
+        
+        $('#kpi-coll-total').text(formatRp(d.collection.total_nominal));
+        $('#kpi-coll-nomen-total').text(formatNum(d.collection.total_nomen) + ' Lbr');
+        
+        $('#kpi-target-belum').text(formatRp(d.target.belum_bayar_nominal));
+        $('#kpi-target-nomen-belum').text(formatNum(d.target.belum_bayar_nomen) + ' Lbr');
+        
+        // Label Periode di Header
+        $('#labelPeriode').html('<i class="fas fa-calendar-alt me-2"></i>Periode: ' + d.periode);
+    }).fail(function() {
+        console.error("Gagal memuat data KPI.");
     });
 }
 
-// 2. Grafik Komposisi Rayon
-function loadChartRayon() {
-    $.get('/api/breakdown_rayon', function(data) {
+/**
+ * Mengisi Tabel Ringkasan Wilayah di Tab Collection
+ * (AB Sunter, 34, 35)
+ */
+function loadSummaryTable() {
+    $.get('/api/collection_summary_table', function(data) {
+        const tbody = $('#summaryTable tbody');
+        tbody.empty();
+
+        data.forEach(item => {
+            const d = item.data;
+            // Hitung % Capaian
+            const plbr = d.target_nomen > 0 ? (d.realisasi_nomen / d.target_nomen * 100).toFixed(1) : 0;
+            const prp = d.target_nominal > 0 ? (d.realisasi_nominal / d.target_nominal * 100).toFixed(1) : 0;
+
+            tbody.append(`
+                <tr class="${item.class}">
+                    <td class="text-start ps-4">${item.kategori}</td>
+                    <td>${formatNum(d.target_nomen)}</td>
+                    <td class="text-end">${formatRp(d.target_nominal)}</td>
+                    <td>${formatNum(d.realisasi_nomen)}</td>
+                    <td class="text-end text-success">${formatRp(d.realisasi_nominal)}</td>
+                    <td><span class="badge ${plbr >= 100 ? 'bg-success' : 'bg-warning text-dark'}">${plbr}%</span></td>
+                    <td><span class="badge ${prp >= 100 ? 'bg-success' : 'bg-primary'}">${prp}%</span></td>
+                </tr>
+            `);
+        });
+    });
+}
+
+/**
+ * Inisialisasi dan Update Grafik Chart.js
+ */
+function loadCharts() {
+    // 1. Grafik Batang Rayon
+    $.get('/api/breakdown_rayon', function(d) {
         const ctx = document.getElementById('chartRayon');
         if (!ctx) return;
-
-        if (chartRayonInstance) chartRayonInstance.destroy();
-
-        chartRayonInstance = new Chart(ctx, {
+        
+        if (chartRayon) chartRayon.destroy();
+        chartRayon = new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: data.map(d => 'Rayon ' + d.rayon),
+                labels: d.map(x => 'Rayon ' + x.rayon),
                 datasets: [{
-                    label: 'Collection (Rp)',
-                    data: data.map(d => d.total_collection),
-                    backgroundColor: ['#0d6efd', '#198754'],
-                    borderWidth: 0,
-                    borderRadius: 4
+                    label: 'Realisasi (Rp)',
+                    data: d.map(x => x.total_collection),
+                    backgroundColor: ['#1e3c72', '#198754'],
+                    borderRadius: 5
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return formatRupiah(context.raw);
-                            }
-                        }
-                    }
-                },
+                plugins: { legend: { display: false } }
+            }
+        });
+    });
+
+    // 2. Grafik Tren Kumulatif
+    $.get('/api/tren_harian', function(d) {
+        const ctx = document.getElementById('chartTren');
+        if (!ctx) return;
+        
+        if (chartTren) chartTren.destroy();
+        chartTren = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: d.map(x => x.tgl_bayar.split('-')[2]), // Ambil tanggal (DD)
+                datasets: [{
+                    label: 'Kumulatif (Rp)',
+                    data: d.map(x => x.kumulatif),
+                    borderColor: '#0d6efd',
+                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
                 scales: {
                     y: { 
                         beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                return (value / 1000000).toFixed(0) + ' Jt';
-                            }
-                        }
+                        ticks: { callback: (val) => (val / 1000000).toFixed(0) + ' Jt' }
                     }
                 }
             }
@@ -104,164 +143,110 @@ function loadChartRayon() {
     });
 }
 
-// 3. Grafik Tren Harian
-function loadChartTren() {
-    $.get('/api/tren_harian', function(data) {
-        const ctx = document.getElementById('chartTren');
-        if (!ctx) return;
-
-        if (chartTrenInstance) chartTrenInstance.destroy();
-
-        chartTrenInstance = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: data.map(d => {
-                    const date = new Date(d.tgl_bayar);
-                    return date.getDate(); // Ambil tanggalnya saja
-                }),
-                datasets: [{
-                    label: 'Harian',
-                    data: data.map(d => d.total_harian),
-                    borderColor: '#198754', // Hijau
-                    backgroundColor: 'rgba(25, 135, 84, 0.1)',
-                    fill: true,
-                    tension: 0.3
-                }, {
-                    label: 'Kumulatif',
-                    data: data.map(d => d.kumulatif),
-                    borderColor: '#0d6efd', // Biru
-                    backgroundColor: 'rgba(13, 110, 253, 0.05)',
-                    fill: true,
-                    tension: 0.3,
-                    yAxisID: 'y1'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
-                scales: {
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        ticks: {
-                            callback: function(value) { return (value / 1000000).toFixed(0) + ' Jt'; }
-                        }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        grid: { drawOnChartArea: false },
-                        ticks: {
-                            callback: function(value) { return (value / 1000000000).toFixed(1) + ' M'; }
-                        }
-                    }
-                }
-            }
-        });
-    });
-}
-
-// 4. Tabel Detail Collection
-function loadCollectionData() {
-    // Jika tabel sudah ada, reload saja datanya (jangan di-init ulang)
+/**
+ * Inisialisasi DataTables untuk Detail Collection
+ */
+function loadCollectionData(area = 'SUNTER') {
     if ($.fn.DataTable.isDataTable('#tableColl')) {
-        $('#tableColl').DataTable().ajax.reload();
+        // Jika sudah ada, update URL dan reload
+        tableColl.ajax.url(`/api/collection_data?rayon=${area}`).load();
         return;
     }
 
-    tableCollectionInstance = $('#tableColl').DataTable({
+    tableColl = $('#tableColl').DataTable({
         ajax: {
-            url: '/api/collection_data',
+            url: `/api/collection_data?rayon=${area}`,
             dataSrc: ''
-        },
-        pageLength: 10,
-        responsive: true,
-        order: [[0, 'desc']], // Urutkan tanggal terbaru
-        language: {
-            url: "//cdn.datatables.net/plug-ins/1.13.6/i18n/id.json"
         },
         columns: [
             { data: 'tgl_bayar' },
             { 
                 data: 'rayon',
-                render: function(data) {
-                    let color = data === '34' ? 'primary' : 'success';
-                    return `<span class="badge bg-${color}">Rayon ${data}</span>`;
-                }
+                render: (data) => `<span class="badge bg-${data == '34' ? 'primary' : 'success'}">Rayon ${data}</span>`
             },
             { data: 'nomen' },
+            { data: 'nama', defaultContent: '<span class="text-muted italic">Tanpa Nama</span>' },
             { 
-                data: 'nama',
-                defaultContent: '<span class="text-muted fst-italic">Tanpa Nama</span>'
-            },
-            { 
-                data: 'jumlah_bayar',
+                data: 'jumlah_bayar', 
                 className: 'text-end fw-bold text-success',
-                render: $.fn.dataTable.render.number('.', ',', 0, 'Rp ')
+                render: (v) => formatRp(v)
             }
-        ]
+        ],
+        order: [[0, 'desc']],
+        pageLength: 10,
+        language: {
+            url: "//cdn.datatables.net/plug-ins/1.13.6/i18n/id.json"
+        }
     });
 }
 
-// 5. Fitur Pencarian Global
+/**
+ * Fungsi Pencarian Global dari Header
+ */
 function cariPelanggan() {
-    let val = $('#globalSearch').val();
-    if(val) {
-        // Pindah ke tab collection
-        const triggerEl = document.querySelector('button[data-bs-target="#tab-collection"]');
-        const tab = new bootstrap.Tab(triggerEl);
-        tab.show();
+    const val = $('#globalSearch').val();
+    if (!val) {
+        alert("Masukkan Nomen atau Nama pelanggan.");
+        return;
+    }
 
-        // Load data jika belum ada, lalu filter
-        if (tableCollectionInstance) {
-            tableCollectionInstance.search(val).draw();
+    // Paksa pindah ke tab Collection
+    const triggerEl = document.querySelector('#collection-tab');
+    const tab = new bootstrap.Tab(triggerEl);
+    tab.show();
+
+    // Tunggu render tab selesai lalu search
+    setTimeout(() => {
+        if (tableColl) {
+            tableColl.search(val).draw();
         } else {
             loadCollectionData();
-            setTimeout(() => {
-                tableCollectionInstance.search(val).draw();
-            }, 500);
+            setTimeout(() => tableColl.search(val).draw(), 500);
         }
-    } else {
-        alert("Silakan masukkan Nomen atau Nama pelanggan.");
-    }
+    }, 200);
 }
 
-// --- DOCUMENT READY ---
+// --- INITIALIZATION ---
+
 $(document).ready(function() {
-    console.log("🚀 Dashboard Initialized");
+    console.log("🚀 Dashboard JS Loaded.");
 
-    // Load data pertama kali
+    // 1. Muat data awal (Ringkasan)
     updateKPI();
-    loadChartRayon();
-    loadChartTren();
+    loadCharts();
 
-    // Event saat tab Collection dibuka
-    $('button[data-bs-target="#tab-collection"]').on('shown.bs.tab', function (e) {
-        loadCollectionData(); // Load tabel hanya saat diperlukan
+    // 2. Handle perubahan filter Area
+    $('#filterArea').change(function() {
+        const area = $(this).val();
+        // Jika tab Collection sedang aktif, reload tabel
+        if ($('#tab-collection').hasClass('active')) {
+            loadCollectionData(area);
+        }
+        // Always refresh charts based on global context if API supports it
+        loadCharts();
     });
 
-    // Inisialisasi Tooltip Bootstrap
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl)
+    // 3. Handle Tab Switch (Lazy Load Tabel)
+    $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function (e) {
+        const targetId = $(e.target).data('bs-target');
+        if (targetId === '#tab-collection') {
+            loadSummaryTable();
+            loadCollectionData($('#filterArea').val());
+        } else if (targetId === '#tab-ringkasan') {
+            updateKPI();
+            loadCharts();
+        }
     });
 
-    // Logika UI Upload (Klik Card Radio)
+    // 4. Handle Radio Buttons di Modal Upload (Visual Feedback)
     $('.upload-option').click(function() {
-        // Reset
         $('.upload-option input[type="radio"]').prop('checked', false);
-        
-        // Set Selected
         $(this).find('input[type="radio"]').prop('checked', true);
-        console.log("Selected Type:", $(this).find('input[type="radio"]').val());
     });
 
-    // Auto Refresh setiap 5 menit
-    setInterval(updateKPI, 300000);
+    // 5. Inisialisasi Tooltips Bootstrap
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
 });
