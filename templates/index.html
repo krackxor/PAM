@@ -7,25 +7,28 @@
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
         body { 
-            background-color: #f0f2f5; 
-            padding-top: 155px; /* Memberi ruang agar Header tidak menutupi konten */
+            background-color: #f4f6f9; 
+            padding-top: 160px; /* Ruang untuk Header Sticky */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         
-        /* Header yang selalu nempel di atas */
+        /* Header Sticky */
         .global-header {
             position: fixed; 
             top: 0; left: 0; right: 0; z-index: 1000;
-            background: #fff; 
+            background: #ffffff; 
             border-bottom: 4px solid #0d6efd;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
-            padding: 15px 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+            padding: 15px 25px;
         }
 
-        /* Styling Tab Navigasi */
-        .nav-tabs .nav-link { color: #666; border: none; font-weight: 500; }
+        /* Navigasi Tab */
+        .nav-tabs .nav-link { color: #555; border: none; font-weight: 500; transition: all 0.3s; }
+        .nav-tabs .nav-link:hover { color: #0d6efd; background: #f8f9fa; }
         .nav-tabs .nav-link.active { 
             border-bottom: 3px solid #0d6efd; 
             color: #0d6efd; 
@@ -33,63 +36,73 @@
             background: transparent;
         }
         
-        /* Kontainer Isi Tab */
+        /* Kontainer Tab */
         .tab-content { 
             background: #fff; 
-            padding: 25px; 
+            padding: 30px; 
             min-height: 500px; 
-            border-radius: 0 0 10px 10px; 
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border-radius: 0 0 12px 12px; 
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
         }
 
-        /* Kartu KPI */
+        /* KPI Card */
         .card-kpi { 
-            border:none; 
+            border: none; 
             border-left: 5px solid #ccc; 
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
+            background: #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05); 
             transition: transform 0.2s;
         }
-        .card-kpi:hover { transform: translateY(-3px); }
+        .card-kpi:hover { transform: translateY(-5px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        
+        .badge-rayon { background-color: #6610f2; color: white; }
+        .badge-pcez { background-color: #fd7e14; color: white; }
     </style>
 </head>
 <body>
 
 <header class="global-header">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <h4 class="fw-bold text-primary m-0">🧭 SUNTER DASHBOARD</h4>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex align-items-center">
+            <div class="bg-primary text-white rounded p-2 me-2"><i class="fas fa-compass fa-lg"></i></div>
+            <div>
+                <h4 class="fw-bold text-primary m-0" style="line-height: 1;">SUNTER DASHBOARD</h4>
+                <small class="text-muted" style="font-size: 0.75rem;">Sistem Monitoring Rayon 34 & 35</small>
+            </div>
+        </div>
         
         <div>
-            <span class="badge bg-success me-1">System Online 🟢</span>
-            <span class="badge bg-secondary me-2">👤 Admin Mode</span>
+            <span class="badge bg-success me-1"><i class="fas fa-wifi"></i> Online</span>
+            <span class="badge bg-dark me-3"><i class="fas fa-user-shield"></i> Admin Mode</span>
             
-            <button class="btn btn-sm btn-success fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalUpload">
-                📥 Upload Data Excel
+            <button class="btn btn-sm btn-success fw-bold shadow-sm px-3 py-2" data-bs-toggle="modal" data-bs-target="#modalUpload">
+                <i class="fas fa-cloud-upload-alt me-1"></i> Upload Excel / CSV
             </button>
         </div>
     </div>
     
     <div class="row g-2 align-items-center">
         <div class="col-md-2">
-            <select class="form-select form-select-sm fw-bold bg-primary text-white" id="filterArea">
-                <option value="SUNTER">AREA: SUNTER (34+35)</option>
-                <option value="34">Rayon 34</option>
-                <option value="35">Rayon 35</option>
+            <select class="form-select form-select-sm fw-bold border-primary text-primary" id="filterArea">
+                <option value="SUNTER" selected>🌍 ALL AREA (34 + 35)</option>
+                <option value="34">🏢 Rayon 34</option>
+                <option value="35">🏢 Rayon 35</option>
             </select>
         </div>
         
-        <div class="col-md-4">
+        <div class="col-md-5">
             <div class="btn-group btn-group-sm w-100 shadow-sm">
-                <button class="btn btn-outline-secondary">Filter PC</button>
+                <button class="btn btn-outline-secondary">PC / PCEZ</button>
                 <button class="btn btn-outline-secondary">Tarif</button>
                 <button class="btn btn-outline-secondary">Periode: <b id="lblPeriode">Bulan Ini</b></button>
             </div>
         </div>
         
-        <div class="col-md-4">
+        <div class="col-md-5">
             <div class="input-group input-group-sm shadow-sm">
-                <span class="input-group-text bg-light">🔍</span>
-                <input type="text" class="form-control" id="globalSearch" placeholder="Cari Nomen / Pelanggan...">
-                <button class="btn btn-primary" onclick="cariPelanggan()">Buka Analisa</button>
+                <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
+                <input type="text" class="form-control" id="globalSearch" placeholder="Cari Nomen / Nama Pelanggan...">
+                <button class="btn btn-primary" onclick="cariPelanggan()">Analisa</button>
             </div>
         </div>
     </div>
@@ -101,7 +114,7 @@
         {% if messages %}
             {% for category, message in messages %}
                 <div class="alert alert-{{ category }} alert-dismissible fade show mt-2 shadow-sm" role="alert">
-                    {{ message }}
+                    <i class="fas fa-info-circle me-2"></i> {{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             {% endfor %}
@@ -110,7 +123,7 @@
 
     <ul class="nav nav-tabs nav-fill bg-white shadow-sm rounded-top" id="mainTab" role="tablist">
         <li class="nav-item"><button class="nav-link active py-3" data-bs-toggle="tab" data-bs-target="#tab-ringkasan">1️⃣ Ringkasan</button></li>
-        <li class="nav-item"><button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#tab-collection">2️⃣ Collection (Excel)</button></li>
+        <li class="nav-item"><button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#tab-collection">2️⃣ Collection</button></li>
         <li class="nav-item"><button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#tab-meter">3️⃣ Meter</button></li>
         <li class="nav-item"><button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#tab-history">4️⃣ History</button></li>
         <li class="nav-item"><button class="nav-link py-3 text-danger fw-bold" data-bs-toggle="tab" data-bs-target="#tab-analisa">5️⃣ Analisa Manual 🛠️</button></li>
@@ -122,40 +135,60 @@
     <div class="tab-content shadow-sm">
         
         <div class="tab-pane fade show active" id="tab-ringkasan">
-            <h5 class="mb-4 pb-2 border-bottom">📊 Gambaran Umum Operasional</h5>
+            <h5 class="mb-4 pb-2 border-bottom fw-bold text-primary">📊 Gambaran Umum Operasional</h5>
             <div class="row g-3">
                 <div class="col-md-3">
                     <div class="card card-kpi p-3 border-primary h-100">
-                        <small class="text-muted fw-bold text-uppercase">Total Pelanggan</small>
-                        <h2 class="fw-bold text-primary mb-0">{{ "{:,}".format(kpi['cust']) }}</h2>
-                        <small class="text-success" style="font-size: 0.8rem">Data Master Terdaftar</small>
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <small class="text-muted fw-bold text-uppercase">Total Pelanggan</small>
+                                <h3 class="fw-bold text-primary mb-0">{{ "{:,}".format(kpi['cust']) }}</h3>
+                            </div>
+                            <div class="text-primary opacity-50"><i class="fas fa-users fa-2x"></i></div>
+                        </div>
+                        <small class="text-muted mt-2" style="font-size: 0.8rem">Data Master Terdaftar</small>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="card card-kpi p-3 border-success h-100">
-                        <small class="text-muted fw-bold text-uppercase">Total Collection (Rp)</small>
-                        <h2 class="fw-bold text-success mb-0">Rp {{ "{:,.0f}".format(kpi['coll']).replace(',', '.') }}</h2>
-                        <small class="text-muted" style="font-size: 0.8rem">Realisasi Pembayaran</small>
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <small class="text-muted fw-bold text-uppercase">Realisasi (Collection)</small>
+                                <h3 class="fw-bold text-success mb-0">Rp {{ "{:,.0f}".format(kpi['coll']).replace(',', '.') }}</h3>
+                            </div>
+                            <div class="text-success opacity-50"><i class="fas fa-money-bill-wave fa-2x"></i></div>
+                        </div>
+                        <small class="text-success mt-2 fw-bold"><i class="fas fa-arrow-up"></i> {{ kpi['persen'] }}% dari Target</small>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="card card-kpi p-3 border-warning h-100">
-                        <small class="text-muted fw-bold text-uppercase">Anomali Open</small>
-                        <h2 class="fw-bold text-warning mb-0">{{ kpi['anomali'] }}</h2>
-                        <small class="text-muted" style="font-size: 0.8rem">Perlu Tindak Lanjut</small>
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <small class="text-muted fw-bold text-uppercase">Anomali Open</small>
+                                <h3 class="fw-bold text-warning mb-0">{{ kpi['anomali'] }}</h3>
+                            </div>
+                            <div class="text-warning opacity-50"><i class="fas fa-exclamation-triangle fa-2x"></i></div>
+                        </div>
+                        <small class="text-muted mt-2" style="font-size: 0.8rem">Perlu Tindak Lanjut</small>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="card card-kpi p-3 border-danger h-100">
-                        <small class="text-muted fw-bold text-uppercase">Tunggakan (Est)</small>
-                        <h2 class="fw-bold text-danger mb-0">Rp 0</h2>
-                        <small class="text-muted" style="font-size: 0.8rem">Belum tersedia</small>
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <small class="text-muted fw-bold text-uppercase">Sisa Target (Est)</small>
+                                <h3 class="fw-bold text-danger mb-0">Rp 0</h3>
+                            </div>
+                            <div class="text-danger opacity-50"><i class="fas fa-chart-line fa-2x"></i></div>
+                        </div>
+                        <small class="text-muted mt-2" style="font-size: 0.8rem">Belum Terbayar</small>
                     </div>
                 </div>
             </div>
 
             <div class="card mt-4 border-0 shadow-sm">
-                <div class="card-header bg-white fw-bold text-primary">📈 Tren Collection Mingguan</div>
+                <div class="card-header bg-white fw-bold text-primary border-bottom-0"><i class="fas fa-chart-area me-2"></i>Tren Collection Harian</div>
                 <div class="card-body">
                     <canvas id="chartCollection" style="max-height: 280px;"></canvas>
                 </div>
@@ -164,21 +197,22 @@
 
         <div class="tab-pane fade" id="tab-collection">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="text-primary fw-bold">📅 Data Transaksi Harian</h5>
-                <button class="btn btn-sm btn-outline-primary" onclick="loadCollectionData()">🔄 Refresh Data</button>
+                <h5 class="text-primary fw-bold"><i class="fas fa-table me-2"></i>Data Transaksi & Detail Pelanggan</h5>
+                <button class="btn btn-sm btn-outline-primary" onclick="loadCollectionData()"><i class="fas fa-sync-alt me-1"></i> Refresh Data</button>
             </div>
             
             <div class="table-responsive">
-                <table id="tableColl" class="table table-striped table-bordered table-hover w-100" style="font-size: 0.9rem;">
-                    <thead class="table-dark text-center">
+                <table id="tableColl" class="table table-striped table-bordered table-hover w-100 align-middle" style="font-size: 0.85rem;">
+                    <thead class="table-dark text-center text-nowrap">
                         <tr>
-                            <th>Tanggal</th>
+                            <th>Tgl Bayar</th>
                             <th>Rayon</th>
+                            <th>PC / EZ</th>
                             <th>Nomen</th>
                             <th>Nama Pelanggan</th>
-                            <th>Target MC (Rp)</th>
-                            <th>Bayar (Rp)</th>
-                            <th>% Capai</th>
+                            <th>Target MB (Rp)</th>
+                            <th>Bayar Daily (Rp)</th>
+                            <th>%</th>
                             <th>Aksi</th>
                         </tr>
                     </thead>
@@ -191,63 +225,65 @@
         <div class="tab-pane fade" id="tab-analisa">
             <div class="row">
                 <div class="col-md-4 border-end">
-                    <h6 class="fw-bold text-danger border-bottom pb-2 mb-3">📝 Form Input Analisa</h6>
-                    <form id="formAnalisa">
-                        <div class="mb-2">
-                            <label class="fw-bold small">Nomen Pelanggan</label>
-                            <input type="text" class="form-control" name="nomen" id="inputNomen" placeholder="Contoh: 6012345" required>
-                        </div>
-                        <div class="mb-2">
-                            <label class="fw-bold small">Jenis Anomali</label>
-                            <select class="form-select" name="jenis_anomali">
-                                <option value="Zero Usage">Zero Usage (0 Meter)</option>
-                                <option value="Extreme Usage">Extreme Usage (Lonjakan)</option>
-                                <option value="Stand Negatif">Stand Negatif</option>
-                                <option value="Tunggakan Macet">Tunggakan Macet</option>
-                                <option value="Lainnya">Lainnya</option>
-                            </select>
-                        </div>
-                        <div class="mb-2">
-                            <label class="fw-bold small">Analisa Tim / Lapangan</label>
-                            <textarea class="form-control" name="analisa_tim" rows="2" placeholder="Hasil cek lapangan..." required></textarea>
-                        </div>
-                        <div class="mb-2">
-                            <label class="fw-bold small">Kesimpulan</label>
-                            <input type="text" class="form-control" name="kesimpulan" placeholder="Kesimpulan singkat">
-                        </div>
-                        <div class="mb-2">
-                            <label class="fw-bold small">Rekomendasi</label>
-                            <select class="form-select" name="rekomendasi">
-                                <option value="Monitoring">Lanjutkan Monitoring</option>
-                                <option value="Ganti Meter">Ganti Water Meter</option>
-                                <option value="Tagihan Susulan">Buat Tagihan Susulan</option>
-                                <option value="Cabut">Cabut Dinas</option>
-                            </select>
-                        </div>
-                        <div class="mb-4">
-                            <label class="fw-bold small">Status Pengerjaan</label>
-                            <select class="form-select bg-warning bg-opacity-10 fw-bold" name="status">
-                                <option value="Open">📂 Open (Baru)</option>
-                                <option value="Progress">🚧 On Progress</option>
-                                <option value="Closed">✅ Closed (Selesai)</option>
-                            </select>
-                        </div>
-                        <button type="submit" class="btn btn-danger w-100 fw-bold shadow-sm">💾 SIMPAN HASIL ANALISA</button>
-                    </form>
+                    <div class="p-3 bg-light rounded">
+                        <h6 class="fw-bold text-danger border-bottom pb-2 mb-3"><i class="fas fa-edit me-2"></i>Form Input Analisa</h6>
+                        <form id="formAnalisa">
+                            <div class="mb-2">
+                                <label class="fw-bold small">Nomen Pelanggan</label>
+                                <input type="text" class="form-control" name="nomen" id="inputNomen" placeholder="Contoh: 6012345" required>
+                            </div>
+                            <div class="mb-2">
+                                <label class="fw-bold small">Jenis Anomali</label>
+                                <select class="form-select" name="jenis_anomali">
+                                    <option value="Zero Usage">Zero Usage (0 Meter)</option>
+                                    <option value="Extreme Usage">Extreme Usage (Lonjakan)</option>
+                                    <option value="Stand Negatif">Stand Negatif</option>
+                                    <option value="Tunggakan Macet">Tunggakan Macet</option>
+                                    <option value="Lainnya">Lainnya</option>
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <label class="fw-bold small">Analisa Tim / Lapangan</label>
+                                <textarea class="form-control" name="analisa_tim" rows="3" placeholder="Hasil cek lapangan..." required></textarea>
+                            </div>
+                            <div class="mb-2">
+                                <label class="fw-bold small">Kesimpulan</label>
+                                <input type="text" class="form-control" name="kesimpulan">
+                            </div>
+                            <div class="mb-2">
+                                <label class="fw-bold small">Rekomendasi</label>
+                                <select class="form-select" name="rekomendasi">
+                                    <option value="Monitoring">Lanjutkan Monitoring</option>
+                                    <option value="Ganti Meter">Ganti Water Meter</option>
+                                    <option value="Tagihan Susulan">Buat Tagihan Susulan</option>
+                                    <option value="Cabut">Cabut Dinas</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="fw-bold small">Status</label>
+                                <select class="form-select bg-warning bg-opacity-10 fw-bold" name="status">
+                                    <option value="Open">📂 Open</option>
+                                    <option value="Progress">🚧 On Progress</option>
+                                    <option value="Closed">✅ Closed</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-danger w-100 fw-bold shadow-sm"><i class="fas fa-save me-2"></i>SIMPAN ANALISA</button>
+                        </form>
+                    </div>
                 </div>
                 
                 <div class="col-md-8">
-                    <h6 class="fw-bold text-muted border-bottom pb-2 mb-3">📂 History & Profil Pelanggan</h6>
-                    <div class="alert alert-info d-flex align-items-center">
-                        <span class="fs-4 me-3">ℹ️</span>
-                        <div>
-                            <strong>Mode Input Analisa</strong><br>
-                            Silakan masukkan Nomen pelanggan di sebelah kiri, atau klik tombol <b>"🛠️ Analisa"</b> dari tab Collection untuk mengisi otomatis.
-                        </div>
+                    <h6 class="fw-bold text-muted border-bottom pb-2 mb-3"><i class="fas fa-history me-2"></i>Informasi & History</h6>
+                    <div class="alert alert-info">
+                        <strong><i class="fas fa-info-circle"></i> Cara Penggunaan:</strong><br>
+                        1. Masukkan Nomen di form sebelah kiri.<br>
+                        2. Atau klik tombol <b>"Analisa"</b> dari tabel Collection.<br>
+                        3. Isi hasil pengecekan lapangan dan rekomendasi.
                     </div>
+                    
                     <div class="text-center text-muted mt-5 opacity-50">
-                        <img src="https://cdn-icons-png.flaticon.com/512/2921/2921222.png" width="80" class="mb-3">
-                        <p>Detail History Pelanggan akan muncul di sini.</p>
+                        <i class="fas fa-clipboard-list fa-5x mb-3"></i>
+                        <p>Belum ada pelanggan yang dipilih.</p>
                     </div>
                 </div>
             </div>
@@ -263,31 +299,63 @@
 </div>
 
 <div class="modal fade" id="modalUpload" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <form action="/upload" method="POST" enctype="multipart/form-data" class="modal-content">
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title">📤 Upload Data Excel</h5>
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-file-excel me-2"></i>Upload Data Sistem</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-warning small">
-                    <strong>Perhatian:</strong> Pastikan header kolom Excel sesuai standar sistem.
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="card h-100 border-primary bg-light">
+                            <div class="card-body">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="tipe_upload" id="uploadMaster" value="master" checked>
+                                    <label class="form-check-label fw-bold text-primary" for="uploadMaster">
+                                        MASTER BILLING (Target/MC)
+                                    </label>
+                                </div>
+                                <hr>
+                                <ul class="small text-muted mb-0 ps-3">
+                                    <li>Upload File: <b>MB / MC</b></li>
+                                    <li>Wajib Kolom: <b>ZONA_NOVAK</b> & <b>REK_AIR</b></li>
+                                    <li>Fungsi: Memperbarui Target & Memecah Rayon/PC/Block.</li>
+                                    <li><span class="text-danger fw-bold">PERINGATAN:</span> Data lama akan di-REPLACE (Diganti total).</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card h-100 border-success bg-light">
+                            <div class="card-body">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="tipe_upload" id="uploadColl" value="collection">
+                                    <label class="form-check-label fw-bold text-success" for="uploadColl">
+                                        DAILY COLLECTION (Lunas)
+                                    </label>
+                                </div>
+                                <hr>
+                                <ul class="small text-muted mb-0 ps-3">
+                                    <li>Upload File: <b>Laporan Harian</b></li>
+                                    <li>Wajib Kolom: <b>NOMEN</b> & <b>BAYAR/JUMLAH</b></li>
+                                    <li>Fungsi: Menambah data pembayaran harian.</li>
+                                    <li><span class="text-success fw-bold">INFO:</span> Data akan ditambahkan (APPEND).</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Tipe Data</label>
-                    <select name="tipe_upload" class="form-select">
-                        <option value="collection">📂 Data Collection (Transaksi Harian)</option>
-                        <option value="master">📂 Master Pelanggan (Database Pusat)</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Pilih File (.xlsx)</label>
-                    <input type="file" name="file" class="form-control" accept=".xlsx, .xls" required>
+                
+                <div class="mt-4">
+                    <label class="form-label fw-bold">Pilih File (CSV atau Excel)</label>
+                    <input type="file" name="file" class="form-control form-control-lg" accept=".xlsx, .xls, .csv" required>
+                    <div class="form-text">Sistem otomatis mendeteksi format CSV (MC/MB) atau Excel.</div>
                 </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer bg-light">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                <button type="submit" class="btn btn-success fw-bold">Mulai Upload</button>
+                <button type="submit" class="btn btn-primary fw-bold px-4">🚀 Mulai Proses Upload</button>
             </div>
         </form>
     </div>
@@ -308,76 +376,88 @@
         new Chart(ctx, {
             type: 'line',
             data: {
-                labels: ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'],
+                labels: ['1', '2', '3', '4', '5', '6', '7'],
                 datasets: [{ 
-                    label: 'Collection Harian (Juta Rp)', 
-                    data: [15, 22, 18, 25, 30, 45, 10], // Data Dummy Visual
+                    label: 'Trend Collection (Juta Rp)', 
+                    data: [15, 22, 18, 25, 30, 45, 10], 
                     borderColor: '#0d6efd',
                     backgroundColor: 'rgba(13, 110, 253, 0.1)',
                     fill: true,
-                    tension: 0.4
+                    tension: 0.4,
+                    pointRadius: 4
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: { legend: { display: false } },
-                scales: { y: { beginAtZero: true } }
+                scales: { y: { beginAtZero: true, grid: { borderDash: [2, 4] } } }
             }
         });
     }
 
     /**
      * 2. DATATABLES COLLECTION (AJAX LOAD)
+     * Kolom disesuaikan dengan ZONA_NOVAK Split
      */
     let table;
     function loadCollectionData() {
-        // Jika tabel sudah ada, reload saja datanya
         if ($.fn.DataTable.isDataTable('#tableColl')) {
             $('#tableColl').DataTable().ajax.reload();
             return;
         }
 
-        // Inisialisasi DataTable Pertama Kali
         table = $('#tableColl').DataTable({
             ajax: { 
-                url: '/api/collection_data', // Ambil data dari Python
+                url: '/api/collection_data', 
                 dataSrc: '' 
             },
             language: {
-                search: "Cari Data:",
+                search: "🔍 Cari Data:",
                 lengthMenu: "Tampil _MENU_",
-                info: "Menampilkan _START_-_END_ dari _TOTAL_",
-                paginate: { next: "➡️", previous: "⬅️" }
+                info: "Data _START_ - _END_ dari _TOTAL_",
+                paginate: { next: ">", previous: "<" }
             },
             columns: [
                 { data: 'tgl_bayar' },
-                { data: 'rayon' },
-                { data: 'nomen' },
-                { data: 'nama', defaultContent: "<em>Tanpa Nama</em>" },
+                { 
+                    data: 'rayon',
+                    render: function(d) {
+                        return d ? `<span class="badge badge-rayon">${d}</span>` : '-';
+                    }
+                },
+                { 
+                    data: 'pcez',
+                    render: function(d) {
+                        return d ? `<span class="badge badge-pcez">${d}</span>` : '-';
+                    }
+                },
+                { data: 'nomen', className: 'fw-bold' },
+                { data: 'nama', defaultContent: '<span class="text-muted fst-italic">Tanpa Nama</span>' },
                 { 
                     data: 'target_mc', 
                     render: $.fn.dataTable.render.number('.', ',', 0, 'Rp ') 
                 },
                 { 
                     data: 'jumlah_bayar', 
-                    render: $.fn.dataTable.render.number('.', ',', 0, 'Rp ') 
+                    render: $.fn.dataTable.render.number('.', ',', 0, 'Rp '),
+                    className: 'text-success fw-bold'
                 },
                 { 
-                    // Kolom Persentase (Hitung Otomatis)
+                    // Kolom Persentase
                     data: null, 
                     render: function(data) {
                         if(data.target_mc == 0 || !data.target_mc) return '<span class="badge bg-secondary">N/A</span>';
                         let pct = Math.round((data.jumlah_bayar / data.target_mc) * 100);
-                        let color = pct >= 90 ? 'success' : (pct >= 50 ? 'warning' : 'danger');
+                        let color = pct >= 100 ? 'success' : (pct >= 50 ? 'warning' : 'danger');
                         return `<span class="badge bg-${color}">${pct}%</span>`;
                     }
                 },
                 {
-                    // Tombol Aksi Analisa
+                    // Tombol Aksi
                     data: 'nomen',
                     render: function(data) {
-                        return `<button class="btn btn-sm btn-outline-danger py-0" onclick="bukaAnalisa('${data}')">🛠️ Analisa</button>`;
+                        return `<button class="btn btn-sm btn-outline-danger py-0 shadow-sm" onclick="bukaAnalisa('${data}')"><i class="fas fa-tools"></i> Analisa</button>`;
                     }
                 }
             ]
@@ -385,24 +465,19 @@
     }
 
     /**
-     * 3. FUNGSI PINDAH TAB & ISI FORM ANALISA
+     * 3. FUNGSI PINDAH TAB & FORM
      */
     function bukaAnalisa(nomen) {
-        // Aktifkan Tab Analisa (Index 4 / ID tab-analisa)
         const triggerEl = document.querySelector('button[data-bs-target="#tab-analisa"]');
         bootstrap.Tab.getInstance(triggerEl).show();
         
-        // Isi Form Nomen
         $('#inputNomen').val(nomen);
-        
-        // Animasi Focus
         setTimeout(() => {
             $('#inputNomen').focus().addClass('bg-warning bg-opacity-25');
             setTimeout(() => $('#inputNomen').removeClass('bg-warning bg-opacity-25'), 500);
         }, 200);
     }
     
-    // Fungsi Search Global di Header
     function cariPelanggan() {
         let val = $('#globalSearch').val();
         if(val) bukaAnalisa(val);
@@ -410,27 +485,22 @@
     }
 
     /**
-     * 4. SUBMIT FORM ANALISA (AJAX)
+     * 4. SUBMIT FORM ANALISA
      */
     $('#formAnalisa').on('submit', function(e) {
-        e.preventDefault(); // Mencegah reload halaman
-        
-        // Kirim data ke Python
+        e.preventDefault();
         $.post('/simpan_analisa', $(this).serialize(), function(resp) {
             if(resp.status === 'success') {
                 alert("✅ " + resp.msg);
-                $('#formAnalisa')[0].reset(); // Kosongkan form setelah sukses
+                $('#formAnalisa')[0].reset();
             } else {
-                alert("❌ Gagal menyimpan: " + resp.msg);
+                alert("❌ Gagal: " + resp.msg);
             }
         });
     });
 
-    /**
-     * 5. RUN ON LOAD
-     */
     $(document).ready(function() {
-        loadCollectionData(); // Load tabel saat web dibuka
+        loadCollectionData(); 
     });
 
 </script>
