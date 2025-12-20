@@ -65,7 +65,6 @@ def init_db():
 # --- ROUTING UTAMA ---
 @app.route('/')
 def index():
-    # Bypass Login (Langsung Dashboard)
     db = get_db()
     kpi = {}
     try:
@@ -77,7 +76,6 @@ def index():
     
     return render_template('index.html', kpi=kpi)
 
-# API: Ambil Data untuk Tabel
 @app.route('/api/collection_data')
 def api_collection():
     db = get_db()
@@ -88,11 +86,9 @@ def api_collection():
         ORDER BY c.tgl_bayar DESC LIMIT 1000
     '''
     rows = db.execute(query).fetchall()
-    # Convert ke list of dict
     data = [dict(row) for row in rows]
     return jsonify(data)
 
-# API: Simpan Analisa Manual
 @app.route('/simpan_analisa', methods=['POST'])
 def simpan_analisa():
     try:
@@ -109,7 +105,7 @@ def simpan_analisa():
     except Exception as e:
         return jsonify({'status': 'error', 'msg': str(e)})
 
-# FITUR: Upload Excel
+# --- FITUR UPLOAD (YANG DIPERBAIKI) ---
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files: return redirect(url_for('index'))
@@ -122,32 +118,107 @@ def upload_file():
         
         try:
             conn = get_db()
-            df = pd.read_excel(filepath)
             
+            # 1. DETEKSI FORMAT (CSV atau EXCEL)
+            if filepath.endswith('.csv'):
+                # Coba baca CSV (separator koma atau titik koma)
+                try:
+                    df = pd.read_csv(filepath, sep=',')
+                    # Cek kalau header ngumpul jadi 1 kolom (tanda sep salah), coba pakai ;
+                    if len(df.columns) < 2:
+                        df = pd.read_csv(filepath, sep=';')
+                except:
+                    df = pd.read_csv(filepath, sep=';')
+            else:
+                # Baca Excel biasa
+                df = pd.read_excel(filepath)
+
+            # 2. BERSIHKAN HEADER (Jadikan Huruf Besar Semua & Hapus Spasi)
+            df.columns = df.columns.str.upper().str.strip()
+            print("Kolom ditemukan:", df.columns.tolist()) # Debugging
+
             if tipe == 'master':
-                # Harap Header Excel: NOMEN, NAMA, RAYON, TARIF, TARGET
-                df = df.rename(columns={'NOMEN':'nomen', 'NAMA':'nama', 'RAYON':'rayon', 'TARIF':'tarif', 'TARGET':'target_mc'})
-                df[['nomen','nama','rayon','tarif','target_mc']].to_sql('master_pelanggan', conn, if_exists='replace', index=False)
-                flash('Master Pelanggan Berhasil Diupload!', 'success')
+                # MAPPING KHUSUS FILE MC...csv
+                # File kamu: NOMEN, NAMA_PEL, ZONA_NOVAK (Rayon), TARIF, REK_AIR (Target)
+                
+                # Kita buat kamus (dictionary) penyesuaian nama kolom
+                # Kiri: Nama di Database, Kanan: Kemungkinan nama di File
+                mapping = {
+                    'nomen': ['NOMEN'],
+                    'nama': ['NAMA_PEL', 'NAMA'],
+                    'rayon': ['ZONA_NOVAK', 'RAYON'],
+                    'tarif': ['TARIF', 'KODETARIF'],
+                    'target_mc': ['REK_AIR', 'TARGET', 'TAGIHAN']
+                }
+
+                # Fungsi pencari kolom otomatis
+                def cari_kolom(target_db):
+                    for calon in mapping[target_db]:
+                        if calon in df.columns:
+                            return calon
+                    return None
+
+                # Rename kolom sesuai database
+                rename_dict = {}
+                for col_db in mapping:
+                    found = cari_kolom(col_db)
+                    if found:
+                        rename_dict[found] = col_db
+                
+                # Cek kelengkapan
+                if 'nomen' not in rename_dict.values(): # Minimal Nomen wajib ada
+                    flash(f'Kolom NOMEN tidak ditemukan! Header file: {df.columns.tolist()}', 'danger')
+                    return redirect(url_for('index'))
+
+                df = df.rename(columns=rename_dict)
+                
+                # LOGIKA KHUSUS RAYON: Ambil 2 digit pertama dari ZONA_NOVAK (misal 35096.. jadi 35)
+                if 'rayon' in df.columns:
+                    df['rayon'] = df['rayon'].astype(str).str[:2]
+
+                # Pastikan kolom yang tidak ada diisi default
+                required_cols = ['nomen', 'nama', 'rayon', 'tarif', 'target_mc']
+                for col in required_cols:
+                    if col not in df.columns:
+                        df[col] = '' if col != 'target_mc' else 0
+
+                # Pilih & Simpan
+                df = df[required_cols]
+                df.to_sql('master_pelanggan', conn, if_exists='replace', index=False)
+                flash(f'Sukses Upload {len(df)} Data Master Pelanggan!', 'success')
                 
             elif tipe == 'collection':
-                # Harap Header Excel: NOMEN, TGL_BAYAR, JUMLAH
-                df = df.rename(columns={'NOMEN':'nomen', 'TGL_BAYAR':'tgl_bayar', 'JUMLAH':'jumlah_bayar'})
+                # Mapping Collection
+                # Standar: NOMEN, TGL_BAYAR, JUMLAH
+                # Jika file collection formatnya lain, tambahkan di sini
+                rename_dict = {}
+                if 'NOMEN' in df.columns: rename_dict['NOMEN'] = 'nomen'
+                if 'TGL_BAYAR' in df.columns: rename_dict['TGL_BAYAR'] = 'tgl_bayar'
+                if 'JUMLAH' in df.columns: rename_dict['JUMLAH'] = 'jumlah_bayar'
+                
+                if not rename_dict:
+                    flash('Format Collection Salah! Wajib: NOMEN, TGL_BAYAR, JUMLAH', 'danger')
+                    return redirect(url_for('index'))
+                
+                df = df.rename(columns=rename_dict)
                 df['sumber_file'] = file.filename
-                df[['nomen','tgl_bayar','jumlah_bayar','sumber_file']].to_sql('collection_harian', conn, if_exists='append', index=False)
-                flash('Data Transaksi Berhasil Diupload!', 'success')
+                
+                # Filter kolom yang ada saja
+                save_cols = [c for c in ['nomen', 'tgl_bayar', 'jumlah_bayar', 'sumber_file'] if c in df.columns]
+                df[save_cols].to_sql('collection_harian', conn, if_exists='append', index=False)
+                flash(f'Sukses Upload {len(df)} Transaksi!', 'success')
                 
         except Exception as e:
+            print(f"Error Detail: {e}")
             flash(f'Gagal Upload: {e}', 'danger')
             
     return redirect(url_for('index'))
 
-# Route Login/Logout dibuang/redirect ke index
 @app.route('/login')
 @app.route('/logout')
 def auth_bypass(): return redirect(url_for('index'))
 
 if __name__ == '__main__':
     if not os.path.exists(DB_PATH): init_db()
-    print("🚀 APLIKASI SIAP! BUKA BROWSER DI: http://localhost:5000")
+    print("🚀 APLIKASI SIAP (CSV SUPPORTED)!")
     app.run(host='0.0.0.0', port=5000, debug=True)
