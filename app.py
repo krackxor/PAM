@@ -479,44 +479,35 @@ def upload_file():
                 except:
                     df = pd.read_csv(filepath, sep=';', encoding='utf-8')
             elif filepath.endswith(('.xls', '.xlsx')):
-                # Excel file - coba berbagai cara
+                # Excel file - gunakan chunk untuk file besar
                 df = None
                 errors = []
                 
-                # Method 1: Try openpyxl (for .xlsx)
-                try:
-                    df = pd.read_excel(filepath, engine='openpyxl')
-                except Exception as e1:
-                    errors.append(f"openpyxl: {str(e1)[:50]}")
-                    
-                    # Method 2: Try default engine
-                    if df is None:
-                        try:
-                            df = pd.read_excel(filepath)
-                        except Exception as e2:
-                            errors.append(f"default: {str(e2)[:50]}")
-                            
-                            # Method 3: Try convert via LibreOffice if available
-                            if df is None:
-                                try:
-                                    import subprocess
-                                    csv_path = filepath.replace('.xls', '_temp.csv').replace('.xlsx', '_temp.csv')
-                                    result = subprocess.run(
-                                        ['libreoffice', '--headless', '--convert-to', 'csv', '--outdir', app.config['UPLOAD_FOLDER'], filepath],
-                                        capture_output=True,
-                                        timeout=30
-                                    )
-                                    if os.path.exists(csv_path):
-                                        df = pd.read_csv(csv_path)
-                                        os.remove(csv_path)  # Clean up
-                                    else:
-                                        raise Exception("Conversion failed")
-                                except Exception as e3:
-                                    errors.append(f"libreoffice: {str(e3)[:50]}")
+                # Cek ukuran file
+                file_size = os.path.getsize(filepath)
+                use_chunks = file_size > 5 * 1024 * 1024  # > 5MB
                 
+                print(f"[INFO] File size: {file_size / (1024*1024):.2f} MB")
+                
+                # Method 1: Try openpyxl (for .xlsx)
+                if not use_chunks:
+                    try:
+                        df = pd.read_excel(filepath, engine='openpyxl')
+                        print("[INFO] Berhasil baca dengan openpyxl")
+                    except Exception as e1:
+                        errors.append(f"openpyxl: {str(e1)[:50]}")
+                
+                # Method 2: Try default engine
+                if df is None and not use_chunks:
+                    try:
+                        df = pd.read_excel(filepath)
+                        print("[INFO] Berhasil baca dengan default engine")
+                    except Exception as e2:
+                        errors.append(f"default: {str(e2)[:50]}")
+                
+                # Method 3: Untuk file besar, minta user convert manual
                 if df is None:
-                    error_msg = " | ".join(errors)
-                    flash(f'❌ Tidak bisa membaca file Excel: {error_msg}. Coba convert ke CSV terlebih dahulu.', 'danger')
+                    flash(f'❌ File Excel terlalu besar ({file_size/(1024*1024):.1f} MB). Silakan convert ke CSV terlebih dahulu menggunakan Excel: File → Save As → CSV (UTF-8)', 'danger')
                     return redirect(url_for('index'))
             else:
                 flash('❌ Format file tidak didukung. Gunakan .csv, .txt, .xls, atau .xlsx', 'danger')
@@ -591,6 +582,8 @@ def upload_file():
                     flash('Tidak ada data Rayon 34/35 dalam file MC', 'warning')
                     return redirect(url_for('index'))
                 
+                print(f"[INFO] Processing {len(df)} records from MC")
+                
                 # Set default values
                 for col in ['nama', 'alamat', 'tarif']:
                     if col not in df.columns:
@@ -601,11 +594,25 @@ def upload_file():
                 
                 df['periode'] = datetime.now().strftime('%Y-%m')
                 
-                # Insert/Update Master
+                # REPLACE DATA MASTER - optimized untuk file besar
                 cols_db = ['nomen', 'nama', 'alamat', 'rayon', 'pc', 'ez', 'pcez', 'block', 'zona_novak', 'tarif', 'target_mc', 'periode']
-                df[cols_db].to_sql('master_pelanggan', conn, if_exists='replace', index=False)
                 
-                flash(f'✅ Master Pelanggan berhasil diupdate ({len(df)} data Rayon 34/35)', 'success')
+                # Batch insert untuk performa
+                batch_size = 1000
+                total_rows = len(df)
+                
+                if total_rows > batch_size:
+                    print(f"[INFO] Using batch insert ({batch_size} rows per batch)")
+                    conn.execute("DELETE FROM master_pelanggan")  # Clear dulu
+                    
+                    for i in range(0, total_rows, batch_size):
+                        batch = df[cols_db].iloc[i:i+batch_size]
+                        batch.to_sql('master_pelanggan', conn, if_exists='append', index=False)
+                        print(f"[INFO] Inserted {min(i+batch_size, total_rows)}/{total_rows} rows")
+                else:
+                    df[cols_db].to_sql('master_pelanggan', conn, if_exists='replace', index=False)
+                
+                flash(f'✅ Master Pelanggan berhasil diupdate ({len(df):,} data Rayon 34/35)', 'success')
 
             # --- UPLOAD COLLECTION DAILY ---
             elif tipe == 'collection':
@@ -676,13 +683,25 @@ def upload_file():
                     flash('⚠️ Tidak ada data Collection yang cocok dengan MC. Upload MC terlebih dahulu!', 'warning')
                     return redirect(url_for('index'))
                 
-                # Insert collection
-                cols = ['nomen', 'tgl_bayar', 'jumlah_bayar', 'sumber_file']
-                df_valid[cols].to_sql('collection_harian', conn, if_exists='append', index=False)
+                print(f"[INFO] Processing {len(df_valid)} valid Collection records")
                 
-                msg = f'✅ Collection berhasil ditambahkan ({len(df_valid)} transaksi)'
+                # Insert collection dengan batch
+                cols = ['nomen', 'tgl_bayar', 'jumlah_bayar', 'sumber_file']
+                batch_size = 1000
+                total_rows = len(df_valid)
+                
+                if total_rows > batch_size:
+                    print(f"[INFO] Using batch insert ({batch_size} rows per batch)")
+                    for i in range(0, total_rows, batch_size):
+                        batch = df_valid[cols].iloc[i:i+batch_size]
+                        batch.to_sql('collection_harian', conn, if_exists='append', index=False)
+                        print(f"[INFO] Inserted {min(i+batch_size, total_rows)}/{total_rows} rows")
+                else:
+                    df_valid[cols].to_sql('collection_harian', conn, if_exists='append', index=False)
+                
+                msg = f'✅ Collection berhasil ditambahkan ({len(df_valid):,} transaksi)'
                 if len(df_invalid) > 0:
-                    msg += f' | ⚠️ {len(df_invalid)} data diabaikan (nomen tidak ada di MC)'
+                    msg += f' | ⚠️ {len(df_invalid):,} data diabaikan (nomen tidak ada di MC)'
                 flash(msg, 'success')
             
             # --- UPLOAD MB (MASTER BAYAR - Pembayaran Bulan Lalu) ---
