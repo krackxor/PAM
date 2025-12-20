@@ -5,10 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SUNTER DASHBOARD - Monitoring Operasional</title>
     
+    <!-- CSS Libraries -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
+    <!-- Custom Styles -->
     <style>
         body { 
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -30,6 +32,7 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
             margin-bottom: 20px;
             transition: all 0.3s;
+            height: 100%;
         }
         .kpi-card:hover {
             transform: translateY(-5px);
@@ -40,20 +43,6 @@
             font-weight: bold;
             margin: 10px 0;
         }
-        .kpi-detail {
-            font-size: 0.85rem;
-            padding: 8px;
-            margin-top: 10px;
-            border-radius: 5px;
-            background: #f8f9fa;
-        }
-        .badge-custom {
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-size: 0.75rem;
-        }
-        
-        /* Upload Card Styles */
         .upload-option {
             cursor: pointer;
             transition: all 0.3s;
@@ -76,8 +65,10 @@
         .upload-option input[type="radio"]:checked + .card * {
             color: white !important;
         }
-        .upload-option input[type="radio"]:checked + .card .fa {
-            color: white !important;
+        .badge-custom {
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.75rem;
         }
     </style>
 </head>
@@ -135,7 +126,7 @@
 </header>
 
 <!-- MAIN CONTAINER -->
-<div class="container-fluid px-4">
+<div class="container-fluid px-4 pb-5">
     
     <!-- FLASH MESSAGES -->
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -157,12 +148,12 @@
     <!-- TABS -->
     <ul class="nav nav-tabs nav-fill shadow-sm bg-white rounded-top" id="mainTab">
         <li class="nav-item">
-            <button class="nav-link active py-3" data-bs-toggle="tab" data-bs-target="#tab-ringkasan">
+            <button class="nav-link active py-3 fw-bold" data-bs-toggle="tab" data-bs-target="#tab-ringkasan">
                 <i class="fas fa-chart-pie me-2"></i> RINGKASAN
             </button>
         </li>
         <li class="nav-item">
-            <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#tab-collection">
+            <button class="nav-link py-3 fw-bold" data-bs-toggle="tab" data-bs-target="#tab-collection">
                 <i class="fas fa-table me-2"></i> COLLECTION
             </button>
         </li>
@@ -233,23 +224,19 @@
                             <div class="col-md-4">
                                 <div class="text-center">
                                     <small class="text-primary d-block" title="Pemakaian bulan LALU dibayar bulan INI">
-                                        Current
-                                        <i class="fas fa-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" title="Pembayaran normal: Pemakaian bulan lalu dibayar bulan ini"></i>
+                                        Current <i class="fas fa-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" title="Pembayaran normal: Pemakaian bulan lalu dibayar bulan ini"></i>
                                     </small>
                                     <div class="kpi-number text-primary" id="kpi-coll-current" style="font-size: 1.5rem;">Rp 0</div>
                                     <span class="badge badge-custom bg-primary" id="kpi-coll-nomen-current">0 nomen</span>
-                                    <small class="text-muted d-block mt-1" style="font-size: 0.7rem;">Pemakaian bulan lalu</small>
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="text-center">
                                     <small class="text-warning d-block" title="Pemakaian bulan INI dibayar bulan INI">
-                                        Undue
-                                        <i class="fas fa-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" title="Bayar lebih cepat: Pemakaian bulan ini dibayar di bulan ini juga"></i>
+                                        Undue <i class="fas fa-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" title="Bayar lebih cepat: Pemakaian bulan ini dibayar di bulan ini juga"></i>
                                     </small>
                                     <div class="kpi-number text-warning" id="kpi-coll-undue" style="font-size: 1.5rem;">Rp 0</div>
                                     <span class="badge badge-custom bg-warning" id="kpi-coll-nomen-undue">0 nomen</span>
-                                    <small class="text-muted d-block mt-1" style="font-size: 0.7rem;">Pemakaian bulan ini</small>
                                 </div>
                             </div>
                         </div>
@@ -264,7 +251,7 @@
                         <h6 class="text-muted text-uppercase"><i class="fas fa-percent me-2"></i>Collection Rate</h6>
                         <div class="kpi-number text-warning" id="kpi-rate">0%</div>
                         <div class="progress" style="height: 25px;">
-                            <div class="progress-bar bg-warning" id="kpi-rate-bar" style="width: 0%">0%</div>
+                            <div class="progress-bar bg-warning progress-bar-striped progress-bar-animated" id="kpi-rate-bar" style="width: 0%">0%</div>
                         </div>
                     </div>
                 </div>
@@ -307,13 +294,17 @@
                 <div class="col-md-6 mb-3">
                     <div class="kpi-card">
                         <h6 class="text-muted text-uppercase"><i class="fas fa-chart-bar me-2"></i>Collection Rayon 34 vs 35</h6>
-                        <canvas id="chartRayon" height="200"></canvas>
+                        <div style="height: 300px;">
+                            <canvas id="chartRayon"></canvas>
+                        </div>
                     </div>
                 </div>
                 <div class="col-md-6 mb-3">
                     <div class="kpi-card">
                         <h6 class="text-muted text-uppercase"><i class="fas fa-chart-line me-2"></i>Tren Collection Harian</h6>
-                        <canvas id="chartTren" height="200"></canvas>
+                        <div style="height: 300px;">
+                            <canvas id="chartTren"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -322,24 +313,26 @@
 
         <!-- TAB: COLLECTION -->
         <div class="tab-pane fade" id="tab-collection">
-            <div class="d-flex justify-content-between mb-3">
-                <h5>Data Collection</h5>
-                <button class="btn btn-sm btn-primary" onclick="loadCollectionData()">
-                    <i class="fas fa-sync"></i> Refresh
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="fw-bold text-primary"><i class="fas fa-table me-2"></i>Data Detail Collection</h5>
+                <button class="btn btn-sm btn-primary shadow-sm" onclick="loadCollectionData()">
+                    <i class="fas fa-sync me-1"></i> Refresh Data
                 </button>
             </div>
-            <table id="tableColl" class="table table-striped table-hover">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Tgl Bayar</th>
-                        <th>Rayon</th>
-                        <th>Nomen</th>
-                        <th>Nama</th>
-                        <th>Jumlah</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
+            <div class="table-responsive">
+                <table id="tableColl" class="table table-striped table-hover w-100">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Tgl Bayar</th>
+                            <th>Rayon</th>
+                            <th>Nomen</th>
+                            <th>Nama</th>
+                            <th class="text-end">Jumlah</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
@@ -355,14 +348,13 @@
             <div class="modal-body">
                 
                 <!-- ALERT INFO -->
-                <div class="alert alert-info border-0 mb-4">
-                    <h6 class="fw-bold"><i class="fas fa-info-circle me-2"></i> Urutan Upload:</h6>
+                <div class="alert alert-info border-0 mb-4 shadow-sm">
+                    <h6 class="fw-bold"><i class="fas fa-info-circle me-2"></i> Urutan Upload Wajib:</h6>
                     <ol class="mb-0 small">
-                        <li><strong>MC</strong> - Wajib pertama!</li>
-                        <li><strong>Collection</strong> - Transaksi harian</li>
-                        <li><strong>MB</strong> - History bulan lalu</li>
-                        <li><strong>MainBill</strong> - Tagihan bulan depan</li>
-                        <li><strong>Ardebt</strong> - Tunggakan</li>
+                        <li><strong>MC (Master)</strong> - Data Induk (Upload Pertama!)</li>
+                        <li><strong>Collection</strong> - Data Pembayaran</li>
+                        <li><strong>Ardebt</strong> - Data Tunggakan</li>
+                        <li><strong>MainBill</strong> - Tagihan Final</li>
                     </ol>
                 </div>
 
@@ -370,66 +362,49 @@
                 
                 <div class="row g-3 mb-4">
                     <!-- MC -->
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="upload-option w-100">
                             <input type="radio" name="tipe_upload" value="master" class="d-none" checked>
-                            <div class="card text-center p-3">
+                            <div class="card text-center p-3 h-100">
                                 <i class="fas fa-users fa-3x text-primary mb-2"></i>
                                 <h6 class="fw-bold mb-1">MC (Master)</h6>
-                                <small class="text-muted">Data induk pelanggan</small>
-                                <span class="badge bg-danger mt-2">WAJIB PERTAMA</span>
+                                <span class="badge bg-danger mt-1">WAJIB PERTAMA</span>
                             </div>
                         </label>
                     </div>
 
                     <!-- COLLECTION -->
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="upload-option w-100">
                             <input type="radio" name="tipe_upload" value="collection" class="d-none">
-                            <div class="card text-center p-3">
-                                <i class="fas fa-money-bill-wave fa-3x text-success mb-2"></i>
+                            <div class="card text-center p-3 h-100">
+                                <i class="fas fa-money-bill-wave fa-2x text-success mb-2"></i>
                                 <h6 class="fw-bold mb-1">COLLECTION</h6>
-                                <small class="text-muted">Transaksi harian</small>
-                                <span class="badge bg-success mt-2">DAILY</span>
-                            </div>
-                        </label>
-                    </div>
-
-                    <!-- MB -->
-                    <div class="col-md-4">
-                        <label class="upload-option w-100">
-                            <input type="radio" name="tipe_upload" value="mb" class="d-none">
-                            <div class="card text-center p-3">
-                                <i class="fas fa-history fa-3x text-warning mb-2"></i>
-                                <h6 class="fw-bold mb-1">MB (Master Bayar)</h6>
-                                <small class="text-muted">History bulan lalu</small>
-                                <span class="badge bg-warning mt-2">HISTORY</span>
-                            </div>
-                        </label>
-                    </div>
-
-                    <!-- MAINBILL -->
-                    <div class="col-md-4">
-                        <label class="upload-option w-100">
-                            <input type="radio" name="tipe_upload" value="mainbill" class="d-none">
-                            <div class="card text-center p-3">
-                                <i class="fas fa-file-invoice fa-3x text-info mb-2"></i>
-                                <h6 class="fw-bold mb-1">MAINBILL</h6>
-                                <small class="text-muted">Tagihan bulan depan</small>
-                                <span class="badge bg-info mt-2">BILL</span>
+                                <span class="badge bg-success mt-1">DAILY</span>
                             </div>
                         </label>
                     </div>
 
                     <!-- ARDEBT -->
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="upload-option w-100">
                             <input type="radio" name="tipe_upload" value="ardebt" class="d-none">
-                            <div class="card text-center p-3">
-                                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-2"></i>
+                            <div class="card text-center p-3 h-100">
+                                <i class="fas fa-exclamation-triangle fa-2x text-danger mb-2"></i>
                                 <h6 class="fw-bold mb-1">ARDEBT</h6>
-                                <small class="text-muted">Data tunggakan</small>
-                                <span class="badge bg-danger mt-2">DEBT</span>
+                                <span class="badge bg-danger mt-1">TUNGGAKAN</span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- MAINBILL -->
+                    <div class="col-md-3">
+                        <label class="upload-option w-100">
+                            <input type="radio" name="tipe_upload" value="mainbill" class="d-none">
+                            <div class="card text-center p-3 h-100">
+                                <i class="fas fa-file-invoice fa-2x text-info mb-2"></i>
+                                <h6 class="fw-bold mb-1">MAINBILL</h6>
+                                <span class="badge bg-info mt-1">TAGIHAN</span>
                             </div>
                         </label>
                     </div>
@@ -444,11 +419,11 @@
                     <small class="text-muted">Format yang didukung: .txt, .csv, .xls, .xlsx</small>
                 </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer bg-light">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="fas fa-times me-2"></i>Batal
                 </button>
-                <button type="submit" class="btn btn-primary btn-lg px-4">
+                <button type="submit" class="btn btn-primary px-4 fw-bold">
                     <i class="fas fa-upload me-2"></i>UPLOAD SEKARANG
                 </button>
             </div>
@@ -456,171 +431,15 @@
     </div>
 </div>
 
+<!-- JS LIBRARIES -->
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-<script>
-    let chartRayon, chartTren;
-    
-    function formatRupiah(angka) {
-        return 'Rp ' + new Intl.NumberFormat('id-ID').format(angka);
-    }
-    
-    function updateKPI() {
-        $.get('/api/kpi_data', function(data) {
-            console.log('KPI Data:', data);
-            
-            // Total Pelanggan
-            $('#kpi-total-pelanggan').text(new Intl.NumberFormat('id-ID').format(data.total_pelanggan));
-            
-            // Target MC
-            $('#kpi-target-total').text(formatRupiah(data.target.total_nominal));
-            $('#kpi-target-nomen-total').text(data.target.total_nomen + ' nomen');
-            $('#kpi-target-bayar').text(formatRupiah(data.target.sudah_bayar_nominal));
-            $('#kpi-target-nomen-bayar').text(data.target.sudah_bayar_nomen + ' nomen');
-            $('#kpi-target-belum').text(formatRupiah(data.target.belum_bayar_nominal));
-            $('#kpi-target-nomen-belum').text(data.target.belum_bayar_nomen + ' nomen');
-            
-            // Collection
-            $('#kpi-coll-total').text(formatRupiah(data.collection.total_nominal));
-            $('#kpi-coll-nomen-total').text(data.collection.total_nomen + ' nomen');
-            $('#kpi-coll-current').text(formatRupiah(data.collection.current_nominal));
-            $('#kpi-coll-nomen-current').text(data.collection.current_nomen + ' nomen');
-            $('#kpi-coll-undue').text(formatRupiah(data.collection.undue_nominal));
-            $('#kpi-coll-nomen-undue').text(data.collection.undue_nomen + ' nomen');
-            
-            // Collection Rate
-            $('#kpi-rate').text(data.collection_rate + '%');
-            $('#kpi-rate-bar').css('width', data.collection_rate + '%').text(data.collection_rate + '%');
-            
-            // Tunggakan
-            $('#kpi-tunggakan-total').text(formatRupiah(data.tunggakan.total_nominal));
-            $('#kpi-tunggakan-nomen-total').text(data.tunggakan.total_nomen + ' nomen');
-            $('#kpi-tunggakan-bayar').text(formatRupiah(data.tunggakan.sudah_bayar_nominal));
-            $('#kpi-tunggakan-nomen-bayar').text(data.tunggakan.sudah_bayar_nomen + ' nomen');
-            $('#kpi-tunggakan-belum').text(formatRupiah(data.tunggakan.belum_bayar_nominal));
-            $('#kpi-tunggakan-nomen-belum').text(data.tunggakan.belum_bayar_nomen + ' nomen');
-            
-            // Periode
-            $('#labelPeriode').text(data.periode);
-        });
-    }
-    
-    function loadChartRayon() {
-        $.get('/api/breakdown_rayon', function(data) {
-            const ctx = document.getElementById('chartRayon');
-            if (chartRayon) chartRayon.destroy();
-            
-            chartRayon = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: data.map(d => 'Rayon ' + d.rayon),
-                    datasets: [{
-                        label: 'Collection (Rp)',
-                        data: data.map(d => d.total_collection || 0),
-                        backgroundColor: ['#0d6efd', '#198754']
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: { beginAtZero: true }
-                    }
-                }
-            });
-        });
-    }
-    
-    function loadChartTren() {
-        $.get('/api/tren_harian', function(data) {
-            const ctx = document.getElementById('chartTren');
-            if (chartTren) chartTren.destroy();
-            
-            chartTren = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: data.map(d => d.tgl_bayar),
-                    datasets: [{
-                        label: 'Harian',
-                        data: data.map(d => d.total_harian),
-                        borderColor: '#198754',
-                        backgroundColor: 'rgba(25, 135, 84, 0.1)',
-                        fill: true
-                    }, {
-                        label: 'Kumulatif',
-                        data: data.map(d => d.kumulatif),
-                        borderColor: '#0d6efd',
-                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    scales: {
-                        y: { beginAtZero: true }
-                    }
-                }
-            });
-        });
-    }
-
-    let table;
-    function loadCollectionData() {
-        if ($.fn.DataTable.isDataTable('#tableColl')) {
-            $('#tableColl').DataTable().ajax.reload();
-            return;
-        }
-
-        table = $('#tableColl').DataTable({
-            ajax: { url: '/api/collection_data', dataSrc: '' },
-            pageLength: 25,
-            columns: [
-                { data: 'tgl_bayar' },
-                { data: 'rayon' },
-                { data: 'nomen' },
-                { data: 'nama', defaultContent: 'Tanpa Nama' },
-                { data: 'jumlah_bayar', render: $.fn.dataTable.render.number('.', ',', 0, 'Rp ') }
-            ]
-        });
-    }
-
-    function cariPelanggan() {
-        let val = $('#globalSearch').val();
-        if(val) alert('Fitur pencarian: ' + val);
-    }
-
-    $(document).ready(function() {
-        updateKPI();
-        loadChartRayon();
-        loadChartTren();
-        loadCollectionData();
-        
-        // Enable Bootstrap tooltips
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl)
-        });
-        
-        // Handle radio button click via label
-        $('.upload-option').click(function(e) {
-            // Remove all checked states
-            $('.upload-option input[type="radio"]').prop('checked', false);
-            $('.upload-option .card').removeClass('selected');
-            
-            // Add checked state to clicked option
-            $(this).find('input[type="radio"]').prop('checked', true);
-            $(this).find('.card').addClass('selected');
-            
-            console.log('Selected:', $(this).find('input[type="radio"]').val());
-        });
-    });
-</script>
+<!-- CONNECT TO LOGIC -->
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 
 </body>
 </html>
