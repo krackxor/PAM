@@ -308,16 +308,20 @@ def upload_file():
 
             # --- UPLOAD MASTER (MC) ---
             if tipe == 'master':
-                if 'ZONA_NOVAK' not in df.columns or 'NOTAGIHAN' not in df.columns:
-                    flash('Format MC salah! Wajib ada kolom ZONA_NOVAK dan NOTAGIHAN', 'danger')
+                # Validasi kolom wajib
+                if 'ZONA_NOVAK' not in df.columns:
+                    flash('❌ Format MC salah! Wajib ada kolom ZONA_NOVAK', 'danger')
+                    return redirect(url_for('index'))
+                
+                if 'NOTAGIHAN' not in df.columns:
+                    flash('❌ Format MC salah! Wajib ada kolom NOTAGIHAN (ini KEY UTAMA)', 'danger')
                     return redirect(url_for('index'))
 
                 # Mapping field MC
                 rename_dict = {}
                 
-                # Field NOMEN dari NOTAGIHAN (MC)
-                if 'NOTAGIHAN' in df.columns:
-                    rename_dict['NOTAGIHAN'] = 'nomen'
+                # Field NOMEN dari NOTAGIHAN (MC) - INI DATA INDUK!
+                rename_dict['NOTAGIHAN'] = 'nomen'
                 
                 # Field NAMA
                 if 'NAMA_PEL' in df.columns:
@@ -389,33 +393,31 @@ def upload_file():
                 # Field mapping untuk DAILY
                 rename_dict = {}
                 
-                # Field NOMEN dari NOTAG (DAILY)
+                # Field NOMEN dari NOTAG (DAILY) - PENTING!
+                # NOTAG di DAILY = NOTAGIHAN di MC
                 if 'NOTAG' in df.columns:
                     rename_dict['NOTAG'] = 'nomen'
-                elif 'NOMEN' in df.columns:
-                    rename_dict['NOMEN'] = 'nomen'
                 elif 'NO_SAMBUNGAN' in df.columns:
                     rename_dict['NO_SAMBUNGAN'] = 'nomen'
+                else:
+                    flash('❌ Format Collection salah! Butuh kolom NOTAG', 'danger')
+                    return redirect(url_for('index'))
                 
                 # Field TANGGAL dari PAY_DT (DAILY)
                 if 'PAY_DT' in df.columns:
                     rename_dict['PAY_DT'] = 'tgl_bayar'
                 elif 'TGL_BAYAR' in df.columns:
                     rename_dict['TGL_BAYAR'] = 'tgl_bayar'
-                elif 'TANGGAL' in df.columns:
-                    rename_dict['TANGGAL'] = 'tgl_bayar'
                 
-                # Field JUMLAH
+                # Field JUMLAH dari AMT_COLLECT
                 if 'AMT_COLLECT' in df.columns:
                     rename_dict['AMT_COLLECT'] = 'jumlah_bayar'
                 elif 'JUMLAH' in df.columns:
                     rename_dict['JUMLAH'] = 'jumlah_bayar'
-                elif 'BAYAR' in df.columns:
-                    rename_dict['BAYAR'] = 'jumlah_bayar'
                 
-                if 'nomen' not in rename_dict.values():
-                    flash('Format Collection salah! Butuh kolom NOTAG (DAILY) atau NOMEN', 'danger')
-                    return redirect(url_for('index'))
+                # Field RAYON untuk validasi
+                if 'RAYON' in df.columns:
+                    rename_dict['RAYON'] = 'rayon_check'
                 
                 df = df.rename(columns=rename_dict)
                 
@@ -456,27 +458,32 @@ def upload_file():
                 # Field mapping untuk MB
                 rename_dict = {}
                 
-                # Field NOMEN dari NOTAGIHAN (MB)
-                if 'NOTAGIHAN' in df.columns:
-                    rename_dict['NOTAGIHAN'] = 'nomen'
-                elif 'NOMEN' in df.columns:
+                # Field NOMEN dari NOMEN (MB) - langsung
+                if 'NOMEN' in df.columns:
                     rename_dict['NOMEN'] = 'nomen'
-                
-                # Field TANGGAL dari TGL_BAYAR (MB)
-                if 'TGL_BAYAR' in df.columns:
-                    rename_dict['TGL_BAYAR'] = 'tgl_bayar'
-                elif 'TANGGAL' in df.columns:
-                    rename_dict['TANGGAL'] = 'tgl_bayar'
-                
-                # Field TAGIHAN
-                if 'TAGIHAN' in df.columns:
-                    rename_dict['TAGIHAN'] = 'tagihan'
-                elif 'TOTAL_TAGIHAN' in df.columns:
-                    rename_dict['TOTAL_TAGIHAN'] = 'tagihan'
-                
-                if 'nomen' not in rename_dict.values():
-                    flash('Format MainBill salah! Butuh kolom NOTAGIHAN', 'danger')
+                else:
+                    flash('❌ Format MainBill salah! Butuh kolom NOMEN', 'danger')
                     return redirect(url_for('index'))
+                
+                # Field TANGGAL dari FREEZE_DT (MB)
+                if 'FREEZE_DT' in df.columns:
+                    rename_dict['FREEZE_DT'] = 'tgl_bayar'
+                elif 'TGL_BAYAR' in df.columns:
+                    rename_dict['TGL_BAYAR'] = 'tgl_bayar'
+                
+                # Field TAGIHAN dari TOTAL_TAGIHAN
+                if 'TOTAL_TAGIHAN' in df.columns:
+                    rename_dict['TOTAL_TAGIHAN'] = 'tagihan'
+                elif 'TAGIHAN' in df.columns:
+                    rename_dict['TAGIHAN'] = 'tagihan'
+                
+                # Field PCEZBK untuk informasi tambahan
+                if 'PCEZBK' in df.columns:
+                    rename_dict['PCEZBK'] = 'pcezbk'
+                
+                # Field CC (Rayon) untuk validasi
+                if 'CC' in df.columns:
+                    rename_dict['CC'] = 'rayon_check'
                 
                 df = df.rename(columns=rename_dict)
                 
