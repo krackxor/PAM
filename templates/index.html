@@ -52,6 +52,33 @@
             border-radius: 5px;
             font-size: 0.75rem;
         }
+        
+        /* Upload Card Styles */
+        .upload-option {
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .upload-option .card {
+            border: 3px solid #dee2e6;
+            transition: all 0.3s;
+        }
+        .upload-option:hover .card {
+            border-color: #0d6efd;
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(13, 110, 253, 0.3);
+        }
+        .upload-option input[type="radio"]:checked + .card {
+            border-color: #0d6efd;
+            background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+            color: white !important;
+            box-shadow: 0 8px 20px rgba(13, 110, 253, 0.4);
+        }
+        .upload-option input[type="radio"]:checked + .card * {
+            color: white !important;
+        }
+        .upload-option input[type="radio"]:checked + .card .fa {
+            color: white !important;
+        }
     </style>
 </head>
 <body>
@@ -309,69 +336,113 @@
     </div>
 </div>
 
-<!-- MODAL UPLOAD (sama seperti sebelumnya) -->
+<!-- MODAL UPLOAD -->
 <div class="modal fade" id="modalUpload" tabindex="-1">
     <div class="modal-dialog modal-xl">
         <form action="/upload" method="POST" enctype="multipart/form-data" class="modal-content">
             <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title"><i class="fas fa-cloud-upload-alt me-2"></i> Upload Data</h5>
+                <h5 class="modal-title"><i class="fas fa-cloud-upload-alt me-2"></i> Upload Data Sistem</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="row g-3">
+                
+                <!-- ALERT INFO -->
+                <div class="alert alert-info border-0 mb-4">
+                    <h6 class="fw-bold"><i class="fas fa-info-circle me-2"></i> Urutan Upload:</h6>
+                    <ol class="mb-0 small">
+                        <li><strong>MC</strong> - Wajib pertama!</li>
+                        <li><strong>Collection</strong> - Transaksi harian</li>
+                        <li><strong>MB</strong> - History bulan lalu</li>
+                        <li><strong>MainBill</strong> - Tagihan bulan depan</li>
+                        <li><strong>Ardebt</strong> - Tunggakan</li>
+                    </ol>
+                </div>
+
+                <h6 class="fw-bold mb-3">Pilih Jenis File:</h6>
+                
+                <div class="row g-3 mb-4">
+                    <!-- MC -->
                     <div class="col-md-4">
-                        <input type="radio" name="tipe_upload" id="type-mc" value="master" class="d-none" checked>
-                        <label for="type-mc" class="w-100 m-0 cursor-pointer">
-                            <div class="card text-center p-3 border">
+                        <label class="upload-option w-100">
+                            <input type="radio" name="tipe_upload" value="master" class="d-none" checked>
+                            <div class="card text-center p-3">
                                 <i class="fas fa-users fa-3x text-primary mb-2"></i>
-                                <h6>MC (Master)</h6>
+                                <h6 class="fw-bold mb-1">MC (Master)</h6>
+                                <small class="text-muted">Data induk pelanggan</small>
+                                <span class="badge bg-danger mt-2">WAJIB PERTAMA</span>
                             </div>
                         </label>
                     </div>
+
+                    <!-- COLLECTION -->
                     <div class="col-md-4">
-                        <input type="radio" name="tipe_upload" id="type-coll" value="collection" class="d-none">
-                        <label for="type-coll" class="w-100 m-0 cursor-pointer">
-                            <div class="card text-center p-3 border">
+                        <label class="upload-option w-100">
+                            <input type="radio" name="tipe_upload" value="collection" class="d-none">
+                            <div class="card text-center p-3">
                                 <i class="fas fa-money-bill-wave fa-3x text-success mb-2"></i>
-                                <h6>COLLECTION</h6>
+                                <h6 class="fw-bold mb-1">COLLECTION</h6>
+                                <small class="text-muted">Transaksi harian</small>
+                                <span class="badge bg-success mt-2">DAILY</span>
                             </div>
                         </label>
                     </div>
+
+                    <!-- MB -->
                     <div class="col-md-4">
-                        <input type="radio" name="tipe_upload" id="type-mb" value="mb" class="d-none">
-                        <label for="type-mb" class="w-100 m-0 cursor-pointer">
-                            <div class="card text-center p-3 border">
+                        <label class="upload-option w-100">
+                            <input type="radio" name="tipe_upload" value="mb" class="d-none">
+                            <div class="card text-center p-3">
                                 <i class="fas fa-history fa-3x text-warning mb-2"></i>
-                                <h6>MB (Master Bayar)</h6>
+                                <h6 class="fw-bold mb-1">MB (Master Bayar)</h6>
+                                <small class="text-muted">History bulan lalu</small>
+                                <span class="badge bg-warning mt-2">HISTORY</span>
                             </div>
                         </label>
                     </div>
+
+                    <!-- MAINBILL -->
                     <div class="col-md-4">
-                        <input type="radio" name="tipe_upload" id="type-mainbill" value="mainbill" class="d-none">
-                        <label for="type-mainbill" class="w-100 m-0 cursor-pointer">
-                            <div class="card text-center p-3 border">
+                        <label class="upload-option w-100">
+                            <input type="radio" name="tipe_upload" value="mainbill" class="d-none">
+                            <div class="card text-center p-3">
                                 <i class="fas fa-file-invoice fa-3x text-info mb-2"></i>
-                                <h6>MAINBILL</h6>
+                                <h6 class="fw-bold mb-1">MAINBILL</h6>
+                                <small class="text-muted">Tagihan bulan depan</small>
+                                <span class="badge bg-info mt-2">BILL</span>
                             </div>
                         </label>
                     </div>
+
+                    <!-- ARDEBT -->
                     <div class="col-md-4">
-                        <input type="radio" name="tipe_upload" id="type-ardebt" value="ardebt" class="d-none">
-                        <label for="type-ardebt" class="w-100 m-0 cursor-pointer">
-                            <div class="card text-center p-3 border">
+                        <label class="upload-option w-100">
+                            <input type="radio" name="tipe_upload" value="ardebt" class="d-none">
+                            <div class="card text-center p-3">
                                 <i class="fas fa-exclamation-triangle fa-3x text-danger mb-2"></i>
-                                <h6>ARDEBT</h6>
+                                <h6 class="fw-bold mb-1">ARDEBT</h6>
+                                <small class="text-muted">Data tunggakan</small>
+                                <span class="badge bg-danger mt-2">DEBT</span>
                             </div>
                         </label>
                     </div>
                 </div>
+
+                <!-- FILE INPUT -->
                 <div class="mt-3">
-                    <input type="file" name="file" class="form-control" required>
+                    <label class="form-label fw-bold">
+                        <i class="fas fa-file me-2"></i>Pilih File:
+                    </label>
+                    <input type="file" name="file" class="form-control form-control-lg" required accept=".txt,.csv,.xls,.xlsx">
+                    <small class="text-muted">Format yang didukung: .txt, .csv, .xls, .xlsx</small>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                <button type="submit" class="btn btn-primary"><i class="fas fa-upload me-2"></i> UPLOAD</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i>Batal
+                </button>
+                <button type="submit" class="btn btn-primary btn-lg px-4">
+                    <i class="fas fa-upload me-2"></i>UPLOAD SEKARANG
+                </button>
             </div>
         </form>
     </div>
@@ -521,6 +592,19 @@
         loadChartRayon();
         loadChartTren();
         loadCollectionData();
+        
+        // Handle radio button click via label
+        $('.upload-option').click(function(e) {
+            // Remove all checked states
+            $('.upload-option input[type="radio"]').prop('checked', false);
+            $('.upload-option .card').removeClass('selected');
+            
+            // Add checked state to clicked option
+            $(this).find('input[type="radio"]').prop('checked', true);
+            $(this).find('.card').addClass('selected');
+            
+            console.log('Selected:', $(this).find('input[type="radio"]').val());
+        });
     });
 </script>
 
