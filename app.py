@@ -464,12 +464,63 @@ def upload_file():
                     if len(df.columns) < 2:
                         df = pd.read_csv(filepath, sep=';', encoding='utf-8')
                 except:
-                    df = pd.read_csv(filepath, sep=';', encoding='latin-1')
+                    try:
+                        df = pd.read_csv(filepath, sep=',', encoding='latin-1')
+                        if len(df.columns) < 2:
+                            df = pd.read_csv(filepath, sep=';', encoding='latin-1')
+                    except:
+                        df = pd.read_csv(filepath, sep=';', encoding='latin-1')
             elif filepath.endswith('.txt'):
-                # Untuk file DAILY (Collection) yang pakai delimiter |
-                df = pd.read_csv(filepath, sep='|', encoding='utf-8')
+                # Untuk file DAILY (Collection) pakai pipe, MainBill pakai semicolon
+                try:
+                    df = pd.read_csv(filepath, sep='|', encoding='utf-8')
+                    if len(df.columns) < 2:
+                        df = pd.read_csv(filepath, sep=';', encoding='utf-8')
+                except:
+                    df = pd.read_csv(filepath, sep=';', encoding='utf-8')
+            elif filepath.endswith(('.xls', '.xlsx')):
+                # Excel file - coba berbagai cara
+                df = None
+                errors = []
+                
+                # Method 1: Try openpyxl (for .xlsx)
+                try:
+                    df = pd.read_excel(filepath, engine='openpyxl')
+                except Exception as e1:
+                    errors.append(f"openpyxl: {str(e1)[:50]}")
+                    
+                    # Method 2: Try default engine
+                    if df is None:
+                        try:
+                            df = pd.read_excel(filepath)
+                        except Exception as e2:
+                            errors.append(f"default: {str(e2)[:50]}")
+                            
+                            # Method 3: Try convert via LibreOffice if available
+                            if df is None:
+                                try:
+                                    import subprocess
+                                    csv_path = filepath.replace('.xls', '_temp.csv').replace('.xlsx', '_temp.csv')
+                                    result = subprocess.run(
+                                        ['libreoffice', '--headless', '--convert-to', 'csv', '--outdir', app.config['UPLOAD_FOLDER'], filepath],
+                                        capture_output=True,
+                                        timeout=30
+                                    )
+                                    if os.path.exists(csv_path):
+                                        df = pd.read_csv(csv_path)
+                                        os.remove(csv_path)  # Clean up
+                                    else:
+                                        raise Exception("Conversion failed")
+                                except Exception as e3:
+                                    errors.append(f"libreoffice: {str(e3)[:50]}")
+                
+                if df is None:
+                    error_msg = " | ".join(errors)
+                    flash(f'❌ Tidak bisa membaca file Excel: {error_msg}. Coba convert ke CSV terlebih dahulu.', 'danger')
+                    return redirect(url_for('index'))
             else:
-                df = pd.read_excel(filepath)
+                flash('❌ Format file tidak didukung. Gunakan .csv, .txt, .xls, atau .xlsx', 'danger')
+                return redirect(url_for('index'))
 
             # Normalize column names
             df.columns = df.columns.str.upper().str.strip()
@@ -865,23 +916,40 @@ def upload_file():
                 
                 df['periode'] = datetime.now().strftime('%Y-%m')
                 
-                # PENTING: Hanya insert nomen yang ada di MC
-                valid_nomen = set()
-                for nomen in df['nomen'].unique():
-                    check = conn.execute(
-                        "SELECT COUNT(*) as c FROM master_pelanggan WHERE nomen = ?",
-                        (nomen,)
-                    ).fetchone()
-                    if check['c'] > 0:
-                        valid_nomen.add(nomen)
+                # Debug: Lihat sample nomen
+                print(f"\n[DEBUG ARDEBT] Total rows sebelum validasi: {len(df)}")
+                print(f"[DEBUG ARDEBT] Sample nomen dari Ardebt: {df['nomen'].head(3).tolist()}")
                 
-                # Filter hanya nomen yang valid
-                df_valid = df[df['nomen'].isin(valid_nomen)]
-                df_invalid = df[~df['nomen'].isin(valid_nomen)]
+                # PENTING: Hanya insert nomen yang ada di MC
+                # Ambil semua nomen dari MC
+                mc_nomens = conn.execute("SELECT nomen FROM master_pelanggan").fetchall()
+                mc_nomen_set = set([str(row['nomen']).strip() for row in mc_nomens])
+                
+                print(f"[DEBUG ARDEBT] Total nomen di MC: {len(mc_nomen_set)}")
+                print(f"[DEBUG ARDEBT] Sample nomen dari MC: {list(mc_nomen_set)[:3]}")
+                
+                # Clean dan validasi nomen dari Ardebt
+                df['nomen_clean'] = df['nomen'].astype(str).str.strip()
+                valid_mask = df['nomen_clean'].isin(mc_nomen_set)
+                
+                df_valid = df[valid_mask].copy()
+                df_invalid = df[~valid_mask].copy()
+                
+                print(f"[DEBUG ARDEBT] Valid rows: {len(df_valid)}")
+                print(f"[DEBUG ARDEBT] Invalid rows: {len(df_invalid)}")
+                
+                if len(df_invalid) > 0:
+                    print(f"[DEBUG ARDEBT] Sample invalid nomen: {df_invalid['nomen'].head(3).tolist()}")
                 
                 if len(df_valid) == 0:
                     flash('⚠️ Tidak ada data Ardebt yang cocok dengan MC. Upload MC terlebih dahulu!', 'warning')
+                    print("[DEBUG ARDEBT] Perbandingan format:")
+                    print(f"  MC nomen format: {list(mc_nomen_set)[:3]}")
+                    print(f"  Ardebt nomen format: {df['nomen'].head(3).tolist()}")
                     return redirect(url_for('index'))
+                
+                # Gunakan nomen yang sudah di-clean
+                df_valid['nomen'] = df_valid['nomen_clean']
                 
                 # Insert/Update Ardebt (replace)
                 cols = ['nomen', 'saldo_tunggakan', 'periode']
