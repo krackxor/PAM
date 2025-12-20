@@ -464,12 +464,7 @@ def upload_file():
                     if len(df.columns) < 2:
                         df = pd.read_csv(filepath, sep=';', encoding='utf-8')
                 except:
-                    try:
-                        df = pd.read_csv(filepath, sep=',', encoding='latin-1')
-                        if len(df.columns) < 2:
-                            df = pd.read_csv(filepath, sep=';', encoding='latin-1')
-                    except:
-                        df = pd.read_csv(filepath, sep=';', encoding='latin-1')
+                    df = pd.read_csv(filepath, sep=';', encoding='latin-1')
             elif filepath.endswith('.txt'):
                 # Untuk file DAILY (Collection) pakai pipe, MainBill pakai semicolon
                 try:
@@ -478,40 +473,9 @@ def upload_file():
                         df = pd.read_csv(filepath, sep=';', encoding='utf-8')
                 except:
                     df = pd.read_csv(filepath, sep=';', encoding='utf-8')
-            elif filepath.endswith(('.xls', '.xlsx')):
-                # Excel file - gunakan chunk untuk file besar
-                df = None
-                errors = []
-                
-                # Cek ukuran file
-                file_size = os.path.getsize(filepath)
-                use_chunks = file_size > 5 * 1024 * 1024  # > 5MB
-                
-                print(f"[INFO] File size: {file_size / (1024*1024):.2f} MB")
-                
-                # Method 1: Try openpyxl (for .xlsx)
-                if not use_chunks:
-                    try:
-                        df = pd.read_excel(filepath, engine='openpyxl')
-                        print("[INFO] Berhasil baca dengan openpyxl")
-                    except Exception as e1:
-                        errors.append(f"openpyxl: {str(e1)[:50]}")
-                
-                # Method 2: Try default engine
-                if df is None and not use_chunks:
-                    try:
-                        df = pd.read_excel(filepath)
-                        print("[INFO] Berhasil baca dengan default engine")
-                    except Exception as e2:
-                        errors.append(f"default: {str(e2)[:50]}")
-                
-                # Method 3: Untuk file besar, minta user convert manual
-                if df is None:
-                    flash(f'❌ File Excel terlalu besar ({file_size/(1024*1024):.1f} MB). Silakan convert ke CSV terlebih dahulu menggunakan Excel: File → Save As → CSV (UTF-8)', 'danger')
-                    return redirect(url_for('index'))
             else:
-                flash('❌ Format file tidak didukung. Gunakan .csv, .txt, .xls, atau .xlsx', 'danger')
-                return redirect(url_for('index'))
+                # Excel - baca langsung, biarkan pandas handle
+                df = pd.read_excel(filepath)
 
             # Normalize column names
             df.columns = df.columns.str.upper().str.strip()
@@ -582,8 +546,6 @@ def upload_file():
                     flash('Tidak ada data Rayon 34/35 dalam file MC', 'warning')
                     return redirect(url_for('index'))
                 
-                print(f"[INFO] Processing {len(df)} records from MC")
-                
                 # Set default values
                 for col in ['nama', 'alamat', 'tarif']:
                     if col not in df.columns:
@@ -594,25 +556,11 @@ def upload_file():
                 
                 df['periode'] = datetime.now().strftime('%Y-%m')
                 
-                # REPLACE DATA MASTER - optimized untuk file besar
+                # Insert data
                 cols_db = ['nomen', 'nama', 'alamat', 'rayon', 'pc', 'ez', 'pcez', 'block', 'zona_novak', 'tarif', 'target_mc', 'periode']
+                df[cols_db].to_sql('master_pelanggan', conn, if_exists='replace', index=False)
                 
-                # Batch insert untuk performa
-                batch_size = 1000
-                total_rows = len(df)
-                
-                if total_rows > batch_size:
-                    print(f"[INFO] Using batch insert ({batch_size} rows per batch)")
-                    conn.execute("DELETE FROM master_pelanggan")  # Clear dulu
-                    
-                    for i in range(0, total_rows, batch_size):
-                        batch = df[cols_db].iloc[i:i+batch_size]
-                        batch.to_sql('master_pelanggan', conn, if_exists='append', index=False)
-                        print(f"[INFO] Inserted {min(i+batch_size, total_rows)}/{total_rows} rows")
-                else:
-                    df[cols_db].to_sql('master_pelanggan', conn, if_exists='replace', index=False)
-                
-                flash(f'✅ Master Pelanggan berhasil diupdate ({len(df):,} data Rayon 34/35)', 'success')
+                flash(f'✅ MC: {len(df):,} data', 'success')
 
             # --- UPLOAD COLLECTION DAILY ---
             elif tipe == 'collection':
@@ -665,43 +613,30 @@ def upload_file():
                 
                 df['sumber_file'] = file.filename
                 
-                # PENTING: Hanya insert nomen yang ada di MC
-                valid_nomen = set()
-                for nomen in df['nomen'].unique():
-                    check = conn.execute(
-                        "SELECT COUNT(*) as c FROM master_pelanggan WHERE nomen = ?",
-                        (nomen,)
-                    ).fetchone()
-                    if check['c'] > 0:
-                        valid_nomen.add(nomen)
+                # VALIDASI CEPAT: Ambil semua nomen MC sekali saja (tanpa loop!)
+                mc_nomens_result = conn.execute("SELECT nomen FROM master_pelanggan").fetchall()
+                mc_nomen_set = set([str(row['nomen']).strip() for row in mc_nomens_result])
                 
-                # Filter hanya nomen yang valid
-                df_valid = df[df['nomen'].isin(valid_nomen)]
-                df_invalid = df[~df['nomen'].isin(valid_nomen)]
-                
-                if len(df_valid) == 0:
-                    flash('⚠️ Tidak ada data Collection yang cocok dengan MC. Upload MC terlebih dahulu!', 'warning')
+                if len(mc_nomen_set) == 0:
+                    flash('⚠️ MC kosong. Upload MC terlebih dahulu!', 'warning')
                     return redirect(url_for('index'))
                 
-                print(f"[INFO] Processing {len(df_valid)} valid Collection records")
+                # Clean dan filter dengan set operation (super cepat!)
+                df['nomen'] = df['nomen'].astype(str).str.strip()
+                df_valid = df[df['nomen'].isin(mc_nomen_set)].copy()
                 
-                # Insert collection dengan batch
+                if len(df_valid) == 0:
+                    flash('⚠️ Tidak ada data Collection yang cocok dengan MC.', 'warning')
+                    return redirect(url_for('index'))
+                
+                # Insert langsung (pandas to_sql sudah optimal)
                 cols = ['nomen', 'tgl_bayar', 'jumlah_bayar', 'sumber_file']
-                batch_size = 1000
-                total_rows = len(df_valid)
+                df_valid[cols].to_sql('collection_harian', conn, if_exists='append', index=False)
                 
-                if total_rows > batch_size:
-                    print(f"[INFO] Using batch insert ({batch_size} rows per batch)")
-                    for i in range(0, total_rows, batch_size):
-                        batch = df_valid[cols].iloc[i:i+batch_size]
-                        batch.to_sql('collection_harian', conn, if_exists='append', index=False)
-                        print(f"[INFO] Inserted {min(i+batch_size, total_rows)}/{total_rows} rows")
-                else:
-                    df_valid[cols].to_sql('collection_harian', conn, if_exists='append', index=False)
-                
-                msg = f'✅ Collection berhasil ditambahkan ({len(df_valid):,} transaksi)'
-                if len(df_invalid) > 0:
-                    msg += f' | ⚠️ {len(df_invalid):,} data diabaikan (nomen tidak ada di MC)'
+                skipped = len(df) - len(df_valid)
+                msg = f'✅ Collection: {len(df_valid):,} transaksi'
+                if skipped > 0:
+                    msg += f' ({skipped:,} skip)'
                 flash(msg, 'success')
             
             # --- UPLOAD MB (MASTER BAYAR - Pembayaran Bulan Lalu) ---
@@ -752,29 +687,31 @@ def upload_file():
                 df['periode'] = datetime.now().strftime('%Y-%m')
                 df['sumber_file'] = file.filename
                 
-                # PENTING: Jangan create dummy record di master!
-                # Hanya insert data yang nomen-nya sudah ada di master_pelanggan
-                valid_nomen = set()
-                for nomen in df['nomen'].unique():
-                    check = conn.execute(
-                        "SELECT COUNT(*) as c FROM master_pelanggan WHERE nomen = ?",
-                        (nomen,)
-                    ).fetchone()
-                    if check['c'] > 0:
-                        valid_nomen.add(nomen)
+                # VALIDASI CEPAT tanpa loop
+                mc_nomens_result = conn.execute("SELECT nomen FROM master_pelanggan").fetchall()
+                mc_nomen_set = set([str(row['nomen']).strip() for row in mc_nomens_result])
                 
-                # Filter hanya nomen yang valid
-                df = df[df['nomen'].isin(valid_nomen)]
-                
-                if len(df) == 0:
-                    flash('⚠️ Tidak ada data MB yang cocok dengan MC. Upload MC terlebih dahulu!', 'warning')
+                if len(mc_nomen_set) == 0:
+                    flash('⚠️ MC kosong. Upload MC terlebih dahulu!', 'warning')
                     return redirect(url_for('index'))
                 
-                # Insert MB (append, bisa banyak record per nomen)
-                cols = ['nomen', 'tgl_bayar', 'jumlah_bayar', 'periode', 'sumber_file']
-                df[cols].to_sql('master_bayar', conn, if_exists='append', index=False)
+                # Clean dan filter
+                df['nomen'] = df['nomen'].astype(str).str.strip()
+                df_valid = df[df['nomen'].isin(mc_nomen_set)].copy()
                 
-                flash(f'✅ Master Bayar (MB) berhasil ditambahkan ({len(df)} transaksi)', 'success')
+                if len(df_valid) == 0:
+                    flash('⚠️ Tidak ada data MB yang cocok dengan MC.', 'warning')
+                    return redirect(url_for('index'))
+                
+                # Insert MB
+                cols = ['nomen', 'tgl_bayar', 'jumlah_bayar', 'periode', 'sumber_file']
+                df_valid[cols].to_sql('master_bayar', conn, if_exists='append', index=False)
+                
+                skipped = len(df) - len(df_valid)
+                msg = f'✅ MB: {len(df_valid):,} transaksi'
+                if skipped > 0:
+                    msg += f' ({skipped:,} skip)'
+                flash(msg, 'success')
             
             # --- UPLOAD MAINBILL (Tagihan Bulan Depan) ---
             elif tipe == 'mainbill':
@@ -872,32 +809,31 @@ def upload_file():
                 
                 df['periode'] = datetime.now().strftime('%Y-%m')
                 
-                # PENTING: Hanya insert nomen yang ada di MC
-                valid_nomen = set()
-                for nomen in df['nomen'].unique():
-                    check = conn.execute(
-                        "SELECT COUNT(*) as c FROM master_pelanggan WHERE nomen = ?",
-                        (nomen,)
-                    ).fetchone()
-                    if check['c'] > 0:
-                        valid_nomen.add(nomen)
+                # VALIDASI CEPAT
+                mc_nomens_result = conn.execute("SELECT nomen FROM master_pelanggan").fetchall()
+                mc_nomen_set = set([str(row['nomen']).strip() for row in mc_nomens_result])
                 
-                # Filter hanya nomen yang valid
-                df_valid = df[df['nomen'].isin(valid_nomen)]
-                df_invalid = df[~df['nomen'].isin(valid_nomen)]
-                
-                if len(df_valid) == 0:
-                    flash('⚠️ Tidak ada data MainBill yang cocok dengan MC. Upload MC terlebih dahulu!', 'warning')
+                if len(mc_nomen_set) == 0:
+                    flash('⚠️ MC kosong. Upload MC terlebih dahulu!', 'warning')
                     return redirect(url_for('index'))
                 
-                # Insert/Update MainBill (replace karena 1 nomen = 1 tagihan aktif)
+                # Filter
+                df['nomen'] = df['nomen'].astype(str).str.strip()
+                df_valid = df[df['nomen'].isin(mc_nomen_set)].copy()
+                
+                if len(df_valid) == 0:
+                    flash('⚠️ Tidak ada data MainBill yang cocok dengan MC.', 'warning')
+                    return redirect(url_for('index'))
+                
+                # Insert/Update MainBill
                 cols = ['nomen', 'tgl_tagihan', 'total_tagihan', 'pcezbk', 'tarif', 'periode']
                 available_cols = [c for c in cols if c in df_valid.columns]
                 df_valid[available_cols].to_sql('mainbill', conn, if_exists='replace', index=False)
                 
-                msg = f'✅ MainBill (Tagihan) berhasil diupdate ({len(df_valid)} data)'
-                if len(df_invalid) > 0:
-                    msg += f' | ⚠️ {len(df_invalid)} data diabaikan (nomen tidak ada di MC)'
+                skipped = len(df) - len(df_valid)
+                msg = f'✅ MainBill: {len(df_valid):,} data'
+                if skipped > 0:
+                    msg += f' ({skipped:,} skip)'
                 flash(msg, 'success')
             
             # --- UPLOAD ARDEBT (Tunggakan) ---
@@ -935,48 +871,30 @@ def upload_file():
                 
                 df['periode'] = datetime.now().strftime('%Y-%m')
                 
-                # Debug: Lihat sample nomen
-                print(f"\n[DEBUG ARDEBT] Total rows sebelum validasi: {len(df)}")
-                print(f"[DEBUG ARDEBT] Sample nomen dari Ardebt: {df['nomen'].head(3).tolist()}")
-                
-                # PENTING: Hanya insert nomen yang ada di MC
-                # Ambil semua nomen dari MC
+                # VALIDASI CEPAT
                 mc_nomens = conn.execute("SELECT nomen FROM master_pelanggan").fetchall()
                 mc_nomen_set = set([str(row['nomen']).strip() for row in mc_nomens])
                 
-                print(f"[DEBUG ARDEBT] Total nomen di MC: {len(mc_nomen_set)}")
-                print(f"[DEBUG ARDEBT] Sample nomen dari MC: {list(mc_nomen_set)[:3]}")
-                
-                # Clean dan validasi nomen dari Ardebt
-                df['nomen_clean'] = df['nomen'].astype(str).str.strip()
-                valid_mask = df['nomen_clean'].isin(mc_nomen_set)
-                
-                df_valid = df[valid_mask].copy()
-                df_invalid = df[~valid_mask].copy()
-                
-                print(f"[DEBUG ARDEBT] Valid rows: {len(df_valid)}")
-                print(f"[DEBUG ARDEBT] Invalid rows: {len(df_invalid)}")
-                
-                if len(df_invalid) > 0:
-                    print(f"[DEBUG ARDEBT] Sample invalid nomen: {df_invalid['nomen'].head(3).tolist()}")
-                
-                if len(df_valid) == 0:
-                    flash('⚠️ Tidak ada data Ardebt yang cocok dengan MC. Upload MC terlebih dahulu!', 'warning')
-                    print("[DEBUG ARDEBT] Perbandingan format:")
-                    print(f"  MC nomen format: {list(mc_nomen_set)[:3]}")
-                    print(f"  Ardebt nomen format: {df['nomen'].head(3).tolist()}")
+                if len(mc_nomen_set) == 0:
+                    flash('⚠️ MC kosong. Upload MC terlebih dahulu!', 'warning')
                     return redirect(url_for('index'))
                 
-                # Gunakan nomen yang sudah di-clean
-                df_valid['nomen'] = df_valid['nomen_clean']
+                # Clean dan filter
+                df['nomen'] = df['nomen'].astype(str).str.strip()
+                df_valid = df[df['nomen'].isin(mc_nomen_set)].copy()
                 
-                # Insert/Update Ardebt (replace)
+                if len(df_valid) == 0:
+                    flash('⚠️ Tidak ada data Ardebt yang cocok dengan MC.', 'warning')
+                    return redirect(url_for('index'))
+                
+                # Insert/Update Ardebt
                 cols = ['nomen', 'saldo_tunggakan', 'periode']
                 df_valid[cols].to_sql('ardebt', conn, if_exists='replace', index=False)
                 
-                msg = f'✅ Ardebt (Tunggakan) berhasil diupdate ({len(df_valid)} data)'
-                if len(df_invalid) > 0:
-                    msg += f' | ⚠️ {len(df_invalid)} data diabaikan (nomen tidak ada di MC)'
+                skipped = len(df) - len(df_valid)
+                msg = f'✅ Ardebt: {len(df_valid):,} data'
+                if skipped > 0:
+                    msg += f' ({skipped:,} skip)'
                 flash(msg, 'success')
 
         except Exception as e:
