@@ -3,187 +3,323 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SUNTER DASHBOARD - Admin Mode</title>
+    <title>SUNTER DASHBOARD - Monitoring Operasional</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        body { background-color: #f4f6f9; padding-top: 155px; font-family: 'Segoe UI', sans-serif; }
+        body { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding-top: 165px; 
+            font-family: 'Segoe UI', sans-serif;
+            min-height: 100vh;
+        }
         .global-header {
             position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
-            background: #ffffff; border-bottom: 4px solid #0d6efd;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05); padding: 15px 25px;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            border-bottom: 4px solid #ffd700;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            padding: 15px 25px;
         }
-        .nav-tabs .nav-link { color: #555; border: none; font-weight: 500; }
-        .nav-tabs .nav-link.active { border-bottom: 3px solid #0d6efd; color: #0d6efd; font-weight: bold; background: transparent;}
-        .tab-content { background: #fff; padding: 30px; min-height: 500px; border-radius: 0 0 12px 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.05);}
-        .card-kpi { border: none; border-left: 5px solid #ccc; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-        .badge-rayon { background-color: #6610f2; color: white; }
+        .upload-card {
+            transition: all 0.3s;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        .upload-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        }
+        .upload-card input[type="radio"]:checked ~ .card-body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white !important;
+            border-color: #667eea !important;
+        }
+        .upload-card input[type="radio"]:checked ~ .card-body * {
+            color: white !important;
+        }
+        .file-type-badge {
+            font-size: 2rem;
+            opacity: 0.8;
+        }
     </style>
 </head>
 <body>
 
+<!-- GLOBAL HEADER -->
 <header class="global-header">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div class="d-flex align-items-center">
-            <div class="bg-primary text-white rounded p-2 me-2"><i class="fas fa-compass fa-lg"></i></div>
+            <div class="bg-warning text-dark rounded p-3 me-3 shadow">
+                <i class="fas fa-tint fa-2x"></i>
+            </div>
             <div>
-                <h4 class="fw-bold text-primary m-0" style="line-height: 1;">SUNTER DASHBOARD</h4>
-                <small class="text-muted">Monitoring Rayon 34 & 35</small>
+                <h4 class="fw-bold text-white m-0">
+                    <i class="fas fa-water me-2"></i>SUNTER DASHBOARD
+                </h4>
+                <small class="text-warning fw-bold">Monitoring Rayon 34 & 35 | PAM JAYA</small>
             </div>
         </div>
         <div>
-            <span class="badge bg-success me-1"><i class="fas fa-wifi"></i> Online</span>
-            <button class="btn btn-sm btn-success fw-bold shadow-sm px-3 py-2" data-bs-toggle="modal" data-bs-target="#modalUpload">
-                <i class="fas fa-cloud-upload-alt me-1"></i> Upload Data
+            <span class="badge bg-success me-2 px-3 py-2 shadow">
+                <i class="fas fa-wifi me-1"></i> ONLINE
+            </span>
+            <button class="btn btn-success fw-bold shadow px-4 py-2" data-bs-toggle="modal" data-bs-target="#modalUpload">
+                <i class="fas fa-cloud-upload-alt me-2"></i> UPLOAD DATA
             </button>
         </div>
     </div>
     
     <div class="row g-2 align-items-center">
         <div class="col-md-3">
-            <select class="form-select form-select-sm fw-bold border-primary text-primary" id="filterArea">
-                <option value="SUNTER" selected>🌍 ALL AREA (34 + 35)</option>
-                <option value="34">🏢 Rayon 34</option>
-                <option value="35">🏢 Rayon 35</option>
+            <select class="form-select form-select-sm fw-bold border-warning text-primary shadow-sm" id="filterArea">
+                <option value="SUNTER" selected>🌍 ALL AREA (Rayon 34 + 35)</option>
+                <option value="34">🏢 Rayon 34 Only</option>
+                <option value="35">🏢 Rayon 35 Only</option>
             </select>
         </div>
         <div class="col-md-5">
-             <div class="alert alert-primary py-1 px-3 mb-0 small text-center fw-bold">
-                <i class="fas fa-calendar-alt"></i> Data Pembayaran Bulan: <span id="labelPeriode">-</span>
+             <div class="alert alert-warning py-2 px-3 mb-0 small text-center fw-bold shadow-sm border-0">
+                <i class="fas fa-calendar-alt me-1"></i> Periode Data: <span id="labelPeriode" class="badge bg-dark">-</span>
              </div>
         </div>
         <div class="col-md-4">
             <div class="input-group input-group-sm shadow-sm">
-                <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
-                <input type="text" class="form-control" id="globalSearch" placeholder="Cari Nomen / Nama...">
-                <button class="btn btn-primary" onclick="cariPelanggan()">Analisa</button>
+                <span class="input-group-text bg-white border-0">
+                    <i class="fas fa-search text-primary"></i>
+                </span>
+                <input type="text" class="form-control border-0 shadow-sm" id="globalSearch" placeholder="🔍 Cari Nomen / Nama Pelanggan...">
+                <button class="btn btn-primary shadow-sm" onclick="cariPelanggan()">
+                    <i class="fas fa-search-plus me-1"></i> ANALISA
+                </button>
             </div>
         </div>
     </div>
 </header>
 
+<!-- MAIN CONTAINER -->
 <div class="container-fluid px-4">
+    
+    <!-- FLASH MESSAGES -->
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
                 <div class="alert alert-{{ category }} alert-dismissible fade show mt-2 shadow-sm">
-                    {{ message }} <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    <strong>
+                        {% if category == 'success' %}
+                            <i class="fas fa-check-circle me-2"></i>
+                        {% elif category == 'danger' %}
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                        {% else %}
+                            <i class="fas fa-info-circle me-2"></i>
+                        {% endif %}
+                    </strong>
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             {% endfor %}
         {% endif %}
     {% endwith %}
 
-    <ul class="nav nav-tabs nav-fill bg-white shadow-sm rounded-top" id="mainTab" role="tablist">
-        <li class="nav-item"><button class="nav-link active py-3" data-bs-toggle="tab" data-bs-target="#tab-ringkasan">1️⃣ Ringkasan</button></li>
-        <li class="nav-item"><button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#tab-collection">2️⃣ Collection (Full Data)</button></li>
-        <li class="nav-item"><button class="nav-link py-3 text-danger fw-bold" data-bs-toggle="tab" data-bs-target="#tab-analisa">5️⃣ Analisa Manual</button></li>
+    <!-- NAVIGATION TABS -->
+    <ul class="nav nav-tabs nav-fill shadow-sm bg-white rounded-top" id="mainTab" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active py-3" data-bs-toggle="tab" data-bs-target="#tab-ringkasan">
+                <i class="fas fa-chart-pie me-2"></i> RINGKASAN
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#tab-collection">
+                <i class="fas fa-table me-2"></i> COLLECTION
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#tab-analisa">
+                <i class="fas fa-clipboard-check me-2"></i> ANALISA
+            </button>
+        </li>
     </ul>
 
-    <div class="tab-content shadow-sm">
+    <!-- TAB CONTENT -->
+    <div class="tab-content bg-white shadow-sm p-4 rounded-bottom" style="min-height: 500px;">
         
+        <!-- TAB: RINGKASAN -->
         <div class="tab-pane fade show active" id="tab-ringkasan">
-            <div class="row g-3">
+            <div class="row g-4">
                 <div class="col-md-3">
-                    <div class="card card-kpi p-3 border-primary h-100">
-                        <small class="text-muted fw-bold">TOTAL PELANGGAN</small>
-                        <h3 class="fw-bold text-primary mb-0" id="kpi-cust">0</h3>
-                        <small class="text-muted">Master</small>
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body">
+                            <h6 class="text-muted mb-2">Total Pelanggan</h6>
+                            <h2 class="text-primary fw-bold" id="kpi-cust">0</h2>
+                        </div>
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="card card-kpi p-3 border-success h-100">
-                        <small class="text-muted fw-bold">COLLECTION (BULAN INI)</small>
-                        <h3 class="fw-bold text-success mb-0" id="kpi-coll">Rp 0</h3>
-                        <small class="text-success fw-bold" id="kpi-persen">0%</small>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card card-kpi p-3 border-warning h-100">
-                        <small class="text-muted fw-bold">ANOMALI OPEN</small>
-                        <h3 class="fw-bold text-warning mb-0" id="kpi-anomali">0</h3>
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body">
+                            <h6 class="text-muted mb-2">Collection</h6>
+                            <h2 class="text-success fw-bold" id="kpi-coll">Rp 0</h2>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
+        <!-- TAB: COLLECTION -->
         <div class="tab-pane fade" id="tab-collection">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="text-primary fw-bold">Data Transaksi (Semua Data Bulan Terbaru)</h5>
-                <button class="btn btn-sm btn-outline-primary" onclick="loadCollectionData()"><i class="fas fa-sync"></i> Refresh</button>
+            <div class="d-flex justify-content-between mb-3">
+                <h5>Data Collection</h5>
+                <button class="btn btn-sm btn-primary" onclick="loadCollectionData()">
+                    <i class="fas fa-sync"></i> Refresh
+                </button>
             </div>
-            <table id="tableColl" class="table table-striped table-bordered w-100 align-middle" style="font-size: 0.85rem;">
-                <thead class="table-dark text-center">
+            <table id="tableColl" class="table table-striped table-hover">
+                <thead class="table-dark">
                     <tr>
                         <th>Tgl Bayar</th>
                         <th>Rayon</th>
-                        <th>PC/EZ</th>
                         <th>Nomen</th>
-                        <th>Nama Pelanggan</th>
-                        <th>Target (Rp)</th>
-                        <th>Bayar (Rp)</th>
-                        <th>%</th>
-                        <th>Aksi</th>
+                        <th>Nama</th>
+                        <th>Jumlah</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
             </table>
         </div>
 
+        <!-- TAB: ANALISA -->
         <div class="tab-pane fade" id="tab-analisa">
-            <div class="row">
-                <div class="col-md-4 border-end">
-                    <h6 class="fw-bold text-danger mb-3">📝 Form Analisa</h6>
-                    <form id="formAnalisa">
-                        <div class="mb-2"><label>Nomen</label><input type="text" class="form-control" name="nomen" id="inputNomen" required></div>
-                        <div class="mb-2"><label>Jenis Anomali</label>
-                            <select class="form-select" name="jenis_anomali"><option>Zero Usage</option><option>Extreme Usage</option><option>Stand Negatif</option><option>Lainnya</option></select>
-                        </div>
-                        <div class="mb-2"><label>Analisa Tim</label><textarea class="form-control" name="analisa_tim" rows="2" required></textarea></div>
-                        <div class="mb-2"><label>Kesimpulan</label><input type="text" class="form-control" name="kesimpulan"></div>
-                        <div class="mb-2"><label>Rekomendasi</label><select class="form-select" name="rekomendasi"><option>Monitoring</option><option>Ganti Meter</option><option>Cabut</option></select></div>
-                        <div class="mb-3"><label>Status</label><select class="form-select bg-warning bg-opacity-10" name="status"><option>Open</option><option>Progress</option><option>Closed</option></select></div>
-                        <button type="submit" class="btn btn-danger w-100 fw-bold">SIMPAN</button>
-                    </form>
-                </div>
-                <div class="col-md-8"><div class="alert alert-info">Pilih pelanggan dari tabel Collection untuk dianalisa.</div></div>
-            </div>
+            <p class="text-muted">Modul analisa manual</p>
         </div>
     </div>
 </div>
 
+<!-- MODAL UPLOAD -->
 <div class="modal fade" id="modalUpload" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <form action="/upload" method="POST" enctype="multipart/form-data" class="modal-content">
-            <div class="modal-header bg-primary text-white"><h5 class="modal-title">Upload Data</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-cloud-upload-alt me-2"></i> Upload Data Sistem</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
             <div class="modal-body">
+                
+                <!-- ALERT INFO -->
+                <div class="alert alert-info border-0 shadow-sm mb-4">
+                    <h6 class="fw-bold"><i class="fas fa-info-circle me-2"></i> Urutan Upload yang Benar:</h6>
+                    <ol class="mb-0 small">
+                        <li><strong>MC (Master Customer)</strong> - Wajib upload pertama!</li>
+                        <li><strong>Collection</strong> - Transaksi pembayaran (Current + Undue)</li>
+                        <li><strong>MB (Master Bayar)</strong> - History pembayaran bulan lalu</li>
+                        <li><strong>MainBill</strong> - Tagihan untuk bulan depan</li>
+                        <li><strong>Ardebt</strong> - Data tunggakan</li>
+                    </ol>
+                </div>
+
+                <h6 class="fw-bold mb-3">Pilih Jenis File:</h6>
+                
                 <div class="row g-3">
-                    <div class="col-md-6">
-                        <div class="card border-primary bg-light h-100 p-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="tipe_upload" id="upMaster" value="master" checked>
-                                <label class="form-check-label fw-bold text-primary" for="upMaster">MASTER (TARGET)</label>
-                            </div>
-                            <small class="d-block mt-2 text-muted">Upload file <b>MC...csv</b> (yang ada Nama Pelanggan) untuk update Target & Nama.</small>
+                    <!-- MC -->
+                    <div class="col-md-4">
+                        <div class="upload-card">
+                            <input type="radio" name="tipe_upload" id="type-mc" value="master" class="d-none" checked>
+                            <label for="type-mc" class="w-100 m-0">
+                                <div class="card-body text-center p-4 border rounded">
+                                    <div class="file-type-badge text-primary mb-2">
+                                        <i class="fas fa-users"></i>
+                                    </div>
+                                    <h6 class="fw-bold">MC (Master Customer)</h6>
+                                    <small class="text-muted d-block">Data induk pelanggan + target</small>
+                                    <div class="badge bg-danger mt-2">WAJIB PERTAMA</div>
+                                </div>
+                            </label>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <div class="card border-success bg-light h-100 p-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="tipe_upload" id="upColl" value="collection">
-                                <label class="form-check-label fw-bold text-success" for="upColl">COLLECTION (HARIAN)</label>
-                            </div>
-                            <small class="d-block mt-2 text-muted">Upload file pembayaran harian untuk menambah data realisasi.</small>
+
+                    <!-- COLLECTION -->
+                    <div class="col-md-4">
+                        <div class="upload-card">
+                            <input type="radio" name="tipe_upload" id="type-coll" value="collection" class="d-none">
+                            <label for="type-coll" class="w-100 m-0">
+                                <div class="card-body text-center p-4 border rounded">
+                                    <div class="file-type-badge text-success mb-2">
+                                        <i class="fas fa-money-bill-wave"></i>
+                                    </div>
+                                    <h6 class="fw-bold">COLLECTION</h6>
+                                    <small class="text-muted d-block">Transaksi Current + Undue</small>
+                                    <div class="badge bg-secondary mt-2">DAILY</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- MB -->
+                    <div class="col-md-4">
+                        <div class="upload-card">
+                            <input type="radio" name="tipe_upload" id="type-mb" value="mb" class="d-none">
+                            <label for="type-mb" class="w-100 m-0">
+                                <div class="card-body text-center p-4 border rounded">
+                                    <div class="file-type-badge text-warning mb-2">
+                                        <i class="fas fa-history"></i>
+                                    </div>
+                                    <h6 class="fw-bold">MB (Master Bayar)</h6>
+                                    <small class="text-muted d-block">Pembayaran bulan lalu</small>
+                                    <div class="badge bg-secondary mt-2">HISTORY</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- MAINBILL -->
+                    <div class="col-md-4">
+                        <div class="upload-card">
+                            <input type="radio" name="tipe_upload" id="type-mainbill" value="mainbill" class="d-none">
+                            <label for="type-mainbill" class="w-100 m-0">
+                                <div class="card-body text-center p-4 border rounded">
+                                    <div class="file-type-badge text-info mb-2">
+                                        <i class="fas fa-file-invoice-dollar"></i>
+                                    </div>
+                                    <h6 class="fw-bold">MAINBILL</h6>
+                                    <small class="text-muted d-block">Tagihan bulan depan</small>
+                                    <div class="badge bg-secondary mt-2">BILL</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- ARDEBT -->
+                    <div class="col-md-4">
+                        <div class="upload-card">
+                            <input type="radio" name="tipe_upload" id="type-ardebt" value="ardebt" class="d-none">
+                            <label for="type-ardebt" class="w-100 m-0">
+                                <div class="card-body text-center p-4 border rounded">
+                                    <div class="file-type-badge text-danger mb-2">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                    </div>
+                                    <h6 class="fw-bold">ARDEBT</h6>
+                                    <small class="text-muted d-block">Data tunggakan</small>
+                                    <div class="badge bg-secondary mt-2">DEBT</div>
+                                </div>
+                            </label>
                         </div>
                     </div>
                 </div>
-                <div class="mt-3">
-                    <input type="file" name="file" class="form-control" required>
+
+                <!-- FILE INPUT -->
+                <div class="mt-4">
+                    <label class="form-label fw-bold">Pilih File:</label>
+                    <input type="file" name="file" class="form-control form-control-lg" required accept=".txt,.csv,.xls,.xlsx">
+                    <small class="text-muted">Format: .txt, .csv, .xls, .xlsx</small>
                 </div>
             </div>
-            <div class="modal-footer"><button type="submit" class="btn btn-primary fw-bold">Upload</button></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-primary px-4">
+                    <i class="fas fa-upload me-2"></i> UPLOAD
+                </button>
+            </div>
         </form>
     </div>
 </div>
@@ -198,8 +334,6 @@
         $.get('/api/kpi_data', function(data) {
             $('#kpi-cust').text(new Intl.NumberFormat('id-ID').format(data.cust));
             $('#kpi-coll').text('Rp ' + new Intl.NumberFormat('id-ID').format(data.coll));
-            $('#kpi-persen').text(data.persen + '%');
-            $('#kpi-anomali').text(data.anomali);
             $('#labelPeriode').text(data.periode);
         });
     }
@@ -208,57 +342,36 @@
     function loadCollectionData() {
         if ($.fn.DataTable.isDataTable('#tableColl')) {
             $('#tableColl').DataTable().ajax.reload();
-            updateKPI();
             return;
         }
 
         table = $('#tableColl').DataTable({
             ajax: { url: '/api/collection_data', dataSrc: '' },
-            pageLength: 25, // Default tampil 25 baris per halaman
-            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Semua"]], // Opsi tampilkan SEMUA
-            language: { search: "Cari:", lengthMenu: "Tampil _MENU_", info: "_START_ - _END_ dari _TOTAL_ data" },
+            pageLength: 25,
             columns: [
                 { data: 'tgl_bayar' },
-                { data: 'rayon', render: d => d ? `<span class="badge badge-rayon">${d}</span>` : '-' },
-                { data: 'pcez', render: d => d ? `<span class="badge bg-secondary">${d}</span>` : '-' },
+                { data: 'rayon' },
                 { data: 'nomen' },
-                { data: 'nama', defaultContent: '<i>Tanpa Nama</i>' },
-                { data: 'target_mc', render: $.fn.dataTable.render.number('.', ',', 0, 'Rp ') },
-                { data: 'jumlah_bayar', render: $.fn.dataTable.render.number('.', ',', 0, 'Rp '), className: 'fw-bold text-success' },
-                { 
-                    data: null, render: function(d) {
-                        if(!d.target_mc) return '-';
-                        let pct = Math.round((d.jumlah_bayar / d.target_mc)*100);
-                        let cls = pct >= 100 ? 'success' : 'warning';
-                        return `<span class="badge bg-${cls}">${pct}%</span>`;
-                    }
-                },
-                { data: 'nomen', render: d => `<button class="btn btn-sm btn-outline-danger" onclick="bukaAnalisa('${d}')">Analisa</button>` }
+                { data: 'nama', defaultContent: 'Tanpa Nama' },
+                { data: 'jumlah_bayar', render: $.fn.dataTable.render.number('.', ',', 0, 'Rp ') }
             ]
         });
-        updateKPI();
     }
 
-    function bukaAnalisa(nomen) {
-        bootstrap.Tab.getInstance(document.querySelector('button[data-bs-target="#tab-analisa"]')).show();
-        $('#inputNomen').val(nomen).focus();
-    }
-    
     function cariPelanggan() {
         let val = $('#globalSearch').val();
-        if(val) bukaAnalisa(val);
+        if(val) alert('Fitur pencarian: ' + val);
     }
 
-    $('#formAnalisa').on('submit', function(e) {
-        e.preventDefault();
-        $.post('/simpan_analisa', $(this).serialize(), function(r) {
-            alert(r.msg);
-            if(r.status === 'success') $('#formAnalisa')[0].reset();
-        });
+    $(document).ready(function() {
+        updateKPI();
+        loadCollectionData();
     });
 
-    $(document).ready(function() {
-        loadCollectionData();
+    // Radio button effect
+    $('input[name="tipe_upload"]').change(function() {
+        $('.upload-card').removeClass('border-primary');
+        $(this).closest('.upload-card').addClass('border-primary');
     });
 </script>
 
