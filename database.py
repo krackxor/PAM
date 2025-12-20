@@ -1,42 +1,34 @@
 import sqlite3
-from flask import g
-from config import DB_PATH
+import os
+import json
+from datetime import datetime
+import pandas as pd
 
-def get_db():
-    """
-    Membuka koneksi ke database SQLite.
-    Menggunakan g object dari Flask untuk menyimpan koneksi selama request berlangsung.
-    """
-    db = getattr(g, '_database', None)
-    if db is None:
-        db = g._database = sqlite3.connect(DB_PATH)
-        # Mengaktifkan Foreign Key constraint agar relasi antar tabel terjaga
-        db.execute("PRAGMA foreign_keys = ON")
-        # Mengembalikan hasil query sebagai Row object (bisa akses kolom pakai nama, misal: row['nomen'])
-        db.row_factory = sqlite3.Row 
-    return db
+DB_NAME = 'data/sunter.db'
 
-def close_db(e=None):
-    """Menutup koneksi database jika terbuka."""
-    db = getattr(g, '_database', None)
-    if db is not None:
-        db.close()
+class DatabaseManager:
+    def __init__(self):
+        self.ensure_db_exists()
 
-def init_db(app):
-    """
-    Inisialisasi tabel-tabel database.
-    Dijalankan sekali saat aplikasi start.
-    """
-    with app.app_context():
-        db = get_db()
-        cursor = db.cursor()
+    def get_connection(self):
+        """Membuka koneksi dengan konfigurasi Foreign Key & Row Factory"""
+        conn = sqlite3.connect(DB_NAME)
+        conn.execute("PRAGMA foreign_keys = ON") # Aktifkan Foreign Key
+        conn.row_factory = sqlite3.Row         # Return hasil sebagai dict/row object
+        return conn
 
+    def ensure_db_exists(self):
+        """Inisialisasi Skema Database (Tabel-tabel)"""
+        if not os.path.exists('data'):
+            os.makedirs('data')
+            
+        conn = self.get_connection()
+        c = conn.cursor()
+        
         # ==========================================
         # 1. TABEL MASTER PELANGGAN
         # ==========================================
-        # Gabungan data dari File MC (Target) & File ARDEBT (Tunggakan)
-        # Nomen adalah kunci utama.
-        cursor.execute('''
+        c.execute('''
             CREATE TABLE IF NOT EXISTS master_pelanggan (
                 nomen TEXT PRIMARY KEY,
                 nama TEXT,
@@ -46,43 +38,41 @@ def init_db(app):
                 target_mc REAL DEFAULT 0,    -- Dari File MC (Kolom REK_AIR)
                 saldo_ardebt REAL DEFAULT 0, -- Dari File ARDEBT (Kolom SumOfJUMLAH)
                 periode TEXT,                -- Periode Data (Format YYYY-MM)
+                data_json TEXT,              -- Tambahan untuk menyimpan raw data fleksibel
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        # Index untuk pencarian cepat berdasarkan Rayon (Filter Dashboard)
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_master_rayon ON master_pelanggan(rayon)')
+        # Index untuk pencarian cepat
+        c.execute('CREATE INDEX IF NOT EXISTS idx_master_rayon ON master_pelanggan(rayon)')
 
         # ==========================================
         # 2. TABEL COLLECTION HARIAN
         # ==========================================
-        # Data Transaksi Harian dari File Collection (.txt)
-        cursor.execute('''
+        c.execute('''
             CREATE TABLE IF NOT EXISTS collection_harian (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nomen TEXT,
-                tgl_bayar TEXT,     -- Format YYYY-MM-DD
-                jumlah_bayar REAL,  -- Dari AMT_COLLECT (Nilai Absolut)
-                sumber_file TEXT,   -- Nama file asal untuk tracing jika ada double upload
+                tgl_bayar TEXT,      -- Format YYYY-MM-DD
+                jumlah_bayar REAL,   -- Dari AMT_COLLECT (Nilai Absolut)
+                sumber_file TEXT,    -- Nama file asal
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(nomen) REFERENCES master_pelanggan(nomen) ON DELETE CASCADE
             )
         ''')
-        # Index untuk report harian dan pencarian per pelanggan
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_coll_tgl ON collection_harian(tgl_bayar)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_coll_nomen ON collection_harian(nomen)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_coll_tgl ON collection_harian(tgl_bayar)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_coll_nomen ON collection_harian(nomen)')
 
         # ==========================================
-        # 3. TABEL OPERASIONAL SIKLUS
+        # 3. TABEL OPERASIONAL (SBRS & MAINBILL)
         # ==========================================
-        # Data Progresif dari SBRS (Baca Meter) & MainBill (Tagihan Final)
-        cursor.execute('''
+        c.execute('''
             CREATE TABLE IF NOT EXISTS operasional (
                 nomen TEXT PRIMARY KEY,
-                status_baca TEXT DEFAULT 'BELUM', -- SUDAH BACA / BELUM
-                stand_akhir INTEGER DEFAULT 0,    -- Dari SBRS (Curr_Read_1)
-                tgl_baca TEXT,                    -- Dari SBRS (Read_date_1)
-                tagihan_final REAL DEFAULT 0,     -- Dari MainBill (TOTAL_TAGIHAN)
-                cycle TEXT,                       -- Dari SBRS/MainBill
+                status_baca TEXT DEFAULT 'BELUM',
+                stand_akhir REAL DEFAULT 0,
+                tgl_baca TEXT,
+                tagihan_final REAL DEFAULT 0,
+                cycle TEXT,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(nomen) REFERENCES master_pelanggan(nomen) ON DELETE CASCADE
             )
@@ -91,8 +81,7 @@ def init_db(app):
         # ==========================================
         # 4. TABEL ANALISA MANUAL (WORKBENCH)
         # ==========================================
-        # Tempat menyimpan hasil kerja user/tim (Menu Analisa Manual)
-        cursor.execute('''
+        c.execute('''
             CREATE TABLE IF NOT EXISTS analisa_manual (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nomen TEXT,
@@ -109,15 +98,159 @@ def init_db(app):
         # ==========================================
         # 5. TABEL AUDIT TRAIL (LOG AKTIVITAS)
         # ==========================================
-        # Mencatat history upload dan perubahan data (Syarat Wajib: Audit)
-        cursor.execute('''
+        c.execute('''
             CREATE TABLE IF NOT EXISTS audit_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                aktivitas TEXT,       -- Contoh: "Upload File MC", "Simpan Analisa"
-                detail TEXT,          -- Contoh: "NamaFile.csv" atau "Nomen: 6012345"
+                aktivitas TEXT,       -- Contoh: "Upload File MC"
+                detail TEXT,          -- Detail aktivitas
                 user TEXT DEFAULT 'Admin',
                 waktu TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        
+        conn.commit()
+        conn.close()
 
-        db.commit()
+    # =========================================================
+    # FITUR ANALYTICS (DIPERLUKAN UNTUK DASHBOARD)
+    # =========================================================
+
+    def get_collection_summary(self):
+        """Mengambil ringkasan header (MC, Undue, Realisasi)"""
+        conn = self.get_connection()
+        
+        try:
+            # 1. Target MC (Bulan ini)
+            mc_df = pd.read_sql("SELECT SUM(target_mc) as total_mc FROM master_pelanggan", conn)
+            total_mc = mc_df['total_mc'].iloc[0] or 0
+            
+            # 2. Ardebt (Undue awal)
+            ardebt_df = pd.read_sql("SELECT SUM(saldo_ardebt) as total_ardebt FROM master_pelanggan", conn)
+            total_undue = ardebt_df['total_ardebt'].iloc[0] or 0
+            
+            # 3. Realisasi Collection (Total)
+            coll_df = pd.read_sql("SELECT SUM(jumlah_bayar) as total_bayar FROM collection_harian", conn)
+            total_coll = coll_df['total_bayar'].iloc[0] or 0
+        finally:
+            conn.close()
+        
+        # Hitung Persentase
+        coll_rate = (total_coll / total_mc * 100) if total_mc > 0 else 0
+        
+        return {
+            "mc_bulan_ini": total_mc,
+            "mb_undue": total_undue,
+            "coll_current": total_coll, # Asumsi sementara semua current
+            "coll_undue": 0,
+            "coll_rate": round(coll_rate, 2),
+            "total_coll": total_coll
+        }
+
+    def get_daily_collection_table(self):
+        """Menghasilkan data tabel harian dengan akumulasi dan varians."""
+        conn = self.get_connection()
+        
+        query = '''
+            SELECT 
+                tgl_bayar,
+                COUNT(DISTINCT nomen) as jml_cust,
+                SUM(jumlah_bayar) as total_coll
+            FROM collection_harian
+            GROUP BY tgl_bayar
+            ORDER BY tgl_bayar ASC
+        '''
+        try:
+            df = pd.read_sql(query, conn)
+        finally:
+            conn.close()
+
+        if df.empty:
+            return []
+
+        # Ambil Total MC untuk hitung %
+        summary = self.get_collection_summary()
+        total_mc = summary['mc_bulan_ini']
+
+        # Proses Data Frame untuk kolom-kolom hitungan
+        df['kumulatif'] = df['total_coll'].cumsum()
+        df['var_h_min_1'] = df['total_coll'].diff().fillna(0)
+        df['persen_mc'] = df['kumulatif'].apply(lambda x: (x / total_mc * 100) if total_mc > 0 else 0)
+        
+        results = []
+        for _, row in df.iterrows():
+            results.append({
+                "tgl": row['tgl_bayar'],
+                "jml_cust": int(row['jml_cust']),
+                "mc_target": total_mc,
+                "mb_undue": summary['mb_undue'],
+                "coll_current": row['total_coll'],
+                "coll_undue": 0,
+                "total_coll": row['total_coll'],
+                "persen_mc": round(row['persen_mc'], 2),
+                "kumulatif": row['kumulatif'],
+                "var_h1": row['var_h_min_1']
+            })
+            
+        return results
+
+    def get_breakdown_stats(self, category_col):
+        """Breakdown berdasarkan Rayon, Tarif, dll."""
+        conn = self.get_connection()
+        
+        # Mapping kolom input ke kolom DB
+        col_db = category_col
+        if category_col == 'pc': col_db = 'rayon'
+        
+        # Validasi sederhana untuk mencegah SQL Injection via parameter
+        if col_db not in ['rayon', 'tarif', 'pc']:
+            col_db = 'rayon'
+
+        query = f'''
+            SELECT 
+                m.{col_db} as kategori,
+                COUNT(DISTINCT m.nomen) as total_plg,
+                SUM(m.target_mc) as target,
+                SUM(c.jumlah_bayar) as realisasi
+            FROM master_pelanggan m
+            LEFT JOIN collection_harian c ON m.nomen = c.nomen
+            GROUP BY m.{col_db}
+        '''
+        
+        try:
+            df = pd.read_sql(query, conn)
+            df = df.fillna(0)
+            df['persen'] = df.apply(lambda x: (x['realisasi'] / x['target'] * 100) if x['target'] > 0 else 0, axis=1)
+            return df.to_dict('records')
+        except:
+            return []
+        finally:
+            conn.close()
+
+    def get_customer_details(self, limit=100):
+        """Detail Pelanggan untuk tabel bawah (Top Payer)"""
+        conn = self.get_connection()
+        query = '''
+            SELECT 
+                m.nomen, m.nama, m.rayon, m.tarif,
+                m.target_mc, m.saldo_ardebt,
+                IFNULL(SUM(c.jumlah_bayar), 0) as total_bayar,
+                MAX(c.tgl_bayar) as tgl_bayar_terakhir
+            FROM master_pelanggan m
+            LEFT JOIN collection_harian c ON m.nomen = c.nomen
+            GROUP BY m.nomen
+            HAVING total_bayar > 0
+            ORDER BY total_bayar DESC
+            LIMIT ?
+        '''
+        try:
+            # Gunakan cursor agar parameter limit aman
+            cursor = conn.cursor()
+            cursor.execute(query, (limit,))
+            # Convert sqlite3.Row objects to dicts
+            rows = [dict(row) for row in cursor.fetchall()]
+            return rows
+        finally:
+            conn.close()
+
+# Instance global
+db = DatabaseManager()
