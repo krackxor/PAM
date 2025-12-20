@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SUNTER DASHBOARD - Sistem Monitoring Terpadu</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <style>
+        body {
+            background-color: #f4f6f9; /* Warna latar belakang abu-abu muda */
+            padding-top: 135px; /* Memberi ruang agar konten tidak tertutup Header yang Sticky */
+        }
+        /* Global Header yang Selalu Terlihat (Sticky Top) */
+        .global-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1030; /* Memastikan header selalu di atas elemen lain */
+            background: #ffffff;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            padding-top: 15px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #0d6efd; /* Aksen biru di bawah header */
+        }
+        /* Styling untuk Tab Navigasi */
+        .nav-tabs .nav-link {
+            font-weight: 600;
+            color: #495057;
+            border: none;
+            border-bottom: 3px solid transparent;
+        }
+        .nav-tabs .nav-link.active {
+            color: #0d6efd; /* Warna biru saat tab aktif */
+            background-color: transparent;
+            border-bottom: 3px solid #0d6efd;
+        }
+        /* Kontainer isi Tab */
+        .tab-content {
+            background: #fff;
+            padding: 25px;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,.05);
+            min-height: 400px; /* Tinggi minimal agar tidak terlihat kosong */
+        }
+        /* Styling Card KPI di Ringkasan */
+        .card-kpi {
+            border: none;
+            border-left: 5px solid #ddd;
+            box-shadow: 0 2px 4px rgba(0,0,0,.05);
+            transition: transform 0.2s;
+        }
+        .card-kpi:hover { transform: translateY(-3px); }
+    </style>
+</head>
+<body>
+
+    <header class="global-header container-fluid px-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="m-0 fw-bolder text-primary">🧭 SUNTER DASHBOARD</h4>
+            <div class="text-muted small">
+                <span class="badge bg-success me-2">System Online 🟢</span>
+                Kamis, 25 Mei 2024 (Contoh Data)
+            </div>
+        </div>
+
+        <div class="row g-2">
+            <div class="col-md-3">
+                <div class="input-group input-group-sm">
+                    <label class="input-group-text fw-bold bg-primary text-white" for="filterArea">AREA</label>
+                    <select class="form-select fw-bold text-center bg-light" id="filterArea">
+                        <option value="SUNTER" selected>SUNTER (Gabungan 34 + 35)</option>
+                        <option value="34">Rayon 34 Saja</option>
+                        <option value="35">Rayon 35 Saja</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-5">
+                 <div class="btn-group btn-group-sm w-100 shadow-sm" role="group">
+                    <button type="button" class="btn btn-outline-secondary dropdown-toggle">PC / PCEZ</button>
+                    <button type="button" class="btn btn-outline-secondary dropdown-toggle">Tarif</button>
+                    <button type="button" class="btn btn-outline-secondary">Periode: <span class="fw-bold">Harian Hari Ini</span></button>
+                </div>
+            </div>
+            <div class="col-md-4">
+                 <div class="input-group input-group-sm shadow-sm">
+                    <span class="input-group-text bg-white">🔍</span>
+                    <input type="text" class="form-control" placeholder="Cari Nomen / Nama Pelanggan...">
+                    <button class="btn btn-primary" type="button">Buka Detail</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+
+    <div class="container-fluid px-4">
+        
+        <ul class="nav nav-tabs nav-fill mb-0 shadow-sm rounded-top-3 bg-white" id="mainTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active py-3" id="ringkasan-tab" data-bs-toggle="tab" data-bs-target="#ringkasan-pane" type="button" role="tab">1️⃣ Ringkasan</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link py-3" id="collection-tab" data-bs-toggle="tab" data-bs-target="#collection-pane" type="button" role="tab">2️⃣ Collection</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link py-3" id="meter-tab" data-bs-toggle="tab" data-bs-target="#placeholder-pane" type="button" role="tab">3️⃣ Meter</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link py-3" id="history-tab" data-bs-toggle="tab" data-bs-target="#placeholder-pane" type="button" role="tab">4️⃣ History</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link py-3 text-danger fw-bold" id="analisa-tab" data-bs-toggle="tab" data-bs-target="#placeholder-pane" type="button" role="tab">5️⃣ Analisa Manual 🛠️</button>
+            </li>
+             <li class="nav-item" role="presentation">
+                <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#placeholder-pane" type="button">6️⃣ TOP</button>
+            </li>
+             <li class="nav-item" role="presentation">
+                <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#placeholder-pane" type="button">7️⃣ Alert</button>
+            </li>
+             <li class="nav-item" role="presentation">
+                <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#placeholder-pane" type="button">8️⃣ Laporan</button>
+            </li>
+        </ul>
+
+
+        <div class="tab-content" id="mainTabContent">
+            
+            <div class="tab-pane fade show active" id="ringkasan-pane" role="tabpanel">
+                <h5 class="mb-4 pb-2 border-bottom">Gambaran Umum Area <span class="text-primary fw-bold">SUNTER</span></h5>
+                
+                <div class="row g-4">
+                    <div class="col-md-3">
+                        <div class="card card-kpi border-primary h-100">
+                            <div class="card-body">
+                                <h6 class="text-muted text-uppercase small mb-2">Total Pelanggan Master</h6>
+                                <h2 class="fw-bold text-primary mb-0">{{ "{:,}".format(cust_count) }}</h2>
+                                <small class="text-success">Data Rayon 34 & 35</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                         <div class="card card-kpi h-100" style="border-left-color: #198754;">
+                            <div class="card-body">
+                                <h6 class="text-muted text-uppercase small mb-2">Total Collection Hari Ini (Rp)</h6>
+                                <h2 class="fw-bold text-success mb-0">Rp {{ "{:,.0f}".format(total_coll).replace(',', '.') }}</h2>
+                                <small class="text-muted">Realisasi pembayaran masuk</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-3">
+                         <div class="card card-kpi h-100" style="border-left-color: #dc3545;">
+                            <div class="card-body">
+                                <h6 class="text-muted text-uppercase small mb-2">Total Tunggakan (Undue)</h6>
+                                <h2 class="fw-bold text-danger mb-0">Rp 0</h2>
+                                <small class="text-muted fw-light fst-italic">(Data belum tersedia)</small>
+                            </div>
+                        </div>
+                    </div>
+                     <div class="col-md-2">
+                        <div class="card card-kpi h-100 bg-warning bg-opacity-10" style="border-left-color: #ffc107;">
+                            <div class="card-body text-center pt-4">
+                                <h3 class="fw-bold text-warning mb-0">0</h3>
+                                <h6 class="text-muted small">Anomali Meter Baru</h6>
+                            </div>
+                        </div>
+                    </div>
+                </div> <div class="alert alert-info mt-5 d-flex align-items-center">
+                    <span class="fs-4 me-3">ℹ️</span>
+                    <div>
+                        <strong>Status Data:</strong> Angka di atas (0) adalah normal saat ini karena database SQLite baru saja dibuat dan belum ada data pelanggan atau transaksi yang di-upload.
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="tab-pane fade" id="collection-pane" role="tabpanel">
+                <div class="text-center py-5 text-muted">
+                    <img src="https://cdn-icons-png.flaticon.com/512/337/337946.png" alt="Excel Icon" width="64" class="mb-3 opacity-50">
+                    <h4>Tabel Collection Harian (Excel Style)</h4>
+                    <p>Tab ini nanti akan memuat tabel interaktif menggunakan JavaScript (DataTables atau sejenisnya) untuk menampilkan data transaksi harian secara detail.</p>
+                    <button class="btn btn-sm btn-outline-primary mt-2">Contoh Muat Data (AJAX)</button>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="placeholder-pane" role="tabpanel">
+                <div class="d-flex flex-column align-items-center justify-content-center py-5 text-muted" style="min-height: 300px;">
+                    <div class="spinner-border text-secondary mb-3" role="status"></div>
+                    <h4>Modul Sedang Disiapkan</h4>
+                    <p>Konten untuk tab ini akan segera diimplementasikan.</p>
+                </div>
+            </div>
+
+        </div> </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Contoh: Logika agar saat filter Area diubah, console browser mencatatnya
+        document.getElementById('filterArea').addEventListener('change', function() {
+            console.log('Filter Area diubah menjadi: ' + this.value);
+            // Nanti di sini kita tambahkan logika AJAX untuk reload data tab tanpa refresh halaman
+            alert('Contoh: Filter diubah ke ' + this.value + '. Data di semua tab akan dimuat ulang (AJAX).');
+        });
+    </script>
+
+</body>
+</html>
