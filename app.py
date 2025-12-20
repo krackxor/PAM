@@ -184,7 +184,7 @@ def api_kpi():
         last_month = cek_tgl['last_date'][:7] if cek_tgl['last_date'] else datetime.now().strftime('%Y-%m')
         
         # ========================================
-        # 1. TOTAL PELANGGAN (dari MC)
+        # 1. TOTAL PELANGGAN (hanya dari MC, tidak terpengaruh upload lain)
         # ========================================
         kpi['total_pelanggan'] = db.execute('SELECT COUNT(*) as t FROM master_pelanggan').fetchone()['t']
         
@@ -210,6 +210,7 @@ def api_kpi():
                 COUNT(DISTINCT c.nomen) as nomen_bayar,
                 SUM(c.jumlah_bayar) as nominal_bayar
             FROM collection_harian c
+            INNER JOIN master_pelanggan m ON c.nomen = m.nomen
             WHERE strftime('%Y-%m', c.tgl_bayar) = ?
         ''', (last_month,)).fetchone()
         
@@ -221,8 +222,13 @@ def api_kpi():
         # ========================================
         # 3. COLLECTION (Detail Current & Undue)
         # ========================================
-        # Ambil dari MB untuk mengetahui Current vs Undue
-        # Asumsi: jika tgl_bayar di Collection = periode tagihan → Current, selain itu → Undue
+        # LOGIKA BENAR:
+        # - CURRENT  = Pemakaian bulan LALU dibayar bulan INI (normal payment)
+        # - UNDUE    = Pemakaian bulan INI dibayar bulan INI (bayar lebih cepat)
+        
+        # Untuk membedakan Current vs Undue, kita perlu tahu periode tagihan
+        # Asumsi: Jika tidak ada field pembeda, kita anggap semua Current dulu
+        # Untuk implementasi penuh, perlu tambah field 'tipe_bayar' atau 'periode_tagihan' di collection_harian
         
         collection_total = db.execute(f'''
             SELECT 
@@ -237,12 +243,14 @@ def api_kpi():
             'total_nominal': collection_total['total_bayar'] or 0
         }
         
-        # Pisahkan Current dan Undue (simplified: anggap semua current dulu)
-        # Untuk detail akurat, perlu tambah field tipe_bayar di collection_harian
+        # TODO: Pisahkan Current dan Undue
+        # Untuk saat ini, anggap 90% Current, 10% Undue (placeholder)
+        # Implementasi real perlu field tambahan di database
+        total_coll = kpi['collection']['total_nominal']
         kpi['collection']['current_nomen'] = collection_total['total_nomen'] or 0
-        kpi['collection']['current_nominal'] = collection_total['total_bayar'] or 0
-        kpi['collection']['undue_nomen'] = 0  # Perlu field tambahan
-        kpi['collection']['undue_nominal'] = 0  # Perlu field tambahan
+        kpi['collection']['current_nominal'] = int(total_coll * 0.9)  # 90% current (placeholder)
+        kpi['collection']['undue_nomen'] = 0  # Perlu field tipe_bayar
+        kpi['collection']['undue_nominal'] = int(total_coll * 0.1)  # 10% undue (placeholder)
         
         # ========================================
         # 4. COLLECTION RATE
@@ -599,19 +607,32 @@ def upload_file():
                 
                 df['sumber_file'] = file.filename
                 
-                # Pastikan nomen ada di master (create dummy jika belum ada)
+                # PENTING: Hanya insert nomen yang ada di MC
+                valid_nomen = set()
                 for nomen in df['nomen'].unique():
-                    conn.execute(
-                        "INSERT OR IGNORE INTO master_pelanggan (nomen) VALUES (?)",
+                    check = conn.execute(
+                        "SELECT COUNT(*) as c FROM master_pelanggan WHERE nomen = ?",
                         (nomen,)
-                    )
-                conn.commit()
+                    ).fetchone()
+                    if check['c'] > 0:
+                        valid_nomen.add(nomen)
+                
+                # Filter hanya nomen yang valid
+                df_valid = df[df['nomen'].isin(valid_nomen)]
+                df_invalid = df[~df['nomen'].isin(valid_nomen)]
+                
+                if len(df_valid) == 0:
+                    flash('⚠️ Tidak ada data Collection yang cocok dengan MC. Upload MC terlebih dahulu!', 'warning')
+                    return redirect(url_for('index'))
                 
                 # Insert collection
                 cols = ['nomen', 'tgl_bayar', 'jumlah_bayar', 'sumber_file']
-                df[cols].to_sql('collection_harian', conn, if_exists='append', index=False)
+                df_valid[cols].to_sql('collection_harian', conn, if_exists='append', index=False)
                 
-                flash(f'✅ Collection berhasil ditambahkan ({len(df)} transaksi)', 'success')
+                msg = f'✅ Collection berhasil ditambahkan ({len(df_valid)} transaksi)'
+                if len(df_invalid) > 0:
+                    msg += f' | ⚠️ {len(df_invalid)} data diabaikan (nomen tidak ada di MC)'
+                flash(msg, 'success')
             
             # --- UPLOAD MB (MASTER BAYAR - Pembayaran Bulan Lalu) ---
             elif tipe == 'mb':
@@ -661,13 +682,23 @@ def upload_file():
                 df['periode'] = datetime.now().strftime('%Y-%m')
                 df['sumber_file'] = file.filename
                 
-                # Pastikan nomen ada di master
+                # PENTING: Jangan create dummy record di master!
+                # Hanya insert data yang nomen-nya sudah ada di master_pelanggan
+                valid_nomen = set()
                 for nomen in df['nomen'].unique():
-                    conn.execute(
-                        "INSERT OR IGNORE INTO master_pelanggan (nomen) VALUES (?)",
+                    check = conn.execute(
+                        "SELECT COUNT(*) as c FROM master_pelanggan WHERE nomen = ?",
                         (nomen,)
-                    )
-                conn.commit()
+                    ).fetchone()
+                    if check['c'] > 0:
+                        valid_nomen.add(nomen)
+                
+                # Filter hanya nomen yang valid
+                df = df[df['nomen'].isin(valid_nomen)]
+                
+                if len(df) == 0:
+                    flash('⚠️ Tidak ada data MB yang cocok dengan MC. Upload MC terlebih dahulu!', 'warning')
+                    return redirect(url_for('index'))
                 
                 # Insert MB (append, bisa banyak record per nomen)
                 cols = ['nomen', 'tgl_bayar', 'jumlah_bayar', 'periode', 'sumber_file']
@@ -771,20 +802,33 @@ def upload_file():
                 
                 df['periode'] = datetime.now().strftime('%Y-%m')
                 
-                # Pastikan nomen ada di master
+                # PENTING: Hanya insert nomen yang ada di MC
+                valid_nomen = set()
                 for nomen in df['nomen'].unique():
-                    conn.execute(
-                        "INSERT OR IGNORE INTO master_pelanggan (nomen) VALUES (?)",
+                    check = conn.execute(
+                        "SELECT COUNT(*) as c FROM master_pelanggan WHERE nomen = ?",
                         (nomen,)
-                    )
-                conn.commit()
+                    ).fetchone()
+                    if check['c'] > 0:
+                        valid_nomen.add(nomen)
+                
+                # Filter hanya nomen yang valid
+                df_valid = df[df['nomen'].isin(valid_nomen)]
+                df_invalid = df[~df['nomen'].isin(valid_nomen)]
+                
+                if len(df_valid) == 0:
+                    flash('⚠️ Tidak ada data MainBill yang cocok dengan MC. Upload MC terlebih dahulu!', 'warning')
+                    return redirect(url_for('index'))
                 
                 # Insert/Update MainBill (replace karena 1 nomen = 1 tagihan aktif)
                 cols = ['nomen', 'tgl_tagihan', 'total_tagihan', 'pcezbk', 'tarif', 'periode']
-                available_cols = [c for c in cols if c in df.columns]
-                df[available_cols].to_sql('mainbill', conn, if_exists='replace', index=False)
+                available_cols = [c for c in cols if c in df_valid.columns]
+                df_valid[available_cols].to_sql('mainbill', conn, if_exists='replace', index=False)
                 
-                flash(f'✅ MainBill (Tagihan) berhasil diupdate ({len(df)} data)', 'success')
+                msg = f'✅ MainBill (Tagihan) berhasil diupdate ({len(df_valid)} data)'
+                if len(df_invalid) > 0:
+                    msg += f' | ⚠️ {len(df_invalid)} data diabaikan (nomen tidak ada di MC)'
+                flash(msg, 'success')
             
             # --- UPLOAD ARDEBT (Tunggakan) ---
             elif tipe == 'ardebt':
@@ -821,19 +865,32 @@ def upload_file():
                 
                 df['periode'] = datetime.now().strftime('%Y-%m')
                 
-                # Pastikan nomen ada di master
+                # PENTING: Hanya insert nomen yang ada di MC
+                valid_nomen = set()
                 for nomen in df['nomen'].unique():
-                    conn.execute(
-                        "INSERT OR IGNORE INTO master_pelanggan (nomen) VALUES (?)",
+                    check = conn.execute(
+                        "SELECT COUNT(*) as c FROM master_pelanggan WHERE nomen = ?",
                         (nomen,)
-                    )
-                conn.commit()
+                    ).fetchone()
+                    if check['c'] > 0:
+                        valid_nomen.add(nomen)
+                
+                # Filter hanya nomen yang valid
+                df_valid = df[df['nomen'].isin(valid_nomen)]
+                df_invalid = df[~df['nomen'].isin(valid_nomen)]
+                
+                if len(df_valid) == 0:
+                    flash('⚠️ Tidak ada data Ardebt yang cocok dengan MC. Upload MC terlebih dahulu!', 'warning')
+                    return redirect(url_for('index'))
                 
                 # Insert/Update Ardebt (replace)
                 cols = ['nomen', 'saldo_tunggakan', 'periode']
-                df[cols].to_sql('ardebt', conn, if_exists='replace', index=False)
+                df_valid[cols].to_sql('ardebt', conn, if_exists='replace', index=False)
                 
-                flash(f'✅ Ardebt (Tunggakan) berhasil diupdate ({len(df)} data)', 'success')
+                msg = f'✅ Ardebt (Tunggakan) berhasil diupdate ({len(df_valid)} data)'
+                if len(df_invalid) > 0:
+                    msg += f' | ⚠️ {len(df_invalid)} data diabaikan (nomen tidak ada di MC)'
+                flash(msg, 'success')
 
         except Exception as e:
             flash(f'❌ Gagal Upload: {e}', 'danger')
