@@ -35,10 +35,18 @@ def init_db():
         db = get_db()
         cursor = db.cursor()
         
-        # 1. Master Pelanggan
+        # 1. Master Pelanggan (STRUKTUR BARU: Tambah PC, PCEZ, EZ, BLOCK)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS master_pelanggan (
-                nomen TEXT PRIMARY KEY, nama TEXT, rayon TEXT, tarif TEXT, target_mc REAL DEFAULT 0
+                nomen TEXT PRIMARY KEY,
+                nama TEXT,
+                rayon TEXT,
+                pc TEXT,
+                ez TEXT,
+                pcez TEXT,
+                block TEXT,
+                tarif TEXT,
+                target_mc REAL DEFAULT 0
             )
         ''')
         
@@ -60,7 +68,7 @@ def init_db():
         ''')
         
         db.commit()
-        print("✅ Database Terinisialisasi.")
+        print("✅ Database Terinisialisasi dengan Struktur Baru (ZONA_NOVAK Split).")
 
 # --- ROUTING UTAMA ---
 @app.route('/')
@@ -79,8 +87,9 @@ def index():
 @app.route('/api/collection_data')
 def api_collection():
     db = get_db()
+    # Update query untuk mengambil data PC/PCEZ jika perlu ditampilkan nanti
     query = '''
-        SELECT c.tgl_bayar, m.rayon, m.nomen, m.nama, m.target_mc, c.jumlah_bayar 
+        SELECT c.tgl_bayar, m.rayon, m.pcez, m.nomen, m.nama, m.target_mc, c.jumlah_bayar 
         FROM collection_harian c
         LEFT JOIN master_pelanggan m ON c.nomen = m.nomen
         ORDER BY c.tgl_bayar DESC LIMIT 1000
@@ -105,7 +114,7 @@ def simpan_analisa():
     except Exception as e:
         return jsonify({'status': 'error', 'msg': str(e)})
 
-# --- FITUR UPLOAD (YANG DIPERBAIKI) ---
+# --- FITUR UPLOAD (LOGIKA PECAH ZONA_NOVAK) ---
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files: return redirect(url_for('index'))
@@ -119,97 +128,99 @@ def upload_file():
         try:
             conn = get_db()
             
-            # 1. DETEKSI FORMAT (CSV atau EXCEL)
+            # 1. BACA FILE (CSV / EXCEL)
             if filepath.endswith('.csv'):
-                # Coba baca CSV (separator koma atau titik koma)
                 try:
                     df = pd.read_csv(filepath, sep=',')
-                    # Cek kalau header ngumpul jadi 1 kolom (tanda sep salah), coba pakai ;
-                    if len(df.columns) < 2:
-                        df = pd.read_csv(filepath, sep=';')
+                    if len(df.columns) < 2: df = pd.read_csv(filepath, sep=';')
                 except:
                     df = pd.read_csv(filepath, sep=';')
             else:
-                # Baca Excel biasa
                 df = pd.read_excel(filepath)
 
-            # 2. BERSIHKAN HEADER (Jadikan Huruf Besar Semua & Hapus Spasi)
+            # 2. BERSIHKAN HEADER
             df.columns = df.columns.str.upper().str.strip()
-            print("Kolom ditemukan:", df.columns.tolist()) # Debugging
 
             if tipe == 'master':
-                # MAPPING KHUSUS FILE MC...csv
-                # File kamu: NOMEN, NAMA_PEL, ZONA_NOVAK (Rayon), TARIF, REK_AIR (Target)
+                # --- LOGIKA BARU: EXTRAKSI ZONA_NOVAK ---
                 
-                # Kita buat kamus (dictionary) penyesuaian nama kolom
-                # Kiri: Nama di Database, Kanan: Kemungkinan nama di File
-                mapping = {
-                    'nomen': ['NOMEN'],
-                    'nama': ['NAMA_PEL', 'NAMA'],
-                    'rayon': ['ZONA_NOVAK', 'RAYON'],
-                    'tarif': ['TARIF', 'KODETARIF'],
-                    'target_mc': ['REK_AIR', 'TARGET', 'TAGIHAN']
-                }
-
-                # Fungsi pencari kolom otomatis
-                def cari_kolom(target_db):
-                    for calon in mapping[target_db]:
-                        if calon in df.columns:
-                            return calon
-                    return None
-
-                # Rename kolom sesuai database
-                rename_dict = {}
-                for col_db in mapping:
-                    found = cari_kolom(col_db)
-                    if found:
-                        rename_dict[found] = col_db
-                
-                # Cek kelengkapan
-                if 'nomen' not in rename_dict.values(): # Minimal Nomen wajib ada
-                    flash(f'Kolom NOMEN tidak ditemukan! Header file: {df.columns.tolist()}', 'danger')
+                # Cek ketersediaan kolom ZONA_NOVAK
+                if 'ZONA_NOVAK' not in df.columns:
+                    flash('Gagal: Kolom ZONA_NOVAK tidak ditemukan di file!', 'danger')
                     return redirect(url_for('index'))
 
-                df = df.rename(columns=rename_dict)
-                
-                # LOGIKA KHUSUS RAYON: Ambil 2 digit pertama dari ZONA_NOVAK (misal 35096.. jadi 35)
-                if 'rayon' in df.columns:
-                    df['rayon'] = df['rayon'].astype(str).str[:2]
+                # Pastikan format string agar bisa di-slice (potong)
+                df['ZONA_NOVAK'] = df['ZONA_NOVAK'].astype(str).str.replace(r'\.0$', '', regex=True) # Hapus .0 jika ada
 
-                # Pastikan kolom yang tidak ada diisi default
-                required_cols = ['nomen', 'nama', 'rayon', 'tarif', 'target_mc']
-                for col in required_cols:
+                # LAKUKAN PEMISAHAN DATA (SLICING)
+                # Contoh: 350960217
+                
+                # 1. RAYON (Digit 1-2) -> '35'
+                df['rayon'] = df['ZONA_NOVAK'].str[:2]
+                
+                # 2. PC (Digit 3-5) -> '096' (Index 2 sampai 5)
+                df['pc'] = df['ZONA_NOVAK'].str[2:5]
+                
+                # 3. EZ (Digit 6-7) -> '02' (Index 5 sampai 7)
+                df['ez'] = df['ZONA_NOVAK'].str[5:7]
+                
+                # 4. BLOCK (Digit 8-9) -> '17' (Index 7 sampai 9)
+                df['block'] = df['ZONA_NOVAK'].str[7:9]
+                
+                # 5. PCEZ (Gabungan PC/EZ) -> '096/02'
+                df['pcez'] = df['pc'] + '/' + df['ez']
+
+                # --- MAPPING SISA KOLOM ---
+                rename_dict = {}
+                if 'NOMEN' in df.columns: rename_dict['NOMEN'] = 'nomen'
+                
+                # Cari Nama (Bisa NAMA_PEL atau NAMA)
+                if 'NAMA_PEL' in df.columns: rename_dict['NAMA_PEL'] = 'nama'
+                elif 'NAMA' in df.columns: rename_dict['NAMA'] = 'nama'
+                
+                # Cari Tarif
+                if 'TARIF' in df.columns: rename_dict['TARIF'] = 'tarif'
+                elif 'KODETARIF' in df.columns: rename_dict['KODETARIF'] = 'tarif'
+                
+                # Cari Target (Rekening Air)
+                if 'REK_AIR' in df.columns: rename_dict['REK_AIR'] = 'target_mc'
+                elif 'TARGET' in df.columns: rename_dict['TARGET'] = 'target_mc'
+                
+                df = df.rename(columns=rename_dict)
+
+                # Pastikan kolom wajib ada
+                wajib = ['nomen', 'nama', 'rayon', 'pc', 'ez', 'pcez', 'block', 'tarif', 'target_mc']
+                
+                # Isi default jika ada kolom yang kosong (selain hasil ektraksi tadi)
+                for col in wajib:
                     if col not in df.columns:
                         df[col] = '' if col != 'target_mc' else 0
 
-                # Pilih & Simpan
-                df = df[required_cols]
+                # SIMPAN KE DATABASE
+                df = df[wajib] # Hanya ambil kolom yang sesuai tabel
                 df.to_sql('master_pelanggan', conn, if_exists='replace', index=False)
-                flash(f'Sukses Upload {len(df)} Data Master Pelanggan!', 'success')
+                
+                flash(f'Sukses! Data Master dipecah: Rayon, PC, EZ, Block berhasil disimpan. ({len(df)} data)', 'success')
                 
             elif tipe == 'collection':
-                # Mapping Collection
-                # Standar: NOMEN, TGL_BAYAR, JUMLAH
-                # Jika file collection formatnya lain, tambahkan di sini
+                # Logika Collection Tetap Sama
                 rename_dict = {}
                 if 'NOMEN' in df.columns: rename_dict['NOMEN'] = 'nomen'
                 if 'TGL_BAYAR' in df.columns: rename_dict['TGL_BAYAR'] = 'tgl_bayar'
                 if 'JUMLAH' in df.columns: rename_dict['JUMLAH'] = 'jumlah_bayar'
                 
                 if not rename_dict:
-                    flash('Format Collection Salah! Wajib: NOMEN, TGL_BAYAR, JUMLAH', 'danger')
+                    flash('Format Collection Salah!', 'danger')
                     return redirect(url_for('index'))
                 
                 df = df.rename(columns=rename_dict)
                 df['sumber_file'] = file.filename
-                
-                # Filter kolom yang ada saja
-                save_cols = [c for c in ['nomen', 'tgl_bayar', 'jumlah_bayar', 'sumber_file'] if c in df.columns]
-                df[save_cols].to_sql('collection_harian', conn, if_exists='append', index=False)
+                cols = [c for c in ['nomen', 'tgl_bayar', 'jumlah_bayar', 'sumber_file'] if c in df.columns]
+                df[cols].to_sql('collection_harian', conn, if_exists='append', index=False)
                 flash(f'Sukses Upload {len(df)} Transaksi!', 'success')
                 
         except Exception as e:
-            print(f"Error Detail: {e}")
+            print(f"Error: {e}")
             flash(f'Gagal Upload: {e}', 'danger')
             
     return redirect(url_for('index'))
@@ -220,5 +231,5 @@ def auth_bypass(): return redirect(url_for('index'))
 
 if __name__ == '__main__':
     if not os.path.exists(DB_PATH): init_db()
-    print("🚀 APLIKASI SIAP (CSV SUPPORTED)!")
+    print("🚀 APLIKASI SIAP (ZONA_NOVAK SPLITTER AKTIF)!")
     app.run(host='0.0.0.0', port=5000, debug=True)
