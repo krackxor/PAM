@@ -65,19 +65,46 @@ def init_db():
             )
         ''')
 
-        # 3. MainBill (Tagihan - dari MB)
+        # 3. MB (Master Bayar - Pembayaran Bulan Sebelumnya)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS master_bayar (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nomen TEXT,
+                tgl_bayar TEXT,
+                jumlah_bayar REAL DEFAULT 0,
+                periode TEXT,
+                sumber_file TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(nomen) REFERENCES master_pelanggan(nomen)
+            )
+        ''')
+        
+        # 4. MainBill (Tagihan Bulan Depan - Bill Baru)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS mainbill (
                 nomen TEXT PRIMARY KEY,
-                tgl_bayar TEXT,
-                tagihan REAL DEFAULT 0,
+                tgl_tagihan TEXT,
+                total_tagihan REAL DEFAULT 0,
+                pcezbk TEXT,
+                tarif TEXT,
+                periode TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(nomen) REFERENCES master_pelanggan(nomen)
+            )
+        ''')
+        
+        # 5. Ardebt (Tunggakan)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ardebt (
+                nomen TEXT PRIMARY KEY,
+                saldo_tunggakan REAL DEFAULT 0,
                 periode TEXT,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(nomen) REFERENCES master_pelanggan(nomen)
             )
         ''')
 
-        # 4. Analisa Manual
+        # 6. Analisa Manual
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS analisa_manual (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,6 +124,8 @@ def init_db():
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_coll_tgl ON collection_harian(tgl_bayar)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_coll_nomen ON collection_harian(nomen)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_master_rayon ON master_pelanggan(rayon)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_mb_nomen ON master_bayar(nomen)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_mb_periode ON master_bayar(periode)')
         
         db.commit()
         print("✅ Database Siap.")
@@ -453,7 +482,69 @@ def upload_file():
                 
                 flash(f'✅ Collection berhasil ditambahkan ({len(df)} transaksi)', 'success')
             
-            # --- UPLOAD MAINBILL (MB) ---
+            # --- UPLOAD MB (MASTER BAYAR - Pembayaran Bulan Lalu) ---
+            elif tipe == 'mb':
+                # Field mapping untuk MB
+                rename_dict = {}
+                
+                # Field NOMEN dari NOTAGIHAN (MB)
+                if 'NOTAGIHAN' in df.columns:
+                    rename_dict['NOTAGIHAN'] = 'nomen'
+                elif 'NOMEN' in df.columns:
+                    rename_dict['NOMEN'] = 'nomen'
+                else:
+                    flash('❌ Format MB salah! Butuh kolom NOTAGIHAN atau NOMEN', 'danger')
+                    return redirect(url_for('index'))
+                
+                # Field TANGGAL dari TGL_BAYAR (MB)
+                if 'TGL_BAYAR' in df.columns:
+                    rename_dict['TGL_BAYAR'] = 'tgl_bayar'
+                elif 'TANGGAL' in df.columns:
+                    rename_dict['TANGGAL'] = 'tgl_bayar'
+                
+                # Field JUMLAH BAYAR
+                if 'BAYAR' in df.columns:
+                    rename_dict['BAYAR'] = 'jumlah_bayar'
+                elif 'JUMLAH_BAYAR' in df.columns:
+                    rename_dict['JUMLAH_BAYAR'] = 'jumlah_bayar'
+                elif 'JUMLAH' in df.columns:
+                    rename_dict['JUMLAH'] = 'jumlah_bayar'
+                
+                df = df.rename(columns=rename_dict)
+                
+                # Clean data
+                df['nomen'] = df['nomen'].apply(clean_nomen)
+                df = df.dropna(subset=['nomen'])
+                
+                if 'tgl_bayar' in df.columns:
+                    df['tgl_bayar'] = df['tgl_bayar'].apply(lambda x: clean_date(x))
+                else:
+                    df['tgl_bayar'] = ''
+                
+                if 'jumlah_bayar' not in df.columns:
+                    df['jumlah_bayar'] = 0
+                else:
+                    # Pastikan positif
+                    df['jumlah_bayar'] = df['jumlah_bayar'].apply(lambda x: abs(float(x)) if pd.notna(x) else 0)
+                
+                df['periode'] = datetime.now().strftime('%Y-%m')
+                df['sumber_file'] = file.filename
+                
+                # Pastikan nomen ada di master
+                for nomen in df['nomen'].unique():
+                    conn.execute(
+                        "INSERT OR IGNORE INTO master_pelanggan (nomen) VALUES (?)",
+                        (nomen,)
+                    )
+                conn.commit()
+                
+                # Insert MB (append, bisa banyak record per nomen)
+                cols = ['nomen', 'tgl_bayar', 'jumlah_bayar', 'periode', 'sumber_file']
+                df[cols].to_sql('master_bayar', conn, if_exists='append', index=False)
+                
+                flash(f'✅ Master Bayar (MB) berhasil ditambahkan ({len(df)} transaksi)', 'success')
+            
+            # --- UPLOAD MAINBILL (Tagihan Bulan Depan) ---
             elif tipe == 'mainbill':
                 # Field mapping untuk MB
                 rename_dict = {}
@@ -499,13 +590,119 @@ def upload_file():
                 if 'tagihan' not in df.columns:
                     df['tagihan'] = 0
                 
+            # --- UPLOAD MAINBILL (Tagihan Bulan Depan) ---
+            elif tipe == 'mainbill':
+                # Field mapping untuk MainBill
+                rename_dict = {}
+                
+                # Field NOMEN dari NOMEN (MainBill) - langsung
+                if 'NOMEN' in df.columns:
+                    rename_dict['NOMEN'] = 'nomen'
+                else:
+                    flash('❌ Format MainBill salah! Butuh kolom NOMEN', 'danger')
+                    return redirect(url_for('index'))
+                
+                # Field TANGGAL dari FREEZE_DT (MainBill)
+                if 'FREEZE_DT' in df.columns:
+                    rename_dict['FREEZE_DT'] = 'tgl_tagihan'
+                elif 'TGL_TAGIHAN' in df.columns:
+                    rename_dict['TGL_TAGIHAN'] = 'tgl_tagihan'
+                
+                # Field TAGIHAN dari TOTAL_TAGIHAN
+                if 'TOTAL_TAGIHAN' in df.columns:
+                    rename_dict['TOTAL_TAGIHAN'] = 'total_tagihan'
+                elif 'TAGIHAN' in df.columns:
+                    rename_dict['TAGIHAN'] = 'total_tagihan'
+                
+                # Field PCEZBK untuk informasi tambahan
+                if 'PCEZBK' in df.columns:
+                    rename_dict['PCEZBK'] = 'pcezbk'
+                
+                # Field TARIF
+                if 'TARIF' in df.columns:
+                    rename_dict['TARIF'] = 'tarif'
+                
+                df = df.rename(columns=rename_dict)
+                
+                # Clean data
+                df['nomen'] = df['nomen'].apply(clean_nomen)
+                df = df.dropna(subset=['nomen'])
+                
+                if 'tgl_tagihan' in df.columns:
+                    df['tgl_tagihan'] = df['tgl_tagihan'].apply(lambda x: clean_date(x))
+                else:
+                    df['tgl_tagihan'] = ''
+                
+                if 'total_tagihan' not in df.columns:
+                    df['total_tagihan'] = 0
+                else:
+                    df['total_tagihan'] = df['total_tagihan'].apply(lambda x: abs(float(x)) if pd.notna(x) else 0)
+                
                 df['periode'] = datetime.now().strftime('%Y-%m')
                 
-                # Insert/Update MainBill
-                cols = ['nomen', 'tgl_bayar', 'tagihan', 'periode']
-                df[cols].to_sql('mainbill', conn, if_exists='replace', index=False)
+                # Pastikan nomen ada di master
+                for nomen in df['nomen'].unique():
+                    conn.execute(
+                        "INSERT OR IGNORE INTO master_pelanggan (nomen) VALUES (?)",
+                        (nomen,)
+                    )
+                conn.commit()
                 
-                flash(f'✅ MainBill berhasil diupdate ({len(df)} data)', 'success')
+                # Insert/Update MainBill (replace karena 1 nomen = 1 tagihan aktif)
+                cols = ['nomen', 'tgl_tagihan', 'total_tagihan', 'pcezbk', 'tarif', 'periode']
+                available_cols = [c for c in cols if c in df.columns]
+                df[available_cols].to_sql('mainbill', conn, if_exists='replace', index=False)
+                
+                flash(f'✅ MainBill (Tagihan) berhasil diupdate ({len(df)} data)', 'success')
+            
+            # --- UPLOAD ARDEBT (Tunggakan) ---
+            elif tipe == 'ardebt':
+                # Field mapping untuk Ardebt
+                rename_dict = {}
+                
+                # Field NOMEN
+                if 'NOMEN' in df.columns:
+                    rename_dict['NOMEN'] = 'nomen'
+                elif 'NOTAGIHAN' in df.columns:
+                    rename_dict['NOTAGIHAN'] = 'nomen'
+                else:
+                    flash('❌ Format Ardebt salah! Butuh kolom NOMEN', 'danger')
+                    return redirect(url_for('index'))
+                
+                # Field TUNGGAKAN
+                if 'SumOfJUMLAH' in df.columns:
+                    rename_dict['SumOfJUMLAH'] = 'saldo_tunggakan'
+                elif 'TUNGGAKAN' in df.columns:
+                    rename_dict['TUNGGAKAN'] = 'saldo_tunggakan'
+                elif 'SALDO' in df.columns:
+                    rename_dict['SALDO'] = 'saldo_tunggakan'
+                
+                df = df.rename(columns=rename_dict)
+                
+                # Clean data
+                df['nomen'] = df['nomen'].apply(clean_nomen)
+                df = df.dropna(subset=['nomen'])
+                
+                if 'saldo_tunggakan' not in df.columns:
+                    df['saldo_tunggakan'] = 0
+                else:
+                    df['saldo_tunggakan'] = df['saldo_tunggakan'].apply(lambda x: abs(float(x)) if pd.notna(x) else 0)
+                
+                df['periode'] = datetime.now().strftime('%Y-%m')
+                
+                # Pastikan nomen ada di master
+                for nomen in df['nomen'].unique():
+                    conn.execute(
+                        "INSERT OR IGNORE INTO master_pelanggan (nomen) VALUES (?)",
+                        (nomen,)
+                    )
+                conn.commit()
+                
+                # Insert/Update Ardebt (replace)
+                cols = ['nomen', 'saldo_tunggakan', 'periode']
+                df[cols].to_sql('ardebt', conn, if_exists='replace', index=False)
+                
+                flash(f'✅ Ardebt (Tunggakan) berhasil diupdate ({len(df)} data)', 'success')
 
         except Exception as e:
             flash(f'❌ Gagal Upload: {e}', 'danger')
@@ -523,8 +720,19 @@ def auth_bypass():
 if __name__ == '__main__':
     if not os.path.exists(DB_PATH):
         init_db()
-    print("🚀 APLIKASI SUNTER SIAP! (FIELD MAPPING FIX)")
-    print("📌 MC: NOTAGIHAN -> nomen")
-    print("📌 MB: NOTAGIHAN -> nomen, TGL_BAYAR")
-    print("📌 DAILY: NOTAG -> nomen, PAY_DT -> tgl_bayar")
+    print("🚀 APLIKASI SUNTER SIAP! (FIELD MAPPING LENGKAP)")
+    print("="*60)
+    print("📌 MC         : NOTAGIHAN → nomen (DATA INDUK)")
+    print("📌 COLLECTION : NOTAG → nomen, PAY_DT → tgl_bayar")
+    print("📌 MB         : NOTAGIHAN → nomen, TGL_BAYAR → tgl_bayar")
+    print("📌 MAINBILL   : NOMEN → nomen, FREEZE_DT → tgl_tagihan")
+    print("📌 ARDEBT     : NOMEN → nomen, SumOfJUMLAH → saldo_tunggakan")
+    print("="*60)
+    print("🎯 URUTAN UPLOAD:")
+    print("   1. MC (Master Customer) - WAJIB PERTAMA")
+    print("   2. Collection (Transaksi Current+Undue)")
+    print("   3. MB (Master Bayar bulan lalu)")
+    print("   4. MainBill (Tagihan bulan depan)")
+    print("   5. Ardebt (Tunggakan)")
+    print("="*60)
     app.run(host='0.0.0.0', port=5000, debug=True)
