@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - SUNTER DASHBOARD</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
         body {
-            background-color: #f4f6f9; /* Abu-abu muda, sama dengan Dashboard */
+            background-color: #f4f6f9;
             height: 100vh;
             display: flex;
             align-items: center;
@@ -17,12 +18,12 @@
             width: 100%;
             max-width: 400px;
             border: none;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1); /* Efek bayangan halus */
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
             border-radius: 12px;
             overflow: hidden;
         }
         .login-header {
-            background-color: #0d6efd; /* Biru Utama */
+            background-color: #0d6efd;
             color: white;
             padding: 30px 20px;
             text-align: center;
@@ -32,9 +33,18 @@
             font-weight: bold;
             font-size: 16px;
         }
-        .form-control:focus {
-            box-shadow: none;
-            border-color: #0d6efd;
+        /* CSS Tambahan untuk tombol mata */
+        .password-group {
+            position: relative;
+        }
+        .toggle-password {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: #6c757d;
+            z-index: 10;
         }
     </style>
 </head>
@@ -67,7 +77,10 @@
                 
                 <div class="mb-4">
                     <label for="password" class="form-label text-muted fw-bold small">PASSWORD</label>
-                    <input type="password" class="form-control form-control-lg" id="password" name="password" placeholder="Masukan Kata Sandi" required>
+                    <div class="password-group">
+                        <input type="password" class="form-control form-control-lg" id="password" name="password" placeholder="Masukan Kata Sandi" required>
+                        <i class="bi bi-eye-slash toggle-password" id="togglePassword"></i>
+                    </div>
                 </div>
 
                 <div class="d-grid gap-2">
@@ -82,5 +95,20 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        const togglePassword = document.querySelector('#togglePassword');
+        const password = document.querySelector('#password');
+
+        togglePassword.addEventListener('click', function (e) {
+            // Toggle type attribute
+            const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
+            password.setAttribute('type', type);
+            
+            // Toggle icon class (mata terbuka / tertutup)
+            this.classList.toggle('bi-eye');
+            this.classList.toggle('bi-eye-slash');
+        });
+    </script>
 </body>
 </html>
