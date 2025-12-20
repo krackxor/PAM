@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - SUNTER DASHBOARD</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f4f6f9; /* Abu-abu muda, sama dengan Dashboard */
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            width: 100%;
+            max-width: 400px;
+            border: none;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1); /* Efek bayangan halus */
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .login-header {
+            background-color: #0d6efd; /* Biru Utama */
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .btn-login {
+            padding: 12px;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .form-control:focus {
+            box-shadow: none;
+            border-color: #0d6efd;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card login-card">
+        <div class="login-header">
+            <h3 class="fw-bold mb-1">SUNTER DASHBOARD</h3>
+            <p class="mb-0 opacity-75 small">Sistem Monitoring Terpadu</p>
+        </div>
+
+        <div class="card-body p-4">
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form action="{{ url_for('login') }}" method="POST">
+                <div class="mb-3">
+                    <label for="username" class="form-label text-muted fw-bold small">USERNAME</label>
+                    <input type="text" class="form-control form-control-lg" id="username" name="username" placeholder="Masukan ID Pengguna" required autofocus>
+                </div>
+                
+                <div class="mb-4">
+                    <label for="password" class="form-label text-muted fw-bold small">PASSWORD</label>
+                    <input type="password" class="form-control form-control-lg" id="password" name="password" placeholder="Masukan Kata Sandi" required>
+                </div>
+
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-primary btn-login">MASUK SISTEM</button>
+                </div>
+            </form>
+        </div>
+        
+        <div class="card-footer text-center py-3 bg-white border-top-0">
+            <small class="text-muted">© 2024 Tim IT Sunter</small>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
