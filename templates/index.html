@@ -2,13 +2,10 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SUNTER DASHBOARD - Monitoring Operasional</title>
-    
+    <title>SUNTER DASHBOARD - Sistem Lengkap</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
     <style>
         body { 
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -16,6 +13,31 @@
             font-family: 'Segoe UI', sans-serif;
             min-height: 100vh;
         }
+        .global-header {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            border-bottom: 4px solid #ffd700;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            padding: 15px 25px;
+        }
+        .kpi-card {
+            background: white; border-radius: 10px; padding: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px; transition: all 0.3s;
+        }
+        .kpi-card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
+        .kpi-number { font-size: 2rem; font-weight: bold; margin: 10px 0; }
+        .cursor-pointer { cursor: pointer; transition: all 0.3s; }
+        .cursor-pointer:hover { transform: scale(1.02); }
+        .badge-custom { padding: 5px 10px; border-radius: 5px; font-size: 0.75rem; }
+        .upload-option { cursor: pointer; transition: all 0.3s; }
+        .upload-option .card { border: 3px solid #dee2e6; transition: all 0.3s; }
+        .upload-option:hover .card { border-color: #0d6efd; transform: translateY(-3px); }
+        .upload-option input[type="radio"]:checked + .card { border-color: #0d6efd; background: #0d6efd; color: white !important; }
+        .hover-shadow:hover { box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+    </style>
+</head>
+<body>
         .global-header {
             position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
@@ -108,70 +130,6 @@
     </div>
     
     <div class="row g-2 align-items-center">
-        <div class="col-md-3">
-            <select class="form-select form-select-sm fw-bold border-warning text-primary shadow-sm" id="filterArea">
-                <option value="SUNTER" selected>🌍 ALL AREA (Rayon 34 + 35)</option>
-                <option value="34">🏢 Rayon 34 Only</option>
-                <option value="35">🏢 Rayon 35 Only</option>
-            </select>
-        </div>
-        <div class="col-md-5">
-             <div class="alert alert-warning py-2 px-3 mb-0 small text-center fw-bold shadow-sm border-0">
-                <i class="fas fa-calendar-alt me-1"></i> Periode: <span id="labelPeriode" class="badge bg-dark">-</span>
-             </div>
-        </div>
-        <div class="col-md-4">
-            <div class="input-group input-group-sm shadow-sm">
-                <span class="input-group-text bg-white border-0">
-                    <i class="fas fa-search text-primary"></i>
-                </span>
-                <input type="text" class="form-control border-0 shadow-sm" id="globalSearch" placeholder="🔍 Cari Nomen / Nama...">
-                <button class="btn btn-primary shadow-sm" onclick="cariPelanggan()">
-                    <i class="fas fa-search-plus me-1"></i> CARI
-                </button>
-            </div>
-        </div>
-    </div>
-</header>
-
-<!-- MAIN CONTAINER -->
-<div class="container-fluid px-4">
-    
-    <!-- FLASH MESSAGES -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }} alert-dismissible fade show mt-2 shadow-sm">
-                    <strong>
-                        {% if category == 'success' %}<i class="fas fa-check-circle me-2"></i>
-                        {% elif category == 'danger' %}<i class="fas fa-exclamation-circle me-2"></i>
-                        {% else %}<i class="fas fa-info-circle me-2"></i>{% endif %}
-                    </strong>
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
-    <!-- TABS -->
-    <ul class="nav nav-tabs nav-fill shadow-sm bg-white rounded-top" id="mainTab">
-        <li class="nav-item">
-            <button class="nav-link active py-3" data-bs-toggle="tab" data-bs-target="#tab-ringkasan">
-                <i class="fas fa-chart-pie me-2"></i> RINGKASAN
-            </button>
-        </li>
-        <li class="nav-item">
-            <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#tab-collection">
-                <i class="fas fa-table me-2"></i> COLLECTION
-            </button>
-        </li>
-    </ul>
-
-    <!-- TAB CONTENT -->
-    <div class="tab-content bg-white shadow-sm p-4 rounded-bottom" style="min-height: 600px;">
-        
-        <!-- TAB: RINGKASAN -->
         <div class="tab-pane fade show active" id="tab-ringkasan">
             
             <!-- Row 1: Total Pelanggan & Pemakaian Air -->
@@ -358,6 +316,884 @@
     </div>
 </div>
 
+<!-- TAB: METER - ANOMALI DETECTION -->
+<div class="tab-pane fade" id="tab-meter">
+    
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="alert alert-info border-0">
+                <h6 class="fw-bold mb-2"><i class="fas fa-info-circle me-2"></i>Deteksi Anomali Pencatatan Meter</h6>
+                <p class="mb-0 small">Sistem otomatis mendeteksi anomali berdasarkan data MC dan Collection. Klik card untuk lihat detail.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Anomali Cards Grid -->
+    <div class="row g-3 mb-4">
+        
+        <!-- Card 1: Pemakaian Extreme -->
+        <div class="col-md-4">
+            <div class="kpi-card border-start border-danger border-5 cursor-pointer" onclick="loadAnomaliDetail('extreme')">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-danger text-uppercase mb-2">
+                            <i class="fas fa-exclamation-triangle me-2"></i>Pemakaian Extreme
+                        </h6>
+                        <div class="kpi-number text-danger" id="anomali-extreme-count">0</div>
+                        <small class="text-muted">Pemakaian > 200% rata-rata</small>
+                    </div>
+                    <i class="fas fa-arrow-circle-right fa-2x text-danger opacity-25"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 2: Zero Usage -->
+        <div class="col-md-4">
+            <div class="kpi-card border-start border-warning border-5 cursor-pointer" onclick="loadAnomaliDetail('zero')">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-warning text-uppercase mb-2">
+                            <i class="fas fa-battery-empty me-2"></i>Zero Usage
+                        </h6>
+                        <div class="kpi-number text-warning" id="anomali-zero-count">0</div>
+                        <small class="text-muted">Kubikasi = 0 m³</small>
+                    </div>
+                    <i class="fas fa-arrow-circle-right fa-2x text-warning opacity-25"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 3: Pemakaian Turun -->
+        <div class="col-md-4">
+            <div class="kpi-card border-start border-info border-5 cursor-pointer" onclick="loadAnomaliDetail('turun')">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-info text-uppercase mb-2">
+                            <i class="fas fa-arrow-down me-2"></i>Pemakaian Turun
+                        </h6>
+                        <div class="kpi-number text-info" id="anomali-turun-count">0</div>
+                        <small class="text-muted">Turun > 50% dari bulan lalu</small>
+                    </div>
+                    <i class="fas fa-arrow-circle-right fa-2x text-info opacity-25"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 4: Stand Negatif -->
+        <div class="col-md-3">
+            <div class="kpi-card border-start border-dark border-5 cursor-pointer" onclick="loadAnomaliDetail('negatif')">
+                <h6 class="text-dark text-uppercase mb-2">
+                    <i class="fas fa-minus-circle me-2"></i>Stand Negatif
+                </h6>
+                <div class="kpi-number text-dark" id="anomali-negatif-count">0</div>
+                <small class="text-muted">Stand < 0</small>
+            </div>
+        </div>
+
+        <!-- Card 5: Salah Catat -->
+        <div class="col-md-3">
+            <div class="kpi-card border-start border-secondary border-5 cursor-pointer" onclick="loadAnomaliDetail('salah')">
+                <h6 class="text-secondary text-uppercase mb-2">
+                    <i class="fas fa-pen me-2"></i>Salah Catat
+                </h6>
+                <div class="kpi-number text-secondary" id="anomali-salah-count">0</div>
+                <small class="text-muted">Data tidak valid</small>
+            </div>
+        </div>
+
+        <!-- Card 6: Rebill -->
+        <div class="col-md-3">
+            <div class="kpi-card border-start border-primary border-5 cursor-pointer" onclick="loadAnomaliDetail('rebill')">
+                <h6 class="text-primary text-uppercase mb-2">
+                    <i class="fas fa-redo me-2"></i>Rebill
+                </h6>
+                <div class="kpi-number text-primary" id="anomali-rebill-count">0</div>
+                <small class="text-muted">Tagihan ulang</small>
+            </div>
+        </div>
+
+        <!-- Card 7: Estimasi -->
+        <div class="col-md-3">
+            <div class="kpi-card border-start border-success border-5 cursor-pointer" onclick="loadAnomaliDetail('estimasi')">
+                <h6 class="text-success text-uppercase mb-2">
+                    <i class="fas fa-calculator me-2"></i>Estimasi
+                </h6>
+                <div class="kpi-number text-success" id="anomali-estimasi-count">0</div>
+                <small class="text-muted">Stand tidak terbaca</small>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Detail Table -->
+    <div class="kpi-card">
+        <div class="d-flex justify-content-between mb-3">
+            <h6 class="fw-bold">
+                <i class="fas fa-list me-2"></i>Detail Anomali: <span id="anomali-type-label">Semua</span>
+            </h6>
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-primary" onclick="loadAnomaliDetail('all')">
+                    <i class="fas fa-sync me-1"></i>Refresh
+                </button>
+                <button class="btn btn-outline-success" onclick="exportAnomali()">
+                    <i class="fas fa-file-excel me-1"></i>Export
+                </button>
+            </div>
+        </div>
+
+        <table id="tableAnomali" class="table table-striped table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Nomen</th>
+                    <th>Nama</th>
+                    <th>Rayon</th>
+                    <th>Kubikasi</th>
+                    <th>Jenis</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Data akan di-load via AJAX -->
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+<style>
+.cursor-pointer {
+    cursor: pointer;
+    transition: all 0.3s;
+}
+.cursor-pointer:hover {
+    transform: scale(1.02);
+}
+</style>
+
+<script>
+// Load anomali data
+function loadAnomaliData() {
+    $.get('/api/meter_anomali', function(data) {
+        $('#anomali-extreme-count').text(data.extreme_count);
+        $('#anomali-zero-count').text(data.zero_count);
+        $('#anomali-turun-count').text(data.turun_count);
+        $('#anomali-negatif-count').text(data.stand_negatif_count);
+        $('#anomali-salah-count').text(data.salah_catat_count);
+        $('#anomali-rebill-count').text(data.rebill_count);
+        $('#anomali-estimasi-count').text(data.estimasi_count);
+    });
+}
+
+// Load detail anomali
+function loadAnomaliDetail(type) {
+    // TODO: Implement detail loading
+    alert('Load detail: ' + type);
+}
+
+// Export anomali
+function exportAnomali() {
+    alert('Export Excel coming soon!');
+}
+
+// Load on tab show
+$('button[data-bs-target="#tab-meter"]').on('shown.bs.tab', function() {
+    loadAnomaliData();
+});
+</script>
+<!-- TAB: HISTORY - DATA KRONOLOGIS -->
+<div class="tab-pane fade" id="tab-history">
+    
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="alert alert-primary border-0">
+                <h6 class="fw-bold mb-2"><i class="fas fa-clock me-2"></i>History Data Pelanggan</h6>
+                <p class="mb-0 small">Cari nomen untuk melihat history kubikasi dan pembayaran multi periode.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Box -->
+    <div class="row mb-4">
+        <div class="col-md-8 mx-auto">
+            <div class="input-group input-group-lg shadow">
+                <span class="input-group-text bg-primary text-white">
+                    <i class="fas fa-search"></i>
+                </span>
+                <input type="text" class="form-control" id="historyNomenSearch" placeholder="Masukkan NOMEN untuk cari history...">
+                <button class="btn btn-primary px-4" onclick="searchHistory()">
+                    <i class="fas fa-search me-2"></i>CARI
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Result Container -->
+    <div id="historyResult" style="display: none;">
+        
+        <!-- Profil Pelanggan -->
+        <div class="kpi-card border-start border-primary border-5 mb-3">
+            <h6 class="fw-bold mb-3">
+                <i class="fas fa-user-circle me-2"></i>Profil Pelanggan
+            </h6>
+            <div class="row">
+                <div class="col-md-3">
+                    <small class="text-muted d-block">NOMEN</small>
+                    <strong id="history-nomen">-</strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Nama</small>
+                    <strong id="history-nama">-</strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Rayon</small>
+                    <strong id="history-rayon">-</strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Target MC</small>
+                    <strong id="history-target">-</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Sub-Menu -->
+        <ul class="nav nav-pills mb-3">
+            <li class="nav-item">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#history-kubikasi-tab">
+                    <i class="fas fa-tint me-2"></i>Kubikasi
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#history-pembayaran-tab">
+                    <i class="fas fa-money-bill me-2"></i>Pembayaran
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#history-current-tab">
+                    <i class="fas fa-check me-2"></i>Current
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#history-undue-tab">
+                    <i class="fas fa-bolt me-2"></i>Undue
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            
+            <!-- Sub-Tab: Kubikasi -->
+            <div class="tab-pane fade show active" id="history-kubikasi-tab">
+                <div class="kpi-card">
+                    <h6 class="fw-bold mb-3">History Kubikasi (Multi Periode)</h6>
+                    
+                    <!-- Chart -->
+                    <canvas id="chartHistoryKubikasi" height="200"></canvas>
+                    
+                    <!-- Table -->
+                    <table class="table table-striped mt-3">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Periode</th>
+                                <th>Kubikasi (m³)</th>
+                                <th>Perubahan</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-kubikasi-tbody">
+                            <!-- Data akan di-load via AJAX -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Sub-Tab: Pembayaran -->
+            <div class="tab-pane fade" id="history-pembayaran-tab">
+                <div class="kpi-card">
+                    <h6 class="fw-bold mb-3">History Pembayaran</h6>
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Tanggal</th>
+                                <th>Jumlah</th>
+                                <th>Tipe</th>
+                                <th>Bill Period</th>
+                                <th>Sumber</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-pembayaran-tbody">
+                            <!-- Data akan di-load via AJAX -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Sub-Tab: Current -->
+            <div class="tab-pane fade" id="history-current-tab">
+                <div class="kpi-card">
+                    <h6 class="fw-bold mb-3">History Current (Pembayaran Normal)</h6>
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Tanggal</th>
+                                <th>Jumlah</th>
+                                <th>Bill Period</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-current-tbody">
+                            <!-- Filtered data -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Sub-Tab: Undue -->
+            <div class="tab-pane fade" id="history-undue-tab">
+                <div class="kpi-card">
+                    <h6 class="fw-bold mb-3">History Undue (Bayar Cepat)</h6>
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Tanggal</th>
+                                <th>Jumlah</th>
+                                <th>Bill Period</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-undue-tbody">
+                            <!-- Filtered data -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Export Button -->
+        <div class="text-end mt-3">
+            <button class="btn btn-success" onclick="exportHistory()">
+                <i class="fas fa-file-excel me-2"></i>Export Raw Data
+            </button>
+        </div>
+
+    </div>
+
+    <!-- Empty State -->
+    <div id="historyEmpty" class="text-center py-5">
+        <i class="fas fa-search fa-5x text-muted opacity-25 mb-3"></i>
+        <p class="text-muted">Masukkan NOMEN untuk melihat history data pelanggan</p>
+    </div>
+
+</div>
+
+<script>
+let chartHistoryKubikasi;
+
+function searchHistory() {
+    const nomen = $('#historyNomenSearch').val().trim();
+    
+    if (!nomen) {
+        alert('Masukkan NOMEN terlebih dahulu');
+        return;
+    }
+    
+    // Show loading
+    $('#historyResult').hide();
+    $('#historyEmpty').html('<i class="fas fa-spinner fa-spin fa-3x text-primary"></i><p class="text-muted mt-3">Loading...</p>');
+    
+    // Load profil pelanggan
+    $.get('/api/profil_pelanggan/' + nomen, function(data) {
+        // Update profil
+        $('#history-nomen').text(data.master.nomen);
+        $('#history-nama').text(data.master.nama || 'Tanpa Nama');
+        $('#history-rayon').text(data.master.rayon);
+        $('#history-target').text(formatRupiah(data.master.target_mc));
+        
+        // Load history pembayaran
+        loadHistoryPembayaran(nomen);
+        
+        // Show result
+        $('#historyEmpty').hide();
+        $('#historyResult').show();
+        
+    }).fail(function() {
+        $('#historyEmpty').html('<i class="fas fa-times-circle fa-5x text-danger opacity-50 mb-3"></i><p class="text-danger">Nomen tidak ditemukan</p>');
+    });
+}
+
+function loadHistoryPembayaran(nomen) {
+    $.get('/api/history_pembayaran?nomen=' + nomen, function(data) {
+        let htmlPembayaran = '';
+        let htmlCurrent = '';
+        let htmlUndue = '';
+        
+        data.forEach(row => {
+            const html = `
+                <tr>
+                    <td>${row.tgl_bayar}</td>
+                    <td>${formatRupiah(row.jumlah_bayar)}</td>
+                    <td><span class="badge bg-${row.tipe_bayar === 'current' ? 'primary' : 'warning'}">${row.tipe_bayar.toUpperCase()}</span></td>
+                    <td>${row.bill_period || '-'}</td>
+                    <td class="small">${row.sumber_file}</td>
+                </tr>
+            `;
+            
+            htmlPembayaran += html;
+            
+            if (row.tipe_bayar === 'current') {
+                htmlCurrent += html;
+            } else {
+                htmlUndue += html;
+            }
+        });
+        
+        $('#history-pembayaran-tbody').html(htmlPembayaran || '<tr><td colspan="5" class="text-center text-muted">Tidak ada data</td></tr>');
+        $('#history-current-tbody').html(htmlCurrent || '<tr><td colspan="3" class="text-center text-muted">Tidak ada data</td></tr>');
+        $('#history-undue-tbody').html(htmlUndue || '<tr><td colspan="3" class="text-center text-muted">Tidak ada data</td></tr>');
+    });
+}
+
+function exportHistory() {
+    const nomen = $('#historyNomenSearch').val().trim();
+    window.location.href = '/api/export_history?nomen=' + nomen;
+}
+</script>
+<!-- TAB: ANALISA MANUAL - PUSAT KERJA TIM -->
+<div class="tab-pane fade" id="tab-analisa">
+    
+    <div class="row">
+        
+        <!-- Sidebar: List Analisa -->
+        <div class="col-md-4">
+            
+            <!-- Filter -->
+            <div class="kpi-card mb-3">
+                <h6 class="fw-bold mb-3">
+                    <i class="fas fa-filter me-2"></i>Filter Status
+                </h6>
+                <div class="btn-group w-100 mb-2">
+                    <button class="btn btn-sm btn-outline-danger" onclick="filterAnalisa('Open')">
+                        Open (<span id="count-open">0</span>)
+                    </button>
+                    <button class="btn btn-sm btn-outline-warning" onclick="filterAnalisa('Progress')">
+                        Progress (<span id="count-progress">0</span>)
+                    </button>
+                    <button class="btn btn-sm btn-outline-success" onclick="filterAnalisa('Closed')">
+                        Closed (<span id="count-closed">0</span>)
+                    </button>
+                </div>
+                <button class="btn btn-sm btn-primary w-100" onclick="filterAnalisa('all')">
+                    <i class="fas fa-list me-1"></i>Semua
+                </button>
+            </div>
+
+            <!-- Button Tambah Baru -->
+            <button class="btn btn-success w-100 mb-3" onclick="showFormAnalisaBaru()">
+                <i class="fas fa-plus-circle me-2"></i>BUAT ANALISA BARU
+            </button>
+
+            <!-- List Analisa -->
+            <div style="max-height: 600px; overflow-y: auto;">
+                <div id="analisa-list">
+                    <!-- Items akan di-load via AJAX -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Main: Detail & Form Analisa -->
+        <div class="col-md-8">
+            
+            <!-- Empty State -->
+            <div id="analisa-empty" class="kpi-card text-center py-5">
+                <i class="fas fa-clipboard-list fa-5x text-muted opacity-25 mb-3"></i>
+                <h5 class="text-muted">Pilih analisa di sidebar atau buat baru</h5>
+            </div>
+
+            <!-- Form Analisa -->
+            <div id="analisa-form" style="display: none;">
+                
+                <!-- Profil Pelanggan (Read-Only) -->
+                <div class="kpi-card border-start border-primary border-5 mb-3">
+                    <h6 class="fw-bold mb-3">
+                        <i class="fas fa-user me-2"></i>Profil Pelanggan
+                    </h6>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <small class="text-muted">NOMEN</small>
+                            <div class="fw-bold" id="form-nomen">-</div>
+                        </div>
+                        <div class="col-md-5">
+                            <small class="text-muted">Nama</small>
+                            <div class="fw-bold" id="form-nama">-</div>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted">Rayon</small>
+                            <div class="fw-bold" id="form-rayon">-</div>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted">Kubikasi</small>
+                            <div class="fw-bold" id="form-kubikasi">-</div>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-muted">Alamat</small>
+                        <div class="fw-bold" id="form-alamat">-</div>
+                    </div>
+                </div>
+
+                <!-- History Singkat -->
+                <div class="kpi-card mb-3">
+                    <h6 class="fw-bold mb-3">
+                        <i class="fas fa-history me-2"></i>History Singkat
+                    </h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-muted small">Pembayaran Terakhir</h6>
+                            <div id="history-last-payment">-</div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted small">Anomali Terdahulu</h6>
+                            <div id="history-anomali-list">-</div>
+                        </div>
+                    </div>
+                    <div class="text-end mt-2">
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewFullHistory()">
+                            <i class="fas fa-external-link-alt me-1"></i>Lihat History Lengkap
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Form Input Analisa -->
+                <div class="kpi-card">
+                    <h6 class="fw-bold mb-3">
+                        <i class="fas fa-edit me-2"></i>Form Analisa
+                    </h6>
+
+                    <form id="formAnalisaManual">
+                        <input type="hidden" id="analisa-id" name="id">
+                        <input type="hidden" id="analisa-nomen" name="nomen">
+
+                        <!-- Jenis Anomali -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-tag me-1"></i>Jenis Anomali *
+                            </label>
+                            <select class="form-select" id="analisa-jenis" name="jenis_anomali" required>
+                                <option value="">-- Pilih --</option>
+                                <option value="Zero Usage">Zero Usage</option>
+                                <option value="Pemakaian Extreme">Pemakaian Extreme</option>
+                                <option value="Pemakaian Turun">Pemakaian Turun</option>
+                                <option value="Stand Negatif">Stand Negatif</option>
+                                <option value="Salah Catat">Salah Catat</option>
+                                <option value="Rebill">Rebill</option>
+                                <option value="Estimasi">Estimasi</option>
+                                <option value="Lainnya">Lainnya</option>
+                            </select>
+                        </div>
+
+                        <!-- Analisa Tim -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-search me-1"></i>Analisa Tim *
+                            </label>
+                            <textarea class="form-control" id="analisa-tim" name="analisa_tim" rows="3" placeholder="Hasil cek lapangan, verifikasi data, dll..." required></textarea>
+                            <div class="form-text">Jelaskan temuan di lapangan atau hasil verifikasi data</div>
+                        </div>
+
+                        <!-- Kesimpulan -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-lightbulb me-1"></i>Kesimpulan *
+                            </label>
+                            <textarea class="form-control" id="analisa-kesimpulan" name="kesimpulan" rows="2" placeholder="Kesimpulan analisa..." required></textarea>
+                        </div>
+
+                        <!-- Rekomendasi -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-clipboard-check me-1"></i>Rekomendasi *
+                            </label>
+                            <select class="form-select mb-2" id="analisa-rekomendasi" name="rekomendasi" required>
+                                <option value="">-- Pilih Rekomendasi --</option>
+                                <option value="Ganti Meter">Ganti Meter</option>
+                                <option value="Cek Lapangan">Cek Lapangan Ulang</option>
+                                <option value="Tagih Susulan">Tagih Susulan</option>
+                                <option value="Monitoring">Monitoring Lanjut</option>
+                                <option value="Tidak Ada Tindakan">Tidak Ada Tindakan</option>
+                                <option value="Lainnya">Lainnya</option>
+                            </select>
+                            <textarea class="form-control" id="analisa-rekomendasi-detail" placeholder="Detail rekomendasi (opsional)..." rows="2"></textarea>
+                        </div>
+
+                        <!-- Status -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-flag me-1"></i>Status *
+                            </label>
+                            <div class="btn-group w-100">
+                                <input type="radio" class="btn-check" name="status" id="status-open" value="Open">
+                                <label class="btn btn-outline-danger" for="status-open">Open</label>
+
+                                <input type="radio" class="btn-check" name="status" id="status-progress" value="Progress">
+                                <label class="btn btn-outline-warning" for="status-progress">Progress</label>
+
+                                <input type="radio" class="btn-check" name="status" id="status-closed" value="Closed">
+                                <label class="btn btn-outline-success" for="status-closed">Closed</label>
+                            </div>
+                        </div>
+
+                        <!-- User Editor -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-user-edit me-1"></i>Nama Analis
+                            </label>
+                            <input type="text" class="form-control" id="analisa-user" name="user_editor" placeholder="Nama petugas..." value="Admin">
+                        </div>
+
+                        <!-- Audit Trail (Read-Only untuk update) -->
+                        <div class="mb-3" id="audit-trail" style="display: none;">
+                            <div class="alert alert-info small mb-0">
+                                <i class="fas fa-info-circle me-1"></i>
+                                <strong>Audit Trail:</strong>
+                                <div id="audit-info">-</div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex justify-content-between mt-4">
+                            <button type="button" class="btn btn-secondary" onclick="cancelAnalisa()">
+                                <i class="fas fa-times me-1"></i>Batal
+                            </button>
+                            <div>
+                                <button type="button" class="btn btn-outline-danger me-2" id="btn-delete" onclick="deleteAnalisa()" style="display: none;">
+                                    <i class="fas fa-trash me-1"></i>Hapus
+                                </button>
+                                <button type="submit" class="btn btn-success px-4">
+                                    <i class="fas fa-save me-2"></i>SIMPAN ANALISA
+                                </button>
+                            </div>
+                        </div>
+
+                    </form>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+let currentAnalisa = null;
+
+// Load list analisa
+function loadAnalisaList(statusFilter = 'all') {
+    const url = statusFilter === 'all' ? '/api/analisa_list' : '/api/analisa_list?status=' + statusFilter;
+    
+    $.get(url, function(data) {
+        let html = '';
+        
+        if (data.length === 0) {
+            html = '<div class="alert alert-warning">Tidak ada data analisa</div>';
+        } else {
+            data.forEach(item => {
+                const badgeClass = item.status === 'Open' ? 'danger' : (item.status === 'Progress' ? 'warning' : 'success');
+                html += `
+                    <div class="card mb-2 cursor-pointer hover-shadow" onclick="loadAnalisaDetail(${item.id})">
+                        <div class="card-body p-3">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="mb-0">${item.nomen}</h6>
+                                <span class="badge bg-${badgeClass}">${item.status}</span>
+                            </div>
+                            <small class="text-muted d-block">${item.nama || 'Tanpa Nama'}</small>
+                            <small class="text-muted d-block">
+                                <i class="fas fa-tag me-1"></i>${item.jenis_anomali}
+                            </small>
+                            <small class="text-muted">
+                                <i class="fas fa-clock me-1"></i>${item.updated_at}
+                            </small>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        $('#analisa-list').html(html);
+        
+        // Update counts
+        const counts = {open: 0, progress: 0, closed: 0};
+        data.forEach(item => {
+            if (item.status === 'Open') counts.open++;
+            else if (item.status === 'Progress') counts.progress++;
+            else counts.closed++;
+        });
+        
+        $('#count-open').text(counts.open);
+        $('#count-progress').text(counts.progress);
+        $('#count-closed').text(counts.closed);
+    });
+}
+
+// Load detail analisa
+function loadAnalisaDetail(analisa_id) {
+    $.get('/api/analisa_detail/' + analisa_id, function(data) {
+        currentAnalisa = data;
+        
+        // Show form
+        $('#analisa-empty').hide();
+        $('#analisa-form').show();
+        
+        // Fill profil pelanggan
+        $('#form-nomen').text(data.nomen);
+        $('#form-nama').text(data.nama || 'Tanpa Nama');
+        $('#form-rayon').text(data.rayon);
+        $('#form-kubikasi').text(data.kubikasi + ' m³');
+        $('#form-alamat').text(data.alamat || '-');
+        
+        // Fill form
+        $('#analisa-id').val(data.id);
+        $('#analisa-nomen').val(data.nomen);
+        $('#analisa-jenis').val(data.jenis_anomali);
+        $('#analisa-tim').val(data.analisa_tim);
+        $('#analisa-kesimpulan').val(data.kesimpulan);
+        $('#analisa-rekomendasi').val(data.rekomendasi);
+        $('#analisa-user').val(data.user_editor);
+        $(`#status-${data.status.toLowerCase()}`).prop('checked', true);
+        
+        // Show audit trail
+        $('#audit-info').html(`
+            Dibuat/Update: ${data.updated_at}<br>
+            Oleh: ${data.user_editor}
+        `);
+        $('#audit-trail').show();
+        $('#btn-delete').show();
+        
+        // Load history
+        loadHistorySingkat(data.nomen);
+    });
+}
+
+// Show form baru
+function showFormAnalisaBaru() {
+    const nomen = prompt('Masukkan NOMEN pelanggan:');
+    
+    if (!nomen) return;
+    
+    // Load profil pelanggan
+    $.get('/api/profil_pelanggan/' + nomen, function(data) {
+        currentAnalisa = null;
+        
+        // Show form
+        $('#analisa-empty').hide();
+        $('#analisa-form').show();
+        
+        // Fill profil
+        $('#form-nomen').text(data.master.nomen);
+        $('#form-nama').text(data.master.nama || 'Tanpa Nama');
+        $('#form-rayon').text(data.master.rayon);
+        $('#form-kubikasi').text(data.master.kubikasi + ' m³');
+        $('#form-alamat').text(data.master.alamat || '-');
+        
+        // Reset form
+        $('#formAnalisaManual')[0].reset();
+        $('#analisa-id').val('');
+        $('#analisa-nomen').val(nomen);
+        $('#status-open').prop('checked', true);
+        $('#audit-trail').hide();
+        $('#btn-delete').hide();
+        
+        // Load history
+        loadHistorySingkat(nomen);
+    }).fail(function() {
+        alert('Nomen tidak ditemukan!');
+    });
+}
+
+// Load history singkat
+function loadHistorySingkat(nomen) {
+    $.get('/api/history_pembayaran?nomen=' + nomen, function(data) {
+        if (data.length > 0) {
+            const last = data[0];
+            $('#history-last-payment').html(`
+                <strong>${formatRupiah(last.jumlah_bayar)}</strong><br>
+                <small>${last.tgl_bayar}</small>
+            `);
+        } else {
+            $('#history-last-payment').text('Belum ada data');
+        }
+    });
+}
+
+// Save analisa
+$('#formAnalisaManual').submit(function(e) {
+    e.preventDefault();
+    
+    const formData = {
+        id: $('#analisa-id').val() || null,
+        nomen: $('#analisa-nomen').val(),
+        jenis_anomali: $('#analisa-jenis').val(),
+        analisa_tim: $('#analisa-tim').val(),
+        kesimpulan: $('#analisa-kesimpulan').val(),
+        rekomendasi: $('#analisa-rekomendasi').val() + '\n' + $('#analisa-rekomendasi-detail').val(),
+        status: $('input[name="status"]:checked').val(),
+        user_editor: $('#analisa-user').val()
+    };
+    
+    $.ajax({
+        url: '/api/analisa_save',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(formData),
+        success: function(response) {
+            alert('✅ Analisa berhasil disimpan!');
+            loadAnalisaList();
+            if (response.id) {
+                loadAnalisaDetail(response.id);
+            }
+        },
+        error: function() {
+            alert('❌ Gagal menyimpan analisa!');
+        }
+    });
+});
+
+// Cancel
+function cancelAnalisa() {
+    $('#analisa-form').hide();
+    $('#analisa-empty').show();
+}
+
+// Delete
+function deleteAnalisa() {
+    if (!confirm('Yakin hapus analisa ini?')) return;
+    
+    const id = $('#analisa-id').val();
+    // TODO: Implement delete API
+    alert('Delete feature coming soon!');
+}
+
+// Filter
+function filterAnalisa(status) {
+    loadAnalisaList(status);
+}
+
+// View full history
+function viewFullHistory() {
+    const nomen = $('#form-nomen').text();
+    $('#historyNomenSearch').val(nomen);
+    $('button[data-bs-target="#tab-history"]').tab('show');
+    setTimeout(() => searchHistory(), 500);
+}
+
+// Load on tab show
+$('button[data-bs-target="#tab-analisa"]').on('shown.bs.tab', function() {
+    loadAnalisaList();
+});
+
+.hover-shadow:hover {
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+</script>
 <!-- MODAL UPLOAD -->
 <div class="modal fade" id="modalUpload" tabindex="-1">
     <div class="modal-dialog modal-xl">
