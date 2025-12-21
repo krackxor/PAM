@@ -248,6 +248,63 @@
                                         <i class="fas fa-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" title="Bayar lebih cepat: Pemakaian bulan ini dibayar di bulan ini juga"></i>
                                     </small>
                                     <div class="kpi-number text-warning" id="kpi-coll-undue" style="font-size: 1.5rem;">Rp 0</div>
+                                    <span class="badge badge-custom bg-warning text-dark" id="kpi-coll-nomen-undue">0 nomen</span>
+                                    <small class="text-muted d-block mt-1" style="font-size: 0.7rem;">Pemakaian bulan ini</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 3b: Total Pemakaian Air -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="kpi-card border-start border-primary border-5">
+                        <h6 class="text-muted text-uppercase"><i class="fas fa-tint me-2"></i>Total Pemakaian Air</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <small class="text-muted d-block">Total Volume</small>
+                                    <div class="kpi-number text-primary" id="kpi-volume-total" style="font-size: 1.5rem;">0 m³</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <small class="text-primary d-block">Current</small>
+                                    <div class="kpi-number text-primary" id="kpi-volume-current" style="font-size: 1.5rem;">0 m³</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <small class="text-warning d-block">Undue</small>
+                                    <div class="kpi-number text-warning" id="kpi-volume-undue" style="font-size: 1.5rem;">0 m³</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <small class="text-primary d-block" title="Pemakaian bulan LALU dibayar bulan INI">
+                                        Current
+                                        <i class="fas fa-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" title="Pembayaran normal: Pemakaian bulan lalu dibayar bulan ini"></i>
+                                    </small>
+                                    <div class="kpi-number text-primary" id="kpi-coll-current" style="font-size: 1.5rem;">Rp 0</div>
+                                    <span class="badge badge-custom bg-primary" id="kpi-coll-nomen-current">0 nomen</span>
+                                    <small class="text-muted d-block mt-1" style="font-size: 0.7rem;">Pemakaian bulan lalu</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <small class="text-warning d-block" title="Pemakaian bulan INI dibayar bulan INI">
+                                        Undue
+                                        <i class="fas fa-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" title="Bayar lebih cepat: Pemakaian bulan ini dibayar di bulan ini juga"></i>
+                                    </small>
+                                    <div class="kpi-number text-warning" id="kpi-coll-undue" style="font-size: 1.5rem;">Rp 0</div>
                                     <span class="badge badge-custom bg-warning" id="kpi-coll-nomen-undue">0 nomen</span>
                                     <small class="text-muted d-block mt-1" style="font-size: 0.7rem;">Pemakaian bulan ini</small>
                                 </div>
@@ -491,6 +548,11 @@
             $('#kpi-coll-nomen-current').text(data.collection.current_nomen + ' nomen');
             $('#kpi-coll-undue').text(formatRupiah(data.collection.undue_nominal));
             $('#kpi-coll-nomen-undue').text(data.collection.undue_nomen + ' nomen');
+            
+            // Total Pemakaian Air
+            $('#kpi-volume-total').text(new Intl.NumberFormat('id-ID').format(data.collection.total_volume) + ' m³');
+            $('#kpi-volume-current').text(new Intl.NumberFormat('id-ID').format(data.collection.current_volume) + ' m³');
+            $('#kpi-volume-undue').text(new Intl.NumberFormat('id-ID').format(data.collection.undue_volume) + ' m³');
             
             // Collection Rate
             $('#kpi-rate').text(data.collection_rate + '%');
