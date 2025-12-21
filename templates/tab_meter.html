@@ -1,0 +1,184 @@
+<!-- TAB: METER - ANOMALI DETECTION -->
+<div class="tab-pane fade" id="tab-meter">
+    
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="alert alert-info border-0">
+                <h6 class="fw-bold mb-2"><i class="fas fa-info-circle me-2"></i>Deteksi Anomali Pencatatan Meter</h6>
+                <p class="mb-0 small">Sistem otomatis mendeteksi anomali berdasarkan data MC dan Collection. Klik card untuk lihat detail.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Anomali Cards Grid -->
+    <div class="row g-3 mb-4">
+        
+        <!-- Card 1: Pemakaian Extreme -->
+        <div class="col-md-4">
+            <div class="kpi-card border-start border-danger border-5 cursor-pointer" onclick="loadAnomaliDetail('extreme')">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-danger text-uppercase mb-2">
+                            <i class="fas fa-exclamation-triangle me-2"></i>Pemakaian Extreme
+                        </h6>
+                        <div class="kpi-number text-danger" id="anomali-extreme-count">0</div>
+                        <small class="text-muted">Pemakaian > 200% rata-rata</small>
+                    </div>
+                    <i class="fas fa-arrow-circle-right fa-2x text-danger opacity-25"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 2: Zero Usage -->
+        <div class="col-md-4">
+            <div class="kpi-card border-start border-warning border-5 cursor-pointer" onclick="loadAnomaliDetail('zero')">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-warning text-uppercase mb-2">
+                            <i class="fas fa-battery-empty me-2"></i>Zero Usage
+                        </h6>
+                        <div class="kpi-number text-warning" id="anomali-zero-count">0</div>
+                        <small class="text-muted">Kubikasi = 0 m³</small>
+                    </div>
+                    <i class="fas fa-arrow-circle-right fa-2x text-warning opacity-25"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 3: Pemakaian Turun -->
+        <div class="col-md-4">
+            <div class="kpi-card border-start border-info border-5 cursor-pointer" onclick="loadAnomaliDetail('turun')">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-info text-uppercase mb-2">
+                            <i class="fas fa-arrow-down me-2"></i>Pemakaian Turun
+                        </h6>
+                        <div class="kpi-number text-info" id="anomali-turun-count">0</div>
+                        <small class="text-muted">Turun > 50% dari bulan lalu</small>
+                    </div>
+                    <i class="fas fa-arrow-circle-right fa-2x text-info opacity-25"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 4: Stand Negatif -->
+        <div class="col-md-3">
+            <div class="kpi-card border-start border-dark border-5 cursor-pointer" onclick="loadAnomaliDetail('negatif')">
+                <h6 class="text-dark text-uppercase mb-2">
+                    <i class="fas fa-minus-circle me-2"></i>Stand Negatif
+                </h6>
+                <div class="kpi-number text-dark" id="anomali-negatif-count">0</div>
+                <small class="text-muted">Stand < 0</small>
+            </div>
+        </div>
+
+        <!-- Card 5: Salah Catat -->
+        <div class="col-md-3">
+            <div class="kpi-card border-start border-secondary border-5 cursor-pointer" onclick="loadAnomaliDetail('salah')">
+                <h6 class="text-secondary text-uppercase mb-2">
+                    <i class="fas fa-pen me-2"></i>Salah Catat
+                </h6>
+                <div class="kpi-number text-secondary" id="anomali-salah-count">0</div>
+                <small class="text-muted">Data tidak valid</small>
+            </div>
+        </div>
+
+        <!-- Card 6: Rebill -->
+        <div class="col-md-3">
+            <div class="kpi-card border-start border-primary border-5 cursor-pointer" onclick="loadAnomaliDetail('rebill')">
+                <h6 class="text-primary text-uppercase mb-2">
+                    <i class="fas fa-redo me-2"></i>Rebill
+                </h6>
+                <div class="kpi-number text-primary" id="anomali-rebill-count">0</div>
+                <small class="text-muted">Tagihan ulang</small>
+            </div>
+        </div>
+
+        <!-- Card 7: Estimasi -->
+        <div class="col-md-3">
+            <div class="kpi-card border-start border-success border-5 cursor-pointer" onclick="loadAnomaliDetail('estimasi')">
+                <h6 class="text-success text-uppercase mb-2">
+                    <i class="fas fa-calculator me-2"></i>Estimasi
+                </h6>
+                <div class="kpi-number text-success" id="anomali-estimasi-count">0</div>
+                <small class="text-muted">Stand tidak terbaca</small>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Detail Table -->
+    <div class="kpi-card">
+        <div class="d-flex justify-content-between mb-3">
+            <h6 class="fw-bold">
+                <i class="fas fa-list me-2"></i>Detail Anomali: <span id="anomali-type-label">Semua</span>
+            </h6>
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-primary" onclick="loadAnomaliDetail('all')">
+                    <i class="fas fa-sync me-1"></i>Refresh
+                </button>
+                <button class="btn btn-outline-success" onclick="exportAnomali()">
+                    <i class="fas fa-file-excel me-1"></i>Export
+                </button>
+            </div>
+        </div>
+
+        <table id="tableAnomali" class="table table-striped table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Nomen</th>
+                    <th>Nama</th>
+                    <th>Rayon</th>
+                    <th>Kubikasi</th>
+                    <th>Jenis</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Data akan di-load via AJAX -->
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+<style>
+.cursor-pointer {
+    cursor: pointer;
+    transition: all 0.3s;
+}
+.cursor-pointer:hover {
+    transform: scale(1.02);
+}
+</style>
+
+<script>
+// Load anomali data
+function loadAnomaliData() {
+    $.get('/api/meter_anomali', function(data) {
+        $('#anomali-extreme-count').text(data.extreme_count);
+        $('#anomali-zero-count').text(data.zero_count);
+        $('#anomali-turun-count').text(data.turun_count);
+        $('#anomali-negatif-count').text(data.stand_negatif_count);
+        $('#anomali-salah-count').text(data.salah_catat_count);
+        $('#anomali-rebill-count').text(data.rebill_count);
+        $('#anomali-estimasi-count').text(data.estimasi_count);
+    });
+}
+
+// Load detail anomali
+function loadAnomaliDetail(type) {
+    // TODO: Implement detail loading
+    alert('Load detail: ' + type);
+}
+
+// Export anomali
+function exportAnomali() {
+    alert('Export Excel coming soon!');
+}
+
+// Load on tab show
+$('button[data-bs-target="#tab-meter"]').on('shown.bs.tab', function() {
+    loadAnomaliData();
+});
+</script>
