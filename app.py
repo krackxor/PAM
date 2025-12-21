@@ -543,9 +543,11 @@ def upload_file():
                 
                 df = df.rename(columns=rename_dict)
                 
-                # Clean nomen
-                df['nomen'] = df['nomen'].apply(clean_nomen)
+                # Clean nomen - SAMA seperti di Collection!
+                df['nomen'] = df['nomen'].astype(str).str.strip().str.replace('.0', '', regex=False)
                 df = df.dropna(subset=['nomen'])
+                df = df[df['nomen'] != '']
+                df = df[df['nomen'] != 'nan']
                 
                 # Parse ZONA_NOVAK
                 df['zona_novak'] = df['ZONA_NOVAK'].astype(str).str.strip()
@@ -614,9 +616,12 @@ def upload_file():
                 
                 df = df.rename(columns=rename_dict)
                 
-                # Clean data
-                df['nomen'] = df['nomen'].apply(clean_nomen)
+                # Clean data NOMEN - SANGAT PENTING untuk matching!
+                # NOMEN bisa punya format berbeda: "40061003" vs "40061003.0" vs " 40061003 "
+                df['nomen'] = df['nomen'].astype(str).str.strip().str.replace('.0', '', regex=False)
                 df = df.dropna(subset=['nomen'])
+                df = df[df['nomen'] != '']  # Hapus nomen kosong
+                df = df[df['nomen'] != 'nan']  # Hapus nomen nan string
                 
                 # Clean tanggal
                 if 'tgl_bayar' in df.columns:
