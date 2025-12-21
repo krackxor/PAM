@@ -1,0 +1,256 @@
+<!-- TAB: HISTORY - DATA KRONOLOGIS -->
+<div class="tab-pane fade" id="tab-history">
+    
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="alert alert-primary border-0">
+                <h6 class="fw-bold mb-2"><i class="fas fa-clock me-2"></i>History Data Pelanggan</h6>
+                <p class="mb-0 small">Cari nomen untuk melihat history kubikasi dan pembayaran multi periode.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Box -->
+    <div class="row mb-4">
+        <div class="col-md-8 mx-auto">
+            <div class="input-group input-group-lg shadow">
+                <span class="input-group-text bg-primary text-white">
+                    <i class="fas fa-search"></i>
+                </span>
+                <input type="text" class="form-control" id="historyNomenSearch" placeholder="Masukkan NOMEN untuk cari history...">
+                <button class="btn btn-primary px-4" onclick="searchHistory()">
+                    <i class="fas fa-search me-2"></i>CARI
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Result Container -->
+    <div id="historyResult" style="display: none;">
+        
+        <!-- Profil Pelanggan -->
+        <div class="kpi-card border-start border-primary border-5 mb-3">
+            <h6 class="fw-bold mb-3">
+                <i class="fas fa-user-circle me-2"></i>Profil Pelanggan
+            </h6>
+            <div class="row">
+                <div class="col-md-3">
+                    <small class="text-muted d-block">NOMEN</small>
+                    <strong id="history-nomen">-</strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Nama</small>
+                    <strong id="history-nama">-</strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Rayon</small>
+                    <strong id="history-rayon">-</strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Target MC</small>
+                    <strong id="history-target">-</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Sub-Menu -->
+        <ul class="nav nav-pills mb-3">
+            <li class="nav-item">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#history-kubikasi-tab">
+                    <i class="fas fa-tint me-2"></i>Kubikasi
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#history-pembayaran-tab">
+                    <i class="fas fa-money-bill me-2"></i>Pembayaran
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#history-current-tab">
+                    <i class="fas fa-check me-2"></i>Current
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#history-undue-tab">
+                    <i class="fas fa-bolt me-2"></i>Undue
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            
+            <!-- Sub-Tab: Kubikasi -->
+            <div class="tab-pane fade show active" id="history-kubikasi-tab">
+                <div class="kpi-card">
+                    <h6 class="fw-bold mb-3">History Kubikasi (Multi Periode)</h6>
+                    
+                    <!-- Chart -->
+                    <canvas id="chartHistoryKubikasi" height="200"></canvas>
+                    
+                    <!-- Table -->
+                    <table class="table table-striped mt-3">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Periode</th>
+                                <th>Kubikasi (m³)</th>
+                                <th>Perubahan</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-kubikasi-tbody">
+                            <!-- Data akan di-load via AJAX -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Sub-Tab: Pembayaran -->
+            <div class="tab-pane fade" id="history-pembayaran-tab">
+                <div class="kpi-card">
+                    <h6 class="fw-bold mb-3">History Pembayaran</h6>
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Tanggal</th>
+                                <th>Jumlah</th>
+                                <th>Tipe</th>
+                                <th>Bill Period</th>
+                                <th>Sumber</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-pembayaran-tbody">
+                            <!-- Data akan di-load via AJAX -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Sub-Tab: Current -->
+            <div class="tab-pane fade" id="history-current-tab">
+                <div class="kpi-card">
+                    <h6 class="fw-bold mb-3">History Current (Pembayaran Normal)</h6>
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Tanggal</th>
+                                <th>Jumlah</th>
+                                <th>Bill Period</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-current-tbody">
+                            <!-- Filtered data -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Sub-Tab: Undue -->
+            <div class="tab-pane fade" id="history-undue-tab">
+                <div class="kpi-card">
+                    <h6 class="fw-bold mb-3">History Undue (Bayar Cepat)</h6>
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Tanggal</th>
+                                <th>Jumlah</th>
+                                <th>Bill Period</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-undue-tbody">
+                            <!-- Filtered data -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Export Button -->
+        <div class="text-end mt-3">
+            <button class="btn btn-success" onclick="exportHistory()">
+                <i class="fas fa-file-excel me-2"></i>Export Raw Data
+            </button>
+        </div>
+
+    </div>
+
+    <!-- Empty State -->
+    <div id="historyEmpty" class="text-center py-5">
+        <i class="fas fa-search fa-5x text-muted opacity-25 mb-3"></i>
+        <p class="text-muted">Masukkan NOMEN untuk melihat history data pelanggan</p>
+    </div>
+
+</div>
+
+<script>
+let chartHistoryKubikasi;
+
+function searchHistory() {
+    const nomen = $('#historyNomenSearch').val().trim();
+    
+    if (!nomen) {
+        alert('Masukkan NOMEN terlebih dahulu');
+        return;
+    }
+    
+    // Show loading
+    $('#historyResult').hide();
+    $('#historyEmpty').html('<i class="fas fa-spinner fa-spin fa-3x text-primary"></i><p class="text-muted mt-3">Loading...</p>');
+    
+    // Load profil pelanggan
+    $.get('/api/profil_pelanggan/' + nomen, function(data) {
+        // Update profil
+        $('#history-nomen').text(data.master.nomen);
+        $('#history-nama').text(data.master.nama || 'Tanpa Nama');
+        $('#history-rayon').text(data.master.rayon);
+        $('#history-target').text(formatRupiah(data.master.target_mc));
+        
+        // Load history pembayaran
+        loadHistoryPembayaran(nomen);
+        
+        // Show result
+        $('#historyEmpty').hide();
+        $('#historyResult').show();
+        
+    }).fail(function() {
+        $('#historyEmpty').html('<i class="fas fa-times-circle fa-5x text-danger opacity-50 mb-3"></i><p class="text-danger">Nomen tidak ditemukan</p>');
+    });
+}
+
+function loadHistoryPembayaran(nomen) {
+    $.get('/api/history_pembayaran?nomen=' + nomen, function(data) {
+        let htmlPembayaran = '';
+        let htmlCurrent = '';
+        let htmlUndue = '';
+        
+        data.forEach(row => {
+            const html = `
+                <tr>
+                    <td>${row.tgl_bayar}</td>
+                    <td>${formatRupiah(row.jumlah_bayar)}</td>
+                    <td><span class="badge bg-${row.tipe_bayar === 'current' ? 'primary' : 'warning'}">${row.tipe_bayar.toUpperCase()}</span></td>
+                    <td>${row.bill_period || '-'}</td>
+                    <td class="small">${row.sumber_file}</td>
+                </tr>
+            `;
+            
+            htmlPembayaran += html;
+            
+            if (row.tipe_bayar === 'current') {
+                htmlCurrent += html;
+            } else {
+                htmlUndue += html;
+            }
+        });
+        
+        $('#history-pembayaran-tbody').html(htmlPembayaran || '<tr><td colspan="5" class="text-center text-muted">Tidak ada data</td></tr>');
+        $('#history-current-tbody').html(htmlCurrent || '<tr><td colspan="3" class="text-center text-muted">Tidak ada data</td></tr>');
+        $('#history-undue-tbody').html(htmlUndue || '<tr><td colspan="3" class="text-center text-muted">Tidak ada data</td></tr>');
+    });
+}
+
+function exportHistory() {
+    const nomen = $('#historyNomenSearch').val().trim();
+    window.location.href = '/api/export_history?nomen=' + nomen;
+}
+</script>
