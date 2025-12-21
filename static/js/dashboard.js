@@ -1,252 +1,157 @@
 /**
- * SUNTER DASHBOARD - MAIN LOGIC
- * Mengelola pembaruan data real-time, grafik, dan tabel.
+ * SUNTER DASHBOARD MAIN LOGIC
+ * Mengatur interaksi Filter Global, Chart, dan Tabel Data.
  */
 
-let chartRayon, chartTren, tableColl;
+document.addEventListener('DOMContentLoaded', function () {
+    
+    // ==================================================
+    // 1. INISIALISASI VARIABEL GLOBAL
+    // ==================================================
+    let currentArea = 'SUNTER'; // Default Filter
+    let collectionTable; // Instance DataTable
+    let trendChart; // Instance Chart.js
 
-// --- FORMATTER HELPERS ---
-const formatRp = (val) => {
-    return 'Rp ' + new Intl.NumberFormat('id-ID', {
-        maximumFractionDigits: 0
-    }).format(val || 0);
-};
+    console.log("🚀 Dashboard JS Loaded. Area saat ini:", currentArea);
 
-const formatNum = (val) => {
-    return new Intl.NumberFormat('id-ID').format(val || 0);
-};
+    // ==================================================
+    // 2. LOGIKA GLOBAL FILTER (HEADER)
+    // ==================================================
+    const filterSelect = document.getElementById('filterArea');
+    
+    if (filterSelect) {
+        filterSelect.addEventListener('change', function() {
+            currentArea = this.value;
+            console.log("🔄 Filter Berubah: " + currentArea);
+            
+            // Tampilkan Loading Indicator (Opsional/Visual Feedback)
+            showLoadingState();
 
-// --- CORE FUNCTIONS ---
-
-/**
- * Update semua angka KPI di halaman Ringkasan
- */
-function updateKPI() {
-    $.get('/api/kpi_data', function(d) {
-        // Total Pelanggan
-        $('#kpi-total-pelanggan').text(formatNum(d.total_pelanggan));
-        
-        // Collection Rate
-        $('#kpi-rate').text(d.collection_rate + '%');
-        $('#kpi-rate-bar').css('width', d.collection_rate + '%').text(d.collection_rate + '%');
-        
-        // Tunggakan (Ardebt)
-        $('#kpi-tunggakan-total').text(formatRp(d.tunggakan.total_nominal));
-        
-        // Analisa Target vs Realisasi
-        $('#kpi-target-total').text(formatRp(d.target.total_nominal));
-        $('#kpi-target-nomen-total').text(formatNum(d.target.total_nomen) + ' Lbr');
-        
-        $('#kpi-coll-total').text(formatRp(d.collection.total_nominal));
-        $('#kpi-coll-nomen-total').text(formatNum(d.collection.total_nomen) + ' Lbr');
-        
-        $('#kpi-target-belum').text(formatRp(d.target.belum_bayar_nominal));
-        $('#kpi-target-nomen-belum').text(formatNum(d.target.belum_bayar_nomen) + ' Lbr');
-        
-        // Label Periode di Header
-        $('#labelPeriode').html('<i class="fas fa-calendar-alt me-2"></i>Periode: ' + d.periode);
-    }).fail(function() {
-        console.error("Gagal memuat data KPI.");
-    });
-}
-
-/**
- * Mengisi Tabel Ringkasan Wilayah di Tab Collection
- * (AB Sunter, 34, 35)
- */
-function loadSummaryTable() {
-    $.get('/api/collection_summary_table', function(data) {
-        const tbody = $('#summaryTable tbody');
-        tbody.empty();
-
-        data.forEach(item => {
-            const d = item.data;
-            // Hitung % Capaian
-            const plbr = d.target_nomen > 0 ? (d.realisasi_nomen / d.target_nomen * 100).toFixed(1) : 0;
-            const prp = d.target_nominal > 0 ? (d.realisasi_nominal / d.target_nominal * 100).toFixed(1) : 0;
-
-            tbody.append(`
-                <tr class="${item.class}">
-                    <td class="text-start ps-4">${item.kategori}</td>
-                    <td>${formatNum(d.target_nomen)}</td>
-                    <td class="text-end">${formatRp(d.target_nominal)}</td>
-                    <td>${formatNum(d.realisasi_nomen)}</td>
-                    <td class="text-end text-success">${formatRp(d.realisasi_nominal)}</td>
-                    <td><span class="badge ${plbr >= 100 ? 'bg-success' : 'bg-warning text-dark'}">${plbr}%</span></td>
-                    <td><span class="badge ${prp >= 100 ? 'bg-success' : 'bg-primary'}">${prp}%</span></td>
-                </tr>
-            `);
+            // Panggil fungsi update data (Simulasi AJAX)
+            updateDashboardData(currentArea);
         });
-    });
-}
+    }
 
-/**
- * Inisialisasi dan Update Grafik Chart.js
- */
-function loadCharts() {
-    // 1. Grafik Batang Rayon
-    $.get('/api/breakdown_rayon', function(d) {
-        const ctx = document.getElementById('chartRayon');
-        if (!ctx) return;
-        
-        if (chartRayon) chartRayon.destroy();
-        chartRayon = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: d.map(x => 'Rayon ' + x.rayon),
-                datasets: [{
-                    label: 'Realisasi (Rp)',
-                    data: d.map(x => x.total_collection),
-                    backgroundColor: ['#1e3c72', '#198754'],
-                    borderRadius: 5
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } }
-            }
-        });
-    });
-
-    // 2. Grafik Tren Kumulatif
-    $.get('/api/tren_harian', function(d) {
-        const ctx = document.getElementById('chartTren');
-        if (!ctx) return;
-        
-        if (chartTren) chartTren.destroy();
-        chartTren = new Chart(ctx, {
+    // ==================================================
+    // 3. INISIALISASI CHART (TAB RINGKASAN)
+    // ==================================================
+    const ctx = document.getElementById('trendChart');
+    if (ctx) {
+        trendChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: d.map(x => x.tgl_bayar.split('-')[2]), // Ambil tanggal (DD)
+                labels: ['1 Mei', '2 Mei', '3 Mei', '4 Mei', '5 Mei', '6 Mei', '7 Mei'],
                 datasets: [{
-                    label: 'Kumulatif (Rp)',
-                    data: d.map(x => x.kumulatif),
+                    label: 'Collection Harian (Juta Rp)',
+                    data: [120, 150, 180, 140, 200, 220, 250], // Data Dummy Awal
                     borderColor: '#0d6efd',
                     backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                    borderWidth: 2,
                     fill: true,
-                    tension: 0.3
+                    tension: 0.4 // Garis melengkung halus
                 }]
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false } // Sembunyikan legend agar bersih
+                },
                 scales: {
-                    y: { 
-                        beginAtZero: true,
-                        ticks: { callback: (val) => (val / 1000000).toFixed(0) + ' Jt' }
-                    }
+                    y: { beginAtZero: true }
                 }
             }
         });
-    });
-}
-
-/**
- * Inisialisasi DataTables untuk Detail Collection
- */
-function loadCollectionData(area = 'SUNTER') {
-    if ($.fn.DataTable.isDataTable('#tableColl')) {
-        // Jika sudah ada, update URL dan reload
-        tableColl.ajax.url(`/api/collection_data?rayon=${area}`).load();
-        return;
     }
 
-    tableColl = $('#tableColl').DataTable({
-        ajax: {
-            url: `/api/collection_data?rayon=${area}`,
-            dataSrc: ''
-        },
-        columns: [
-            { data: 'tgl_bayar' },
-            { 
-                data: 'rayon',
-                render: (data) => `<span class="badge bg-${data == '34' ? 'primary' : 'success'}">Rayon ${data}</span>`
+    // ==================================================
+    // 4. INISIALISASI DATATABLES (TAB COLLECTION)
+    // ==================================================
+    // Kita cek apakah tabel ada di DOM sebelum init
+    if ($('#tableCollection').length) {
+        collectionTable = $('#tableCollection').DataTable({
+            responsive: true,
+            language: {
+                search: "Cari Data:",
+                lengthMenu: "Tampilkan _MENU_ baris",
+                info: "Menampilkan _START_ s/d _END_ dari _TOTAL_ data",
+                paginate: {
+                    first: "Awal",
+                    last: "Akhir",
+                    next: "➡️",
+                    previous: "⬅️"
+                }
             },
-            { data: 'nomen' },
-            { data: 'nama', defaultContent: '<span class="text-muted italic">Tanpa Nama</span>' },
-            { 
-                data: 'jumlah_bayar', 
-                className: 'text-end fw-bold text-success',
-                render: (v) => formatRp(v)
-            }
-        ],
-        order: [[0, 'desc']],
-        pageLength: 10,
-        language: {
-            url: "//cdn.datatables.net/plug-ins/1.13.6/i18n/id.json"
-        }
-    });
-}
+            // Simulasi Kolom Excel
+            columns: [
+                { title: "Tanggal" },
+                { title: "Rayon" },
+                { title: "Jml Cust" },
+                { title: "Target MC (Rp)" },
+                { title: "Realisasi (Rp)" },
+                { title: "% Capaian" },
+                { title: "Status" }
+            ]
+        });
 
-/**
- * Fungsi Pencarian Global dari Header
- */
-function cariPelanggan() {
-    const val = $('#globalSearch').val();
-    if (!val) {
-        alert("Masukkan Nomen atau Nama pelanggan.");
-        return;
+        // Isi Data Dummy Awal ke Tabel
+        const dummyData = [
+            ["2024-05-25", "34", "150", "50.000.000", "45.000.000", "90%", "<span class='badge bg-success'>OK</span>"],
+            ["2024-05-25", "35", "120", "40.000.000", "20.000.000", "50%", "<span class='badge bg-warning'>Low</span>"],
+        ];
+        
+        dummyData.forEach(row => {
+            collectionTable.row.add(row).draw();
+        });
     }
 
-    // Paksa pindah ke tab Collection
-    const triggerEl = document.querySelector('#collection-tab');
-    const tab = new bootstrap.Tab(triggerEl);
-    tab.show();
+    // ==================================================
+    // 5. FUNGSI UPDATE DATA (SIMULASI AJAX)
+    // ==================================================
+    function updateDashboardData(area) {
+        // Di sini nanti kita pakai fetch() ke Python Flask
+        // Contoh logika sederhana untuk demo:
+        
+        let multiplier = 1;
+        if (area === '34') multiplier = 0.6;
+        if (area === '35') multiplier = 0.4;
 
-    // Tunggu render tab selesai lalu search
-    setTimeout(() => {
-        if (tableColl) {
-            tableColl.search(val).draw();
-        } else {
-            loadCollectionData();
-            setTimeout(() => tableColl.search(val).draw(), 500);
+        // 1. Update Angka KPI (Simulasi DOM Manipulation)
+        const kpiElement = document.querySelector('.card-kpi h2.text-success');
+        if(kpiElement) {
+            let baseVal = 125000000; // Contoh nilai dasar
+            let newVal = baseVal * multiplier;
+            kpiElement.innerText = "Rp " + new Intl.NumberFormat('id-ID').format(newVal);
         }
-    }, 200);
-}
 
-// --- INITIALIZATION ---
-
-$(document).ready(function() {
-    console.log("🚀 Dashboard JS Loaded.");
-
-    // 1. Muat data awal (Ringkasan)
-    updateKPI();
-    loadCharts();
-
-    // 2. Handle perubahan filter Area
-    $('#filterArea').change(function() {
-        const area = $(this).val();
-        // Jika tab Collection sedang aktif, reload tabel
-        if ($('#tab-collection').hasClass('active')) {
-            loadCollectionData(area);
+        // 2. Update Chart
+        if (trendChart) {
+            // Ubah data chart acak agar terlihat 'hidup'
+            const newData = [120, 150, 180, 140, 200, 220, 250].map(val => val * multiplier);
+            trendChart.data.datasets[0].data = newData;
+            trendChart.update();
         }
-        // Always refresh charts based on global context if API supports it
-        loadCharts();
-    });
 
-    // 3. Handle Tab Switch (Lazy Load Tabel)
-    $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function (e) {
-        const targetId = $(e.target).data('bs-target');
-        if (targetId === '#tab-collection') {
-            loadSummaryTable();
-            loadCollectionData($('#filterArea').val());
-        } else if (targetId === '#tab-ringkasan') {
-            updateKPI();
-            loadCharts();
+        // 3. Update Tabel Collection
+        if (collectionTable) {
+            collectionTable.clear();
+            if (area === 'SUNTER' || area === '34') {
+                collectionTable.row.add(["2024-05-25", "34", "150", "50.000.000", "45.000.000", "90%", "<span class='badge bg-success'>OK</span>"]);
+            }
+            if (area === 'SUNTER' || area === '35') {
+                collectionTable.row.add(["2024-05-25", "35", "120", "40.000.000", "20.000.000", "50%", "<span class='badge bg-warning'>Low</span>"]);
+            }
+            collectionTable.draw();
         }
-    });
 
-    // 4. Handle Radio Buttons di Modal Upload (Visual Feedback)
-    $('.upload-option').click(function() {
-        $('.upload-option input[type="radio"]').prop('checked', false);
-        $(this).find('input[type="radio"]').prop('checked', true);
-    });
+        // Selesai Loading
+        setTimeout(() => {
+             // Hilangkan loading state jika ada
+             console.log("✅ Data updated for: " + area);
+        }, 500);
+    }
 
-    // 5. Inisialisasi Tooltips Bootstrap
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
+    function showLoadingState() {
+        // Bisa tambahkan spinner overlay di sini nanti
+    }
+
 });
