@@ -3,493 +3,444 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SUNTER DASHBOARD | Monitoring & Analisa</title>
+    <title>SUNTER DASHBOARD | Monitoring & Analisa Manual</title>
+    
+    <!-- Framework & Library -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
         
-        body { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; }
         
-        /* Custom Scrollbar for Excel Look */
-        .excel-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
-        .excel-scroll::-webkit-scrollbar-track { background: #f1f1f1; }
-        .excel-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        .excel-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-
+        /* Tab Management */
         .tab-content { display: none; }
         .tab-content.active { display: block; }
         
-        .active-tab {
+        .nav-tab.active {
             color: #2563eb;
-            border-bottom: 2px solid #2563eb;
+            border-bottom: 3px solid #2563eb;
             background-color: #eff6ff;
         }
 
-        /* Sticky Column for Excel Table */
+        /* Excel-Style Table Styling */
+        .excel-table-container {
+            overflow-x: auto;
+            max-height: 550px;
+        }
+        
+        .excel-table { border-collapse: separate; border-spacing: 0; }
+        
+        .excel-table th {
+            position: sticky;
+            top: 0;
+            background: #f1f5f9;
+            z-index: 20;
+            border: 1px solid #e2e8f0;
+            white-space: nowrap;
+            padding: 8px 12px;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .excel-table td {
+            border: 1px solid #e2e8f0;
+            padding: 6px 12px;
+            white-space: nowrap;
+            font-size: 11px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .excel-table tr:hover td { background-color: #f0f9ff; }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Sticky First Column for Excel Table */
         .sticky-col {
             position: sticky;
             left: 0;
             background: white;
             z-index: 10;
+            font-weight: bold;
         }
         
-        tr:hover td { background-color: #f8fafc; }
+        thead th.sticky-col { z-index: 30; background: #f1f5f9; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900 overflow-hidden h-screen flex flex-col">
+<body class="h-screen flex flex-col overflow-hidden">
 
     <!-- 🌐 GLOBAL HEADER (ALWAYS VISIBLE) -->
-    <header class="bg-white border-b border-slate-200 shadow-sm z-50 shrink-0">
-        <div class="px-6 py-3">
-            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div class="flex items-center gap-3">
-                    <div class="bg-blue-600 p-2 rounded-lg">
-                        <i data-lucide="droplets" class="text-white w-6 h-6"></i>
-                    </div>
-                    <div>
-                        <h1 class="font-bold text-xl tracking-tight">SUNTER DASHBOARD</h1>
-                        <p class="text-[10px] text-slate-500 font-medium uppercase tracking-widest">Single Page Operation System</p>
+    <header class="bg-slate-900 text-white shadow-2xl z-50 shrink-0">
+        <div class="px-6 py-4 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <!-- Branding -->
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-600 p-2.5 rounded-xl shadow-lg shadow-blue-500/20">
+                    <i data-lucide="waves" class="w-6 h-6 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="font-black text-xl tracking-tight">SUNTER DASHBOARD</h1>
+                    <p class="text-[10px] font-bold text-blue-400 uppercase tracking-widest leading-none mt-1">Single Page Operational Hub</p>
+                </div>
+            </div>
+
+            <!-- Global Context Filters -->
+            <div class="flex flex-wrap items-center gap-2">
+                <div class="flex flex-col gap-1">
+                    <label class="text-[9px] font-bold text-slate-500 uppercase">Wilayah Area</label>
+                    <select class="bg-slate-800 border border-slate-700 text-xs rounded px-3 py-1.5 outline-none focus:ring-1 focus:ring-blue-500">
+                        <option>SUNTER (ALL)</option>
+                        <option>Rayon 34</option>
+                        <option>Rayon 35</option>
+                    </select>
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-[9px] font-bold text-slate-500 uppercase">Filter Lanjutan (PC/Tarif)</label>
+                    <div class="flex gap-1">
+                        <select class="bg-slate-800 border border-slate-700 text-xs rounded px-2 py-1.5 outline-none w-20">
+                            <option>Semua PC</option>
+                        </select>
+                        <select class="bg-slate-800 border border-slate-700 text-xs rounded px-2 py-1.5 outline-none w-20">
+                            <option>Tarif</option>
+                        </select>
                     </div>
                 </div>
-
-                <!-- Global Filters -->
-                <div class="flex flex-wrap items-center gap-2">
-                    <div class="flex items-center bg-slate-100 rounded-md px-2 border border-slate-200">
-                        <i data-lucide="map-pin" class="w-4 h-4 text-slate-400 mr-2"></i>
-                        <select class="bg-transparent py-1.5 text-xs font-semibold outline-none cursor-pointer">
-                            <option>SUNTER (34 + 35)</option>
-                            <option>Rayon 34</option>
-                            <option>Rayon 35</option>
-                        </select>
+                <div class="flex flex-col gap-1">
+                    <label class="text-[9px] font-bold text-slate-500 uppercase">Periode</label>
+                    <input type="month" value="2025-12" class="bg-slate-800 border border-slate-700 text-xs rounded px-2 py-1 outline-none">
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-[9px] font-bold text-slate-500 uppercase">Bandingkan</label>
+                    <select class="bg-slate-800 border border-slate-700 text-xs rounded px-3 py-1.5 outline-none">
+                        <option>vs Bulan Lalu</option>
+                        <option>vs Tahun Lalu</option>
+                    </select>
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-[9px] font-bold text-slate-500 uppercase">Cari Pelanggan</label>
+                    <div class="relative">
+                        <input type="text" placeholder="Nomen / Nama..." class="bg-slate-800 border border-slate-700 text-xs rounded pl-8 pr-3 py-1.5 outline-none w-48 focus:w-64 focus:bg-slate-700 transition-all">
+                        <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-500"></i>
                     </div>
-                    
-                    <div class="flex items-center bg-slate-100 rounded-md px-2 border border-slate-200">
-                        <select class="bg-transparent py-1.5 text-xs outline-none cursor-pointer">
-                            <option>Semua PC</option>
-                            <option>PC 34</option>
-                            <option>PC 35</option>
-                        </select>
-                    </div>
-
-                    <div class="flex items-center bg-slate-100 rounded-md px-2 border border-slate-200">
-                        <select class="bg-transparent py-1.5 text-xs outline-none cursor-pointer">
-                            <option>Semua Tarif</option>
-                            <option>Sosial</option>
-                            <option>Rumah Tangga</option>
-                            <option>Niaga</option>
-                        </select>
-                    </div>
-
-                    <div class="flex items-center bg-slate-100 rounded-md px-2 border border-slate-200">
-                        <i data-lucide="calendar" class="w-4 h-4 text-slate-400 mr-2"></i>
-                        <input type="month" value="2025-12" class="bg-transparent py-1 text-xs outline-none cursor-pointer font-medium">
-                    </div>
-
-                    <div class="relative group">
-                        <input type="text" placeholder="Cari Nomen / Nama..." class="pl-9 pr-4 py-1.5 bg-slate-100 border border-slate-200 rounded-md text-xs w-48 focus:w-64 transition-all focus:bg-white outline-none">
-                        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2 text-slate-400"></i>
-                    </div>
-                    
-                    <button class="bg-blue-600 hover:bg-blue-700 text-white p-1.5 rounded-md transition shadow-sm">
-                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                    </button>
                 </div>
             </div>
         </div>
 
-        <!-- 📌 NAVIGASI UTAMA (TAB) -->
-        <nav class="flex px-6 border-t border-slate-100 overflow-x-auto bg-white no-scrollbar">
-            <button onclick="openTab('ringkasan')" class="tab-link active-tab px-5 py-3 text-xs font-bold whitespace-nowrap flex items-center gap-2 border-b-2 transition-all">
-                <i data-lucide="layout-grid" class="w-4 h-4"></i> Ringkasan
+        <!-- 📌 MAIN NAVIGATION (TABS) -->
+        <nav class="flex px-6 bg-white border-t border-slate-200 overflow-x-auto no-scrollbar scroll-smooth">
+            <button onclick="switchTab('ringkasan')" class="nav-tab active px-5 py-4 text-xs font-bold whitespace-nowrap flex items-center gap-2 text-slate-500 transition-all border-b-2 border-transparent">
+                <i data-lucide="pie-chart" class="w-4 h-4"></i> Ringkasan
             </button>
-            <button onclick="openTab('collection')" class="tab-link px-5 py-3 text-xs font-bold text-slate-500 whitespace-nowrap flex items-center gap-2 border-b-2 border-transparent hover:text-blue-600 transition-all">
+            <button onclick="switchTab('collection')" class="nav-tab px-5 py-4 text-xs font-bold whitespace-nowrap flex items-center gap-2 text-slate-500 transition-all border-b-2 border-transparent">
                 <i data-lucide="banknote" class="w-4 h-4"></i> Collection
             </button>
-            <button onclick="openTab('meter')" class="tab-link px-5 py-3 text-xs font-bold text-slate-500 whitespace-nowrap flex items-center gap-2 border-b-2 border-transparent hover:text-blue-600 transition-all">
+            <button onclick="switchTab('meter')" class="nav-tab px-5 py-4 text-xs font-bold whitespace-nowrap flex items-center gap-2 text-slate-500 transition-all border-b-2 border-transparent">
                 <i data-lucide="gauge" class="w-4 h-4"></i> Meter
             </button>
-            <button onclick="openTab('history')" class="tab-link px-5 py-3 text-xs font-bold text-slate-500 whitespace-nowrap flex items-center gap-2 border-b-2 border-transparent hover:text-blue-600 transition-all">
+            <button onclick="switchTab('history')" class="nav-tab px-5 py-4 text-xs font-bold whitespace-nowrap flex items-center gap-2 text-slate-500 transition-all border-b-2 border-transparent">
                 <i data-lucide="history" class="w-4 h-4"></i> History
             </button>
-            <button onclick="openTab('analisa')" class="tab-link px-5 py-3 text-xs font-bold text-slate-500 whitespace-nowrap flex items-center gap-2 border-b-2 border-transparent hover:text-blue-600 transition-all">
-                <i data-lucide="file-search" class="w-4 h-4"></i> Analisa Manual
+            <button onclick="switchTab('analisa')" class="nav-tab px-5 py-4 text-xs font-bold whitespace-nowrap flex items-center gap-2 text-slate-500 transition-all border-b-2 border-transparent">
+                <i data-lucide="clipboard-edit" class="w-4 h-4"></i> Analisa Manual
             </button>
-            <button onclick="openTab('top')" class="tab-link px-5 py-3 text-xs font-bold text-slate-500 whitespace-nowrap flex items-center gap-2 border-b-2 border-transparent hover:text-blue-600 transition-all">
+            <button onclick="switchTab('top')" class="nav-tab px-5 py-4 text-xs font-bold whitespace-nowrap flex items-center gap-2 text-slate-500 transition-all border-b-2 border-transparent">
                 <i data-lucide="award" class="w-4 h-4"></i> TOP
             </button>
-            <button onclick="openTab('alert')" class="tab-link px-5 py-3 text-xs font-bold text-slate-500 whitespace-nowrap flex items-center gap-2 border-b-2 border-transparent hover:text-blue-600 transition-all">
-                <i data-lucide="bell-ring" class="w-4 h-4"></i> Alert
+            <button onclick="switchTab('alert')" class="nav-tab px-5 py-4 text-xs font-bold whitespace-nowrap flex items-center gap-2 text-slate-500 transition-all border-b-2 border-transparent">
+                <i data-lucide="bell-ring" class="w-4 h-4 text-rose-500"></i> Alert
             </button>
-            <button onclick="openTab('laporan')" class="tab-link px-5 py-3 text-xs font-bold text-slate-500 whitespace-nowrap flex items-center gap-2 border-b-2 border-transparent hover:text-blue-600 transition-all">
+            <button onclick="switchTab('laporan')" class="nav-tab px-5 py-4 text-xs font-bold whitespace-nowrap flex items-center gap-2 text-slate-500 transition-all border-b-2 border-transparent">
                 <i data-lucide="file-text" class="w-4 h-4"></i> Laporan
             </button>
         </nav>
     </header>
 
-    <!-- 🧱 MAIN CONTENT AREA -->
-    <main class="flex-1 overflow-y-auto p-6 bg-slate-50">
+    <!-- 🧱 MAIN CONTENT (SCROLLABLE) -->
+    <main class="flex-1 overflow-y-auto p-6 space-y-6">
 
         <!-- 1️⃣ TAB: RINGKASAN -->
         <section id="ringkasan" class="tab-content active space-y-6">
-            <!-- KPI Utama -->
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                    <p class="text-[10px] font-bold text-slate-500 uppercase">Total Pelanggan</p>
-                    <h3 class="text-xl font-bold mt-1">125,482</h3>
-                    <div class="text-[10px] text-emerald-600 font-bold mt-1 flex items-center"><i data-lucide="trending-up" class="w-3 h-3 mr-1"></i> +0.4%</div>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase">Total Pelanggan</p>
+                    <h3 class="text-xl font-black mt-1">125,482</h3>
                 </div>
                 <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                    <p class="text-[10px] font-bold text-slate-500 uppercase">Master Customer (MC)</p>
-                    <h3 class="text-xl font-bold mt-1">Rp 45.2M</h3>
-                    <div class="text-[10px] text-slate-400 font-medium mt-1">Target Bulan Ini</div>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase">Master Customer (MC)</p>
+                    <h3 class="text-xl font-black mt-1">Rp 45.2 M</h3>
                 </div>
                 <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm bg-blue-50 border-blue-100">
                     <p class="text-[10px] font-bold text-blue-600 uppercase">Collection</p>
-                    <h3 class="text-xl font-bold mt-1 text-blue-700">Rp 38.1M</h3>
-                    <div class="text-[10px] text-blue-500 font-medium mt-1">Real-time update</div>
+                    <h3 class="text-xl font-black mt-1 text-blue-700">Rp 38.1 M</h3>
                 </div>
                 <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                    <p class="text-[10px] font-bold text-slate-500 uppercase">Rate (%)</p>
-                    <h3 class="text-xl font-bold mt-1">84.29%</h3>
-                    <div class="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden">
-                        <div class="bg-emerald-500 h-full w-[84%]"></div>
-                    </div>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase">Rate (%)</p>
+                    <h3 class="text-xl font-black mt-1 text-emerald-600">84.29%</h3>
                 </div>
                 <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                    <p class="text-[10px] font-bold text-slate-500 uppercase">Tunggakan</p>
-                    <h3 class="text-xl font-bold mt-1 text-rose-600">Rp 7.1M</h3>
-                    <div class="text-[10px] text-rose-400 font-medium mt-1">Belum tertagih</div>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase">Tunggakan</p>
+                    <h3 class="text-xl font-black mt-1 text-rose-600">Rp 7.1 M</h3>
                 </div>
                 <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                    <p class="text-[10px] font-bold text-slate-500 uppercase">Anomali Meter</p>
-                    <h3 class="text-xl font-bold mt-1 text-amber-600">1,204</h3>
-                    <div class="text-[10px] text-amber-500 font-bold mt-1">Perlu Analisa</div>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase">Anomali Meter</p>
+                    <h3 class="text-xl font-black mt-1 text-amber-600">1,240</h3>
                 </div>
             </div>
 
-            <!-- Grafik Utama -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                    <div class="flex items-center justify-between mb-6">
-                        <h4 class="font-bold text-slate-700">Tren Collection SUNTER vs Rayon</h4>
-                        <div class="flex gap-2">
-                            <span class="flex items-center gap-1 text-[10px] font-bold text-slate-400"><span class="w-2 h-2 bg-blue-600 rounded-full"></span> Sunter</span>
-                            <span class="flex items-center gap-1 text-[10px] font-bold text-slate-400"><span class="w-2 h-2 bg-sky-400 rounded-full"></span> Rayon 34</span>
-                            <span class="flex items-center gap-1 text-[10px] font-bold text-slate-400"><span class="w-2 h-2 bg-indigo-400 rounded-full"></span> Rayon 35</span>
-                        </div>
-                    </div>
-                    <canvas id="chartTren" class="w-full h-64"></canvas>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-[350px]">
+                    <h4 class="font-bold text-slate-700 mb-4 flex items-center gap-2">
+                        <i data-lucide="trending-up" class="w-4 h-4 text-blue-600"></i> Tren Collection SUNTER (Harian)
+                    </h4>
+                    <canvas id="trendChart"></canvas>
                 </div>
-                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                    <h4 class="font-bold text-slate-700 mb-6 text-center">Komposisi Collection per Rayon</h4>
-                    <canvas id="chartPie" class="w-full h-64"></canvas>
-                    <div class="mt-6 space-y-3">
-                        <div class="flex justify-between items-center text-xs">
-                            <span class="text-slate-500">Rayon 34 (Sunter Utara)</span>
-                            <span class="font-bold">54.2%</span>
-                        </div>
-                        <div class="flex justify-between items-center text-xs">
-                            <span class="text-slate-500">Rayon 35 (Sunter Selatan)</span>
-                            <span class="font-bold">45.8%</span>
-                        </div>
-                    </div>
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-[350px]">
+                    <h4 class="font-bold text-slate-700 mb-4 flex items-center gap-2">
+                        <i data-lucide="pie-chart" class="w-4 h-4 text-blue-600"></i> Komposisi Rayon 34 vs 35
+                    </h4>
+                    <canvas id="compositionChart"></canvas>
                 </div>
             </div>
         </section>
 
-        <!-- 2️⃣ TAB: COLLECTION -->
-        <section id="collection" class="tab-content space-y-6">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div class="bg-emerald-600 text-white p-4 rounded-xl shadow-lg">
-                    <p class="text-[10px] font-bold opacity-80 uppercase">Collection Current</p>
-                    <h3 class="text-2xl font-bold">Rp 24.5 M</h3>
-                    <p class="text-[10px] mt-1 opacity-80">64.3% dari total</p>
+        <!-- 2️⃣ TAB: COLLECTION (EXCEL VIEW) -->
+        <section id="collection" class="tab-content space-y-4">
+            <!-- Mini Summary -->
+            <div class="flex flex-wrap gap-4">
+                <div class="bg-white px-4 py-2 rounded-lg border border-slate-200 flex items-center gap-3">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase">MC Bulan Ini:</span>
+                    <span class="text-xs font-black">Rp 45.200.000</span>
                 </div>
-                <div class="bg-blue-600 text-white p-4 rounded-xl shadow-lg">
-                    <p class="text-[10px] font-bold opacity-80 uppercase">Collection Undue</p>
-                    <h3 class="text-2xl font-bold">Rp 13.6 M</h3>
-                    <p class="text-[10px] mt-1 opacity-80">35.7% dari total</p>
+                <div class="bg-white px-4 py-2 rounded-lg border border-slate-200 flex items-center gap-3">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase">MB Undue:</span>
+                    <span class="text-xs font-black">Rp 12.500.000</span>
                 </div>
-                <div class="bg-white p-4 rounded-xl border border-slate-200">
-                    <p class="text-[10px] font-bold text-slate-500 uppercase">MB Undue (Target)</p>
-                    <h3 class="text-2xl font-bold">Rp 15.2 M</h3>
-                    <p class="text-[10px] mt-1 text-blue-600 font-bold">Progress 89.4%</p>
+                <div class="bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-100 flex items-center gap-3">
+                    <span class="text-[10px] font-bold text-emerald-600 uppercase">Coll Current:</span>
+                    <span class="text-xs font-black text-emerald-700">Rp 30.150.000</span>
                 </div>
-                <div class="bg-white p-4 rounded-xl border border-slate-200">
-                    <p class="text-[10px] font-bold text-slate-500 uppercase">Kumulatif Hari Ini</p>
-                    <h3 class="text-2xl font-bold">Rp 1.2 M</h3>
-                    <p class="text-[10px] mt-1 text-emerald-600 font-bold">↑ 12% vs Kemarin</p>
+                <div class="bg-blue-50 px-4 py-2 rounded-lg border border-blue-100 flex items-center gap-3">
+                    <span class="text-[10px] font-bold text-blue-600 uppercase">Coll Undue:</span>
+                    <span class="text-xs font-black text-blue-700">Rp 7.950.000</span>
                 </div>
             </div>
 
-            <!-- Tabel Excel Version -->
-            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[500px]">
-                <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                    <h4 class="text-xs font-bold text-slate-700">Daily Collection Table (Excel View)</h4>
+            <!-- Excel Table -->
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                <div class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                    <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                        <i data-lucide="table-2" class="w-4 h-4 text-emerald-600"></i> Daily Collection Table (Excel Style)
+                    </h4>
                     <div class="flex gap-2">
-                        <button class="flex items-center gap-1 text-[10px] bg-white border border-slate-300 px-3 py-1.5 rounded-md hover:bg-slate-50 transition"><i data-lucide="download" class="w-3 h-3"></i> Export Excel</button>
+                        <button class="bg-white border border-slate-300 text-[10px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-2 hover:bg-slate-50">
+                            <i data-lucide="filter" class="w-3.5 h-3.5"></i> Filter Detail
+                        </button>
+                        <button class="bg-emerald-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-2 hover:bg-emerald-700 shadow-lg shadow-emerald-500/20">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i> Export Excel
+                        </button>
                     </div>
                 </div>
-                <div class="flex-1 overflow-auto excel-scroll text-xs">
-                    <table class="w-full border-collapse">
-                        <thead class="sticky top-0 bg-slate-100 z-20 shadow-sm">
-                            <tr class="text-slate-500 uppercase tracking-wider font-bold text-[10px]">
-                                <th class="sticky-col border-b border-r px-4 py-3 text-left w-24">Tgl</th>
-                                <th class="border-b border-r px-4 py-3 text-right">Jml Cust</th>
-                                <th class="border-b border-r px-4 py-3 text-right">MC (Target)</th>
-                                <th class="border-b border-r px-4 py-3 text-right">MB Undue</th>
-                                <th class="border-b border-r px-4 py-3 text-right bg-emerald-50 text-emerald-700">Coll Current</th>
-                                <th class="border-b border-r px-4 py-3 text-right bg-blue-50 text-blue-700">Coll Undue</th>
-                                <th class="border-b border-r px-4 py-3 text-right bg-slate-200">Total Coll</th>
-                                <th class="border-b border-r px-4 py-3 text-right">% MC</th>
-                                <th class="border-b border-r px-4 py-3 text-right">Kumulatif</th>
-                                <th class="border-b px-4 py-3 text-center">Var H-1</th>
+                <div class="excel-table-container">
+                    <table class="excel-table w-full">
+                        <thead>
+                            <tr class="text-slate-500">
+                                <th class="sticky-col">Tgl</th>
+                                <th class="text-right">Jml Cust</th>
+                                <th class="text-right">MC</th>
+                                <th class="text-right">MB Undue</th>
+                                <th class="text-right bg-emerald-50 text-emerald-700">Coll Current</th>
+                                <th class="text-right bg-blue-50 text-blue-700">Coll Undue</th>
+                                <th class="text-right bg-slate-200 text-slate-900 font-black">Total Coll</th>
+                                <th class="text-right">% MC</th>
+                                <th class="text-right">Kumulatif</th>
+                                <th class="text-center">Var H-1</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-100">
-                            <!-- Loop Data Dummy -->
-                            <script>
-                                const rows = [];
-                                for(let i=1; i<=31; i++) {
-                                    document.write(`
-                                        <tr class="hover:bg-blue-50/30 transition-colors">
-                                            <td class="sticky-col border-r px-4 py-2.5 font-bold text-slate-600">${i < 10 ? '0'+i : i}-12-25</td>
-                                            <td class="border-r px-4 py-2.5 text-right font-mono">${(Math.random() * 500 + 1000).toFixed(0)}</td>
-                                            <td class="border-r px-4 py-2.5 text-right font-mono text-slate-400">1.458.200.000</td>
-                                            <td class="border-r px-4 py-2.5 text-right font-mono text-slate-400">490.300.000</td>
-                                            <td class="border-r px-4 py-2.5 text-right font-mono font-bold text-emerald-600">842.100.000</td>
-                                            <td class="border-r px-4 py-2.5 text-right font-mono font-bold text-blue-600">350.200.000</td>
-                                            <td class="border-r px-4 py-2.5 text-right font-mono font-bold bg-slate-50 text-slate-800">1.192.300.000</td>
-                                            <td class="border-r px-4 py-2.5 text-right font-bold text-emerald-500">81.7%</td>
-                                            <td class="border-r px-4 py-2.5 text-right font-mono font-bold text-indigo-600">38.102.500.000</td>
-                                            <td class="px-4 py-2.5 text-center">
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[9px]">
-                                                    <i data-lucide="trending-up" class="w-2 h-2 mr-1"></i> +2.4%
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    `);
-                                }
-                            </script>
+                        <tbody id="collectionTableBody">
+                            <!-- Mock Data via JS -->
                         </tbody>
                     </table>
                 </div>
             </div>
         </section>
 
-        <!-- 3️⃣ TAB: METER -->
-        <section id="meter" class="tab-content space-y-6">
-            <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-7 gap-4">
-                <div class="bg-white p-4 rounded-xl border-l-4 border-l-rose-500 shadow-sm cursor-pointer hover:bg-slate-50 transition" onclick="openTab('analisa')">
-                    <p class="text-[9px] font-bold text-slate-400 uppercase">Extreme</p>
-                    <h3 class="text-lg font-bold">242</h3>
-                </div>
-                <div class="bg-white p-4 rounded-xl border-l-4 border-l-amber-500 shadow-sm cursor-pointer hover:bg-slate-50 transition">
-                    <p class="text-[9px] font-bold text-slate-400 uppercase">Turun</p>
-                    <h3 class="text-lg font-bold">156</h3>
-                </div>
-                <div class="bg-white p-4 rounded-xl border-l-4 border-l-slate-400 shadow-sm cursor-pointer hover:bg-slate-50 transition">
-                    <p class="text-[9px] font-bold text-slate-400 uppercase">Zero Usage</p>
-                    <h3 class="text-lg font-bold">482</h3>
-                </div>
-                <div class="bg-white p-4 rounded-xl border-l-4 border-l-indigo-500 shadow-sm cursor-pointer hover:bg-slate-50 transition">
-                    <p class="text-[9px] font-bold text-slate-400 uppercase">Stand Negatif</p>
-                    <h3 class="text-lg font-bold">12</h3>
-                </div>
-                <div class="bg-white p-4 rounded-xl border-l-4 border-l-blue-400 shadow-sm cursor-pointer hover:bg-slate-50 transition">
-                    <p class="text-[9px] font-bold text-slate-400 uppercase">Salah Catat</p>
-                    <h3 class="text-lg font-bold">45</h3>
-                </div>
-                <div class="bg-white p-4 rounded-xl border-l-4 border-l-emerald-400 shadow-sm cursor-pointer hover:bg-slate-50 transition">
-                    <p class="text-[9px] font-bold text-slate-400 uppercase">Rebill</p>
-                    <h3 class="text-lg font-bold">124</h3>
-                </div>
-                <div class="bg-white p-4 rounded-xl border-l-4 border-l-purple-400 shadow-sm cursor-pointer hover:bg-slate-50 transition">
-                    <p class="text-[9px] font-bold text-slate-400 uppercase">Estimasi</p>
-                    <h3 class="text-lg font-bold">143</h3>
-                </div>
-            </div>
-
-            <!-- Meter List -->
-            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <table class="w-full text-xs text-left">
-                    <thead class="bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase text-slate-500">
-                        <tr>
-                            <th class="px-6 py-4">Nomen</th>
-                            <th class="px-6 py-4">Nama Pelanggan</th>
-                            <th class="px-6 py-4">Rayon</th>
-                            <th class="px-6 py-4">Kubikasi (m3)</th>
-                            <th class="px-6 py-4">Jenis Anomali</th>
-                            <th class="px-6 py-4 text-center">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        <tr class="hover:bg-slate-50">
-                            <td class="px-6 py-4 font-mono font-bold">601230491</td>
-                            <td class="px-6 py-4 font-medium text-slate-700">PT. LOGISTIK MAJU JAYA</td>
-                            <td class="px-6 py-4">Rayon 34</td>
-                            <td class="px-6 py-4 text-rose-600 font-bold">2.450 (↑ 300%)</td>
-                            <td class="px-6 py-4"><span class="px-2 py-0.5 rounded bg-rose-100 text-rose-700 font-bold text-[9px]">EXTREME USAGE</span></td>
-                            <td class="px-6 py-4 text-center">
-                                <button onclick="openTab('analisa')" class="text-blue-600 hover:underline font-bold">Analisa Manual</button>
-                            </td>
-                        </tr>
-                        <!-- More dummy rows -->
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- 5️⃣ TAB: ANALISA MANUAL (PUSAT KERJA) -->
-        <section id="analisa" class="tab-content">
+        <!-- 5️⃣ TAB: ANALISA MANUAL (PUSAT KERJA TIM) -->
+        <section id="analisa" class="tab-content h-full">
             <div class="flex flex-col lg:flex-row gap-6 h-[700px]">
-                <!-- Sidebar List Pelanggan Ber-Anomali -->
+                
+                <!-- Sidebar: Antrian Anomali -->
                 <div class="w-full lg:w-1/3 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
-                    <div class="p-4 border-b bg-slate-50">
-                        <h4 class="font-bold text-slate-700 text-xs mb-3">Daftar Anomali & Tunggakan Premium</h4>
-                        <div class="relative">
-                            <input type="text" placeholder="Filter Nomen/Status..." class="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-md text-xs outline-none focus:ring-2 focus:ring-blue-500">
-                            <i data-lucide="filter" class="w-4 h-4 absolute left-3 top-2.5 text-slate-400"></i>
-                        </div>
+                    <div class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                        <h4 class="text-xs font-bold text-slate-700 uppercase">Antrian Analisa</h4>
+                        <span class="bg-rose-100 text-rose-700 text-[9px] font-black px-2 py-0.5 rounded-full">12 OPEN</span>
                     </div>
                     <div class="flex-1 overflow-y-auto divide-y divide-slate-100">
                         <!-- Active Item -->
-                        <div class="p-4 bg-blue-50 border-l-4 border-blue-600 cursor-pointer">
+                        <div class="p-4 bg-blue-50 border-l-4 border-l-blue-600 cursor-pointer transition hover:bg-blue-100">
                             <div class="flex justify-between items-start mb-1">
-                                <span class="text-[10px] font-mono font-bold text-blue-700">601230491</span>
-                                <span class="px-2 py-0.5 rounded bg-rose-500 text-white font-bold text-[8px]">URGENT</span>
+                                <span class="text-[10px] font-mono font-bold text-blue-700">#601244509</span>
+                                <span class="text-[8px] bg-rose-500 text-white font-black px-1.5 py-0.5 rounded uppercase">Urgent</span>
                             </div>
-                            <h5 class="text-xs font-bold text-slate-800">PT. LOGISTIK MAJU JAYA</h5>
-                            <p class="text-[10px] text-slate-500 mt-1 line-clamp-1">Jl. Sunter Agung Utara Blok A No. 12</p>
+                            <h5 class="text-xs font-black text-slate-800">PT. LOGISTIK MAJU JAYA</h5>
+                            <p class="text-[10px] text-slate-500 mt-1 truncate italic">Jl. Sunter Agung Utara No. 12, Kel. Sunter Agung...</p>
                             <div class="mt-2 flex gap-2">
-                                <span class="text-[9px] text-rose-600 font-bold bg-rose-50 px-1.5 py-0.5 rounded italic">Extreme Usage</span>
-                                <span class="text-[9px] text-slate-400 font-medium">Update: 10m ago</span>
+                                <span class="text-[9px] font-bold bg-white px-2 py-0.5 rounded border border-blue-200 text-blue-600">Extreme Usage</span>
+                                <span class="text-[9px] text-slate-400 font-medium">Update: 12 menit lalu</span>
                             </div>
                         </div>
-                        <!-- Other Items -->
-                        <div class="p-4 hover:bg-slate-50 cursor-pointer">
+                        
+                        <!-- Normal Item -->
+                        <div class="p-4 hover:bg-slate-50 cursor-pointer transition">
                             <div class="flex justify-between items-start mb-1">
-                                <span class="text-[10px] font-mono font-bold text-slate-400">601550212</span>
-                                <span class="px-2 py-0.5 rounded bg-emerald-500 text-white font-bold text-[8px]">PROGRESS</span>
+                                <span class="text-[10px] font-mono font-bold text-slate-400">#601550912</span>
+                                <span class="text-[8px] bg-amber-500 text-white font-black px-1.5 py-0.5 rounded uppercase">Waiting</span>
                             </div>
-                            <h5 class="text-xs font-bold text-slate-800">HOTEL SUNTER INDAH</h5>
-                            <p class="text-[10px] text-slate-500 mt-1 line-clamp-1">Jl. Danau Sunter Barat Kav. 23</p>
+                            <h5 class="text-xs font-black text-slate-800">BPK. BUDI SETIAWAN</h5>
+                            <p class="text-[10px] text-slate-500 mt-1 truncate">Jl. Danau Sunter Barat Kav. 22...</p>
                             <div class="mt-2 flex gap-2">
-                                <span class="text-[9px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded italic">Zero Usage</span>
-                                <span class="text-[9px] text-slate-400 font-medium">Update: 2h ago</span>
+                                <span class="text-[9px] font-bold bg-slate-100 px-2 py-0.5 rounded border border-slate-200 text-slate-500">Zero Usage</span>
+                                <span class="text-[9px] text-slate-400 font-medium">Update: 2 jam lalu</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Detail Panel & Form Input -->
-                <div class="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
-                    <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                        <div class="flex items-center gap-4">
-                            <h4 class="font-bold text-slate-700">Profil Pelanggan & Form Analisa</h4>
-                            <span class="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-700 font-bold rounded">OPEN STATUS</span>
+                <!-- Main Panel: Profil & Form Analisa -->
+                <div class="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden relative">
+                    <!-- Top Actions -->
+                    <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-blue-50 p-2 rounded-lg"><i data-lucide="user-search" class="w-5 h-5 text-blue-600"></i></div>
+                            <h4 class="font-black text-slate-800">Workbench Analisa Manual</h4>
                         </div>
                         <div class="flex gap-2">
-                            <button class="px-3 py-1.5 bg-white border border-slate-200 text-[10px] font-bold rounded-md hover:bg-slate-50 transition"><i data-lucide="share-2" class="w-3 h-3 inline mr-1"></i> Bagikan</button>
-                            <button class="px-3 py-1.5 bg-emerald-600 text-white text-[10px] font-bold rounded-md hover:bg-emerald-700 transition shadow-sm"><i data-lucide="save" class="w-3 h-3 inline mr-1"></i> Simpan Analisa</button>
+                            <button class="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-200 transition">Batal</button>
+                            <button class="bg-blue-600 text-white px-6 py-2 rounded-lg text-xs font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-500/20">Simpan Analisa</button>
                         </div>
                     </div>
-                    
-                    <div class="flex-1 overflow-y-auto p-8 space-y-8">
-                        <!-- Profil Grid -->
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div class="col-span-2 space-y-4">
-                                <div>
-                                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nama Pelanggan / Nomen</p>
-                                    <h2 class="text-xl font-extrabold text-slate-900">PT. LOGISTIK MAJU JAYA <span class="text-slate-300 font-mono ml-2">#601230491</span></h2>
-                                </div>
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                        <p class="text-[9px] font-bold text-slate-400 uppercase">Tarif</p>
-                                        <p class="text-xs font-bold">NIAGA-2 (N2)</p>
+
+                    <!-- Scrollable Form Area -->
+                    <div class="flex-1 overflow-y-auto p-8 space-y-10">
+                        
+                        <!-- Profil Pelanggan Segment -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 border-b border-slate-100 pb-10">
+                            <div class="col-span-2 space-y-5">
+                                <div class="grid grid-cols-2 gap-6">
+                                    <div>
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Nama Pelanggan</label>
+                                        <p class="text-lg font-black text-slate-900 leading-tight">PT. LOGISTIK MAJU JAYA</p>
                                     </div>
-                                    <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                        <p class="text-[9px] font-bold text-slate-400 uppercase">Rayon / PC / PCEZ</p>
-                                        <p class="text-xs font-bold text-blue-600">34 / 098 / 098-02</p>
+                                    <div>
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Nomen / ID Pelanggan</label>
+                                        <p class="text-lg font-mono font-black text-blue-700">601244509</p>
                                     </div>
                                 </div>
+                                <div class="grid grid-cols-3 gap-4">
+                                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                        <p class="text-[9px] font-bold text-slate-400">Rayon / PCEZ</p>
+                                        <p class="text-xs font-black">34 / 098-02</p>
+                                    </div>
+                                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                        <p class="text-[9px] font-bold text-slate-400">Tarif / Merk</p>
+                                        <p class="text-xs font-black">NIAGA-2 / Itron</p>
+                                    </div>
+                                    <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+                                        <p class="text-[9px] font-bold text-emerald-600">Status Pembayaran</p>
+                                        <p class="text-[10px] font-black text-emerald-700">PAID (Dec-25)</p>
+                                    </div>
+                                </div>
                                 <div>
-                                    <p class="text-[9px] font-bold text-slate-400 uppercase">Alamat Lengkap</p>
-                                    <p class="text-xs text-slate-600 italic">Jl. Sunter Agung Utara Blok A No. 12, Kel. Sunter Agung, Kec. Tanjung Priok, Jakarta Utara</p>
+                                    <label class="text-[9px] font-bold text-slate-400 uppercase">Alamat Lengkap</label>
+                                    <p class="text-xs text-slate-600 font-medium italic">Jl. Sunter Agung Utara No. 12, Kel. Sunter Agung, Kec. Tanjung Priok, Jakarta Utara 14350</p>
                                 </div>
                             </div>
-                            <div class="bg-slate-900 rounded-xl p-6 text-white flex flex-col justify-between">
+                            <!-- Side Stats / Ardebt Info -->
+                            <div class="bg-slate-900 rounded-3xl p-6 text-white flex flex-col justify-between shadow-xl relative overflow-hidden">
+                                <div class="absolute -right-4 -top-4 opacity-10"><i data-lucide="wallet" class="w-24 h-24"></i></div>
                                 <div>
-                                    <p class="text-[10px] font-bold opacity-60 uppercase">Tagihan Berjalan</p>
-                                    <h3 class="text-2xl font-bold mt-1">Rp 18.240.500</h3>
+                                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Ardebt (Tunggakan)</p>
+                                    <h3 class="text-2xl font-black tracking-tight">Rp 12.450.200</h3>
                                 </div>
-                                <div class="space-y-2 mt-4">
-                                    <div class="flex justify-between text-[10px]">
-                                        <span class="opacity-60 text-emerald-400 font-bold">Current</span>
-                                        <span>Rp 12.100.000</span>
+                                <div class="space-y-3 mt-6">
+                                    <div class="flex justify-between text-[10px] border-b border-white/10 pb-2">
+                                        <span class="text-slate-400">Current (Bln Ini)</span>
+                                        <span class="font-bold text-emerald-400">Rp 0</span>
                                     </div>
                                     <div class="flex justify-between text-[10px]">
-                                        <span class="opacity-60 text-rose-400 font-bold">Ardebt</span>
-                                        <span>Rp 6.140.500</span>
+                                        <span class="text-slate-400">Saldo Ardebt</span>
+                                        <span class="font-bold text-rose-400">Rp 12.450.200</span>
                                     </div>
                                 </div>
-                                <button class="w-full mt-4 bg-white/10 hover:bg-white/20 py-2 rounded-lg text-[10px] font-bold transition">Cek History Bayar</button>
+                                <button class="w-full mt-6 bg-white/10 hover:bg-white/20 py-2.5 rounded-xl text-[10px] font-bold transition">Lihat History Bayar</button>
                             </div>
                         </div>
 
-                        <!-- Charts History (Embedded) -->
-                        <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                            <h5 class="text-[10px] font-bold text-slate-500 uppercase mb-4">Tren Kubikasi 12 Bulan Terakhir</h5>
-                            <canvas id="chartHistoryKubikasi" class="w-full h-32"></canvas>
-                        </div>
-
-                        <!-- Form Analisa Manual -->
-                        <div class="space-y-6 pt-4 border-t border-slate-100">
-                            <h4 class="font-bold text-slate-700 flex items-center gap-2">
-                                <i data-lucide="edit-3" class="w-4 h-4 text-blue-600"></i> Form Hasil Analisa Tim
-                            </h4>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Analysis Workspace -->
+                        <div class="space-y-8">
+                            <h5 class="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                <i data-lucide="edit-3" class="w-4 h-4 text-blue-600"></i> Form Analisa & Rekomendasi
+                            </h5>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div class="space-y-2">
-                                    <label class="text-[10px] font-bold text-slate-500 uppercase">Jenis Anomali</label>
-                                    <select class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500">
+                                    <label class="text-[10px] font-black text-slate-600 uppercase flex items-center gap-2">
+                                        Jenis Anomali <span class="text-rose-500">*</span>
+                                    </label>
+                                    <select class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500">
                                         <option>-- Pilih Jenis --</option>
                                         <option selected>Extreme Usage (Pemakaian Naik Drastis)</option>
                                         <option>Zero Usage (Meter Berhenti)</option>
-                                        <option>Meter Tidak Dapat Dibaca (Kabur/Rusak)</option>
+                                        <option>Stand Negatif</option>
+                                        <option>Estimasi (Stand Tidak Terbaca)</option>
                                     </select>
                                 </div>
                                 <div class="space-y-2">
-                                    <label class="text-[10px] font-bold text-slate-500 uppercase">Status Operasional</label>
-                                    <select class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500">
-                                        <option selected>Open - Perlu Cek Lapangan</option>
-                                        <option>Progress - Sedang di Lapangan</option>
-                                        <option>Closed - Selesai Analisa</option>
+                                    <label class="text-[10px] font-black text-slate-600 uppercase flex items-center gap-2">
+                                        Rekomendasi Tindak Lanjut <span class="text-rose-500">*</span>
+                                    </label>
+                                    <select class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option>-- Pilih Tindakan --</option>
+                                        <option selected>Cek Lapangan (Survei Lokasi)</option>
+                                        <option>Ganti Meter Total</option>
+                                        <option>Koreksi Tagihan (Rebill)</option>
+                                        <option>Monitoring Bulanan</option>
                                     </select>
                                 </div>
                             </div>
+
                             <div class="space-y-2">
-                                <label class="text-[10px] font-bold text-slate-500 uppercase">Analisa Tim & Hasil Verifikasi Lapangan</label>
-                                <textarea rows="3" placeholder="Tuliskan detail temuan..." class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-xs outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                                <label class="text-[10px] font-black text-slate-600 uppercase">Analisa Tim & Hasil Verifikasi Lapangan</label>
+                                <textarea rows="5" placeholder="Input temuan tim lapangan, hasil cek fisik meter, indikasi kebocoran, atau faktor eksternal lainnya..." class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed"></textarea>
                             </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div class="space-y-2">
-                                    <label class="text-[10px] font-bold text-slate-500 uppercase">Kesimpulan</label>
-                                    <input type="text" placeholder="Contoh: Meter rusak mekanik..." class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500">
+                                    <label class="text-[10px] font-black text-slate-600 uppercase">Kesimpulan Akhir</label>
+                                    <input type="text" placeholder="Contoh: Meter rusak mekanik, perlu penggantian segera." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500">
                                 </div>
                                 <div class="space-y-2">
-                                    <label class="text-[10px] font-bold text-slate-500 uppercase">Rekomendasi Tindak Lanjut</label>
-                                    <select class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500">
-                                        <option>Ganti Meter Baru (Ganti Total)</option>
-                                        <option>Rebill (Koreksi Tagihan)</option>
-                                        <option>Monitoring Lanjutan</option>
-                                    </select>
+                                    <label class="text-[10px] font-black text-slate-600 uppercase">Status Operasional</label>
+                                    <div class="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                                        <button class="flex-1 bg-white text-rose-600 text-[9px] font-black py-2 rounded-lg border border-rose-200 shadow-sm">OPEN</button>
+                                        <button class="flex-1 bg-slate-100 text-slate-400 text-[9px] font-black py-2 rounded-lg">PROGRESS</button>
+                                        <button class="flex-1 bg-slate-100 text-slate-400 text-[9px] font-black py-2 rounded-lg">CLOSED</button>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-2 p-3 bg-amber-50 border border-amber-100 rounded-lg">
-                                <i data-lucide="info" class="w-4 h-4 text-amber-600"></i>
-                                <p class="text-[10px] text-amber-700 italic">Terakhir diupdate oleh <b>Tim Ops 34 (Roni)</b> pada 15-12-2025 14:20 (Audit Trail tersimpan)</p>
+
+                            <!-- Audit Trail Info -->
+                            <div class="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-center gap-4">
+                                <div class="bg-amber-100 p-2 rounded-lg"><i data-lucide="shield-check" class="w-5 h-5 text-amber-600"></i></div>
+                                <div>
+                                    <p class="text-[10px] text-amber-800 font-bold italic">Audit Trail Tracking</p>
+                                    <p class="text-[9px] text-amber-600 font-medium">Data ini diinput oleh <b>Supervisor Ops 34 (Bpk. Andi)</b> pada 15-12-2025 pukul 14:20:01 WIB.</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -497,79 +448,90 @@
             </div>
         </section>
 
-        <!-- (Placeholder for other tabs: HISTORY, TOP, ALERT, LAPORAN) -->
-        <section id="history" class="tab-content text-center py-20 text-slate-400">
-            <i data-lucide="database" class="w-12 h-12 mx-auto mb-4 opacity-20"></i>
-            <h3 class="font-bold">History Database</h3>
-            <p class="text-xs">Fitur arsip kubikasi & pembayaran multi-tahun sedang memuat...</p>
-        </section>
-
-        <section id="top" class="tab-content text-center py-20 text-slate-400">
-            <i data-lucide="award" class="w-12 h-12 mx-auto mb-4 opacity-20"></i>
-            <h3 class="font-bold">TOP 100 Premium Customers</h3>
-            <p class="text-xs">Sorting data pelanggan premium & tunggakan tertinggi...</p>
-        </section>
-
-        <section id="alert" class="tab-content text-center py-20 text-slate-400">
-            <i data-lucide="bell" class="w-12 h-12 mx-auto mb-4 opacity-20"></i>
-            <h3 class="font-bold">Smart Notification</h3>
-            <p class="text-xs">Mendeteksi fluktuasi abnormal hari ini...</p>
-        </section>
-
-        <section id="laporan" class="tab-content text-center py-20 text-slate-400">
-            <i data-lucide="printer" class="w-12 h-12 mx-auto mb-4 opacity-20"></i>
-            <h3 class="font-bold">Laporan Management</h3>
-            <p class="text-xs">Menyiapkan format PDF/Excel resmi...</p>
-        </section>
+        <!-- (Placeholder sections for other tabs) -->
+        <section id="meter" class="tab-content text-center py-20 text-slate-300 italic"><i data-lucide="gauge" class="w-16 h-16 mx-auto mb-4 opacity-10"></i><h3 class="font-bold">Modul Meter Sedang Memuat...</h3></section>
+        <section id="history" class="tab-content text-center py-20 text-slate-300 italic"><i data-lucide="history" class="w-16 h-16 mx-auto mb-4 opacity-10"></i><h3 class="font-bold">History Database Multi-Year Sedang Memuat...</h3></section>
+        <section id="top" class="tab-content text-center py-20 text-slate-300 italic"><i data-lucide="award" class="w-16 h-16 mx-auto mb-4 opacity-10"></i><h3 class="font-bold">TOP 100 Premium Customers Sedang Memuat...</h3></section>
+        <section id="alert" class="tab-content text-center py-20 text-slate-300 italic"><i data-lucide="bell-ring" class="w-16 h-16 mx-auto mb-4 opacity-10"></i><h3 class="font-bold">Alert System Sedang Memuat...</h3></section>
+        <section id="laporan" class="tab-content text-center py-20 text-slate-300 italic"><i data-lucide="file-text" class="w-16 h-16 mx-auto mb-4 opacity-10"></i><h3 class="font-bold">Laporan Management Sedang Memuat...</h3></section>
 
     </main>
 
-    <!-- Footer Status -->
+    <!-- 🏷️ FOOTER STATUS -->
     <footer class="bg-white border-t border-slate-200 px-6 py-2 shrink-0 flex justify-between items-center text-[10px] font-bold text-slate-400">
-        <div class="flex items-center gap-4">
-            <span class="flex items-center gap-1"><span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> SYSTEM CONNECTED</span>
-            <span>LAST SYNC: 15-12-2025 21:30</span>
+        <div class="flex items-center gap-5">
+            <span class="flex items-center gap-1.5"><span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> ONLINE</span>
+            <span>LAST SYNC: 2025-12-21 21:05 WIB</span>
+            <span>APP_VERSION: 3.5.0-FINAL</span>
         </div>
-        <div>
-            PAM JAYA SUNTER DASHBOARD v3.2.0 (INTERNAL ONLY)
-        </div>
+        <div class="uppercase tracking-widest text-slate-300 font-black">Internal PAM JAYA Only</div>
     </footer>
 
-    <!-- Logic Script -->
+    <!-- 🧠 JAVASCRIPT LOGIC -->
     <script>
-        // Init Lucide
+        // Init Icons
         lucide.createIcons();
 
-        // Tab System
-        function openTab(tabId) {
-            // Hide all
+        // Global State & Tab Switching
+        function switchTab(tabId) {
+            // Reset all
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.tab-link').forEach(el => {
-                el.classList.remove('active-tab');
-                el.classList.add('text-slate-500');
-            });
-
-            // Show active
+            document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
+            
+            // Activate target
             document.getElementById(tabId).classList.add('active');
             
-            // Find the link and activate it
-            const activeLink = Array.from(document.querySelectorAll('.tab-link')).find(el => el.getAttribute('onclick').includes(tabId));
-            activeLink.classList.add('active-tab');
-            activeLink.classList.remove('text-slate-500');
+            // Set active button
+            const activeBtn = Array.from(document.querySelectorAll('.nav-tab')).find(btn => btn.getAttribute('onclick').includes(tabId));
+            if(activeBtn) activeBtn.classList.add('active');
+
+            // Re-render chart if needed
+            if(tabId === 'ringkasan') {
+                renderCharts();
+            }
         }
 
-        // Charts
-        window.onload = function() {
-            // Trend Line Chart
-            const ctxTren = document.getElementById('chartTren').getContext('2d');
-            new Chart(ctxTren, {
+        // Mock Data Generation for Table
+        function renderCollectionTable() {
+            const body = document.getElementById('collectionTableBody');
+            let rows = '';
+            for(let i=1; i<=31; i++) {
+                const day = i < 10 ? '0'+i : i;
+                const dailyVal = Math.floor(Math.random() * 500000 + 1000000);
+                rows += `
+                    <tr>
+                        <td class="sticky-col">${day}-12-2025</td>
+                        <td>${(Math.random()*200 + 1200).toFixed(0)}</td>
+                        <td>1.450.000</td>
+                        <td>416.000</td>
+                        <td class="bg-emerald-50 font-bold text-emerald-700">${(Math.random()*800000 + 500000).toFixed(0)}</td>
+                        <td class="bg-blue-50 font-bold text-blue-700">${(Math.random()*200000 + 100000).toFixed(0)}</td>
+                        <td class="bg-slate-50 font-black text-slate-900">${dailyVal.toLocaleString()}</td>
+                        <td class="font-bold ${Math.random() > 0.5 ? 'text-emerald-600' : 'text-rose-500'}">88.4%</td>
+                        <td class="font-bold">${(i * 1250000).toLocaleString()}</td>
+                        <td class="text-center font-bold text-emerald-600">↑ 2.4%</td>
+                    </tr>
+                `;
+            }
+            body.innerHTML = rows;
+        }
+
+        // Chart Rendering Logic
+        let trendChart, compositionChart;
+        function renderCharts() {
+            if(trendChart) trendChart.destroy();
+            if(compositionChart) compositionChart.destroy();
+
+            // Line Chart
+            const ctxTrend = document.getElementById('trendChart').getContext('2d');
+            trendChart = new Chart(ctxTrend, {
                 type: 'line',
                 data: {
                     labels: ['01 Des', '05 Des', '10 Des', '15 Des', '20 Des', '25 Des', '30 Des'],
                     datasets: [
                         {
                             label: 'Total Sunter',
-                            data: [12, 19, 25, 32, 38, 42, 45],
+                            data: [12, 19, 15, 25, 32, 28, 38],
                             borderColor: '#2563eb',
                             backgroundColor: 'rgba(37, 99, 235, 0.1)',
                             fill: true,
@@ -578,19 +540,11 @@
                         },
                         {
                             label: 'Rayon 34',
-                            data: [7, 10, 14, 18, 21, 23, 25],
-                            borderColor: '#38bdf8',
-                            borderDash: [5, 5],
+                            data: [7, 10, 8, 14, 18, 15, 20],
+                            borderColor: '#0ea5e9',
                             tension: 0.4,
-                            borderWidth: 2
-                        },
-                        {
-                            label: 'Rayon 35',
-                            data: [5, 9, 11, 14, 17, 19, 20],
-                            borderColor: '#6366f1',
-                            borderDash: [2, 2],
-                            tension: 0.4,
-                            borderWidth: 2
+                            borderWidth: 2,
+                            borderDash: [5, 5]
                         }
                     ]
                 },
@@ -598,63 +552,36 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
-                    scales: {
-                        y: { 
-                            beginAtZero: true,
-                            grid: { borderDash: [2, 2], color: '#f1f5f9' },
-                            ticks: { font: { size: 10 }, color: '#94a3b8', callback: v => 'Rp '+v+'M' }
-                        },
-                        x: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#94a3b8' } }
-                    }
+                    scales: { y: { beginAtZero: true, grid: { borderDash: [2, 2] } } }
                 }
             });
 
-            // Pie Composition
-            const ctxPie = document.getElementById('chartPie').getContext('2d');
-            new Chart(ctxPie, {
+            // Pie Chart
+            const ctxComp = document.getElementById('compositionChart').getContext('2d');
+            compositionChart = new Chart(ctxComp, {
                 type: 'doughnut',
                 data: {
                     labels: ['Rayon 34', 'Rayon 35'],
                     datasets: [{
-                        data: [54.2, 45.8],
-                        backgroundColor: ['#2563eb', '#6366f1'],
+                        data: [54, 46],
+                        backgroundColor: ['#2563eb', '#0ea5e9'],
                         borderWidth: 0,
-                        hoverOffset: 10
+                        hoverOffset: 20
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     cutout: '75%',
-                    plugins: { legend: { display: false } }
+                    plugins: { legend: { position: 'bottom', labels: { font: { size: 10, weight: 'bold' } } } }
                 }
             });
+        }
 
-            // Mini History Chart for Analisa
-            const ctxHist = document.getElementById('chartHistoryKubikasi').getContext('2d');
-            new Chart(ctxHist, {
-                type: 'bar',
-                data: {
-                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'],
-                    datasets: [{
-                        data: [420, 380, 450, 480, 520, 600, 580, 550, 590, 800, 1200, 2450],
-                        backgroundColor: context => {
-                            const val = context.raw;
-                            return val > 1000 ? '#f43f5e' : '#94a3b8';
-                        },
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: { 
-                        y: { display: false },
-                        x: { grid: { display: false }, ticks: { font: { size: 8 } } }
-                    }
-                }
-            });
+        // Init on load
+        window.onload = function() {
+            renderCharts();
+            renderCollectionTable();
         };
     </script>
 </body>
