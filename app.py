@@ -273,8 +273,6 @@ def api_kpi():
         
         kpi['collection']['undue_nomen'] = collection_undue['nomen_undue'] or 0
         kpi['collection']['undue_nominal'] = collection_undue['nominal_undue'] or 0
-        kpi['collection']['undue_nominal'] = collection_undue['nominal_undue'] or 0
-        kpi['collection']['undue_volume'] = collection_undue['volume_undue'] or 0
         
         # ========================================
         # 4. COLLECTION RATE
@@ -481,25 +479,82 @@ def upload_file():
         try:
             conn = get_db()
             
-            # Baca File
+            # Baca File dengan support lengkap: CSV, TXT, Excel (.xls, .xlsx), DBF
+            df = None
+            
             if filepath.endswith('.csv'):
+                # CSV Support
                 try:
                     df = pd.read_csv(filepath, sep=',', encoding='utf-8')
                     if len(df.columns) < 2:
                         df = pd.read_csv(filepath, sep=';', encoding='utf-8')
                 except:
-                    df = pd.read_csv(filepath, sep=';', encoding='latin-1')
+                    try:
+                        df = pd.read_csv(filepath, sep=',', encoding='latin-1')
+                        if len(df.columns) < 2:
+                            df = pd.read_csv(filepath, sep=';', encoding='latin-1')
+                    except:
+                        # Detect encoding otomatis
+                        import chardet
+                        with open(filepath, 'rb') as f:
+                            result = chardet.detect(f.read())
+                        df = pd.read_csv(filepath, encoding=result['encoding'])
+                        
             elif filepath.endswith('.txt'):
-                # Untuk file DAILY (Collection) pakai pipe, MainBill pakai semicolon
+                # TXT Support (pipe atau semicolon)
                 try:
                     df = pd.read_csv(filepath, sep='|', encoding='utf-8')
                     if len(df.columns) < 2:
                         df = pd.read_csv(filepath, sep=';', encoding='utf-8')
                 except:
                     df = pd.read_csv(filepath, sep=';', encoding='utf-8')
+                    
+            elif filepath.endswith('.dbf'):
+                # DBF Support (dBase format)
+                try:
+                    from dbfread import DBF
+                    table = DBF(filepath, encoding='latin-1')
+                    df = pd.DataFrame(iter(table))
+                    print(f"✅ DBF file berhasil dibaca: {len(df)} rows")
+                except Exception as e:
+                    flash(f'❌ Gagal membaca file DBF: {e}', 'danger')
+                    return redirect(url_for('index'))
+                    
+            elif filepath.endswith(('.xls', '.xlsx')):
+                # Excel Support - Multiple Engines dengan priority
+                engines_to_try = []
+                
+                if filepath.endswith('.xlsx'):
+                    # Untuk .xlsx, prioritas openpyxl
+                    engines_to_try = ['openpyxl', None]
+                else:
+                    # Untuk .xls, prioritas xlrd
+                    engines_to_try = ['xlrd', 'openpyxl', None]
+                
+                error_msgs = []
+                for engine in engines_to_try:
+                    try:
+                        if engine:
+                            df = pd.read_excel(filepath, engine=engine)
+                            print(f"✅ Excel berhasil dibaca dengan engine: {engine}")
+                        else:
+                            df = pd.read_excel(filepath)
+                            print(f"✅ Excel berhasil dibaca dengan default engine")
+                        break
+                    except Exception as e:
+                        error_msgs.append(f"{engine or 'default'}: {str(e)[:80]}")
+                        continue
+                
+                if df is None:
+                    flash(f'❌ Tidak bisa membaca file Excel. Error: {"; ".join(error_msgs)}. Solusi: Convert ke CSV di Excel (File → Save As → CSV UTF-8)', 'danger')
+                    return redirect(url_for('index'))
             else:
-                # Excel - baca langsung, biarkan pandas handle
-                df = pd.read_excel(filepath)
+                flash('❌ Format file tidak didukung. Gunakan: .csv, .txt, .xls, .xlsx, atau .dbf', 'danger')
+                return redirect(url_for('index'))
+            
+            if df is None:
+                flash('❌ File tidak bisa dibaca. Pastikan format file benar.', 'danger')
+                return redirect(url_for('index'))
 
             # Normalize column names
             df.columns = df.columns.str.upper().str.strip()
