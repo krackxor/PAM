@@ -3,517 +3,717 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SUNTER DASHBOARD | Monitoring Operasional</title>
-    
-    <!-- 1. LIBRARY EKSTERNAL (CDN) -->
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>PAM DSS Server V3.0 - Control Panel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-    <!-- 2. CUSTOM CSS (Load dari file static/style.css) -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        /* Animated Background */
+        .bg-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .bg-animation span {
+            position: absolute;
+            display: block;
+            width: 20px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            animation: float 25s infinite;
+            bottom: -150px;
+        }
+
+        .bg-animation span:nth-child(1) { left: 25%; width: 80px; height: 80px; animation-delay: 0s; }
+        .bg-animation span:nth-child(2) { left: 10%; width: 20px; height: 20px; animation-delay: 2s; animation-duration: 12s; }
+        .bg-animation span:nth-child(3) { left: 70%; width: 20px; height: 20px; animation-delay: 4s; }
+        .bg-animation span:nth-child(4) { left: 40%; width: 60px; height: 60px; animation-delay: 0s; animation-duration: 18s; }
+        .bg-animation span:nth-child(5) { left: 65%; width: 20px; height: 20px; animation-delay: 0s; }
+        .bg-animation span:nth-child(6) { left: 75%; width: 110px; height: 110px; animation-delay: 3s; }
+        .bg-animation span:nth-child(7) { left: 35%; width: 150px; height: 150px; animation-delay: 7s; }
+        .bg-animation span:nth-child(8) { left: 50%; width: 25px; height: 25px; animation-delay: 15s; animation-duration: 45s; }
+        .bg-animation span:nth-child(9) { left: 20%; width: 15px; height: 15px; animation-delay: 2s; animation-duration: 35s; }
+        .bg-animation span:nth-child(10) { left: 85%; width: 150px; height: 150px; animation-delay: 0s; animation-duration: 11s; }
+
+        @keyframes float {
+            0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(-1000px) rotate(720deg); opacity: 0; }
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 30px;
+            padding: 50px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.6s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(50px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+            position: relative;
+        }
+
+        .logo {
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 48px;
+            animation: pulse 2s infinite;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .header h1 {
+            font-size: 48px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+            letter-spacing: -2px;
+        }
+
+        .header .version {
+            font-size: 14px;
+            color: #667eea;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+
+        /* Status Cards */
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .status-card {
+            background: white;
+            padding: 25px;
+            border-radius: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            border-left: 5px solid;
+            transition: all 0.3s ease;
+            animation: fadeIn 0.5s ease-out;
+            animation-fill-mode: both;
+        }
+
+        .status-card:nth-child(1) { border-color: #10b981; animation-delay: 0.1s; }
+        .status-card:nth-child(2) { border-color: #3b82f6; animation-delay: 0.2s; }
+        .status-card:nth-child(3) { border-color: #f59e0b; animation-delay: 0.3s; }
+        .status-card:nth-child(4) { border-color: #8b5cf6; animation-delay: 0.4s; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .status-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15);
+        }
+
+        .status-card .label {
+            font-size: 12px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .status-card .value {
+            font-size: 24px;
+            font-weight: 900;
+            color: #1f2937;
+        }
+
+        .status-online { color: #10b981; }
+        .status-port { color: #3b82f6; }
+        .status-db { color: #f59e0b; }
+        .status-version { color: #8b5cf6; }
+
+        /* Upload Section */
+        .upload-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px;
+            border-radius: 20px;
+            margin-bottom: 30px;
+            animation: fadeIn 0.5s ease-out 0.5s;
+            animation-fill-mode: both;
+        }
+
+        .upload-section h2 {
+            color: white;
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .upload-area {
+            background: rgba(255, 255, 255, 0.95);
+            border: 3px dashed rgba(255, 255, 255, 0.5);
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-area::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(102, 126, 234, 0.1), transparent);
+            transform: rotate(45deg);
+            animation: shimmer 3s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+        }
+
+        .upload-area:hover {
+            background: white;
+            border-color: rgba(255, 255, 255, 0.8);
+            transform: scale(1.02);
+        }
+
+        .upload-area.dragover {
+            background: rgba(255, 255, 255, 1);
+            border-color: #667eea;
+            transform: scale(1.05);
+        }
+
+        .upload-icon {
+            font-size: 64px;
+            margin-bottom: 15px;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .upload-area h3 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 8px;
+        }
+
+        .upload-area p {
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .btn-upload {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+            position: relative;
+            z-index: 1;
+        }
+
+        .btn-upload:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-upload:active {
+            transform: translateY(0);
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            width: 0%;
+            transition: width 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: loading 1.5s infinite;
+        }
+
+        @keyframes loading {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .progress-text {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        /* Action Buttons */
+        .action-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            animation: fadeIn 0.5s ease-out 0.6s;
+            animation-fill-mode: both;
+        }
+
+        .btn-action {
+            background: white;
+            color: #1f2937;
+            padding: 20px;
+            border-radius: 15px;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-weight: 700;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            border: 2px solid transparent;
+        }
+
+        .btn-action:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15);
+            border-color: #667eea;
+        }
+
+        .btn-action .icon {
+            font-size: 32px;
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-action .text {
+            flex: 1;
+        }
+
+        .btn-action .text .title {
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+
+        .btn-action .text .desc {
+            font-size: 12px;
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            color: #6b7280;
+            font-size: 14px;
+            animation: fadeIn 0.5s ease-out 0.7s;
+            animation-fill-mode: both;
+        }
+
+        /* Notification Toast */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 20px 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            display: none;
+            align-items: center;
+            gap: 15px;
+            z-index: 1000;
+            animation: slideInRight 0.3s ease-out;
+        }
+
+        @keyframes slideInRight {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .toast.show {
+            display: flex;
+        }
+
+        .toast.success { border-left: 5px solid #10b981; }
+        .toast.error { border-left: 5px solid #ef4444; }
+
+        .toast .icon {
+            font-size: 24px;
+        }
+
+        .toast.success .icon { color: #10b981; }
+        .toast.error .icon { color: #ef4444; }
+
+        /* Loading Spinner */
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container { padding: 30px 20px; }
+            .header h1 { font-size: 32px; }
+            .status-grid { grid-template-columns: 1fr; }
+            .action-buttons { grid-template-columns: 1fr; }
+        }
+    </style>
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col overflow-hidden">
+<body>
+    <!-- Animated Background -->
+    <div class="bg-animation">
+        <span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span>
+    </div>
 
-    <!-- 3. NOTIFIKASI SYSTEM (FLASH MESSAGES) -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <div class="fixed top-4 right-4 z-[100] flex flex-col gap-2">
-        {% for category, message in messages %}
-          <div class="p-4 rounded shadow-lg flex items-center gap-3 text-sm font-medium animate-bounce 
-                      {{ 'bg-emerald-100 text-emerald-800 border-l-4 border-emerald-600' if category == 'success' else 'bg-rose-100 text-rose-800 border-l-4 border-rose-600' }}">
-            {% if category == 'success' %}
-                <i data-lucide="check-circle" class="w-5 h-5"></i>
-            {% else %}
-                <i data-lucide="alert-triangle" class="w-5 h-5"></i>
-            {% endif %}
-            <span>{{ message }}</span>
-            <button onclick="this.parentElement.remove()" class="ml-4 hover:opacity-50"><i data-lucide="x" class="w-4 h-4"></i></button>
-          </div>
-        {% endfor %}
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">🛡️</div>
+            <h1>PAM DSS Server</h1>
+            <div class="version">Control Panel V3.0</div>
         </div>
-      {% endif %}
-    {% endwith %}
 
-    <!-- 4. GLOBAL HEADER (STICKY TOP) -->
-    <header class="bg-slate-900 text-white shadow-md z-50 shrink-0">
-        <div class="px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
-            
-            <!-- Branding & Scope -->
-            <div class="flex flex-col">
-                <h1 class="text-lg font-bold tracking-wider flex items-center gap-2 text-blue-100">
-                    <i data-lucide="layout-dashboard" class="w-6 h-6 text-blue-400"></i> 
-                    SUNTER DASHBOARD
-                </h1>
-                <div class="flex gap-2 mt-1 text-[11px] font-semibold">
-                    <span class="px-2 py-0.5 rounded bg-blue-600 text-white border border-blue-400 cursor-default">SUNTER (All)</span>
-                    <span class="px-2 py-0.5 rounded bg-slate-700 text-slate-300 border border-slate-600 cursor-pointer hover:bg-slate-600 hover:text-white transition">Rayon 34</span>
-                    <span class="px-2 py-0.5 rounded bg-slate-700 text-slate-300 border border-slate-600 cursor-pointer hover:bg-slate-600 hover:text-white transition">Rayon 35</span>
-                </div>
+        <!-- Status Cards -->
+        <div class="status-grid">
+            <div class="status-card">
+                <div class="label">Server Status</div>
+                <div class="value status-online">● Online</div>
             </div>
-
-            <!-- Global Filters -->
-            <div class="flex flex-wrap gap-2 text-xs hidden md:flex">
-                <div class="flex items-center bg-slate-800 rounded px-3 py-1.5 border border-slate-700 hover:border-slate-500 transition">
-                    <i data-lucide="filter" class="w-3 h-3 mr-2 text-blue-400"></i>
-                    <select class="bg-transparent border-none focus:ring-0 cursor-pointer text-slate-200 font-medium outline-none">
-                        <option>Semua PC</option>
-                        <option>PC 34</option>
-                        <option>PC 35</option>
-                    </select>
-                </div>
-                <div class="flex items-center bg-slate-800 rounded px-3 py-1.5 border border-slate-700 hover:border-slate-500 transition">
-                    <i data-lucide="calendar" class="w-3 h-3 mr-2 text-blue-400"></i>
-                    <span class="font-medium text-slate-200">Desember 2025</span>
-                </div>
+            <div class="status-card">
+                <div class="label">API Port</div>
+                <div class="value status-port">5000</div>
             </div>
+            <div class="status-card">
+                <div class="label">Database</div>
+                <div class="value status-db">MongoDB Connected</div>
+            </div>
+            <div class="status-card">
+                <div class="label">Version</div>
+                <div class="value status-version">3.0.0</div>
+            </div>
+        </div>
 
-            <!-- Actions -->
-            <div class="flex gap-3">
-                <button onclick="toggleModal('uploadModal')" 
-                        class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded shadow-sm text-sm font-medium flex items-center gap-2 transition hover:shadow-emerald-500/20 shadow-lg">
-                    <i data-lucide="upload-cloud" class="w-4 h-4"></i> Upload Data
+        <!-- Upload Section -->
+        <div class="upload-section">
+            <h2>📤 Upload SBRS / Data File</h2>
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📁</div>
+                <h3>Drag & Drop File Disini</h3>
+                <p>Atau klik untuk memilih file (.csv, .txt, .xlsx)</p>
+                <button class="btn-upload" onclick="document.getElementById('fileInput').click()">
+                    Pilih File
                 </button>
-                <div class="relative group">
-                    <input type="text" placeholder="Cari Nomen / Nama..." 
-                           class="pl-9 pr-4 py-2 rounded bg-slate-800 text-white placeholder-slate-400 text-sm w-48 focus:w-64 focus:bg-white focus:text-slate-900 focus:outline-none transition-all duration-300 border border-slate-700 focus:border-blue-500">
-                    <i data-lucide="search" class="absolute left-3 top-2.5 text-slate-400 group-focus-within:text-blue-500 w-4 h-4 transition-colors"></i>
-                </div>
+                <input type="file" id="fileInput" class="file-input" accept=".csv,.txt,.xlsx,.xls">
             </div>
-        </div>
-    </header>
-
-    <!-- 5. TAB NAVIGATION (STICKY BELOW HEADER) -->
-    <nav class="bg-white border-b border-slate-200 shadow-sm shrink-0 overflow-x-auto z-40">
-        <div class="flex px-4 min-w-max gap-1">
-            <button onclick="switchTab('ringkasan')" class="tab-btn active px-6 py-3 text-sm font-medium flex items-center gap-2 transition-colors border-b-2 border-transparent hover:bg-slate-50" data-target="ringkasan">
-                <i data-lucide="pie-chart" class="w-4 h-4"></i> Ringkasan
-            </button>
-            <button onclick="switchTab('collection')" class="tab-btn px-6 py-3 text-sm font-medium flex items-center gap-2 transition-colors border-b-2 border-transparent hover:bg-slate-50 text-slate-500" data-target="collection">
-                <i data-lucide="sheet" class="w-4 h-4"></i> Collection
-            </button>
-            <button onclick="switchTab('meter')" class="tab-btn px-6 py-3 text-sm font-medium flex items-center gap-2 transition-colors border-b-2 border-transparent hover:bg-slate-50 text-slate-500" data-target="meter">
-                <i data-lucide="gauge" class="w-4 h-4"></i> Meter
-            </button>
-            <button onclick="switchTab('analisa')" class="tab-btn px-6 py-3 text-sm font-medium flex items-center gap-2 transition-colors border-b-2 border-transparent hover:bg-slate-50 text-slate-500" data-target="analisa">
-                <i data-lucide="file-edit" class="w-4 h-4"></i> Analisa Manual
-            </button>
-            <button onclick="switchTab('top')" class="tab-btn px-6 py-3 text-sm font-medium flex items-center gap-2 transition-colors border-b-2 border-transparent hover:bg-slate-50 text-slate-500" data-target="top">
-                <i data-lucide="trophy" class="w-4 h-4"></i> TOP 100
-            </button>
-            <button onclick="switchTab('laporan')" class="tab-btn px-6 py-3 text-sm font-medium flex items-center gap-2 transition-colors border-b-2 border-transparent hover:bg-slate-50 text-slate-500" data-target="laporan">
-                <i data-lucide="file-text" class="w-4 h-4"></i> Laporan
-            </button>
-        </div>
-    </nav>
-
-    <!-- 6. MAIN CONTENT AREA (SCROLLABLE) -->
-    <main class="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-100 relative w-full">
-
-        <!-- A. TAB: RINGKASAN -->
-        <div id="ringkasan" class="tab-content block fade-in space-y-6">
-            <!-- KPI Cards Row -->
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                <!-- Card 1: Pelanggan -->
-                <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm hover-card relative overflow-hidden group">
-                    <div class="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition">
-                        <i data-lucide="users" class="w-16 h-16 text-slate-800"></i>
-                    </div>
-                    <p class="text-xs text-slate-500 font-bold uppercase tracking-wide">Total Pelanggan</p>
-                    <h3 class="text-2xl font-bold text-slate-800 mt-1">{{ "{:,.0f}".format(stats.total_pelanggan) }}</h3>
-                    <p class="text-[10px] text-slate-400 mt-2">Aktif & Pasif</p>
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
                 </div>
-
-                <!-- Card 2: Target MC -->
-                <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm hover-card relative overflow-hidden group">
-                    <div class="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition">
-                        <i data-lucide="target" class="w-16 h-16 text-blue-600"></i>
-                    </div>
-                    <p class="text-xs text-slate-500 font-bold uppercase tracking-wide">Target MC</p>
-                    <h3 class="text-2xl font-bold text-blue-600 mt-1">{{ "{:,.0f}".format(stats.target_mc) }}</h3>
-                    <p class="text-[10px] text-slate-400 mt-2">Bulan Ini</p>
-                </div>
-
-                <!-- Card 3: Realisasi -->
-                <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm hover-card relative overflow-hidden group">
-                    <div class="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition">
-                        <i data-lucide="wallet" class="w-16 h-16 text-emerald-600"></i>
-                    </div>
-                    <p class="text-xs text-slate-500 font-bold uppercase tracking-wide">Realisasi Coll.</p>
-                    <h3 class="text-2xl font-bold text-emerald-600 mt-1">{{ "{:,.0f}".format(stats.realisasi_coll) }}</h3>
-                    <p class="text-[10px] text-emerald-600 mt-2 flex items-center gap-1">
-                        <i data-lucide="trending-up" class="w-3 h-3"></i> On Track
-                    </p>
-                </div>
-
-                <!-- Card 4: Rate -->
-                <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm hover-card relative overflow-hidden group">
-                    <div class="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition">
-                        <i data-lucide="percent" class="w-16 h-16 text-indigo-600"></i>
-                    </div>
-                    <p class="text-xs text-slate-500 font-bold uppercase tracking-wide">Collection Rate</p>
-                    <h3 class="text-2xl font-bold text-indigo-600 mt-1">{{ "{:,.2f}".format(stats.coll_rate) }}%</h3>
-                    <div class="w-full bg-slate-100 rounded-full h-1.5 mt-3">
-                        <div class="bg-indigo-600 h-1.5 rounded-full" style="width: {{ stats.coll_rate }}%"></div>
-                    </div>
-                </div>
-
-                <!-- Card 5: Ardebt -->
-                <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm hover-card relative overflow-hidden group">
-                    <div class="absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition">
-                        <i data-lucide="alert-circle" class="w-16 h-16 text-rose-600"></i>
-                    </div>
-                    <p class="text-xs text-slate-500 font-bold uppercase tracking-wide">Saldo Tunggakan</p>
-                    <h3 class="text-2xl font-bold text-rose-600 mt-1">{{ "{:,.0f}".format(stats.saldo_ardebt) }}</h3>
-                    <p class="text-[10px] text-slate-400 mt-2">Total Outstanding</p>
-                </div>
-            </div>
-
-            <!-- Charts & Widget -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Main Chart -->
-                <div class="lg:col-span-2 bg-white p-5 rounded-lg border border-slate-200 shadow-sm">
-                    <div class="flex justify-between items-center mb-4">
-                        <h4 class="font-bold text-slate-700 flex items-center gap-2">
-                            <i data-lucide="bar-chart-2" class="w-4 h-4 text-blue-500"></i> 
-                            Tren Collection Harian & Kumulatif
-                        </h4>
-                        <button class="text-xs border px-2 py-1 rounded hover:bg-slate-50 flex items-center gap-1">
-                            <i data-lucide="download" class="w-3 h-3"></i> Save Img
-                        </button>
-                    </div>
-                    <div class="h-80 w-full">
-                        <canvas id="chartTren"></canvas>
-                    </div>
-                </div>
-
-                <!-- Composition / Side Widget -->
-                <div class="bg-white p-5 rounded-lg border border-slate-200 shadow-sm flex flex-col">
-                    <h4 class="font-bold text-slate-700 mb-4 text-center">Komposisi Wilayah</h4>
-                    <div class="flex-1 flex items-center justify-center relative">
-                        <canvas id="chartPie"></canvas>
-                    </div>
-                    <div class="mt-4 grid grid-cols-2 gap-2 text-center text-xs">
-                        <div class="p-2 bg-blue-50 rounded text-blue-700 font-bold">Rayon 34 <br> 55%</div>
-                        <div class="p-2 bg-sky-50 rounded text-sky-700 font-bold">Rayon 35 <br> 45%</div>
-                    </div>
-                </div>
+                <div class="progress-text" id="progressText">Mengupload...</div>
             </div>
         </div>
 
-        <!-- B. TAB: COLLECTION (EXCEL TABLE) -->
-        <div id="collection" class="tab-content hidden fade-in h-full flex flex-col">
-            <div class="bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col h-full overflow-hidden">
-                <!-- Toolbar -->
-                <div class="p-3 border-b border-slate-200 bg-slate-50 flex justify-between items-center shrink-0">
-                    <h3 class="font-bold text-slate-700 flex items-center gap-2 text-sm">
-                        <i data-lucide="table" class="w-4 h-4 text-emerald-600"></i>
-                        Laporan Detail Collection
-                    </h3>
-                    <div class="flex gap-2">
-                        <input type="date" class="text-xs border rounded px-2 py-1 focus:ring-1 focus:ring-blue-500 outline-none">
-                        <button class="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded hover:bg-emerald-700 flex items-center gap-1 font-medium shadow-sm transition">
-                            <i data-lucide="file-spreadsheet" class="w-3 h-3"></i> Export Excel
-                        </button>
-                    </div>
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <a href="/api" class="btn-action">
+                <div class="icon">📡</div>
+                <div class="text">
+                    <div class="title">API Endpoints</div>
+                    <div class="desc">View all available APIs</div>
                 </div>
-
-                <!-- Table Container (Scrollable) -->
-                <div class="flex-1 overflow-auto excel-table bg-white">
-                    <table class="w-full text-sm text-right border-collapse">
-                        <thead class="bg-slate-50 text-slate-600 font-semibold text-xs uppercase tracking-wider sticky top-0 z-30 shadow-sm">
-                            <tr>
-                                <th class="px-4 py-3 text-left sticky-col border-b">Tanggal</th>
-                                <th class="px-4 py-3 border-b border-r bg-emerald-50/50 text-emerald-700">Collection Harian</th>
-                                <th class="px-4 py-3 border-b border-r bg-blue-50/50 text-blue-700">Kumulatif</th>
-                                <th class="px-4 py-3 border-b border-r bg-indigo-50/50 text-indigo-700">% Progress</th>
-                                <th class="px-4 py-3 border-b text-center">Indikator</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100 text-xs font-mono">
-                            {% for row in chart_data %}
-                            <tr class="hover:bg-blue-50 transition-colors group">
-                                <td class="px-4 py-2.5 text-left sticky-col font-medium text-slate-700 group-hover:bg-blue-50 border-r border-slate-100">{{ row.tgl }}</td>
-                                <td class="px-4 py-2.5 border-r border-slate-100 font-semibold text-emerald-600">{{ "{:,.0f}".format(row.total) }}</td>
-                                <td class="px-4 py-2.5 border-r border-slate-100 font-bold text-blue-700 bg-blue-50/20">{{ "{:,.0f}".format(row.kumulatif) }}</td>
-                                <td class="px-4 py-2.5 border-r border-slate-100 text-slate-600">{{ "{:,.2f}".format(row.progress) }}%</td>
-                                <td class="px-4 py-2.5 text-center">
-                                    {% if row.progress >= 100 %}
-                                        <span class="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">ACHIEVED</span>
-                                    {% else %}
-                                        <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">ON TRACK</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% else %}
-                            <tr>
-                                <td colspan="5" class="p-10 text-center text-slate-400">
-                                    <i data-lucide="inbox" class="w-8 h-8 mx-auto mb-2 opacity-30"></i>
-                                    Belum ada data Collection. Silakan upload file terlebih dahulu.
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+            </a>
+            <a href="http://174.138.16.241:5173" class="btn-action" target="_blank">
+                <div class="icon">📊</div>
+                <div class="text">
+                    <div class="title">Dashboard</div>
+                    <div class="desc">Open analytics dashboard</div>
                 </div>
-            </div>
+            </a>
+            <a href="#" class="btn-action" onclick="checkHealth(); return false;">
+                <div class="icon">💚</div>
+                <div class="text">
+                    <div class="title">Health Check</div>
+                    <div class="desc">Test system status</div>
+                </div>
+            </a>
+            <a href="#" class="btn-action" onclick="viewLogs(); return false;">
+                <div class="icon">📋</div>
+                <div class="text">
+                    <div class="title">System Logs</div>
+                    <div class="desc">View activity logs</div>
+                </div>
+            </a>
         </div>
 
-        <!-- C. TAB: ANALISA MANUAL -->
-        <div id="analisa" class="tab-content hidden fade-in h-[calc(100vh-140px)]">
-            <div class="flex flex-col lg:flex-row gap-4 h-full">
-                <!-- Sidebar List -->
-                <div class="w-full lg:w-1/3 bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col">
-                    <div class="p-3 border-b bg-slate-50 shrink-0">
-                        <div class="relative">
-                            <input type="text" placeholder="Cari Anomali / ID..." class="w-full text-xs border border-slate-300 rounded-lg pl-8 pr-2 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
-                            <i data-lucide="search" class="absolute left-2.5 top-2.5 text-slate-400 w-4 h-4"></i>
-                        </div>
-                    </div>
-                    <div class="flex-1 overflow-y-auto p-2 space-y-2">
-                        <!-- Mockup Items -->
-                        <div class="p-3 rounded-lg border border-slate-200 hover:bg-blue-50 hover:border-blue-300 cursor-pointer transition group bg-white">
-                            <div class="flex justify-between items-start mb-1">
-                                <span class="font-bold text-sm text-slate-700 group-hover:text-blue-700">601234567</span>
-                                <span class="text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-bold border border-rose-200">OPEN</span>
-                            </div>
-                            <p class="text-xs text-slate-500 line-clamp-1 mb-2">Jl. Sunter Agung Utara Blok A...</p>
-                            <div class="flex gap-2">
-                                <span class="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">Zero Usage</span>
-                                <span class="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">Rayon 34</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Detail / Form Area -->
-                <div class="w-full lg:w-2/3 bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col relative overflow-hidden">
-                    <!-- Placeholder State -->
-                    <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 bg-slate-50/50">
-                        <div class="bg-white p-6 rounded-full shadow-sm mb-4 border border-slate-100">
-                            <i data-lucide="file-search" class="w-12 h-12 text-blue-300"></i>
-                        </div>
-                        <h4 class="font-bold text-slate-600">Area Kerja Analisa</h4>
-                        <p class="text-sm">Pilih pelanggan di panel kiri untuk melihat detail & input analisa.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- PLACEHOLDERS FOR OTHER TABS -->
-        <div id="meter" class="tab-content hidden p-20 text-center text-slate-400">
-            <i data-lucide="cone" class="w-16 h-16 mx-auto mb-4 opacity-50 text-orange-400"></i>
-            <h3 class="text-lg font-bold text-slate-600">Modul Meter</h3>
-            <p>Fitur deteksi anomali meter sedang dalam pengembangan.</p>
-        </div>
-        <div id="top" class="tab-content hidden p-20 text-center text-slate-400">
-            <i data-lucide="cone" class="w-16 h-16 mx-auto mb-4 opacity-50 text-orange-400"></i>
-            <h3 class="text-lg font-bold text-slate-600">Modul TOP 100</h3>
-            <p>Fitur prioritas pelanggan premium sedang dalam pengembangan.</p>
-        </div>
-        <div id="laporan" class="tab-content hidden p-20 text-center text-slate-400">
-            <i data-lucide="cone" class="w-16 h-16 mx-auto mb-4 opacity-50 text-orange-400"></i>
-            <h3 class="text-lg font-bold text-slate-600">Modul Laporan</h3>
-            <p>Fitur cetak laporan resmi sedang dalam pengembangan.</p>
-        </div>
-
-    </main>
-
-    <!-- 7. MODAL UPLOAD -->
-    <div id="uploadModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center modal-backdrop">
-        <!-- Modal Container -->
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md relative z-10 overflow-hidden transform transition-all scale-100 animate-in fade-in zoom-in duration-200">
-            <!-- Modal Header -->
-            <div class="bg-slate-900 px-6 py-4 flex justify-between items-center border-b border-slate-700">
-                <h3 class="text-white font-bold flex items-center gap-2">
-                    <i data-lucide="upload" class="w-5 h-5 text-blue-400"></i> Upload Data
-                </h3>
-                <button onclick="toggleModal('uploadModal')" class="text-slate-400 hover:text-white transition">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-            </div>
-            
-            <!-- Modal Body -->
-            <form action="/upload" method="POST" enctype="multipart/form-data" class="p-6">
-                <div class="mb-5">
-                    <label class="block text-xs font-bold text-slate-600 uppercase mb-2 tracking-wide">Jenis File Data</label>
-                    <div class="relative">
-                        <select name="jenis_file" class="w-full border border-slate-300 rounded-lg p-3 pl-10 text-sm appearance-none focus:ring-2 focus:ring-blue-500 outline-none bg-white cursor-pointer shadow-sm">
-                            <option value="COLLECTION">📄 Collection (Transaksi Harian .txt)</option>
-                            <option value="MC">🎯 MC (Master Target .csv)</option>
-                            <option value="ARDEBT">💰 Ardebt (Tunggakan .csv)</option>
-                            <option value="SBRS">📟 SBRS (Baca Meter .csv)</option>
-                            <option value="MAINBILL">🧾 MainBill (Tagihan Final .txt)</option>
-                        </select>
-                        <i data-lucide="file-type" class="absolute left-3 top-3 w-4 h-4 text-slate-400"></i>
-                        <i data-lucide="chevron-down" class="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none"></i>
-                    </div>
-                </div>
-                
-                <div class="mb-6">
-                    <label class="block text-xs font-bold text-slate-600 uppercase mb-2 tracking-wide">File Sumber</label>
-                    <div class="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center hover:bg-slate-50 hover:border-blue-400 transition cursor-pointer relative group">
-                        <input type="file" name="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" onchange="document.getElementById('fileName').innerText = this.files[0].name; document.getElementById('fileName').classList.add('text-blue-600', 'font-bold')">
-                        <div class="pointer-events-none">
-                            <div class="bg-blue-50 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition">
-                                <i data-lucide="cloud-upload" class="w-6 h-6 text-blue-500"></i>
-                            </div>
-                            <p class="text-sm text-slate-600 font-medium" id="fileName">Klik atau seret file ke sini</p>
-                            <p class="text-xs text-slate-400 mt-1">Format: .txt, .csv, .xls</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="flex justify-end gap-3 pt-2">
-                    <button type="button" onclick="toggleModal('uploadModal')" class="px-5 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition">Batal</button>
-                    <button type="submit" class="px-5 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md hover:shadow-lg transition flex items-center gap-2">
-                        <i data-lucide="check" class="w-4 h-4"></i> Proses Upload
-                    </button>
-                </div>
-            </form>
+        <!-- Footer -->
+        <div class="footer">
+            <p>© 2024 PAM DSS Enterprise System | Version 3.0.0</p>
+            <p style="margin-top: 8px; font-size: 12px;">Running on Flask + MongoDB + React</p>
         </div>
     </div>
 
-    <!-- 8. JAVASCRIPT LOGIC -->
+    <!-- Toast Notification -->
+    <div class="toast" id="toast">
+        <div class="icon">✓</div>
+        <div id="toastMessage">Success!</div>
+    </div>
+
     <script>
-        // Init Icons
-        lucide.createIcons();
+        const API_URL = window.location.origin + '/api';
+        
+        // Drag & Drop functionality
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
 
-        // Modal Logic
-        function toggleModal(id) {
-            const modal = document.getElementById(id);
-            if(modal.classList.contains('hidden')) {
-                modal.classList.remove('hidden');
-                document.body.style.overflow = 'hidden'; // Prevent body scroll
-            } else {
-                modal.classList.add('hidden');
-                document.body.style.overflow = '';
-            }
+        // Prevent default drag behaviors
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
         }
 
-        // Tab Switching Logic
-        function switchTab(tabId) {
-            // Hide all
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('active', 'text-blue-600', 'border-blue-600');
-                btn.classList.add('text-slate-500');
-            });
+        // Highlight drop area when dragging
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, () => {
+                uploadArea.classList.add('dragover');
+            }, false);
+        });
 
-            // Show target
-            const target = document.getElementById(tabId);
-            if(target) target.classList.remove('hidden');
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, () => {
+                uploadArea.classList.remove('dragover');
+            }, false);
+        });
 
-            // Update button style
-            const activeBtn = document.querySelector(`.tab-btn[data-target="${tabId}"]`);
-            if(activeBtn) {
-                activeBtn.classList.add('active', 'text-blue-600', 'border-blue-600');
-                activeBtn.classList.remove('text-slate-500');
+        // Handle dropped files
+        uploadArea.addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
             }
-        }
+        }, false);
 
-        // Chart.js Logic
-        document.addEventListener('DOMContentLoaded', function() {
-            // Get data from Flask Jinja
-            const rawData = {{ chart_data | tojson }};
+        // Handle file input change
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        // Upload file
+        async function handleFile(file) {
+            const allowedTypes = ['.csv', '.txt', '.xlsx', '.xls'];
+            const fileExt = '.' + file.name.split('.').pop().toLowerCase();
             
-            if (!rawData || rawData.length === 0) return;
-
-            const labels = rawData.map(d => d.tgl);
-            const dataHarian = rawData.map(d => d.total);
-            const dataKumulatif = rawData.map(d => d.kumulatif);
-
-            // Setup Chart Tren
-            const ctx = document.getElementById('chartTren');
-            if(ctx) {
-                new Chart(ctx.getContext('2d'), {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [
-                            {
-                                label: 'Kumulatif (Rp)',
-                                data: dataKumulatif,
-                                borderColor: '#2563eb', // Blue 600
-                                backgroundColor: 'rgba(37, 99, 235, 0.05)',
-                                borderWidth: 2,
-                                yAxisID: 'y1',
-                                fill: true,
-                                tension: 0.3,
-                                pointRadius: 2,
-                                order: 1
-                            },
-                            {
-                                type: 'bar',
-                                label: 'Harian (Rp)',
-                                data: dataHarian,
-                                backgroundColor: '#10b981', // Emerald 500
-                                borderRadius: 4,
-                                yAxisID: 'y',
-                                order: 2
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        interaction: { mode: 'index', intersect: false },
-                        plugins: {
-                            legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        let label = context.dataset.label || '';
-                                        if (label) { label += ': '; }
-                                        if (context.parsed.y !== null) {
-                                            label += new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(context.parsed.y);
-                                        }
-                                        return label;
-                                    }
-                                }
-                            }
-                        },
-                        scales: {
-                            x: { grid: { display: false }, ticks: { font: { size: 10 } } },
-                            y: { 
-                                type: 'linear', display: true, position: 'left', 
-                                grid: { borderDash: [2, 4], color: '#f1f5f9' },
-                                ticks: { callback: function(value) { return (value/1000000).toFixed(0) + ' Jt'; } } 
-                            },
-                            y1: { 
-                                type: 'linear', display: true, position: 'right', 
-                                grid: { display: false },
-                                ticks: { callback: function(value) { return (value/1000000000).toFixed(1) + ' M'; } }
-                            }
-                        }
-                    }
-                });
+            if (!allowedTypes.includes(fileExt)) {
+                showToast('❌ File type not supported. Use .csv, .txt, or .xlsx', 'error');
+                return;
             }
 
-            // Setup Chart Pie (Dummy / Static for now)
-            const ctxPie = document.getElementById('chartPie');
-            if(ctxPie) {
-                new Chart(ctxPie.getContext('2d'), {
-                    type: 'doughnut',
-                    data: {
-                        labels: ['Rayon 34', 'Rayon 35'],
-                        datasets: [{
-                            data: [55, 45],
-                            backgroundColor: ['#2563eb', '#0ea5e9'],
-                            borderWidth: 0,
-                            hoverOffset: 4
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        cutout: '70%',
-                        plugins: { legend: { display: false } }
+            const formData = new FormData();
+            formData.append('file', file);
+
+            progressContainer.style.display = 'block';
+            progressFill.style.width = '0%';
+            progressText.textContent = 'Mengupload...';
+
+            try {
+                // Simulate progress
+                let progress = 0;
+                const progressInterval = setInterval(() => {
+                    progress += 10;
+                    if (progress <= 90) {
+                        progressFill.style.width = progress + '%';
                     }
+                }, 200);
+
+                const response = await fetch(API_URL + '/upload-and-analyze', {
+                    method: 'POST',
+                    body: formData
                 });
+
+                clearInterval(progressInterval);
+                progressFill.style.width = '100%';
+
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    progressText.textContent = '✅ Upload berhasil!';
+                    showToast(`✅ ${result.type} berhasil dianalisa! Total: ${result.data.records || result.data.anomalies?.length || 0} records`, 'success');
+                    
+                    setTimeout(() => {
+                        progressContainer.style.display = 'none';
+                        fileInput.value = '';
+                    }, 2000);
+                } else {
+                    progressText.textContent = '❌ Upload gagal';
+                    showToast('❌ ' + result.message, 'error');
+                }
+            } catch (error) {
+                progressText.textContent = '❌ Error';
+                showToast('❌ Connection error: ' + error.message, 'error');
+                console.error('Upload error:', error);
             }
+        }
+
+        // Show toast notification
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            const icon = toast.querySelector('.icon');
+
+            toastMessage.textContent = message;
+            toast.className = 'toast show ' + type;
+            icon.textContent = type === 'success' ? '✓' : '✗';
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 5000);
+        }
+
+        // Health check
+        async function checkHealth() {
+            try {
+                showToast('🔄 Checking system health...', 'success');
+                const response = await fetch(API_URL + '/status');
+                const data = await response.json();
+                
+                if (data.status === 'online') {
+                    showToast('✅ System is healthy and online!', 'success');
+                } else {
+                    showToast('⚠️ System status: ' + data.status, 'error');
+                }
+            } catch (error) {
+                showToast('❌ Health check failed', 'error');
+            }
+        }
+
+        // View logs (placeholder)
+        function viewLogs() {
+            showToast('📋 Logs feature coming soon...', 'success');
+        }
+
+        // Initial health check on load
+        window.addEventListener('load', () => {
+            setTimeout(checkHealth, 1000);
         });
     </script>
 </body>
