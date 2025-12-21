@@ -1,0 +1,218 @@
+<!-- MODAL UPLOAD DENGAN BULAN/TAHUN -->
+<div class="modal fade" id="modalUpload" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <form action="/upload" method="POST" enctype="multipart/form-data" class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-cloud-upload-alt me-2"></i> Upload Data Sistem
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                
+                <!-- ALERT INFO -->
+                <div class="alert alert-info border-0 mb-4">
+                    <h6 class="fw-bold"><i class="fas fa-info-circle me-2"></i> Urutan Upload:</h6>
+                    <ol class="mb-0 small">
+                        <li><strong>MC</strong> - Master Customer (wajib pertama!)</li>
+                        <li><strong>SBRS</strong> - Sistem Baca Meter ⭐ BARU!</li>
+                        <li><strong>Collection</strong> - Transaksi harian</li>
+                        <li><strong>MB</strong> - Master Bayar</li>
+                        <li><strong>MainBill</strong> - Tagihan bulan depan</li>
+                        <li><strong>Ardebt</strong> - Tunggakan</li>
+                    </ol>
+                </div>
+
+                <div class="row">
+                    
+                    <!-- LEFT: Pilihan Tipe File -->
+                    <div class="col-md-6">
+                        <h6 class="fw-bold mb-3">1️⃣ Pilih Tipe File</h6>
+                        
+                        <!-- MC -->
+                        <label class="upload-option mb-3">
+                            <input type="radio" name="file_type" value="MC" required class="d-none">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title">
+                                        <i class="fas fa-users fa-2x text-primary float-end"></i>
+                                        <strong>MC</strong> - Master Customer
+                                    </h6>
+                                    <p class="card-text small mb-0">Data induk pelanggan, kubikasi, target</p>
+                                    <small class="text-muted">Format: .xls, .xlsx, .txt</small>
+                                </div>
+                            </div>
+                        </label>
+
+                        <!-- SBRS ⭐ BARU -->
+                        <label class="upload-option mb-3">
+                            <input type="radio" name="file_type" value="SBRS" required class="d-none">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title">
+                                        <i class="fas fa-gauge fa-2x text-success float-end"></i>
+                                        <strong>SBRS</strong> - Sistem Baca Meter ⭐
+                                    </h6>
+                                    <p class="card-text small mb-0">Data pembacaan, skip, trouble, anomali</p>
+                                    <small class="text-muted">Format: .xls, .xlsx</small>
+                                </div>
+                            </div>
+                        </label>
+
+                        <!-- Collection -->
+                        <label class="upload-option mb-3">
+                            <input type="radio" name="file_type" value="Collection" class="d-none">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title">
+                                        <i class="fas fa-money-bill fa-2x text-success float-end"></i>
+                                        <strong>COLLECTION</strong> - Transaksi Harian
+                                    </h6>
+                                    <p class="card-text small mb-0">Data pembayaran pelanggan</p>
+                                    <small class="text-muted">Format: .txt, .csv, .xls</small>
+                                </div>
+                            </div>
+                        </label>
+
+                        <!-- MB -->
+                        <label class="upload-option mb-3">
+                            <input type="radio" name="file_type" value="MB" class="d-none">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title">
+                                        <i class="fas fa-receipt fa-2x text-warning float-end"></i>
+                                        <strong>MB</strong> - Master Bayar
+                                    </h6>
+                                    <p class="card-text small mb-0">History pembayaran bulan lalu</p>
+                                    <small class="text-muted">Format: .xls, .xlsx, .txt</small>
+                                </div>
+                            </div>
+                        </label>
+
+                        <!-- MainBill -->
+                        <label class="upload-option mb-3">
+                            <input type="radio" name="file_type" value="MainBill" class="d-none">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title">
+                                        <i class="fas fa-file-invoice fa-2x text-info float-end"></i>
+                                        <strong>MAINBILL</strong> - Tagihan
+                                    </h6>
+                                    <p class="card-text small mb-0">Tagihan bulan depan</p>
+                                    <small class="text-muted">Format: .xls, .xlsx, .txt</small>
+                                </div>
+                            </div>
+                        </label>
+
+                        <!-- Ardebt -->
+                        <label class="upload-option mb-3">
+                            <input type="radio" name="file_type" value="Ardebt" class="d-none">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title">
+                                        <i class="fas fa-exclamation-triangle fa-2x text-danger float-end"></i>
+                                        <strong>ARDEBT</strong> - Tunggakan
+                                    </h6>
+                                    <p class="card-text small mb-0">Data saldo tunggakan</p>
+                                    <small class="text-muted">Format: .xls, .xlsx, .txt</small>
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- RIGHT: Periode & Upload -->
+                    <div class="col-md-6">
+                        
+                        <!-- Periode Data -->
+                        <h6 class="fw-bold mb-3">2️⃣ Periode Data</h6>
+                        
+                        <div class="alert alert-warning mb-3">
+                            <i class="fas fa-calendar-alt me-2"></i>
+                            <strong>Penting!</strong> Pilih bulan/tahun yang sesuai dengan data yang akan diupload.
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Bulan</label>
+                                <select name="periode_bulan" class="form-select form-select-lg" required>
+                                    <option value="">-- Pilih Bulan --</option>
+                                    <option value="1">Januari</option>
+                                    <option value="2">Februari</option>
+                                    <option value="3">Maret</option>
+                                    <option value="4">April</option>
+                                    <option value="5">Mei</option>
+                                    <option value="6">Juni</option>
+                                    <option value="7">Juli</option>
+                                    <option value="8">Agustus</option>
+                                    <option value="9">September</option>
+                                    <option value="10">Oktober</option>
+                                    <option value="11">November</option>
+                                    <option value="12" selected>Desember</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Tahun</label>
+                                <select name="periode_tahun" class="form-select form-select-lg" required>
+                                    <option value="">-- Pilih Tahun --</option>
+                                    <option value="2023">2023</option>
+                                    <option value="2024">2024</option>
+                                    <option value="2025" selected>2025</option>
+                                    <option value="2026">2026</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Pilih File -->
+                        <h6 class="fw-bold mb-3">3️⃣ Pilih File</h6>
+                        
+                        <div class="mb-3">
+                            <input type="file" name="file" class="form-control form-control-lg" required 
+                                   accept=".xls,.xlsx,.txt,.csv,.dbf">
+                            <div class="form-text">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Format: .xls, .xlsx, .txt, .csv, .dbf | Max: 50MB
+                            </div>
+                        </div>
+
+                        <!-- Preview Info -->
+                        <div class="alert alert-light border">
+                            <h6 class="fw-bold mb-2">📋 Preview Upload:</h6>
+                            <div id="uploadPreview">
+                                <small class="text-muted">Pilih tipe file dan periode untuk melihat preview</small>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <button type="submit" class="btn btn-primary btn-lg w-100 shadow-lg">
+                            <i class="fas fa-cloud-upload-alt me-2"></i> UPLOAD DATA
+                        </button>
+                    </div>
+
+                </div>
+
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Preview upload info
+$('input[name="file_type"], select[name="periode_bulan"], select[name="periode_tahun"]').change(function() {
+    const fileType = $('input[name="file_type"]:checked').val();
+    const bulan = $('select[name="periode_bulan"] option:selected').text();
+    const tahun = $('select[name="periode_tahun"]').val();
+    
+    if (fileType && bulan && tahun) {
+        const preview = `
+            <div class="d-flex align-items-center">
+                <i class="fas fa-check-circle text-success fa-2x me-3"></i>
+                <div>
+                    <strong>${fileType}</strong><br>
+                    <small>Periode: ${bulan} ${tahun}</small>
+                </div>
+            </div>
+        `;
+        $('#uploadPreview').html(preview);
+    }
+});
+</script>
