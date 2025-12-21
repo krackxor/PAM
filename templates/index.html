@@ -419,6 +419,11 @@
             </button>
         </li>
         <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-belum-bayar">
+                <i class="fas fa-user-clock me-2"></i> BELUM BAYAR
+            </button>
+        </li>
+        <li class="nav-item">
             <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-meter">
                 <i class="fas fa-gauge me-2"></i> METER
             </button>
@@ -577,6 +582,98 @@
                     <tbody></tbody>
                 </table>
             </div>
+        </div>
+
+        <!-- TAB: BELUM BAYAR -->
+        <div class="tab-pane fade" id="tab-belum-bayar">
+            
+            <!-- Summary Cards -->
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="kpi-card border-start border-danger border-5">
+                        <h6 class="text-muted text-uppercase mb-2">
+                            <i class="fas fa-user-clock me-2"></i>Total Belum Bayar
+                        </h6>
+                        <div class="kpi-number text-danger" id="belum-bayar-total-nomen">0</div>
+                        <small class="text-muted">Pelanggan belum bayar</small>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="kpi-card border-start border-warning border-5">
+                        <h6 class="text-muted text-uppercase mb-2">
+                            <i class="fas fa-money-bill me-2"></i>Total Nominal
+                        </h6>
+                        <div class="kpi-number text-warning" id="belum-bayar-total-nominal">Rp 0</div>
+                        <small class="text-muted">Target belum terbayar</small>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="kpi-card border-start border-info border-5">
+                        <h6 class="text-muted text-uppercase mb-2">
+                            <i class="fas fa-percent me-2"></i>Persentase
+                        </h6>
+                        <div class="kpi-number text-info" id="belum-bayar-persen">0%</div>
+                        <small class="text-muted">Dari total pelanggan</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Breakdown per Rayon -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="kpi-card">
+                        <h6 class="text-muted text-uppercase mb-3">
+                            <i class="fas fa-chart-bar me-2"></i>Breakdown per Rayon
+                        </h6>
+                        <div class="chart-container">
+                            <canvas id="chartBelumBayar"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detail Table -->
+            <div class="kpi-card">
+                <div class="d-flex justify-content-between mb-3">
+                    <h5 class="fw-bold">
+                        <i class="fas fa-user-times me-2"></i>Detail Pelanggan Belum Bayar
+                    </h5>
+                    <div>
+                        <button class="btn btn-modern btn-gradient-primary btn-sm me-2" onclick="loadBelumBayar()">
+                            <i class="fas fa-sync me-1"></i> Refresh
+                        </button>
+                        <button class="btn btn-modern btn-gradient-success btn-sm" onclick="exportBelumBayar()">
+                            <i class="fas fa-file-excel me-1"></i> Export Excel
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="alert alert-danger border-0 mb-3">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Kriteria:</strong> Pelanggan yang <strong>tidak ada di Master Bayar (MB)</strong> DAN <strong>tidak ada di Collection</strong>
+                </div>
+
+                <table id="tableBelumBayar" class="table table-striped table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>No</th>
+                            <th>Nomen</th>
+                            <th>Nama</th>
+                            <th>Alamat</th>
+                            <th>Rayon</th>
+                            <th>PC/EZ</th>
+                            <th>Tarif</th>
+                            <th>Target MC</th>
+                            <th>Kubikasi</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Data akan di-load via AJAX -->
+                    </tbody>
+                </table>
+            </div>
+
         </div>
 
         <div class="tab-pane fade" id="tab-meter">
@@ -753,6 +850,8 @@
 
 <script>
     let chartRayon, chartTren;
+    let chartBelumBayar;
+    let tableBelumBayar;
     
     // Generate periode options
     function initPeriodeOptions() {
@@ -933,6 +1032,168 @@
         }
     }
 
+    // ===== BELUM BAYAR FUNCTIONS =====
+    function loadBelumBayar() {
+        showToast('Loading belum bayar data...', 'info');
+        
+        // Load summary
+        $.get('/api/belum_bayar', function(data) {
+            $('#belum-bayar-total-nomen').text(new Intl.NumberFormat('id-ID').format(data.total_nomen));
+            $('#belum-bayar-total-nominal').text(formatRupiah(data.total_nominal));
+            
+            // Calculate percentage (dari total pelanggan)
+            $.get('/api/kpi_data', function(kpiData) {
+                const persen = kpiData.total_pelanggan > 0 
+                    ? ((data.total_nomen / kpiData.total_pelanggan) * 100).toFixed(2)
+                    : 0;
+                $('#belum-bayar-persen').text(persen + '%');
+            });
+            
+            // Load table
+            if ($.fn.DataTable.isDataTable('#tableBelumBayar')) {
+                $('#tableBelumBayar').DataTable().clear().destroy();
+            }
+            
+            tableBelumBayar = $('#tableBelumBayar').DataTable({
+                data: data.data,
+                columns: [
+                    { 
+                        data: null,
+                        render: function(data, type, row, meta) {
+                            return meta.row + 1;
+                        }
+                    },
+                    { data: 'nomen' },
+                    { data: 'nama', defaultContent: 'Tanpa Nama' },
+                    { data: 'alamat', defaultContent: '-' },
+                    { data: 'rayon' },
+                    { data: 'pcez', defaultContent: '-' },
+                    { data: 'tarif', defaultContent: '-' },
+                    { 
+                        data: 'nominal',
+                        render: $.fn.dataTable.render.number('.', ',', 0, 'Rp ')
+                    },
+                    { 
+                        data: 'kubikasi',
+                        render: function(data) {
+                            return (data || 0) + ' m³';
+                        }
+                    },
+                    {
+                        data: null,
+                        render: function(data, type, row) {
+                            return `
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewPelangganDetail('${row.nomen}')">
+                                    <i class="fas fa-eye"></i> Detail
+                                </button>
+                            `;
+                        }
+                    }
+                ],
+                pageLength: 25,
+                order: [[7, 'desc']], // Sort by nominal DESC
+                language: {
+                    search: "🔍 Cari:",
+                    lengthMenu: "Tampilkan _MENU_ data",
+                    info: "Menampilkan _START_ - _END_ dari _TOTAL_ data",
+                    paginate: {
+                        first: "⏮️",
+                        last: "⏭️",
+                        next: "▶️",
+                        previous: "◀️"
+                    },
+                    emptyTable: "Tidak ada data belum bayar",
+                    zeroRecords: "Tidak ditemukan data yang cocok"
+                }
+            });
+            
+            showToast('Belum bayar data loaded!', 'success');
+        }).fail(function() {
+            showToast('Failed to load belum bayar', 'error');
+        });
+        
+        // Load breakdown chart
+        loadBelumBayarChart();
+    }
+    
+    function loadBelumBayarChart() {
+        $.get('/api/belum_bayar_breakdown', function(data) {
+            const ctx = document.getElementById('chartBelumBayar');
+            if (chartBelumBayar) chartBelumBayar.destroy();
+            
+            chartBelumBayar = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => 'Rayon ' + d.rayon),
+                    datasets: [{
+                        label: 'Jumlah Pelanggan',
+                        data: data.map(d => d.jumlah_nomen || 0),
+                        backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                        borderColor: 'rgba(239, 68, 68, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: function(context) {
+                                    const index = context.dataIndex;
+                                    const nominal = data[index].total_nominal || 0;
+                                    return 'Nominal: Rp ' + new Intl.NumberFormat('id-ID').format(nominal);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { 
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Jumlah Pelanggan'
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    }
+    
+    function viewPelangganDetail(nomen) {
+        showToast('Loading detail for: ' + nomen, 'info');
+        // TODO: Implement detail view (bisa redirect ke tab HISTORY atau modal)
+        alert('Detail untuk NOMEN: ' + nomen + '\nFitur ini akan menampilkan history lengkap pelanggan.');
+    }
+    
+    function exportBelumBayar() {
+        showToast('Preparing Excel export...', 'info');
+        // Create CSV from table data
+        const table = $('#tableBelumBayar').DataTable();
+        const data = table.rows().data();
+        
+        let csv = 'No,Nomen,Nama,Alamat,Rayon,PC/EZ,Tarif,Target MC,Kubikasi\n';
+        
+        data.each(function(row, index) {
+            csv += `${index + 1},"${row.nomen}","${row.nama || ''}","${row.alamat || ''}","${row.rayon}","${row.pcez || ''}","${row.tarif || ''}",${row.nominal || 0},${row.kubikasi || 0}\n`;
+        });
+        
+        // Download
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'Belum_Bayar_' + new Date().toISOString().split('T')[0] + '.csv');
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showToast('Excel exported successfully!', 'success');
+    }
+
     $('.upload-option').click(function() {
         $('.upload-option input[type="radio"]').prop('checked', false);
         $(this).find('input[type="radio"]').prop('checked', true);
@@ -952,6 +1213,16 @@
         setTimeout(() => {
             showToast('Welcome to SUNTER Dashboard! 🎉', 'success');
         }, 1000);
+        
+        // Tab change event - auto load data
+        $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function (e) {
+            const target = $(e.target).data('bs-target');
+            
+            // Auto-load belum bayar when tab opened
+            if (target === '#tab-belum-bayar') {
+                loadBelumBayar();
+            }
+        });
     });
 </script>
 
