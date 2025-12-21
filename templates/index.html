@@ -309,6 +309,18 @@
             outline: none;
         }
 
+        /* FIX: Chart container dengan height tetap */
+        .chart-container {
+            position: relative;
+            height: 250px;
+            max-height: 250px;
+            overflow: hidden;
+        }
+        
+        .chart-container canvas {
+            max-height: 250px !important;
+        }
+
         @media (max-width: 768px) {
             body { padding-top: 180px; }
             .kpi-number { font-size: 1.8rem; }
@@ -525,7 +537,9 @@
                         <h6 class="text-muted text-uppercase mb-3">
                             <i class="fas fa-chart-bar me-2"></i>Rayon 34 vs 35
                         </h6>
-                        <canvas id="chartRayon" height="200"></canvas>
+                        <div class="chart-container">
+                            <canvas id="chartRayon"></canvas>
+                        </div>
                     </div>
                 </div>
                 <div class="col-md-6 mb-3">
@@ -533,7 +547,9 @@
                         <h6 class="text-muted text-uppercase mb-3">
                             <i class="fas fa-chart-line me-2"></i>Tren Harian
                         </h6>
-                        <canvas id="chartTren" height="200"></canvas>
+                        <div class="chart-container">
+                            <canvas id="chartTren"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -587,6 +603,7 @@
     </div>
 </div>
 
+<!-- MODAL UPLOAD - FIXED dengan semua opsi -->
 <div class="modal fade" id="modalUpload" tabindex="-1">
     <div class="modal-dialog modal-xl">
         <form action="/upload" method="POST" enctype="multipart/form-data" class="modal-content" style="border-radius: 24px;">
@@ -601,65 +618,120 @@
                 <div class="alert alert-info">
                     <h6 class="fw-bold">Urutan Upload:</h6>
                     <ol class="mb-0 small">
-                        <li>MC - Master (wajib pertama)</li>
-                        <li>Collection - Transaksi</li>
-                        <li>MB, MainBill, Ardebt</li>
+                        <li><strong>MC</strong> - Master (wajib pertama)</li>
+                        <li><strong>SBRS</strong> - Sistem Baca Meter</li>
+                        <li><strong>Collection</strong> - Transaksi harian</li>
+                        <li><strong>MB</strong> - Master Bayar</li>
+                        <li><strong>MainBill</strong> - Tagihan</li>
+                        <li><strong>Ardebt</strong> - Tunggakan</li>
                     </ol>
                 </div>
 
-                <h6 class="fw-bold mb-3">Pilih Jenis:</h6>
+                <h6 class="fw-bold mb-3">1️⃣ Pilih Jenis File:</h6>
                 
                 <div class="row g-3 mb-4">
+                    <!-- MC -->
                     <div class="col-md-4">
                         <label class="upload-option w-100">
                             <input type="radio" name="tipe_upload" value="master" class="d-none" checked>
                             <div class="card text-center p-3">
                                 <i class="fas fa-users fa-3x text-primary mb-2"></i>
-                                <h6 class="fw-bold">MC</h6>
+                                <h6 class="fw-bold mb-1">MC</h6>
                                 <small>Master Customer</small>
+                                <span class="badge bg-danger mt-2">PERTAMA</span>
                             </div>
                         </label>
                     </div>
+
+                    <!-- SBRS -->
+                    <div class="col-md-4">
+                        <label class="upload-option w-100">
+                            <input type="radio" name="tipe_upload" value="sbrs" class="d-none">
+                            <div class="card text-center p-3">
+                                <i class="fas fa-gauge fa-3x text-info mb-2"></i>
+                                <h6 class="fw-bold mb-1">SBRS</h6>
+                                <small>Baca Meter</small>
+                                <span class="badge bg-info mt-2">METER</span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- COLLECTION -->
                     <div class="col-md-4">
                         <label class="upload-option w-100">
                             <input type="radio" name="tipe_upload" value="collection" class="d-none">
                             <div class="card text-center p-3">
                                 <i class="fas fa-money-bill-wave fa-3x text-success mb-2"></i>
-                                <h6 class="fw-bold">COLLECTION</h6>
+                                <h6 class="fw-bold mb-1">COLLECTION</h6>
                                 <small>Transaksi</small>
+                                <span class="badge bg-success mt-2">DAILY</span>
                             </div>
                         </label>
                     </div>
+
+                    <!-- MB -->
                     <div class="col-md-4">
                         <label class="upload-option w-100">
                             <input type="radio" name="tipe_upload" value="mb" class="d-none">
                             <div class="card text-center p-3">
                                 <i class="fas fa-history fa-3x text-warning mb-2"></i>
-                                <h6 class="fw-bold">MB</h6>
-                                <small>History</small>
+                                <h6 class="fw-bold mb-1">MB</h6>
+                                <small>Master Bayar</small>
+                                <span class="badge bg-warning mt-2">HISTORY</span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- MAINBILL -->
+                    <div class="col-md-4">
+                        <label class="upload-option w-100">
+                            <input type="radio" name="tipe_upload" value="mainbill" class="d-none">
+                            <div class="card text-center p-3">
+                                <i class="fas fa-file-invoice fa-3x text-primary mb-2"></i>
+                                <h6 class="fw-bold mb-1">MAINBILL</h6>
+                                <small>Tagihan</small>
+                                <span class="badge bg-primary mt-2">BILL</span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- ARDEBT -->
+                    <div class="col-md-4">
+                        <label class="upload-option w-100">
+                            <input type="radio" name="tipe_upload" value="ardebt" class="d-none">
+                            <div class="card text-center p-3">
+                                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-2"></i>
+                                <h6 class="fw-bold mb-1">ARDEBT</h6>
+                                <small>Tunggakan</small>
+                                <span class="badge bg-danger mt-2">DEBT</span>
                             </div>
                         </label>
                     </div>
                 </div>
 
-                <h6 class="fw-bold mb-3">Periode (Optional):</h6>
+                <h6 class="fw-bold mb-3">2️⃣ Periode Data (Optional):</h6>
                 
+                <div class="alert alert-warning mb-3">
+                    <i class="fas fa-calendar-alt me-2"></i>
+                    <strong>Pilih periode data</strong> untuk tracking multi-periode. Skip jika tidak perlu.
+                </div>
+
                 <div class="row mb-3">
                     <div class="col-md-6">
-                        <select name="periode_bulan" class="form-select filter-select">
-                            <option value="0">-- Skip --</option>
-                            <option value="12" selected>Desember</option>
+                        <label class="form-label fw-bold">Bulan</label>
+                        <select name="periode_bulan" class="form-select filter-select" id="periodeSelect">
+                            <option value="0">-- Skip (Optional) --</option>
                         </select>
                     </div>
                     <div class="col-md-6">
-                        <select name="periode_tahun" class="form-select filter-select">
-                            <option value="0">-- Skip --</option>
-                            <option value="2025" selected>2025</option>
+                        <label class="form-label fw-bold">Tahun</label>
+                        <select name="periode_tahun" class="form-select filter-select" id="tahunSelect">
+                            <option value="0">-- Skip (Optional) --</option>
                         </select>
                     </div>
                 </div>
 
-                <h6 class="fw-bold mb-3">Pilih File:</h6>
+                <h6 class="fw-bold mb-3">3️⃣ Pilih File:</h6>
                 <input type="file" name="file" class="form-control filter-select" required accept=".txt,.csv,.xls,.xlsx">
                 
             </div>
@@ -681,6 +753,51 @@
 
 <script>
     let chartRayon, chartTren;
+    
+    // Generate periode options
+    function initPeriodeOptions() {
+        const today = new Date();
+        const currentMonth = today.getMonth() + 1;
+        const currentYear = today.getFullYear();
+        
+        const months = [
+            'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+            'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+        ];
+        
+        // Populate months (last 12 months)
+        const periodeSelect = document.getElementById('periodeSelect');
+        for (let i = 0; i < 12; i++) {
+            let month = currentMonth - i;
+            let year = currentYear;
+            
+            if (month <= 0) {
+                month += 12;
+                year -= 1;
+            }
+            
+            const option = document.createElement('option');
+            option.value = month;
+            option.textContent = `${months[month - 1]} ${year}`;
+            
+            if (i === 0) option.selected = true; // Current month selected
+            
+            periodeSelect.appendChild(option);
+        }
+        
+        // Populate years (last 3 years + current + next)
+        const tahunSelect = document.getElementById('tahunSelect');
+        for (let i = 2; i >= -1; i--) {
+            const year = currentYear - i;
+            const option = document.createElement('option');
+            option.value = year;
+            option.textContent = year;
+            
+            if (i === 0) option.selected = true; // Current year selected
+            
+            tahunSelect.appendChild(option);
+        }
+    }
     
     function formatRupiah(angka) {
         return 'Rp ' + new Intl.NumberFormat('id-ID').format(angka);
@@ -822,6 +939,9 @@
     });
 
     $(document).ready(function() {
+        // Initialize periode options
+        initPeriodeOptions();
+        
         setTimeout(() => {
             updateKPI();
             loadChartRayon();
