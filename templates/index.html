@@ -174,13 +174,27 @@
         <!-- TAB: RINGKASAN -->
         <div class="tab-pane fade show active" id="tab-ringkasan">
             
-            <!-- Row 1: Total Pelanggan -->
+            <!-- Row 1: Total Pelanggan & Pemakaian Air -->
             <div class="row mb-3">
                 <div class="col-12">
                     <div class="kpi-card border-start border-primary border-5">
-                        <h6 class="text-muted text-uppercase"><i class="fas fa-users me-2"></i>Total Pelanggan (dari MC)</h6>
-                        <div class="kpi-number text-primary" id="kpi-total-pelanggan">0</div>
-                        <small class="text-muted">Total nomen dalam Master Customer</small>
+                        <h6 class="text-muted text-uppercase"><i class="fas fa-database me-2"></i>Data Master Pelanggan (Rayon 34 & 35)</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="text-center">
+                                    <small class="text-muted d-block">Total Pelanggan</small>
+                                    <div class="kpi-number text-primary" id="kpi-total-pelanggan" style="font-size: 2.5rem;">0</div>
+                                    <small class="text-muted">Nomen aktif</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="text-center">
+                                    <small class="text-muted d-block">Total Pemakaian Air</small>
+                                    <div class="kpi-number text-info" id="kpi-total-kubikasi" style="font-size: 2.5rem;">0 m³</div>
+                                    <small class="text-muted">Dari MC.KUBIK</small>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -250,35 +264,6 @@
                                     <div class="kpi-number text-warning" id="kpi-coll-undue" style="font-size: 1.5rem;">Rp 0</div>
                                     <span class="badge badge-custom bg-warning text-dark" id="kpi-coll-nomen-undue">0 nomen</span>
                                     <small class="text-muted d-block mt-1" style="font-size: 0.7rem;">Pemakaian bulan ini</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Row 3b: Total Pemakaian Air -->
-            <div class="row mb-3">
-                <div class="col-12">
-                    <div class="kpi-card border-start border-primary border-5">
-                        <h6 class="text-muted text-uppercase"><i class="fas fa-tint me-2"></i>Total Pemakaian Air</h6>
-                        <div class="row">
-                            <div class="col-md-4">
-                                <div class="text-center">
-                                    <small class="text-muted d-block">Total Volume</small>
-                                    <div class="kpi-number text-primary" id="kpi-volume-total" style="font-size: 1.5rem;">0 m³</div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="text-center">
-                                    <small class="text-primary d-block">Current</small>
-                                    <div class="kpi-number text-primary" id="kpi-volume-current" style="font-size: 1.5rem;">0 m³</div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="text-center">
-                                    <small class="text-warning d-block">Undue</small>
-                                    <div class="kpi-number text-warning" id="kpi-volume-undue" style="font-size: 1.5rem;">0 m³</div>
                                 </div>
                             </div>
                         </div>
@@ -502,8 +487,9 @@
         $.get('/api/kpi_data', function(data) {
             console.log('KPI Data:', data);
             
-            // Total Pelanggan
+            // Total Pelanggan & Pemakaian Air
             $('#kpi-total-pelanggan').text(new Intl.NumberFormat('id-ID').format(data.total_pelanggan));
+            $('#kpi-total-kubikasi').text(new Intl.NumberFormat('id-ID').format(data.total_kubikasi) + ' m³');
             
             // Target MC
             $('#kpi-target-total').text(formatRupiah(data.target.total_nominal));
@@ -520,11 +506,6 @@
             $('#kpi-coll-nomen-current').text(data.collection.current_nomen + ' nomen');
             $('#kpi-coll-undue').text(formatRupiah(data.collection.undue_nominal));
             $('#kpi-coll-nomen-undue').text(data.collection.undue_nomen + ' nomen');
-            
-            // Total Pemakaian Air
-            $('#kpi-volume-total').text(new Intl.NumberFormat('id-ID').format(data.collection.total_volume) + ' m³');
-            $('#kpi-volume-current').text(new Intl.NumberFormat('id-ID').format(data.collection.current_volume) + ' m³');
-            $('#kpi-volume-undue').text(new Intl.NumberFormat('id-ID').format(data.collection.undue_volume) + ' m³');
             
             // Collection Rate
             $('#kpi-rate').text(data.collection_rate + '%');
