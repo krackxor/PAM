@@ -744,17 +744,34 @@ def upload_file():
                     
                     df['bill_period_parsed'] = df['bill_period'].apply(parse_bill_period)
                     
-                    # Current: bill_period = bulan lalu, dibayar bulan ini
-                    # Undue: bill_period = bulan ini, dibayar bulan ini
-                    current_month = datetime.now().strftime('%Y-%m')
-                    last_month = (datetime.now().replace(day=1) - pd.Timedelta(days=1)).strftime('%Y-%m')
+                    # LOGIKA DETEKSI:
+                    # Current: Pemakaian bulan LALU (Nov) dibayar bulan INI (Des) ← Normal
+                    # Undue: Pemakaian bulan INI (Des) dibayar bulan INI (Des) ← Bayar cepat
                     
-                    df['tipe_bayar'] = df['bill_period_parsed'].apply(
-                        lambda x: 'current' if x == last_month else ('undue' if x == current_month else 'current')
+                    # Ambil bulan dari tanggal bayar (bukan hari ini!)
+                    df['tgl_bayar_month'] = pd.to_datetime(df['tgl_bayar']).dt.strftime('%Y-%m')
+                    
+                    # Bandingkan bill_period dengan tanggal bayar
+                    # Jika bill_period = tanggal bayar → UNDUE
+                    # Jika bill_period < tanggal bayar → CURRENT
+                    df['tipe_bayar'] = df.apply(
+                        lambda row: 'undue' if row['bill_period_parsed'] == row['tgl_bayar_month'] 
+                                    else 'current', 
+                        axis=1
                     )
+                    
+                    # Debug info
+                    undue_count = (df['tipe_bayar'] == 'undue').sum()
+                    current_count = (df['tipe_bayar'] == 'current').sum()
+                    print(f"📊 Collection Breakdown:")
+                    print(f"   Current: {current_count:,} transaksi")
+                    print(f"   Undue: {undue_count:,} transaksi")
+                    
                 else:
+                    # Jika tidak ada BILL_PERIOD, semua dianggap current
                     df['tipe_bayar'] = 'current'
                     df['bill_period'] = ''
+                    print(f"⚠️ BILL_PERIOD tidak ditemukan, semua dianggap CURRENT")
                 
                 df['sumber_file'] = file.filename
                 
