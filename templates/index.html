@@ -1,152 +1,393 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SUNTER DASHBOARD - Monitoring Operasional</title>
+    <title>SUNTER DASHBOARD - Modern Analytics</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     
     <style>
-        body { 
+        :root {
+            --primary: #667eea;
+            --secondary: #764ba2;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --glass-bg: rgba(255, 255, 255, 0.7);
+            --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
+            --shadow-lg: 0 8px 32px rgba(0,0,0,0.16);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Poppins', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding-top: 165px; 
-            font-family: 'Segoe UI', sans-serif;
             min-height: 100vh;
+            padding-top: 200px;
+            position: relative;
+            overflow-x: hidden;
         }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 20% 50%, rgba(102, 126, 234, 0.3) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 80%, rgba(118, 75, 162, 0.3) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(30px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -1000px 0; }
+            100% { background-position: 1000px 0; }
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.6s ease-out forwards;
+        }
+
         .global-header {
-            position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            border-bottom: 4px solid #ffd700;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            padding: 15px 25px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+            box-shadow: var(--shadow-lg);
+            padding: 20px 30px;
+            transition: var(--transition);
         }
+
+        .header-logo {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            padding: 15px 20px;
+            border-radius: 16px;
+            box-shadow: var(--shadow-md);
+            transition: var(--transition);
+        }
+
+        .header-logo:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .status-badge {
+            animation: pulse 2s infinite;
+        }
+
         .kpi-card {
             background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-            transition: all 0.3s;
+            border-radius: 20px;
+            padding: 28px;
+            box-shadow: var(--shadow-md);
+            margin-bottom: 24px;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
         }
+
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
         .kpi-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
         }
+
+        .kpi-card:hover::before {
+            left: 100%;
+        }
+
         .kpi-number {
-            font-size: 2rem;
-            font-weight: bold;
-            margin: 10px 0;
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin: 12px 0;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
-        .kpi-detail {
-            font-size: 0.85rem;
+
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 8px;
+            height: 48px;
+            width: 60%;
+        }
+
+        .btn-modern {
+            padding: 14px 32px;
+            font-weight: 600;
+            border-radius: 12px;
+            border: none;
+            transition: var(--transition);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-modern::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.4);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn-modern:hover::before {
+            width: 400px;
+            height: 400px;
+        }
+
+        .btn-gradient-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-gradient-primary:hover {
+            box-shadow: 0 6px 25px rgba(102, 126, 234, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .btn-gradient-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-gradient-success:hover {
+            box-shadow: 0 6px 25px rgba(16, 185, 129, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .nav-tabs-modern {
+            border: none;
+            background: white;
+            border-radius: 16px;
             padding: 8px;
-            margin-top: 10px;
-            border-radius: 5px;
-            background: #f8f9fa;
+            box-shadow: var(--shadow-md);
         }
-        .badge-custom {
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-size: 0.75rem;
+
+        .nav-tabs-modern .nav-link {
+            border: none;
+            border-radius: 12px;
+            padding: 16px 24px;
+            font-weight: 600;
+            color: #64748b;
+            transition: var(--transition);
         }
-        
-        /* Upload Card Styles */
+
+        .nav-tabs-modern .nav-link:hover {
+            background: rgba(102, 126, 234, 0.1);
+            color: var(--primary);
+        }
+
+        .nav-tabs-modern .nav-link.active {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
         .upload-option {
             cursor: pointer;
-            transition: all 0.3s;
+            transition: var(--transition);
         }
+
         .upload-option .card {
-            border: 3px solid #dee2e6;
-            transition: all 0.3s;
+            border: 2px solid #e2e8f0;
+            border-radius: 16px;
+            transition: var(--transition);
         }
+
         .upload-option:hover .card {
-            border-color: #0d6efd;
-            transform: translateY(-3px);
-            box-shadow: 0 5px 15px rgba(13, 110, 253, 0.3);
+            border-color: var(--primary);
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.2);
         }
+
         .upload-option input[type="radio"]:checked + .card {
-            border-color: #0d6efd;
-            background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
-            color: white !important;
-            box-shadow: 0 8px 20px rgba(13, 110, 253, 0.4);
+            border-color: var(--primary);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
         }
+
         .upload-option input[type="radio"]:checked + .card * {
             color: white !important;
         }
-        .upload-option input[type="radio"]:checked + .card .fa {
-            color: white !important;
+
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+
+        .toast-modern {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: var(--shadow-lg);
+            margin-bottom: 12px;
+            animation: slideInRight 0.4s ease-out;
+            border-left: 4px solid;
+            min-width: 300px;
+        }
+
+        .toast-modern.success { border-left-color: var(--success); }
+        .toast-modern.error { border-left-color: var(--danger); }
+        .toast-modern.info { border-left-color: #3b82f6; }
+
+        .progress-modern {
+            height: 8px;
+            border-radius: 8px;
+            background: #e2e8f0;
+            overflow: hidden;
+        }
+
+        .progress-bar-modern {
+            height: 100%;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            border-radius: 8px;
+            transition: width 0.4s ease-out;
+        }
+
+        .filter-select {
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
+            padding: 12px 16px;
+            font-weight: 600;
+            transition: var(--transition);
+            background: white;
+        }
+
+        .filter-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+            outline: none;
+        }
+
+        @media (max-width: 768px) {
+            body { padding-top: 180px; }
+            .kpi-number { font-size: 1.8rem; }
+        }
+
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            border-radius: 10px;
         }
     </style>
 </head>
 <body>
 
-<!-- HEADER -->
+<div class="toast-container" id="toastContainer"></div>
+
 <header class="global-header">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div class="d-flex align-items-center">
-            <div class="bg-warning text-dark rounded p-3 me-3 shadow">
-                <i class="fas fa-tint fa-2x"></i>
+            <div class="header-logo me-3">
+                <i class="fas fa-tint fa-2x text-white"></i>
             </div>
             <div>
-                <h4 class="fw-bold text-white m-0">
+                <h4 class="fw-bold text-dark m-0">
                     <i class="fas fa-water me-2"></i>SUNTER DASHBOARD
                 </h4>
-                <small class="text-warning fw-bold">Monitoring Rayon 34 & 35 | PAM JAYA</small>
+                <small class="text-muted fw-bold">Monitoring Rayon 34 & 35 | PAM JAYA</small>
             </div>
         </div>
-        <div>
-            <span class="badge bg-success me-2 px-3 py-2 shadow">
+        <div class="d-flex gap-2">
+            <span class="status-badge badge bg-success px-3 py-2">
                 <i class="fas fa-wifi me-1"></i> ONLINE
             </span>
-            <button class="btn btn-success fw-bold shadow px-4 py-2" data-bs-toggle="modal" data-bs-target="#modalUpload">
-                <i class="fas fa-cloud-upload-alt me-2"></i> UPLOAD DATA
+            <button class="btn btn-modern btn-gradient-success" data-bs-toggle="modal" data-bs-target="#modalUpload">
+                <i class="fas fa-cloud-upload-alt me-2"></i> UPLOAD
             </button>
         </div>
     </div>
     
-    <div class="row g-2 align-items-center">
+    <div class="row g-3 align-items-center">
         <div class="col-md-3">
-            <select class="form-select form-select-sm fw-bold border-warning text-primary shadow-sm" id="filterArea">
-                <option value="SUNTER" selected>🌍 ALL AREA (Rayon 34 + 35)</option>
-                <option value="34">🏢 Rayon 34 Only</option>
-                <option value="35">🏢 Rayon 35 Only</option>
+            <select class="form-select filter-select" id="filterArea">
+                <option value="SUNTER" selected>🌍 ALL AREA</option>
+                <option value="34">🏢 Rayon 34</option>
+                <option value="35">🏢 Rayon 35</option>
             </select>
         </div>
         <div class="col-md-5">
-             <div class="alert alert-warning py-2 px-3 mb-0 small text-center fw-bold shadow-sm border-0">
-                <i class="fas fa-calendar-alt me-1"></i> Periode: <span id="labelPeriode" class="badge bg-dark">-</span>
-             </div>
+            <div style="background: white; padding: 10px 16px; border-radius: 12px; text-align: center;">
+                <small class="fw-bold">
+                    <i class="fas fa-calendar-alt me-1"></i> Periode: 
+                    <span id="labelPeriode" class="badge bg-dark ms-1">-</span>
+                </small>
+            </div>
         </div>
         <div class="col-md-4">
-            <div class="input-group input-group-sm shadow-sm">
-                <span class="input-group-text bg-white border-0">
-                    <i class="fas fa-search text-primary"></i>
-                </span>
-                <input type="text" class="form-control border-0 shadow-sm" id="globalSearch" placeholder="🔍 Cari Nomen / Nama...">
-                <button class="btn btn-primary shadow-sm" onclick="cariPelanggan()">
-                    <i class="fas fa-search-plus me-1"></i> CARI
+            <div class="input-group">
+                <input type="text" class="form-control filter-select" id="globalSearch" placeholder="🔍 Cari Nomen...">
+                <button class="btn btn-modern btn-gradient-primary" onclick="cariPelanggan()">
+                    CARI
                 </button>
             </div>
         </div>
     </div>
 </header>
 
-<!-- MAIN CONTAINER -->
-<div class="container-fluid px-4">
+<div class="container-fluid px-4" style="position: relative; z-index: 1;">
     
-    <!-- FLASH MESSAGES -->
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
-                <div class="alert alert-{{ category }} alert-dismissible fade show mt-2 shadow-sm">
-                    <strong>
-                        {% if category == 'success' %}<i class="fas fa-check-circle me-2"></i>
-                        {% elif category == 'danger' %}<i class="fas fa-exclamation-circle me-2"></i>
-                        {% else %}<i class="fas fa-info-circle me-2"></i>{% endif %}
-                    </strong>
+                <div class="alert alert-{{ category }} alert-dismissible fade show mt-2 animate-fade-in">
                     {{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
@@ -154,59 +395,55 @@
         {% endif %}
     {% endwith %}
 
-    <!-- TABS -->
-    <ul class="nav nav-tabs nav-fill shadow-sm bg-white rounded-top" id="mainTab">
+    <ul class="nav nav-tabs nav-tabs-modern mb-4" id="mainTab">
         <li class="nav-item">
-            <button class="nav-link active py-3" data-bs-toggle="tab" data-bs-target="#tab-ringkasan">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-ringkasan">
                 <i class="fas fa-chart-pie me-2"></i> RINGKASAN
             </button>
         </li>
         <li class="nav-item">
-            <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#tab-collection">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-collection">
                 <i class="fas fa-table me-2"></i> COLLECTION
             </button>
         </li>
         <li class="nav-item">
-            <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#tab-meter">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-meter">
                 <i class="fas fa-gauge me-2"></i> METER
             </button>
         </li>
         <li class="nav-item">
-            <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#tab-history">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-history">
                 <i class="fas fa-clock-rotate-left me-2"></i> HISTORY
             </button>
         </li>
         <li class="nav-item">
-            <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#tab-analisa">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-analisa">
                 <i class="fas fa-clipboard-check me-2"></i> ANALISA
             </button>
         </li>
     </ul>
 
-    <!-- TAB CONTENT -->
-    <div class="tab-content bg-white shadow-sm p-4 rounded-bottom" style="min-height: 600px;">
+    <div class="tab-content">
         
-        <!-- TAB: RINGKASAN -->
         <div class="tab-pane fade show active" id="tab-ringkasan">
             
-            <!-- Row 1: Total Pelanggan & Pemakaian Air -->
             <div class="row mb-3">
                 <div class="col-12">
-                    <div class="kpi-card border-start border-primary border-5">
-                        <h6 class="text-muted text-uppercase"><i class="fas fa-database me-2"></i>Data Master Pelanggan (Rayon 34 & 35)</h6>
+                    <div class="kpi-card">
+                        <h6 class="text-muted text-uppercase mb-3">
+                            <i class="fas fa-database me-2"></i>Data Master Pelanggan
+                        </h6>
                         <div class="row">
-                            <div class="col-md-6">
-                                <div class="text-center">
-                                    <small class="text-muted d-block">Total Pelanggan</small>
-                                    <div class="kpi-number text-primary" id="kpi-total-pelanggan" style="font-size: 2.5rem;">0</div>
-                                    <small class="text-muted">Nomen aktif</small>
+                            <div class="col-md-6 text-center">
+                                <small class="text-muted d-block">Total Pelanggan</small>
+                                <div class="kpi-number" id="kpi-total-pelanggan">
+                                    <div class="skeleton"></div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="text-center">
-                                    <small class="text-muted d-block">Total Pemakaian Air</small>
-                                    <div class="kpi-number text-info" id="kpi-total-kubikasi" style="font-size: 2.5rem;">0 m³</div>
-                                    <small class="text-muted">Dari MC.KUBIK</small>
+                            <div class="col-md-6 text-center">
+                                <small class="text-muted d-block">Total Pemakaian Air</small>
+                                <div class="kpi-number" id="kpi-total-kubikasi">
+                                    <div class="skeleton"></div>
                                 </div>
                             </div>
                         </div>
@@ -214,134 +451,88 @@
                 </div>
             </div>
 
-            <!-- Row 2: Target MC -->
             <div class="row mb-3">
                 <div class="col-12">
-                    <div class="kpi-card border-start border-info border-5">
-                        <h6 class="text-muted text-uppercase"><i class="fas fa-bullseye me-2"></i>Target MC</h6>
+                    <div class="kpi-card">
+                        <h6 class="text-muted text-uppercase mb-3">
+                            <i class="fas fa-bullseye me-2"></i>Target MC
+                        </h6>
                         <div class="row">
-                            <div class="col-md-4">
-                                <div class="text-center">
-                                    <small class="text-muted d-block">Total Target</small>
-                                    <div class="kpi-number text-info" id="kpi-target-total" style="font-size: 1.5rem;">Rp 0</div>
-                                    <span class="badge badge-custom bg-info" id="kpi-target-nomen-total">0 nomen</span>
-                                </div>
+                            <div class="col-md-4 text-center">
+                                <small class="text-muted">Total Target</small>
+                                <div class="kpi-number" id="kpi-target-total">Rp 0</div>
+                                <span class="badge bg-info" id="kpi-target-nomen-total">0</span>
                             </div>
-                            <div class="col-md-4">
-                                <div class="text-center">
-                                    <small class="text-success d-block">✓ Sudah Bayar</small>
-                                    <div class="kpi-number text-success" id="kpi-target-bayar" style="font-size: 1.5rem;">Rp 0</div>
-                                    <span class="badge badge-custom bg-success" id="kpi-target-nomen-bayar">0 nomen</span>
-                                </div>
+                            <div class="col-md-4 text-center">
+                                <small class="text-success">✓ Sudah Bayar</small>
+                                <div class="kpi-number" id="kpi-target-bayar">Rp 0</div>
+                                <span class="badge bg-success" id="kpi-target-nomen-bayar">0</span>
                             </div>
-                            <div class="col-md-4">
-                                <div class="text-center">
-                                    <small class="text-danger d-block">✗ Belum Bayar</small>
-                                    <div class="kpi-number text-danger" id="kpi-target-belum" style="font-size: 1.5rem;">Rp 0</div>
-                                    <span class="badge badge-custom bg-danger" id="kpi-target-nomen-belum">0 nomen</span>
-                                </div>
+                            <div class="col-md-4 text-center">
+                                <small class="text-danger">✗ Belum Bayar</small>
+                                <div class="kpi-number" id="kpi-target-belum">Rp 0</div>
+                                <span class="badge bg-danger" id="kpi-target-nomen-belum">0</span>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Row 3: Collection -->
             <div class="row mb-3">
                 <div class="col-12">
-                    <div class="kpi-card border-start border-success border-5">
-                        <h6 class="text-muted text-uppercase"><i class="fas fa-money-bill-wave me-2"></i>Collection</h6>
+                    <div class="kpi-card">
+                        <h6 class="text-muted text-uppercase mb-3">
+                            <i class="fas fa-money-bill-wave me-2"></i>Collection
+                        </h6>
                         <div class="row">
-                            <div class="col-md-4">
-                                <div class="text-center">
-                                    <small class="text-muted d-block">Total Collection</small>
-                                    <div class="kpi-number text-success" id="kpi-coll-total" style="font-size: 1.5rem;">Rp 0</div>
-                                    <span class="badge badge-custom bg-success" id="kpi-coll-nomen-total">0 nomen</span>
-                                </div>
+                            <div class="col-md-4 text-center">
+                                <small class="text-muted">Total</small>
+                                <div class="kpi-number" id="kpi-coll-total">Rp 0</div>
+                                <span class="badge bg-success" id="kpi-coll-nomen-total">0</span>
                             </div>
-                            <div class="col-md-4">
-                                <div class="text-center">
-                                    <small class="text-primary d-block" title="Pemakaian bulan LALU dibayar bulan INI">
-                                        Current
-                                        <i class="fas fa-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" title="Pembayaran normal: Pemakaian bulan lalu dibayar bulan ini"></i>
-                                    </small>
-                                    <div class="kpi-number text-primary" id="kpi-coll-current" style="font-size: 1.5rem;">Rp 0</div>
-                                    <span class="badge badge-custom bg-primary" id="kpi-coll-nomen-current">0 nomen</span>
-                                    <small class="text-muted d-block mt-1" style="font-size: 0.7rem;">Pemakaian bulan lalu</small>
-                                </div>
+                            <div class="col-md-4 text-center">
+                                <small class="text-primary">Current</small>
+                                <div class="kpi-number" id="kpi-coll-current">Rp 0</div>
+                                <span class="badge bg-primary" id="kpi-coll-nomen-current">0</span>
                             </div>
-                            <div class="col-md-4">
-                                <div class="text-center">
-                                    <small class="text-warning d-block" title="Pemakaian bulan INI dibayar bulan INI">
-                                        Undue
-                                        <i class="fas fa-info-circle" data-bs-toggle="tooltip" data-bs-placement="top" title="Bayar lebih cepat: Pemakaian bulan ini dibayar di bulan ini juga"></i>
-                                    </small>
-                                    <div class="kpi-number text-warning" id="kpi-coll-undue" style="font-size: 1.5rem;">Rp 0</div>
-                                    <span class="badge badge-custom bg-warning text-dark" id="kpi-coll-nomen-undue">0 nomen</span>
-                                    <small class="text-muted d-block mt-1" style="font-size: 0.7rem;">Pemakaian bulan ini</small>
-                                </div>
+                            <div class="col-md-4 text-center">
+                                <small class="text-warning">Undue</small>
+                                <div class="kpi-number" id="kpi-coll-undue">Rp 0</div>
+                                <span class="badge bg-warning text-dark" id="kpi-coll-nomen-undue">0</span>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Row 4: Collection Rate -->
             <div class="row mb-3">
                 <div class="col-12">
-                    <div class="kpi-card border-start border-warning border-5">
-                        <h6 class="text-muted text-uppercase"><i class="fas fa-percent me-2"></i>Collection Rate</h6>
-                        <div class="kpi-number text-warning" id="kpi-rate">0%</div>
-                        <div class="progress" style="height: 25px;">
-                            <div class="progress-bar bg-warning" id="kpi-rate-bar" style="width: 0%">0%</div>
+                    <div class="kpi-card">
+                        <h6 class="text-muted text-uppercase mb-3">
+                            <i class="fas fa-percent me-2"></i>Collection Rate
+                        </h6>
+                        <div class="kpi-number" id="kpi-rate">0%</div>
+                        <div class="progress-modern">
+                            <div class="progress-bar-modern" id="kpi-rate-bar" style="width: 0%"></div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Row 5: Tunggakan -->
-            <div class="row mb-3">
-                <div class="col-12">
-                    <div class="kpi-card border-start border-danger border-5">
-                        <h6 class="text-muted text-uppercase"><i class="fas fa-exclamation-triangle me-2"></i>Tunggakan (Ardebt)</h6>
-                        <div class="row">
-                            <div class="col-md-4">
-                                <div class="text-center">
-                                    <small class="text-muted d-block">Total Tunggakan</small>
-                                    <div class="kpi-number text-danger" id="kpi-tunggakan-total" style="font-size: 1.5rem;">Rp 0</div>
-                                    <span class="badge badge-custom bg-danger" id="kpi-tunggakan-nomen-total">0 nomen</span>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="text-center">
-                                    <small class="text-success d-block">✓ Sudah Bayar</small>
-                                    <div class="kpi-number text-success" id="kpi-tunggakan-bayar" style="font-size: 1.5rem;">Rp 0</div>
-                                    <span class="badge badge-custom bg-success" id="kpi-tunggakan-nomen-bayar">0 nomen</span>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="text-center">
-                                    <small class="text-danger d-block">✗ Belum Bayar</small>
-                                    <div class="kpi-number text-danger" id="kpi-tunggakan-belum" style="font-size: 1.5rem;">Rp 0</div>
-                                    <span class="badge badge-custom bg-danger" id="kpi-tunggakan-nomen-belum">0 nomen</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Row 6: Grafik -->
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <div class="kpi-card">
-                        <h6 class="text-muted text-uppercase"><i class="fas fa-chart-bar me-2"></i>Collection Rayon 34 vs 35</h6>
+                        <h6 class="text-muted text-uppercase mb-3">
+                            <i class="fas fa-chart-bar me-2"></i>Rayon 34 vs 35
+                        </h6>
                         <canvas id="chartRayon" height="200"></canvas>
                     </div>
                 </div>
                 <div class="col-md-6 mb-3">
                     <div class="kpi-card">
-                        <h6 class="text-muted text-uppercase"><i class="fas fa-chart-line me-2"></i>Tren Collection Harian</h6>
+                        <h6 class="text-muted text-uppercase mb-3">
+                            <i class="fas fa-chart-line me-2"></i>Tren Harian
+                        </h6>
                         <canvas id="chartTren" height="200"></canvas>
                     </div>
                 </div>
@@ -349,1165 +540,133 @@
 
         </div>
 
-        <!-- TAB: COLLECTION -->
         <div class="tab-pane fade" id="tab-collection">
-            <div class="d-flex justify-content-between mb-3">
-                <h5>Data Collection</h5>
-                <button class="btn btn-sm btn-primary" onclick="loadCollectionData()">
-                    <i class="fas fa-sync"></i> Refresh
-                </button>
-            </div>
-            <table id="tableColl" class="table table-striped table-hover">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Tgl Bayar</th>
-                        <th>Rayon</th>
-                        <th>Nomen</th>
-                        <th>Nama</th>
-                        <th>Jumlah</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </div>
-
-        <!-- TAB 3: METER -->
-<!-- TAB: METER - ANOMALI DETECTION -->
-<div class="tab-pane fade" id="tab-meter">
-    
-    <div class="row mb-3">
-        <div class="col-12">
-            <div class="alert alert-info border-0">
-                <h6 class="fw-bold mb-2"><i class="fas fa-info-circle me-2"></i>Deteksi Anomali Pencatatan Meter</h6>
-                <p class="mb-0 small">Sistem otomatis mendeteksi anomali berdasarkan data MC dan Collection. Klik card untuk lihat detail.</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Anomali Cards Grid -->
-    <div class="row g-3 mb-4">
-        
-        <!-- Card 1: Pemakaian Extreme -->
-        <div class="col-md-4">
-            <div class="kpi-card border-start border-danger border-5 cursor-pointer" onclick="loadAnomaliDetail('extreme')">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="text-danger text-uppercase mb-2">
-                            <i class="fas fa-exclamation-triangle me-2"></i>Pemakaian Extreme
-                        </h6>
-                        <div class="kpi-number text-danger" id="anomali-extreme-count">0</div>
-                        <small class="text-muted">Pemakaian > 200% rata-rata</small>
-                    </div>
-                    <i class="fas fa-arrow-circle-right fa-2x text-danger opacity-25"></i>
-                </div>
-            </div>
-        </div>
-
-        <!-- Card 2: Zero Usage -->
-        <div class="col-md-4">
-            <div class="kpi-card border-start border-warning border-5 cursor-pointer" onclick="loadAnomaliDetail('zero')">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="text-warning text-uppercase mb-2">
-                            <i class="fas fa-battery-empty me-2"></i>Zero Usage
-                        </h6>
-                        <div class="kpi-number text-warning" id="anomali-zero-count">0</div>
-                        <small class="text-muted">Kubikasi = 0 m³</small>
-                    </div>
-                    <i class="fas fa-arrow-circle-right fa-2x text-warning opacity-25"></i>
-                </div>
-            </div>
-        </div>
-
-        <!-- Card 3: Pemakaian Turun -->
-        <div class="col-md-4">
-            <div class="kpi-card border-start border-info border-5 cursor-pointer" onclick="loadAnomaliDetail('turun')">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="text-info text-uppercase mb-2">
-                            <i class="fas fa-arrow-down me-2"></i>Pemakaian Turun
-                        </h6>
-                        <div class="kpi-number text-info" id="anomali-turun-count">0</div>
-                        <small class="text-muted">Turun > 50% dari bulan lalu</small>
-                    </div>
-                    <i class="fas fa-arrow-circle-right fa-2x text-info opacity-25"></i>
-                </div>
-            </div>
-        </div>
-
-        <!-- Card 4: Stand Negatif -->
-        <div class="col-md-3">
-            <div class="kpi-card border-start border-dark border-5 cursor-pointer" onclick="loadAnomaliDetail('negatif')">
-                <h6 class="text-dark text-uppercase mb-2">
-                    <i class="fas fa-minus-circle me-2"></i>Stand Negatif
-                </h6>
-                <div class="kpi-number text-dark" id="anomali-negatif-count">0</div>
-                <small class="text-muted">Stand < 0</small>
-            </div>
-        </div>
-
-        <!-- Card 5: Salah Catat -->
-        <div class="col-md-3">
-            <div class="kpi-card border-start border-secondary border-5 cursor-pointer" onclick="loadAnomaliDetail('salah')">
-                <h6 class="text-secondary text-uppercase mb-2">
-                    <i class="fas fa-pen me-2"></i>Salah Catat
-                </h6>
-                <div class="kpi-number text-secondary" id="anomali-salah-count">0</div>
-                <small class="text-muted">Data tidak valid</small>
-            </div>
-        </div>
-
-        <!-- Card 6: Rebill -->
-        <div class="col-md-3">
-            <div class="kpi-card border-start border-primary border-5 cursor-pointer" onclick="loadAnomaliDetail('rebill')">
-                <h6 class="text-primary text-uppercase mb-2">
-                    <i class="fas fa-redo me-2"></i>Rebill
-                </h6>
-                <div class="kpi-number text-primary" id="anomali-rebill-count">0</div>
-                <small class="text-muted">Tagihan ulang</small>
-            </div>
-        </div>
-
-        <!-- Card 7: Estimasi -->
-        <div class="col-md-3">
-            <div class="kpi-card border-start border-success border-5 cursor-pointer" onclick="loadAnomaliDetail('estimasi')">
-                <h6 class="text-success text-uppercase mb-2">
-                    <i class="fas fa-calculator me-2"></i>Estimasi
-                </h6>
-                <div class="kpi-number text-success" id="anomali-estimasi-count">0</div>
-                <small class="text-muted">Stand tidak terbaca</small>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- Detail Table -->
-    <div class="kpi-card">
-        <div class="d-flex justify-content-between mb-3">
-            <h6 class="fw-bold">
-                <i class="fas fa-list me-2"></i>Detail Anomali: <span id="anomali-type-label">Semua</span>
-            </h6>
-            <div class="btn-group btn-group-sm">
-                <button class="btn btn-outline-primary" onclick="loadAnomaliDetail('all')">
-                    <i class="fas fa-sync me-1"></i>Refresh
-                </button>
-                <button class="btn btn-outline-success" onclick="exportAnomali()">
-                    <i class="fas fa-file-excel me-1"></i>Export
-                </button>
-            </div>
-        </div>
-
-        <table id="tableAnomali" class="table table-striped table-hover">
-            <thead class="table-dark">
-                <tr>
-                    <th>Nomen</th>
-                    <th>Nama</th>
-                    <th>Rayon</th>
-                    <th>Kubikasi</th>
-                    <th>Jenis</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Data akan di-load via AJAX -->
-            </tbody>
-        </table>
-    </div>
-
-</div>
-
-<style>
-.cursor-pointer {
-    cursor: pointer;
-    transition: all 0.3s;
-}
-.cursor-pointer:hover {
-    transform: scale(1.02);
-}
-</style>
-
-<script>
-// Load anomali data
-function loadAnomaliData() {
-    $.get('/api/meter_anomali', function(data) {
-        $('#anomali-extreme-count').text(data.extreme_count);
-        $('#anomali-zero-count').text(data.zero_count);
-        $('#anomali-turun-count').text(data.turun_count);
-        $('#anomali-negatif-count').text(data.stand_negatif_count);
-        $('#anomali-salah-count').text(data.salah_catat_count);
-        $('#anomali-rebill-count').text(data.rebill_count);
-        $('#anomali-estimasi-count').text(data.estimasi_count);
-    });
-}
-
-// Load detail anomali
-function loadAnomaliDetail(type) {
-    // TODO: Implement detail loading
-    alert('Load detail: ' + type);
-}
-
-// Export anomali
-function exportAnomali() {
-    alert('Export Excel coming soon!');
-}
-
-// Load on tab show
-$('button[data-bs-target="#tab-meter"]').on('shown.bs.tab', function() {
-    loadAnomaliData();
-});
-</script>
-
-
-        <!-- TAB 4: HISTORY -->
-<!-- TAB: HISTORY - DATA KRONOLOGIS -->
-<div class="tab-pane fade" id="tab-history">
-    
-    <div class="row mb-3">
-        <div class="col-12">
-            <div class="alert alert-primary border-0">
-                <h6 class="fw-bold mb-2"><i class="fas fa-clock me-2"></i>History Data Pelanggan</h6>
-                <p class="mb-0 small">Cari nomen untuk melihat history kubikasi dan pembayaran multi periode.</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Search Box -->
-    <div class="row mb-4">
-        <div class="col-md-8 mx-auto">
-            <div class="input-group input-group-lg shadow">
-                <span class="input-group-text bg-primary text-white">
-                    <i class="fas fa-search"></i>
-                </span>
-                <input type="text" class="form-control" id="historyNomenSearch" placeholder="Masukkan NOMEN untuk cari history...">
-                <button class="btn btn-primary px-4" onclick="searchHistory()">
-                    <i class="fas fa-search me-2"></i>CARI
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Result Container -->
-    <div id="historyResult" style="display: none;">
-        
-        <!-- Profil Pelanggan -->
-        <div class="kpi-card border-start border-primary border-5 mb-3">
-            <h6 class="fw-bold mb-3">
-                <i class="fas fa-user-circle me-2"></i>Profil Pelanggan
-            </h6>
-            <div class="row">
-                <div class="col-md-3">
-                    <small class="text-muted d-block">NOMEN</small>
-                    <strong id="history-nomen">-</strong>
-                </div>
-                <div class="col-md-3">
-                    <small class="text-muted d-block">Nama</small>
-                    <strong id="history-nama">-</strong>
-                </div>
-                <div class="col-md-3">
-                    <small class="text-muted d-block">Rayon</small>
-                    <strong id="history-rayon">-</strong>
-                </div>
-                <div class="col-md-3">
-                    <small class="text-muted d-block">Target MC</small>
-                    <strong id="history-target">-</strong>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tab Sub-Menu -->
-        <ul class="nav nav-pills mb-3">
-            <li class="nav-item">
-                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#history-kubikasi-tab">
-                    <i class="fas fa-tint me-2"></i>Kubikasi
-                </button>
-            </li>
-            <li class="nav-item">
-                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#history-pembayaran-tab">
-                    <i class="fas fa-money-bill me-2"></i>Pembayaran
-                </button>
-            </li>
-            <li class="nav-item">
-                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#history-current-tab">
-                    <i class="fas fa-check me-2"></i>Current
-                </button>
-            </li>
-            <li class="nav-item">
-                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#history-undue-tab">
-                    <i class="fas fa-bolt me-2"></i>Undue
-                </button>
-            </li>
-        </ul>
-
-        <div class="tab-content">
-            
-            <!-- Sub-Tab: Kubikasi -->
-            <div class="tab-pane fade show active" id="history-kubikasi-tab">
-                <div class="kpi-card">
-                    <h6 class="fw-bold mb-3">History Kubikasi (Multi Periode)</h6>
-                    
-                    <!-- Chart -->
-                    <canvas id="chartHistoryKubikasi" height="200"></canvas>
-                    
-                    <!-- Table -->
-                    <table class="table table-striped mt-3">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>Periode</th>
-                                <th>Kubikasi (m³)</th>
-                                <th>Perubahan</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="history-kubikasi-tbody">
-                            <!-- Data akan di-load via AJAX -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Sub-Tab: Pembayaran -->
-            <div class="tab-pane fade" id="history-pembayaran-tab">
-                <div class="kpi-card">
-                    <h6 class="fw-bold mb-3">History Pembayaran</h6>
-                    <table class="table table-striped">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>Tanggal</th>
-                                <th>Jumlah</th>
-                                <th>Tipe</th>
-                                <th>Bill Period</th>
-                                <th>Sumber</th>
-                            </tr>
-                        </thead>
-                        <tbody id="history-pembayaran-tbody">
-                            <!-- Data akan di-load via AJAX -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Sub-Tab: Current -->
-            <div class="tab-pane fade" id="history-current-tab">
-                <div class="kpi-card">
-                    <h6 class="fw-bold mb-3">History Current (Pembayaran Normal)</h6>
-                    <table class="table table-striped">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>Tanggal</th>
-                                <th>Jumlah</th>
-                                <th>Bill Period</th>
-                            </tr>
-                        </thead>
-                        <tbody id="history-current-tbody">
-                            <!-- Filtered data -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Sub-Tab: Undue -->
-            <div class="tab-pane fade" id="history-undue-tab">
-                <div class="kpi-card">
-                    <h6 class="fw-bold mb-3">History Undue (Bayar Cepat)</h6>
-                    <table class="table table-striped">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>Tanggal</th>
-                                <th>Jumlah</th>
-                                <th>Bill Period</th>
-                            </tr>
-                        </thead>
-                        <tbody id="history-undue-tbody">
-                            <!-- Filtered data -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-        </div>
-
-        <!-- Export Button -->
-        <div class="text-end mt-3">
-            <button class="btn btn-success" onclick="exportHistory()">
-                <i class="fas fa-file-excel me-2"></i>Export Raw Data
-            </button>
-        </div>
-
-    </div>
-
-    <!-- Empty State -->
-    <div id="historyEmpty" class="text-center py-5">
-        <i class="fas fa-search fa-5x text-muted opacity-25 mb-3"></i>
-        <p class="text-muted">Masukkan NOMEN untuk melihat history data pelanggan</p>
-    </div>
-
-</div>
-
-<script>
-let chartHistoryKubikasi;
-
-function searchHistory() {
-    const nomen = $('#historyNomenSearch').val().trim();
-    
-    if (!nomen) {
-        alert('Masukkan NOMEN terlebih dahulu');
-        return;
-    }
-    
-    // Show loading
-    $('#historyResult').hide();
-    $('#historyEmpty').html('<i class="fas fa-spinner fa-spin fa-3x text-primary"></i><p class="text-muted mt-3">Loading...</p>');
-    
-    // Load profil pelanggan
-    $.get('/api/profil_pelanggan/' + nomen, function(data) {
-        // Update profil
-        $('#history-nomen').text(data.master.nomen);
-        $('#history-nama').text(data.master.nama || 'Tanpa Nama');
-        $('#history-rayon').text(data.master.rayon);
-        $('#history-target').text(formatRupiah(data.master.target_mc));
-        
-        // Load history pembayaran
-        loadHistoryPembayaran(nomen);
-        
-        // Show result
-        $('#historyEmpty').hide();
-        $('#historyResult').show();
-        
-    }).fail(function() {
-        $('#historyEmpty').html('<i class="fas fa-times-circle fa-5x text-danger opacity-50 mb-3"></i><p class="text-danger">Nomen tidak ditemukan</p>');
-    });
-}
-
-function loadHistoryPembayaran(nomen) {
-    $.get('/api/history_pembayaran?nomen=' + nomen, function(data) {
-        let htmlPembayaran = '';
-        let htmlCurrent = '';
-        let htmlUndue = '';
-        
-        data.forEach(row => {
-            const html = `
-                <tr>
-                    <td>${row.tgl_bayar}</td>
-                    <td>${formatRupiah(row.jumlah_bayar)}</td>
-                    <td><span class="badge bg-${row.tipe_bayar === 'current' ? 'primary' : 'warning'}">${row.tipe_bayar.toUpperCase()}</span></td>
-                    <td>${row.bill_period || '-'}</td>
-                    <td class="small">${row.sumber_file}</td>
-                </tr>
-            `;
-            
-            htmlPembayaran += html;
-            
-            if (row.tipe_bayar === 'current') {
-                htmlCurrent += html;
-            } else {
-                htmlUndue += html;
-            }
-        });
-        
-        $('#history-pembayaran-tbody').html(htmlPembayaran || '<tr><td colspan="5" class="text-center text-muted">Tidak ada data</td></tr>');
-        $('#history-current-tbody').html(htmlCurrent || '<tr><td colspan="3" class="text-center text-muted">Tidak ada data</td></tr>');
-        $('#history-undue-tbody').html(htmlUndue || '<tr><td colspan="3" class="text-center text-muted">Tidak ada data</td></tr>');
-    });
-}
-
-function exportHistory() {
-    const nomen = $('#historyNomenSearch').val().trim();
-    window.location.href = '/api/export_history?nomen=' + nomen;
-}
-</script>
-
-
-        <!-- TAB 5: ANALISA -->
-<!-- TAB: ANALISA MANUAL - PUSAT KERJA TIM -->
-<div class="tab-pane fade" id="tab-analisa">
-    
-    <div class="row">
-        
-        <!-- Sidebar: List Analisa -->
-        <div class="col-md-4">
-            
-            <!-- Filter -->
-            <div class="kpi-card mb-3">
-                <h6 class="fw-bold mb-3">
-                    <i class="fas fa-filter me-2"></i>Filter Status
-                </h6>
-                <div class="btn-group w-100 mb-2">
-                    <button class="btn btn-sm btn-outline-danger" onclick="filterAnalisa('Open')">
-                        Open (<span id="count-open">0</span>)
-                    </button>
-                    <button class="btn btn-sm btn-outline-warning" onclick="filterAnalisa('Progress')">
-                        Progress (<span id="count-progress">0</span>)
-                    </button>
-                    <button class="btn btn-sm btn-outline-success" onclick="filterAnalisa('Closed')">
-                        Closed (<span id="count-closed">0</span>)
+            <div class="kpi-card">
+                <div class="d-flex justify-content-between mb-3">
+                    <h5 class="fw-bold">Data Collection</h5>
+                    <button class="btn btn-modern btn-gradient-primary btn-sm" onclick="loadCollectionData()">
+                        <i class="fas fa-sync me-1"></i> Refresh
                     </button>
                 </div>
-                <button class="btn btn-sm btn-primary w-100" onclick="filterAnalisa('all')">
-                    <i class="fas fa-list me-1"></i>Semua
-                </button>
-            </div>
-
-            <!-- Button Tambah Baru -->
-            <button class="btn btn-success w-100 mb-3" onclick="showFormAnalisaBaru()">
-                <i class="fas fa-plus-circle me-2"></i>BUAT ANALISA BARU
-            </button>
-
-            <!-- List Analisa -->
-            <div style="max-height: 600px; overflow-y: auto;">
-                <div id="analisa-list">
-                    <!-- Items akan di-load via AJAX -->
-                </div>
+                <table id="tableColl" class="table table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Tgl Bayar</th>
+                            <th>Rayon</th>
+                            <th>Nomen</th>
+                            <th>Nama</th>
+                            <th>Jumlah</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
             </div>
         </div>
 
-        <!-- Main: Detail & Form Analisa -->
-        <div class="col-md-8">
-            
-            <!-- Empty State -->
-            <div id="analisa-empty" class="kpi-card text-center py-5">
-                <i class="fas fa-clipboard-list fa-5x text-muted opacity-25 mb-3"></i>
-                <h5 class="text-muted">Pilih analisa di sidebar atau buat baru</h5>
+        <div class="tab-pane fade" id="tab-meter">
+            <div class="kpi-card">
+                <h5 class="fw-bold">Tab METER</h5>
+                <p class="text-muted">Coming soon - Anomali detection</p>
             </div>
-
-            <!-- Form Analisa -->
-            <div id="analisa-form" style="display: none;">
-                
-                <!-- Profil Pelanggan (Read-Only) -->
-                <div class="kpi-card border-start border-primary border-5 mb-3">
-                    <h6 class="fw-bold mb-3">
-                        <i class="fas fa-user me-2"></i>Profil Pelanggan
-                    </h6>
-                    <div class="row">
-                        <div class="col-md-3">
-                            <small class="text-muted">NOMEN</small>
-                            <div class="fw-bold" id="form-nomen">-</div>
-                        </div>
-                        <div class="col-md-5">
-                            <small class="text-muted">Nama</small>
-                            <div class="fw-bold" id="form-nama">-</div>
-                        </div>
-                        <div class="col-md-2">
-                            <small class="text-muted">Rayon</small>
-                            <div class="fw-bold" id="form-rayon">-</div>
-                        </div>
-                        <div class="col-md-2">
-                            <small class="text-muted">Kubikasi</small>
-                            <div class="fw-bold" id="form-kubikasi">-</div>
-                        </div>
-                    </div>
-                    <div class="mt-2">
-                        <small class="text-muted">Alamat</small>
-                        <div class="fw-bold" id="form-alamat">-</div>
-                    </div>
-                </div>
-
-                <!-- History Singkat -->
-                <div class="kpi-card mb-3">
-                    <h6 class="fw-bold mb-3">
-                        <i class="fas fa-history me-2"></i>History Singkat
-                    </h6>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h6 class="text-muted small">Pembayaran Terakhir</h6>
-                            <div id="history-last-payment">-</div>
-                        </div>
-                        <div class="col-md-6">
-                            <h6 class="text-muted small">Anomali Terdahulu</h6>
-                            <div id="history-anomali-list">-</div>
-                        </div>
-                    </div>
-                    <div class="text-end mt-2">
-                        <button class="btn btn-sm btn-outline-primary" onclick="viewFullHistory()">
-                            <i class="fas fa-external-link-alt me-1"></i>Lihat History Lengkap
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Form Input Analisa -->
-                <div class="kpi-card">
-                    <h6 class="fw-bold mb-3">
-                        <i class="fas fa-edit me-2"></i>Form Analisa
-                    </h6>
-
-                    <form id="formAnalisaManual">
-                        <input type="hidden" id="analisa-id" name="id">
-                        <input type="hidden" id="analisa-nomen" name="nomen">
-
-                        <!-- Jenis Anomali -->
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">
-                                <i class="fas fa-tag me-1"></i>Jenis Anomali *
-                            </label>
-                            <select class="form-select" id="analisa-jenis" name="jenis_anomali" required>
-                                <option value="">-- Pilih --</option>
-                                <option value="Zero Usage">Zero Usage</option>
-                                <option value="Pemakaian Extreme">Pemakaian Extreme</option>
-                                <option value="Pemakaian Turun">Pemakaian Turun</option>
-                                <option value="Stand Negatif">Stand Negatif</option>
-                                <option value="Salah Catat">Salah Catat</option>
-                                <option value="Rebill">Rebill</option>
-                                <option value="Estimasi">Estimasi</option>
-                                <option value="Lainnya">Lainnya</option>
-                            </select>
-                        </div>
-
-                        <!-- Analisa Tim -->
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">
-                                <i class="fas fa-search me-1"></i>Analisa Tim *
-                            </label>
-                            <textarea class="form-control" id="analisa-tim" name="analisa_tim" rows="3" placeholder="Hasil cek lapangan, verifikasi data, dll..." required></textarea>
-                            <div class="form-text">Jelaskan temuan di lapangan atau hasil verifikasi data</div>
-                        </div>
-
-                        <!-- Kesimpulan -->
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">
-                                <i class="fas fa-lightbulb me-1"></i>Kesimpulan *
-                            </label>
-                            <textarea class="form-control" id="analisa-kesimpulan" name="kesimpulan" rows="2" placeholder="Kesimpulan analisa..." required></textarea>
-                        </div>
-
-                        <!-- Rekomendasi -->
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">
-                                <i class="fas fa-clipboard-check me-1"></i>Rekomendasi *
-                            </label>
-                            <select class="form-select mb-2" id="analisa-rekomendasi" name="rekomendasi" required>
-                                <option value="">-- Pilih Rekomendasi --</option>
-                                <option value="Ganti Meter">Ganti Meter</option>
-                                <option value="Cek Lapangan">Cek Lapangan Ulang</option>
-                                <option value="Tagih Susulan">Tagih Susulan</option>
-                                <option value="Monitoring">Monitoring Lanjut</option>
-                                <option value="Tidak Ada Tindakan">Tidak Ada Tindakan</option>
-                                <option value="Lainnya">Lainnya</option>
-                            </select>
-                            <textarea class="form-control" id="analisa-rekomendasi-detail" placeholder="Detail rekomendasi (opsional)..." rows="2"></textarea>
-                        </div>
-
-                        <!-- Status -->
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">
-                                <i class="fas fa-flag me-1"></i>Status *
-                            </label>
-                            <div class="btn-group w-100">
-                                <input type="radio" class="btn-check" name="status" id="status-open" value="Open">
-                                <label class="btn btn-outline-danger" for="status-open">Open</label>
-
-                                <input type="radio" class="btn-check" name="status" id="status-progress" value="Progress">
-                                <label class="btn btn-outline-warning" for="status-progress">Progress</label>
-
-                                <input type="radio" class="btn-check" name="status" id="status-closed" value="Closed">
-                                <label class="btn btn-outline-success" for="status-closed">Closed</label>
-                            </div>
-                        </div>
-
-                        <!-- User Editor -->
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">
-                                <i class="fas fa-user-edit me-1"></i>Nama Analis
-                            </label>
-                            <input type="text" class="form-control" id="analisa-user" name="user_editor" placeholder="Nama petugas..." value="Admin">
-                        </div>
-
-                        <!-- Audit Trail (Read-Only untuk update) -->
-                        <div class="mb-3" id="audit-trail" style="display: none;">
-                            <div class="alert alert-info small mb-0">
-                                <i class="fas fa-info-circle me-1"></i>
-                                <strong>Audit Trail:</strong>
-                                <div id="audit-info">-</div>
-                            </div>
-                        </div>
-
-                        <!-- Action Buttons -->
-                        <div class="d-flex justify-content-between mt-4">
-                            <button type="button" class="btn btn-secondary" onclick="cancelAnalisa()">
-                                <i class="fas fa-times me-1"></i>Batal
-                            </button>
-                            <div>
-                                <button type="button" class="btn btn-outline-danger me-2" id="btn-delete" onclick="deleteAnalisa()" style="display: none;">
-                                    <i class="fas fa-trash me-1"></i>Hapus
-                                </button>
-                                <button type="submit" class="btn btn-success px-4">
-                                    <i class="fas fa-save me-2"></i>SIMPAN ANALISA
-                                </button>
-                            </div>
-                        </div>
-
-                    </form>
-                </div>
-
-            </div>
-
         </div>
 
-    </div>
+        <div class="tab-pane fade" id="tab-history">
+            <div class="kpi-card">
+                <h5 class="fw-bold">Tab HISTORY</h5>
+                <p class="text-muted">Coming soon - Multi-period tracking</p>
+            </div>
+        </div>
 
-</div>
-
-<script>
-let currentAnalisa = null;
-
-// Load list analisa
-function loadAnalisaList(statusFilter = 'all') {
-    const url = statusFilter === 'all' ? '/api/analisa_list' : '/api/analisa_list?status=' + statusFilter;
-    
-    $.get(url, function(data) {
-        let html = '';
-        
-        if (data.length === 0) {
-            html = '<div class="alert alert-warning">Tidak ada data analisa</div>';
-        } else {
-            data.forEach(item => {
-                const badgeClass = item.status === 'Open' ? 'danger' : (item.status === 'Progress' ? 'warning' : 'success');
-                html += `
-                    <div class="card mb-2 cursor-pointer hover-shadow" onclick="loadAnalisaDetail(${item.id})">
-                        <div class="card-body p-3">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <h6 class="mb-0">${item.nomen}</h6>
-                                <span class="badge bg-${badgeClass}">${item.status}</span>
-                            </div>
-                            <small class="text-muted d-block">${item.nama || 'Tanpa Nama'}</small>
-                            <small class="text-muted d-block">
-                                <i class="fas fa-tag me-1"></i>${item.jenis_anomali}
-                            </small>
-                            <small class="text-muted">
-                                <i class="fas fa-clock me-1"></i>${item.updated_at}
-                            </small>
-                        </div>
-                    </div>
-                `;
-            });
-        }
-        
-        $('#analisa-list').html(html);
-        
-        // Update counts
-        const counts = {open: 0, progress: 0, closed: 0};
-        data.forEach(item => {
-            if (item.status === 'Open') counts.open++;
-            else if (item.status === 'Progress') counts.progress++;
-            else counts.closed++;
-        });
-        
-        $('#count-open').text(counts.open);
-        $('#count-progress').text(counts.progress);
-        $('#count-closed').text(counts.closed);
-    });
-}
-
-// Load detail analisa
-function loadAnalisaDetail(analisa_id) {
-    $.get('/api/analisa_detail/' + analisa_id, function(data) {
-        currentAnalisa = data;
-        
-        // Show form
-        $('#analisa-empty').hide();
-        $('#analisa-form').show();
-        
-        // Fill profil pelanggan
-        $('#form-nomen').text(data.nomen);
-        $('#form-nama').text(data.nama || 'Tanpa Nama');
-        $('#form-rayon').text(data.rayon);
-        $('#form-kubikasi').text(data.kubikasi + ' m³');
-        $('#form-alamat').text(data.alamat || '-');
-        
-        // Fill form
-        $('#analisa-id').val(data.id);
-        $('#analisa-nomen').val(data.nomen);
-        $('#analisa-jenis').val(data.jenis_anomali);
-        $('#analisa-tim').val(data.analisa_tim);
-        $('#analisa-kesimpulan').val(data.kesimpulan);
-        $('#analisa-rekomendasi').val(data.rekomendasi);
-        $('#analisa-user').val(data.user_editor);
-        $(`#status-${data.status.toLowerCase()}`).prop('checked', true);
-        
-        // Show audit trail
-        $('#audit-info').html(`
-            Dibuat/Update: ${data.updated_at}<br>
-            Oleh: ${data.user_editor}
-        `);
-        $('#audit-trail').show();
-        $('#btn-delete').show();
-        
-        // Load history
-        loadHistorySingkat(data.nomen);
-    });
-}
-
-// Show form baru
-function showFormAnalisaBaru() {
-    const nomen = prompt('Masukkan NOMEN pelanggan:');
-    
-    if (!nomen) return;
-    
-    // Load profil pelanggan
-    $.get('/api/profil_pelanggan/' + nomen, function(data) {
-        currentAnalisa = null;
-        
-        // Show form
-        $('#analisa-empty').hide();
-        $('#analisa-form').show();
-        
-        // Fill profil
-        $('#form-nomen').text(data.master.nomen);
-        $('#form-nama').text(data.master.nama || 'Tanpa Nama');
-        $('#form-rayon').text(data.master.rayon);
-        $('#form-kubikasi').text(data.master.kubikasi + ' m³');
-        $('#form-alamat').text(data.master.alamat || '-');
-        
-        // Reset form
-        $('#formAnalisaManual')[0].reset();
-        $('#analisa-id').val('');
-        $('#analisa-nomen').val(nomen);
-        $('#status-open').prop('checked', true);
-        $('#audit-trail').hide();
-        $('#btn-delete').hide();
-        
-        // Load history
-        loadHistorySingkat(nomen);
-    }).fail(function() {
-        alert('Nomen tidak ditemukan!');
-    });
-}
-
-// Load history singkat
-function loadHistorySingkat(nomen) {
-    $.get('/api/history_pembayaran?nomen=' + nomen, function(data) {
-        if (data.length > 0) {
-            const last = data[0];
-            $('#history-last-payment').html(`
-                <strong>${formatRupiah(last.jumlah_bayar)}</strong><br>
-                <small>${last.tgl_bayar}</small>
-            `);
-        } else {
-            $('#history-last-payment').text('Belum ada data');
-        }
-    });
-}
-
-// Save analisa
-$('#formAnalisaManual').submit(function(e) {
-    e.preventDefault();
-    
-    const formData = {
-        id: $('#analisa-id').val() || null,
-        nomen: $('#analisa-nomen').val(),
-        jenis_anomali: $('#analisa-jenis').val(),
-        analisa_tim: $('#analisa-tim').val(),
-        kesimpulan: $('#analisa-kesimpulan').val(),
-        rekomendasi: $('#analisa-rekomendasi').val() + '\n' + $('#analisa-rekomendasi-detail').val(),
-        status: $('input[name="status"]:checked').val(),
-        user_editor: $('#analisa-user').val()
-    };
-    
-    $.ajax({
-        url: '/api/analisa_save',
-        method: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify(formData),
-        success: function(response) {
-            alert('✅ Analisa berhasil disimpan!');
-            loadAnalisaList();
-            if (response.id) {
-                loadAnalisaDetail(response.id);
-            }
-        },
-        error: function() {
-            alert('❌ Gagal menyimpan analisa!');
-        }
-    });
-});
-
-// Cancel
-function cancelAnalisa() {
-    $('#analisa-form').hide();
-    $('#analisa-empty').show();
-}
-
-// Delete
-function deleteAnalisa() {
-    if (!confirm('Yakin hapus analisa ini?')) return;
-    
-    const id = $('#analisa-id').val();
-    // TODO: Implement delete API
-    alert('Delete feature coming soon!');
-}
-
-// Filter
-function filterAnalisa(status) {
-    loadAnalisaList(status);
-}
-
-// View full history
-function viewFullHistory() {
-    const nomen = $('#form-nomen').text();
-    $('#historyNomenSearch').val(nomen);
-    $('button[data-bs-target="#tab-history"]').tab('show');
-    setTimeout(() => searchHistory(), 500);
-}
-
-// Load on tab show
-$('button[data-bs-target="#tab-analisa"]').on('shown.bs.tab', function() {
-    loadAnalisaList();
-});
-
-.hover-shadow:hover {
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-}
-</script>
+        <div class="tab-pane fade" id="tab-analisa">
+            <div class="kpi-card">
+                <h5 class="fw-bold">Tab ANALISA</h5>
+                <p class="text-muted">Coming soon - Team collaboration</p>
+            </div>
+        </div>
 
     </div>
 </div>
 
-<!-- MODAL UPLOAD -->
 <div class="modal fade" id="modalUpload" tabindex="-1">
     <div class="modal-dialog modal-xl">
-        <form action="/upload" method="POST" enctype="multipart/form-data" class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title"><i class="fas fa-cloud-upload-alt me-2"></i> Upload Data Sistem</h5>
+        <form action="/upload" method="POST" enctype="multipart/form-data" class="modal-content" style="border-radius: 24px;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 24px 24px 0 0;">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-cloud-upload-alt me-2"></i> Upload Data
+                </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body p-4">
                 
-                <!-- ALERT INFO -->
-                <div class="alert alert-info border-0 mb-4">
-                    <h6 class="fw-bold"><i class="fas fa-info-circle me-2"></i> Urutan Upload:</h6>
+                <div class="alert alert-info">
+                    <h6 class="fw-bold">Urutan Upload:</h6>
                     <ol class="mb-0 small">
-                        <li><strong>MC</strong> - Wajib pertama!</li>
-                        <li><strong>Collection</strong> - Transaksi harian</li>
-                        <li><strong>MB</strong> - History bulan lalu</li>
-                        <li><strong>MainBill</strong> - Tagihan bulan depan</li>
-                        <li><strong>Ardebt</strong> - Tunggakan</li>
+                        <li>MC - Master (wajib pertama)</li>
+                        <li>Collection - Transaksi</li>
+                        <li>MB, MainBill, Ardebt</li>
                     </ol>
                 </div>
 
-                <h6 class="fw-bold mb-3">1️⃣ Pilih Jenis File:</h6>
+                <h6 class="fw-bold mb-3">Pilih Jenis:</h6>
                 
                 <div class="row g-3 mb-4">
-                    <!-- MC -->
                     <div class="col-md-4">
                         <label class="upload-option w-100">
                             <input type="radio" name="tipe_upload" value="master" class="d-none" checked>
                             <div class="card text-center p-3">
                                 <i class="fas fa-users fa-3x text-primary mb-2"></i>
-                                <h6 class="fw-bold mb-1">MC (Master)</h6>
-                                <small class="text-muted">Data induk pelanggan</small>
-                                <span class="badge bg-danger mt-2">WAJIB PERTAMA</span>
+                                <h6 class="fw-bold">MC</h6>
+                                <small>Master Customer</small>
                             </div>
                         </label>
                     </div>
-
-                    <!-- COLLECTION -->
                     <div class="col-md-4">
                         <label class="upload-option w-100">
                             <input type="radio" name="tipe_upload" value="collection" class="d-none">
                             <div class="card text-center p-3">
                                 <i class="fas fa-money-bill-wave fa-3x text-success mb-2"></i>
-                                <h6 class="fw-bold mb-1">COLLECTION</h6>
-                                <small class="text-muted">Transaksi harian</small>
-                                <span class="badge bg-success mt-2">DAILY</span>
+                                <h6 class="fw-bold">COLLECTION</h6>
+                                <small>Transaksi</small>
                             </div>
                         </label>
                     </div>
-
-                    <!-- MB -->
                     <div class="col-md-4">
                         <label class="upload-option w-100">
                             <input type="radio" name="tipe_upload" value="mb" class="d-none">
                             <div class="card text-center p-3">
                                 <i class="fas fa-history fa-3x text-warning mb-2"></i>
-                                <h6 class="fw-bold mb-1">MB (Master Bayar)</h6>
-                                <small class="text-muted">History bulan lalu</small>
-                                <span class="badge bg-warning mt-2">HISTORY</span>
-                            </div>
-                        </label>
-                    </div>
-
-                    <!-- MAINBILL -->
-                    <div class="col-md-4">
-                        <label class="upload-option w-100">
-                            <input type="radio" name="tipe_upload" value="mainbill" class="d-none">
-                            <div class="card text-center p-3">
-                                <i class="fas fa-file-invoice fa-3x text-info mb-2"></i>
-                                <h6 class="fw-bold mb-1">MAINBILL</h6>
-                                <small class="text-muted">Tagihan bulan depan</small>
-                                <span class="badge bg-info mt-2">BILL</span>
-                            </div>
-                        </label>
-                    </div>
-
-                    <!-- ARDEBT -->
-                    <div class="col-md-4">
-                        <label class="upload-option w-100">
-                            <input type="radio" name="tipe_upload" value="ardebt" class="d-none">
-                            <div class="card text-center p-3">
-                                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-2"></i>
-                                <h6 class="fw-bold mb-1">ARDEBT</h6>
-                                <small class="text-muted">Data tunggakan</small>
-                                <span class="badge bg-danger mt-2">DEBT</span>
+                                <h6 class="fw-bold">MB</h6>
+                                <small>History</small>
                             </div>
                         </label>
                     </div>
                 </div>
 
-                <!-- ⭐ BAGIAN BARU: PERIODE DATA ⭐ -->
-                <h6 class="fw-bold mb-3 mt-4">2️⃣ Periode Data (Optional, tapi Disarankan):</h6>
+                <h6 class="fw-bold mb-3">Periode (Optional):</h6>
                 
-                <div class="alert alert-warning mb-3">
-                    <i class="fas fa-calendar-alt me-2"></i>
-                    <strong>Tracking Periode:</strong> Pilih bulan/tahun untuk tracking multi-periode. Skip jika tidak perlu.
-                </div>
-
                 <div class="row mb-3">
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">Bulan</label>
-                        <select name="periode_bulan" class="form-select">
-                            <option value="0">-- Skip (Tidak Perlu) --</option>
-                            <option value="1">Januari</option>
-                            <option value="2">Februari</option>
-                            <option value="3">Maret</option>
-                            <option value="4">April</option>
-                            <option value="5">Mei</option>
-                            <option value="6">Juni</option>
-                            <option value="7">Juli</option>
-                            <option value="8">Agustus</option>
-                            <option value="9">September</option>
-                            <option value="10">Oktober</option>
-                            <option value="11">November</option>
+                        <select name="periode_bulan" class="form-select filter-select">
+                            <option value="0">-- Skip --</option>
                             <option value="12" selected>Desember</option>
                         </select>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">Tahun</label>
-                        <select name="periode_tahun" class="form-select">
-                            <option value="0">-- Skip (Tidak Perlu) --</option>
-                            <option value="2023">2023</option>
-                            <option value="2024">2024</option>
+                        <select name="periode_tahun" class="form-select filter-select">
+                            <option value="0">-- Skip --</option>
                             <option value="2025" selected>2025</option>
-                            <option value="2026">2026</option>
                         </select>
                     </div>
                 </div>
 
-                <!-- FILE INPUT -->
-                <h6 class="fw-bold mb-3 mt-4">3️⃣ Pilih File:</h6>
-                <div class="mt-3">
-                    <label class="form-label fw-bold">
-                        <i class="fas fa-file me-2"></i>Pilih File:
-                    </label>
-                    <input type="file" name="file" class="form-control form-control-lg" required accept=".txt,.csv,.xls,.xlsx">
-                    <small class="text-muted">Format: .txt, .csv, .xls, .xlsx | Max: 100MB</small>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="fas fa-times me-2"></i>Batal
-                </button>
-                <button type="submit" class="btn btn-primary btn-lg px-4">
-                    <i class="fas fa-upload me-2"></i>UPLOAD SEKARANG
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
+                <h6 class="fw-bold mb-3">Pilih File:</h6>
+                <input type="file" name="file" class="form-control filter-select" required accept=".txt,.csv,.xls,.xlsx">
                 
-                <!-- ALERT INFO -->
-                <div class="alert alert-info border-0 mb-4">
-                    <h6 class="fw-bold"><i class="fas fa-info-circle me-2"></i> Urutan Upload:</h6>
-                    <ol class="mb-0 small">
-                        <li><strong>MC</strong> - Wajib pertama!</li>
-                        <li><strong>Collection</strong> - Transaksi harian</li>
-                        <li><strong>MB</strong> - History bulan lalu</li>
-                        <li><strong>MainBill</strong> - Tagihan bulan depan</li>
-                        <li><strong>Ardebt</strong> - Tunggakan</li>
-                    </ol>
-                </div>
-
-                <h6 class="fw-bold mb-3">Pilih Jenis File:</h6>
-                
-                <div class="row g-3 mb-4">
-                    <!-- MC -->
-                    <div class="col-md-4">
-                        <label class="upload-option w-100">
-                            <input type="radio" name="tipe_upload" value="master" class="d-none" checked>
-                            <div class="card text-center p-3">
-                                <i class="fas fa-users fa-3x text-primary mb-2"></i>
-                                <h6 class="fw-bold mb-1">MC (Master)</h6>
-                                <small class="text-muted">Data induk pelanggan</small>
-                                <span class="badge bg-danger mt-2">WAJIB PERTAMA</span>
-                            </div>
-                        </label>
-                    </div>
-
-                    <!-- COLLECTION -->
-                    <div class="col-md-4">
-                        <label class="upload-option w-100">
-                            <input type="radio" name="tipe_upload" value="collection" class="d-none">
-                            <div class="card text-center p-3">
-                                <i class="fas fa-money-bill-wave fa-3x text-success mb-2"></i>
-                                <h6 class="fw-bold mb-1">COLLECTION</h6>
-                                <small class="text-muted">Transaksi harian</small>
-                                <span class="badge bg-success mt-2">DAILY</span>
-                            </div>
-                        </label>
-                    </div>
-
-                    <!-- MB -->
-                    <div class="col-md-4">
-                        <label class="upload-option w-100">
-                            <input type="radio" name="tipe_upload" value="mb" class="d-none">
-                            <div class="card text-center p-3">
-                                <i class="fas fa-history fa-3x text-warning mb-2"></i>
-                                <h6 class="fw-bold mb-1">MB (Master Bayar)</h6>
-                                <small class="text-muted">History bulan lalu</small>
-                                <span class="badge bg-warning mt-2">HISTORY</span>
-                            </div>
-                        </label>
-                    </div>
-
-                    <!-- MAINBILL -->
-                    <div class="col-md-4">
-                        <label class="upload-option w-100">
-                            <input type="radio" name="tipe_upload" value="mainbill" class="d-none">
-                            <div class="card text-center p-3">
-                                <i class="fas fa-file-invoice fa-3x text-info mb-2"></i>
-                                <h6 class="fw-bold mb-1">MAINBILL</h6>
-                                <small class="text-muted">Tagihan bulan depan</small>
-                                <span class="badge bg-info mt-2">BILL</span>
-                            </div>
-                        </label>
-                    </div>
-
-                    <!-- ARDEBT -->
-                    <div class="col-md-4">
-                        <label class="upload-option w-100">
-                            <input type="radio" name="tipe_upload" value="ardebt" class="d-none">
-                            <div class="card text-center p-3">
-                                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-2"></i>
-                                <h6 class="fw-bold mb-1">ARDEBT</h6>
-                                <small class="text-muted">Data tunggakan</small>
-                                <span class="badge bg-danger mt-2">DEBT</span>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- FILE INPUT -->
-                <div class="mt-3">
-                    <label class="form-label fw-bold">
-                        <i class="fas fa-file me-2"></i>Pilih File:
-                    </label>
-                    <input type="file" name="file" class="form-control form-control-lg" required accept=".txt,.csv,.xls,.xlsx">
-                    <small class="text-muted">Format yang didukung: .txt, .csv, .xls, .xlsx</small>
-                </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="fas fa-times me-2"></i>Batal
-                </button>
-                <button type="submit" class="btn btn-primary btn-lg px-4">
-                    <i class="fas fa-upload me-2"></i>UPLOAD SEKARANG
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-modern btn-gradient-primary px-4">
+                    <i class="fas fa-upload me-2"></i>UPLOAD
                 </button>
             </div>
         </form>
@@ -1527,44 +686,46 @@ $('button[data-bs-target="#tab-analisa"]').on('shown.bs.tab', function() {
         return 'Rp ' + new Intl.NumberFormat('id-ID').format(angka);
     }
     
+    function showToast(message, type = 'success') {
+        const toast = document.createElement('div');
+        toast.className = `toast-modern ${type}`;
+        toast.innerHTML = `
+            <div class="d-flex align-items-center">
+                <i class="fas fa-${type === 'success' ? 'check' : 'times'}-circle fa-2x me-3"></i>
+                <div><strong>${type.toUpperCase()}</strong><br><small>${message}</small></div>
+            </div>
+        `;
+        
+        document.getElementById('toastContainer').appendChild(toast);
+        
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => toast.remove(), 400);
+        }, 3000);
+    }
+    
     function updateKPI() {
         $.get('/api/kpi_data', function(data) {
-            console.log('KPI Data:', data);
-            
-            // Total Pelanggan & Pemakaian Air
             $('#kpi-total-pelanggan').text(new Intl.NumberFormat('id-ID').format(data.total_pelanggan));
             $('#kpi-total-kubikasi').text(new Intl.NumberFormat('id-ID').format(data.total_kubikasi) + ' m³');
-            
-            // Target MC
             $('#kpi-target-total').text(formatRupiah(data.target.total_nominal));
-            $('#kpi-target-nomen-total').text(data.target.total_nomen + ' nomen');
+            $('#kpi-target-nomen-total').text(data.target.total_nomen);
             $('#kpi-target-bayar').text(formatRupiah(data.target.sudah_bayar_nominal));
-            $('#kpi-target-nomen-bayar').text(data.target.sudah_bayar_nomen + ' nomen');
+            $('#kpi-target-nomen-bayar').text(data.target.sudah_bayar_nomen);
             $('#kpi-target-belum').text(formatRupiah(data.target.belum_bayar_nominal));
-            $('#kpi-target-nomen-belum').text(data.target.belum_bayar_nomen + ' nomen');
-            
-            // Collection
+            $('#kpi-target-nomen-belum').text(data.target.belum_bayar_nomen);
             $('#kpi-coll-total').text(formatRupiah(data.collection.total_nominal));
-            $('#kpi-coll-nomen-total').text(data.collection.total_nomen + ' nomen');
+            $('#kpi-coll-nomen-total').text(data.collection.total_nomen);
             $('#kpi-coll-current').text(formatRupiah(data.collection.current_nominal));
-            $('#kpi-coll-nomen-current').text(data.collection.current_nomen + ' nomen');
+            $('#kpi-coll-nomen-current').text(data.collection.current_nomen);
             $('#kpi-coll-undue').text(formatRupiah(data.collection.undue_nominal));
-            $('#kpi-coll-nomen-undue').text(data.collection.undue_nomen + ' nomen');
-            
-            // Collection Rate
+            $('#kpi-coll-nomen-undue').text(data.collection.undue_nomen);
             $('#kpi-rate').text(data.collection_rate + '%');
-            $('#kpi-rate-bar').css('width', data.collection_rate + '%').text(data.collection_rate + '%');
-            
-            // Tunggakan
-            $('#kpi-tunggakan-total').text(formatRupiah(data.tunggakan.total_nominal));
-            $('#kpi-tunggakan-nomen-total').text(data.tunggakan.total_nomen + ' nomen');
-            $('#kpi-tunggakan-bayar').text(formatRupiah(data.tunggakan.sudah_bayar_nominal));
-            $('#kpi-tunggakan-nomen-bayar').text(data.tunggakan.sudah_bayar_nomen + ' nomen');
-            $('#kpi-tunggakan-belum').text(formatRupiah(data.tunggakan.belum_bayar_nominal));
-            $('#kpi-tunggakan-nomen-belum').text(data.tunggakan.belum_bayar_nomen + ' nomen');
-            
-            // Periode
+            $('#kpi-rate-bar').css('width', data.collection_rate + '%');
             $('#labelPeriode').text(data.periode);
+            showToast('KPI updated', 'success');
+        }).fail(function() {
+            showToast('Failed to load KPI', 'error');
         });
     }
     
@@ -1578,19 +739,15 @@ $('button[data-bs-target="#tab-analisa"]').on('shown.bs.tab', function() {
                 data: {
                     labels: data.map(d => 'Rayon ' + d.rayon),
                     datasets: [{
-                        label: 'Collection (Rp)',
+                        label: 'Collection',
                         data: data.map(d => d.total_collection || 0),
-                        backgroundColor: ['#0d6efd', '#198754']
+                        backgroundColor: ['rgba(102, 126, 234, 0.8)', 'rgba(16, 185, 129, 0.8)']
                     }]
                 },
                 options: {
                     responsive: true,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: { beginAtZero: true }
-                    }
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } }
                 }
             });
         });
@@ -1608,22 +765,22 @@ $('button[data-bs-target="#tab-analisa"]').on('shown.bs.tab', function() {
                     datasets: [{
                         label: 'Harian',
                         data: data.map(d => d.total_harian),
-                        borderColor: '#198754',
-                        backgroundColor: 'rgba(25, 135, 84, 0.1)',
-                        fill: true
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        tension: 0.4
                     }, {
                         label: 'Kumulatif',
                         data: data.map(d => d.kumulatif),
-                        borderColor: '#0d6efd',
-                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
-                        fill: true
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        fill: true,
+                        tension: 0.4
                     }]
                 },
                 options: {
                     responsive: true,
-                    scales: {
-                        y: { beginAtZero: true }
-                    }
+                    maintainAspectRatio: false
                 }
             });
         });
@@ -1633,6 +790,7 @@ $('button[data-bs-target="#tab-analisa"]').on('shown.bs.tab', function() {
     function loadCollectionData() {
         if ($.fn.DataTable.isDataTable('#tableColl')) {
             $('#tableColl').DataTable().ajax.reload();
+            showToast('Collection refreshed', 'info');
             return;
         }
 
@@ -1650,34 +808,30 @@ $('button[data-bs-target="#tab-analisa"]').on('shown.bs.tab', function() {
     }
 
     function cariPelanggan() {
-        let val = $('#globalSearch').val();
-        if(val) alert('Fitur pencarian: ' + val);
+        const val = $('#globalSearch').val();
+        if (val) {
+            showToast('Searching: ' + val, 'info');
+        } else {
+            showToast('Enter search keyword', 'error');
+        }
     }
 
+    $('.upload-option').click(function() {
+        $('.upload-option input[type="radio"]').prop('checked', false);
+        $(this).find('input[type="radio"]').prop('checked', true);
+    });
+
     $(document).ready(function() {
-        updateKPI();
-        loadChartRayon();
-        loadChartTren();
-        loadCollectionData();
+        setTimeout(() => {
+            updateKPI();
+            loadChartRayon();
+            loadChartTren();
+            loadCollectionData();
+        }, 500);
         
-        // Enable Bootstrap tooltips
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl)
-        });
-        
-        // Handle radio button click via label
-        $('.upload-option').click(function(e) {
-            // Remove all checked states
-            $('.upload-option input[type="radio"]').prop('checked', false);
-            $('.upload-option .card').removeClass('selected');
-            
-            // Add checked state to clicked option
-            $(this).find('input[type="radio"]').prop('checked', true);
-            $(this).find('.card').addClass('selected');
-            
-            console.log('Selected:', $(this).find('input[type="radio"]').val());
-        });
+        setTimeout(() => {
+            showToast('Welcome to SUNTER Dashboard! 🎉', 'success');
+        }, 1000);
     });
 </script>
 
