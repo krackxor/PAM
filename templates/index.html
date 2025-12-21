@@ -2,10 +2,13 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>SUNTER DASHBOARD - Sistem Lengkap</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SUNTER DASHBOARD - Monitoring Operasional</title>
+    
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
         body { 
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -13,31 +16,6 @@
             font-family: 'Segoe UI', sans-serif;
             min-height: 100vh;
         }
-        .global-header {
-            position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            border-bottom: 4px solid #ffd700;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            padding: 15px 25px;
-        }
-        .kpi-card {
-            background: white; border-radius: 10px; padding: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            margin-bottom: 20px; transition: all 0.3s;
-        }
-        .kpi-card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
-        .kpi-number { font-size: 2rem; font-weight: bold; margin: 10px 0; }
-        .cursor-pointer { cursor: pointer; transition: all 0.3s; }
-        .cursor-pointer:hover { transform: scale(1.02); }
-        .badge-custom { padding: 5px 10px; border-radius: 5px; font-size: 0.75rem; }
-        .upload-option { cursor: pointer; transition: all 0.3s; }
-        .upload-option .card { border: 3px solid #dee2e6; transition: all 0.3s; }
-        .upload-option:hover .card { border-color: #0d6efd; transform: translateY(-3px); }
-        .upload-option input[type="radio"]:checked + .card { border-color: #0d6efd; background: #0d6efd; color: white !important; }
-        .hover-shadow:hover { box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
-    </style>
-</head>
-<body>
         .global-header {
             position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
@@ -130,6 +108,85 @@
     </div>
     
     <div class="row g-2 align-items-center">
+        <div class="col-md-3">
+            <select class="form-select form-select-sm fw-bold border-warning text-primary shadow-sm" id="filterArea">
+                <option value="SUNTER" selected>🌍 ALL AREA (Rayon 34 + 35)</option>
+                <option value="34">🏢 Rayon 34 Only</option>
+                <option value="35">🏢 Rayon 35 Only</option>
+            </select>
+        </div>
+        <div class="col-md-5">
+             <div class="alert alert-warning py-2 px-3 mb-0 small text-center fw-bold shadow-sm border-0">
+                <i class="fas fa-calendar-alt me-1"></i> Periode: <span id="labelPeriode" class="badge bg-dark">-</span>
+             </div>
+        </div>
+        <div class="col-md-4">
+            <div class="input-group input-group-sm shadow-sm">
+                <span class="input-group-text bg-white border-0">
+                    <i class="fas fa-search text-primary"></i>
+                </span>
+                <input type="text" class="form-control border-0 shadow-sm" id="globalSearch" placeholder="🔍 Cari Nomen / Nama...">
+                <button class="btn btn-primary shadow-sm" onclick="cariPelanggan()">
+                    <i class="fas fa-search-plus me-1"></i> CARI
+                </button>
+            </div>
+        </div>
+    </div>
+</header>
+
+<!-- MAIN CONTAINER -->
+<div class="container-fluid px-4">
+    
+    <!-- FLASH MESSAGES -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show mt-2 shadow-sm">
+                    <strong>
+                        {% if category == 'success' %}<i class="fas fa-check-circle me-2"></i>
+                        {% elif category == 'danger' %}<i class="fas fa-exclamation-circle me-2"></i>
+                        {% else %}<i class="fas fa-info-circle me-2"></i>{% endif %}
+                    </strong>
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- TABS -->
+    <ul class="nav nav-tabs nav-fill shadow-sm bg-white rounded-top" id="mainTab">
+        <li class="nav-item">
+            <button class="nav-link active py-3" data-bs-toggle="tab" data-bs-target="#tab-ringkasan">
+                <i class="fas fa-chart-pie me-2"></i> RINGKASAN
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#tab-collection">
+                <i class="fas fa-table me-2"></i> COLLECTION
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#tab-meter">
+                <i class="fas fa-gauge me-2"></i> METER
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#tab-history">
+                <i class="fas fa-clock-rotate-left me-2"></i> HISTORY
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#tab-analisa">
+                <i class="fas fa-clipboard-check me-2"></i> ANALISA
+            </button>
+        </li>
+    </ul>
+
+    <!-- TAB CONTENT -->
+    <div class="tab-content bg-white shadow-sm p-4 rounded-bottom" style="min-height: 600px;">
+        
+        <!-- TAB: RINGKASAN -->
         <div class="tab-pane fade show active" id="tab-ringkasan">
             
             <!-- Row 1: Total Pelanggan & Pemakaian Air -->
@@ -313,9 +370,8 @@
                 <tbody></tbody>
             </table>
         </div>
-    </div>
-</div>
 
+        <!-- TAB 3: METER -->
 <!-- TAB: METER - ANOMALI DETECTION -->
 <div class="tab-pane fade" id="tab-meter">
     
@@ -500,6 +556,9 @@ $('button[data-bs-target="#tab-meter"]').on('shown.bs.tab', function() {
     loadAnomaliData();
 });
 </script>
+
+
+        <!-- TAB 4: HISTORY -->
 <!-- TAB: HISTORY - DATA KRONOLOGIS -->
 <div class="tab-pane fade" id="tab-history">
     
@@ -756,6 +815,9 @@ function exportHistory() {
     window.location.href = '/api/export_history?nomen=' + nomen;
 }
 </script>
+
+
+        <!-- TAB 5: ANALISA -->
 <!-- TAB: ANALISA MANUAL - PUSAT KERJA TIM -->
 <div class="tab-pane fade" id="tab-analisa">
     
@@ -1194,6 +1256,10 @@ $('button[data-bs-target="#tab-analisa"]').on('shown.bs.tab', function() {
     box-shadow: 0 4px 15px rgba(0,0,0,0.2);
 }
 </script>
+
+    </div>
+</div>
+
 <!-- MODAL UPLOAD -->
 <div class="modal fade" id="modalUpload" tabindex="-1">
     <div class="modal-dialog modal-xl">
