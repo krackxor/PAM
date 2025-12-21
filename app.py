@@ -47,6 +47,7 @@ def init_db():
                 zona_novak TEXT,
                 tarif TEXT,
                 target_mc REAL DEFAULT 0,
+                kubikasi REAL DEFAULT 0,
                 periode TEXT,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -229,24 +230,21 @@ def api_kpi():
         collection_total = db.execute(f'''
             SELECT 
                 COUNT(DISTINCT nomen) as total_nomen,
-                SUM(jumlah_bayar) as total_bayar,
-                SUM(volume_air) as total_volume
+                SUM(jumlah_bayar) as total_bayar
             FROM collection_harian
             WHERE strftime('%Y-%m', tgl_bayar) = ?
         ''', (last_month,)).fetchone()
         
         kpi['collection'] = {
             'total_nomen': collection_total['total_nomen'] or 0,
-            'total_nominal': collection_total['total_bayar'] or 0,
-            'total_volume': collection_total['total_volume'] or 0
+            'total_nominal': collection_total['total_bayar'] or 0
         }
         
         # Pisahkan Current dan Undue berdasarkan tipe_bayar
         collection_current = db.execute(f'''
             SELECT 
                 COUNT(DISTINCT nomen) as nomen_current,
-                SUM(jumlah_bayar) as nominal_current,
-                SUM(volume_air) as volume_current
+                SUM(jumlah_bayar) as nominal_current
             FROM collection_harian
             WHERE strftime('%Y-%m', tgl_bayar) = ?
             AND tipe_bayar = 'current'
@@ -255,8 +253,7 @@ def api_kpi():
         collection_undue = db.execute(f'''
             SELECT 
                 COUNT(DISTINCT nomen) as nomen_undue,
-                SUM(jumlah_bayar) as nominal_undue,
-                SUM(volume_air) as volume_undue
+                SUM(jumlah_bayar) as nominal_undue
             FROM collection_harian
             WHERE strftime('%Y-%m', tgl_bayar) = ?
             AND tipe_bayar = 'undue'
@@ -264,9 +261,23 @@ def api_kpi():
         
         kpi['collection']['current_nomen'] = collection_current['nomen_current'] or 0
         kpi['collection']['current_nominal'] = collection_current['nominal_current'] or 0
-        kpi['collection']['current_volume'] = collection_current['volume_current'] or 0
         
         kpi['collection']['undue_nomen'] = collection_undue['nomen_undue'] or 0
+        kpi['collection']['undue_nominal'] = collection_undue['nominal_undue'] or 0
+        
+        # ========================================
+        # 3b. TOTAL PEMAKAIAN AIR (dari MC.KUBIKASI untuk Rayon 34/35 saja)
+        # ========================================
+        pemakaian_air = db.execute('''
+            SELECT 
+                SUM(kubikasi) as total_kubikasi
+            FROM master_pelanggan
+            WHERE rayon IN ('34', '35')
+        ''').fetchone()
+        
+        kpi['pemakaian_air'] = {
+            'total_volume': pemakaian_air['total_kubikasi'] or 0
+        }
         kpi['collection']['undue_nominal'] = collection_undue['nominal_undue'] or 0
         kpi['collection']['undue_volume'] = collection_undue['volume_undue'] or 0
         
@@ -505,15 +516,15 @@ def upload_file():
                     flash('❌ Format MC salah! Wajib ada kolom ZONA_NOVAK', 'danger')
                     return redirect(url_for('index'))
                 
-                if 'NOTAGIHAN' not in df.columns:
-                    flash('❌ Format MC salah! Wajib ada kolom NOTAGIHAN (ini KEY UTAMA)', 'danger')
+                if 'NOMEN' not in df.columns:
+                    flash('❌ Format MC salah! Wajib ada kolom NOMEN', 'danger')
                     return redirect(url_for('index'))
 
                 # Mapping field MC
                 rename_dict = {}
                 
-                # Field NOMEN dari NOTAGIHAN (MC) - INI DATA INDUK!
-                rename_dict['NOTAGIHAN'] = 'nomen'
+                # Field NOMEN dari NOMEN (sudah langsung NOMEN!)
+                rename_dict['NOMEN'] = 'nomen'
                 
                 # Field NAMA
                 if 'NAMA_PEL' in df.columns:
@@ -533,13 +544,19 @@ def upload_file():
                 elif 'KODETARIF' in df.columns:
                     rename_dict['KODETARIF'] = 'tarif'
                 
-                # Field TARGET (REK_AIR)
-                if 'REK_AIR' in df.columns:
+                # Field TARGET dari NOMINAL (bukan REK_AIR!)
+                if 'NOMINAL' in df.columns:
+                    rename_dict['NOMINAL'] = 'target_mc'
+                elif 'REK_AIR' in df.columns:
                     rename_dict['REK_AIR'] = 'target_mc'
                 elif 'TARGET' in df.columns:
                     rename_dict['TARGET'] = 'target_mc'
-                elif 'TAGIHAN' in df.columns:
-                    rename_dict['TAGIHAN'] = 'target_mc'
+                
+                # Field KUBIKASI dari KUBIK (bukan KUBIKASI!)
+                if 'KUBIK' in df.columns:
+                    rename_dict['KUBIK'] = 'kubikasi'
+                elif 'KUBIKASI' in df.columns:
+                    rename_dict['KUBIKASI'] = 'kubikasi'
                 
                 df = df.rename(columns=rename_dict)
                 
@@ -574,10 +591,15 @@ def upload_file():
                 if 'target_mc' not in df.columns:
                     df['target_mc'] = 0
                 
+                if 'kubikasi' not in df.columns:
+                    df['kubikasi'] = 0
+                else:
+                    df['kubikasi'] = df['kubikasi'].apply(lambda x: abs(float(x)) if pd.notna(x) else 0)
+                
                 df['periode'] = datetime.now().strftime('%Y-%m')
                 
                 # Insert data
-                cols_db = ['nomen', 'nama', 'alamat', 'rayon', 'pc', 'ez', 'pcez', 'block', 'zona_novak', 'tarif', 'target_mc', 'periode']
+                cols_db = ['nomen', 'nama', 'alamat', 'rayon', 'pc', 'ez', 'pcez', 'block', 'zona_novak', 'tarif', 'target_mc', 'kubikasi', 'periode']
                 df[cols_db].to_sql('master_pelanggan', conn, if_exists='replace', index=False)
                 
                 flash(f'✅ MC: {len(df):,} data', 'success')
@@ -614,7 +636,18 @@ def upload_file():
                 if 'BILL_PERIOD' in df.columns:
                     rename_dict['BILL_PERIOD'] = 'bill_period'
                 
+                # Field RAYON untuk filter
+                if 'RAYON' in df.columns:
+                    rename_dict['RAYON'] = 'rayon'
+                
                 df = df.rename(columns=rename_dict)
+                
+                # FILTER RAYON 34/35 DULU!
+                if 'rayon' in df.columns:
+                    df = df[df['rayon'].isin(['34', '35', 34, 35])]
+                    if len(df) == 0:
+                        flash('⚠️ Tidak ada data Rayon 34/35 di Collection', 'warning')
+                        return redirect(url_for('index'))
                 
                 # Clean data NOMEN - SANGAT PENTING untuk matching!
                 # NOMEN bisa punya format berbeda: "40061003" vs "40061003.0" vs " 40061003 "
