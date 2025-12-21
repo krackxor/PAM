@@ -1038,6 +1038,87 @@ def api_sbrs_anomali():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/belum_bayar')
+def api_belum_bayar():
+    """API untuk menampilkan pelanggan yang belum bayar (tidak ada di MB dan Collection)"""
+    db = get_db()
+    
+    try:
+        # Query sesuai logika SQL yang diberikan:
+        # SELECT pelanggan dari MC yang:
+        # 1. Tidak ada di master_bayar (MB)
+        # 2. Tidak ada di collection_harian (Collection)
+        query = '''
+            SELECT 
+                m.nomen,
+                m.nama,
+                m.alamat,
+                m.rayon,
+                m.pc,
+                m.ez,
+                m.pcez,
+                m.tarif,
+                m.target_mc as nominal,
+                m.kubikasi
+            FROM master_pelanggan m
+            LEFT JOIN master_bayar mb ON m.nomen = mb.nomen
+            LEFT JOIN collection_harian c ON m.nomen = c.nomen
+            WHERE mb.nomen IS NULL 
+            AND c.nomen IS NULL
+            AND m.rayon IN ('34', '35')
+            ORDER BY m.target_mc DESC
+        '''
+        
+        rows = db.execute(query).fetchall()
+        
+        # Hitung summary
+        total_nomen = len(rows)
+        total_nominal = sum([row['nominal'] or 0 for row in rows])
+        
+        result = {
+            'total_nomen': total_nomen,
+            'total_nominal': total_nominal,
+            'data': [dict(row) for row in rows]
+        }
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"Error belum bayar: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/belum_bayar_breakdown')
+def api_belum_bayar_breakdown():
+    """Breakdown belum bayar per rayon"""
+    db = get_db()
+    
+    try:
+        query = '''
+            SELECT 
+                m.rayon,
+                COUNT(m.nomen) as jumlah_nomen,
+                SUM(m.target_mc) as total_nominal
+            FROM master_pelanggan m
+            LEFT JOIN master_bayar mb ON m.nomen = mb.nomen
+            LEFT JOIN collection_harian c ON m.nomen = c.nomen
+            WHERE mb.nomen IS NULL 
+            AND c.nomen IS NULL
+            AND m.rayon IN ('34', '35')
+            GROUP BY m.rayon
+            ORDER BY m.rayon
+        '''
+        
+        rows = db.execute(query).fetchall()
+        
+        return jsonify([dict(row) for row in rows])
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/login')
 @app.route('/logout')
 def auth_bypass():
