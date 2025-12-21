@@ -1282,6 +1282,148 @@ $('button[data-bs-target="#tab-analisa"]').on('shown.bs.tab', function() {
                     </ol>
                 </div>
 
+                <h6 class="fw-bold mb-3">1️⃣ Pilih Jenis File:</h6>
+                
+                <div class="row g-3 mb-4">
+                    <!-- MC -->
+                    <div class="col-md-4">
+                        <label class="upload-option w-100">
+                            <input type="radio" name="tipe_upload" value="master" class="d-none" checked>
+                            <div class="card text-center p-3">
+                                <i class="fas fa-users fa-3x text-primary mb-2"></i>
+                                <h6 class="fw-bold mb-1">MC (Master)</h6>
+                                <small class="text-muted">Data induk pelanggan</small>
+                                <span class="badge bg-danger mt-2">WAJIB PERTAMA</span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- COLLECTION -->
+                    <div class="col-md-4">
+                        <label class="upload-option w-100">
+                            <input type="radio" name="tipe_upload" value="collection" class="d-none">
+                            <div class="card text-center p-3">
+                                <i class="fas fa-money-bill-wave fa-3x text-success mb-2"></i>
+                                <h6 class="fw-bold mb-1">COLLECTION</h6>
+                                <small class="text-muted">Transaksi harian</small>
+                                <span class="badge bg-success mt-2">DAILY</span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- MB -->
+                    <div class="col-md-4">
+                        <label class="upload-option w-100">
+                            <input type="radio" name="tipe_upload" value="mb" class="d-none">
+                            <div class="card text-center p-3">
+                                <i class="fas fa-history fa-3x text-warning mb-2"></i>
+                                <h6 class="fw-bold mb-1">MB (Master Bayar)</h6>
+                                <small class="text-muted">History bulan lalu</small>
+                                <span class="badge bg-warning mt-2">HISTORY</span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- MAINBILL -->
+                    <div class="col-md-4">
+                        <label class="upload-option w-100">
+                            <input type="radio" name="tipe_upload" value="mainbill" class="d-none">
+                            <div class="card text-center p-3">
+                                <i class="fas fa-file-invoice fa-3x text-info mb-2"></i>
+                                <h6 class="fw-bold mb-1">MAINBILL</h6>
+                                <small class="text-muted">Tagihan bulan depan</small>
+                                <span class="badge bg-info mt-2">BILL</span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- ARDEBT -->
+                    <div class="col-md-4">
+                        <label class="upload-option w-100">
+                            <input type="radio" name="tipe_upload" value="ardebt" class="d-none">
+                            <div class="card text-center p-3">
+                                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-2"></i>
+                                <h6 class="fw-bold mb-1">ARDEBT</h6>
+                                <small class="text-muted">Data tunggakan</small>
+                                <span class="badge bg-danger mt-2">DEBT</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- ⭐ BAGIAN BARU: PERIODE DATA ⭐ -->
+                <h6 class="fw-bold mb-3 mt-4">2️⃣ Periode Data (Optional, tapi Disarankan):</h6>
+                
+                <div class="alert alert-warning mb-3">
+                    <i class="fas fa-calendar-alt me-2"></i>
+                    <strong>Tracking Periode:</strong> Pilih bulan/tahun untuk tracking multi-periode. Skip jika tidak perlu.
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Bulan</label>
+                        <select name="periode_bulan" class="form-select">
+                            <option value="0">-- Skip (Tidak Perlu) --</option>
+                            <option value="1">Januari</option>
+                            <option value="2">Februari</option>
+                            <option value="3">Maret</option>
+                            <option value="4">April</option>
+                            <option value="5">Mei</option>
+                            <option value="6">Juni</option>
+                            <option value="7">Juli</option>
+                            <option value="8">Agustus</option>
+                            <option value="9">September</option>
+                            <option value="10">Oktober</option>
+                            <option value="11">November</option>
+                            <option value="12" selected>Desember</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Tahun</label>
+                        <select name="periode_tahun" class="form-select">
+                            <option value="0">-- Skip (Tidak Perlu) --</option>
+                            <option value="2023">2023</option>
+                            <option value="2024">2024</option>
+                            <option value="2025" selected>2025</option>
+                            <option value="2026">2026</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- FILE INPUT -->
+                <h6 class="fw-bold mb-3 mt-4">3️⃣ Pilih File:</h6>
+                <div class="mt-3">
+                    <label class="form-label fw-bold">
+                        <i class="fas fa-file me-2"></i>Pilih File:
+                    </label>
+                    <input type="file" name="file" class="form-control form-control-lg" required accept=".txt,.csv,.xls,.xlsx">
+                    <small class="text-muted">Format: .txt, .csv, .xls, .xlsx | Max: 100MB</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i>Batal
+                </button>
+                <button type="submit" class="btn btn-primary btn-lg px-4">
+                    <i class="fas fa-upload me-2"></i>UPLOAD SEKARANG
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+                
+                <!-- ALERT INFO -->
+                <div class="alert alert-info border-0 mb-4">
+                    <h6 class="fw-bold"><i class="fas fa-info-circle me-2"></i> Urutan Upload:</h6>
+                    <ol class="mb-0 small">
+                        <li><strong>MC</strong> - Wajib pertama!</li>
+                        <li><strong>Collection</strong> - Transaksi harian</li>
+                        <li><strong>MB</strong> - History bulan lalu</li>
+                        <li><strong>MainBill</strong> - Tagihan bulan depan</li>
+                        <li><strong>Ardebt</strong> - Tunggakan</li>
+                    </ol>
+                </div>
+
                 <h6 class="fw-bold mb-3">Pilih Jenis File:</h6>
                 
                 <div class="row g-3 mb-4">
