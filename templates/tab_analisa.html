@@ -1,0 +1,438 @@
+<!-- TAB: ANALISA MANUAL - PUSAT KERJA TIM -->
+<div class="tab-pane fade" id="tab-analisa">
+    
+    <div class="row">
+        
+        <!-- Sidebar: List Analisa -->
+        <div class="col-md-4">
+            
+            <!-- Filter -->
+            <div class="kpi-card mb-3">
+                <h6 class="fw-bold mb-3">
+                    <i class="fas fa-filter me-2"></i>Filter Status
+                </h6>
+                <div class="btn-group w-100 mb-2">
+                    <button class="btn btn-sm btn-outline-danger" onclick="filterAnalisa('Open')">
+                        Open (<span id="count-open">0</span>)
+                    </button>
+                    <button class="btn btn-sm btn-outline-warning" onclick="filterAnalisa('Progress')">
+                        Progress (<span id="count-progress">0</span>)
+                    </button>
+                    <button class="btn btn-sm btn-outline-success" onclick="filterAnalisa('Closed')">
+                        Closed (<span id="count-closed">0</span>)
+                    </button>
+                </div>
+                <button class="btn btn-sm btn-primary w-100" onclick="filterAnalisa('all')">
+                    <i class="fas fa-list me-1"></i>Semua
+                </button>
+            </div>
+
+            <!-- Button Tambah Baru -->
+            <button class="btn btn-success w-100 mb-3" onclick="showFormAnalisaBaru()">
+                <i class="fas fa-plus-circle me-2"></i>BUAT ANALISA BARU
+            </button>
+
+            <!-- List Analisa -->
+            <div style="max-height: 600px; overflow-y: auto;">
+                <div id="analisa-list">
+                    <!-- Items akan di-load via AJAX -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Main: Detail & Form Analisa -->
+        <div class="col-md-8">
+            
+            <!-- Empty State -->
+            <div id="analisa-empty" class="kpi-card text-center py-5">
+                <i class="fas fa-clipboard-list fa-5x text-muted opacity-25 mb-3"></i>
+                <h5 class="text-muted">Pilih analisa di sidebar atau buat baru</h5>
+            </div>
+
+            <!-- Form Analisa -->
+            <div id="analisa-form" style="display: none;">
+                
+                <!-- Profil Pelanggan (Read-Only) -->
+                <div class="kpi-card border-start border-primary border-5 mb-3">
+                    <h6 class="fw-bold mb-3">
+                        <i class="fas fa-user me-2"></i>Profil Pelanggan
+                    </h6>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <small class="text-muted">NOMEN</small>
+                            <div class="fw-bold" id="form-nomen">-</div>
+                        </div>
+                        <div class="col-md-5">
+                            <small class="text-muted">Nama</small>
+                            <div class="fw-bold" id="form-nama">-</div>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted">Rayon</small>
+                            <div class="fw-bold" id="form-rayon">-</div>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted">Kubikasi</small>
+                            <div class="fw-bold" id="form-kubikasi">-</div>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-muted">Alamat</small>
+                        <div class="fw-bold" id="form-alamat">-</div>
+                    </div>
+                </div>
+
+                <!-- History Singkat -->
+                <div class="kpi-card mb-3">
+                    <h6 class="fw-bold mb-3">
+                        <i class="fas fa-history me-2"></i>History Singkat
+                    </h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-muted small">Pembayaran Terakhir</h6>
+                            <div id="history-last-payment">-</div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted small">Anomali Terdahulu</h6>
+                            <div id="history-anomali-list">-</div>
+                        </div>
+                    </div>
+                    <div class="text-end mt-2">
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewFullHistory()">
+                            <i class="fas fa-external-link-alt me-1"></i>Lihat History Lengkap
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Form Input Analisa -->
+                <div class="kpi-card">
+                    <h6 class="fw-bold mb-3">
+                        <i class="fas fa-edit me-2"></i>Form Analisa
+                    </h6>
+
+                    <form id="formAnalisaManual">
+                        <input type="hidden" id="analisa-id" name="id">
+                        <input type="hidden" id="analisa-nomen" name="nomen">
+
+                        <!-- Jenis Anomali -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-tag me-1"></i>Jenis Anomali *
+                            </label>
+                            <select class="form-select" id="analisa-jenis" name="jenis_anomali" required>
+                                <option value="">-- Pilih --</option>
+                                <option value="Zero Usage">Zero Usage</option>
+                                <option value="Pemakaian Extreme">Pemakaian Extreme</option>
+                                <option value="Pemakaian Turun">Pemakaian Turun</option>
+                                <option value="Stand Negatif">Stand Negatif</option>
+                                <option value="Salah Catat">Salah Catat</option>
+                                <option value="Rebill">Rebill</option>
+                                <option value="Estimasi">Estimasi</option>
+                                <option value="Lainnya">Lainnya</option>
+                            </select>
+                        </div>
+
+                        <!-- Analisa Tim -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-search me-1"></i>Analisa Tim *
+                            </label>
+                            <textarea class="form-control" id="analisa-tim" name="analisa_tim" rows="3" placeholder="Hasil cek lapangan, verifikasi data, dll..." required></textarea>
+                            <div class="form-text">Jelaskan temuan di lapangan atau hasil verifikasi data</div>
+                        </div>
+
+                        <!-- Kesimpulan -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-lightbulb me-1"></i>Kesimpulan *
+                            </label>
+                            <textarea class="form-control" id="analisa-kesimpulan" name="kesimpulan" rows="2" placeholder="Kesimpulan analisa..." required></textarea>
+                        </div>
+
+                        <!-- Rekomendasi -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-clipboard-check me-1"></i>Rekomendasi *
+                            </label>
+                            <select class="form-select mb-2" id="analisa-rekomendasi" name="rekomendasi" required>
+                                <option value="">-- Pilih Rekomendasi --</option>
+                                <option value="Ganti Meter">Ganti Meter</option>
+                                <option value="Cek Lapangan">Cek Lapangan Ulang</option>
+                                <option value="Tagih Susulan">Tagih Susulan</option>
+                                <option value="Monitoring">Monitoring Lanjut</option>
+                                <option value="Tidak Ada Tindakan">Tidak Ada Tindakan</option>
+                                <option value="Lainnya">Lainnya</option>
+                            </select>
+                            <textarea class="form-control" id="analisa-rekomendasi-detail" placeholder="Detail rekomendasi (opsional)..." rows="2"></textarea>
+                        </div>
+
+                        <!-- Status -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-flag me-1"></i>Status *
+                            </label>
+                            <div class="btn-group w-100">
+                                <input type="radio" class="btn-check" name="status" id="status-open" value="Open">
+                                <label class="btn btn-outline-danger" for="status-open">Open</label>
+
+                                <input type="radio" class="btn-check" name="status" id="status-progress" value="Progress">
+                                <label class="btn btn-outline-warning" for="status-progress">Progress</label>
+
+                                <input type="radio" class="btn-check" name="status" id="status-closed" value="Closed">
+                                <label class="btn btn-outline-success" for="status-closed">Closed</label>
+                            </div>
+                        </div>
+
+                        <!-- User Editor -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-user-edit me-1"></i>Nama Analis
+                            </label>
+                            <input type="text" class="form-control" id="analisa-user" name="user_editor" placeholder="Nama petugas..." value="Admin">
+                        </div>
+
+                        <!-- Audit Trail (Read-Only untuk update) -->
+                        <div class="mb-3" id="audit-trail" style="display: none;">
+                            <div class="alert alert-info small mb-0">
+                                <i class="fas fa-info-circle me-1"></i>
+                                <strong>Audit Trail:</strong>
+                                <div id="audit-info">-</div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex justify-content-between mt-4">
+                            <button type="button" class="btn btn-secondary" onclick="cancelAnalisa()">
+                                <i class="fas fa-times me-1"></i>Batal
+                            </button>
+                            <div>
+                                <button type="button" class="btn btn-outline-danger me-2" id="btn-delete" onclick="deleteAnalisa()" style="display: none;">
+                                    <i class="fas fa-trash me-1"></i>Hapus
+                                </button>
+                                <button type="submit" class="btn btn-success px-4">
+                                    <i class="fas fa-save me-2"></i>SIMPAN ANALISA
+                                </button>
+                            </div>
+                        </div>
+
+                    </form>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+let currentAnalisa = null;
+
+// Load list analisa
+function loadAnalisaList(statusFilter = 'all') {
+    const url = statusFilter === 'all' ? '/api/analisa_list' : '/api/analisa_list?status=' + statusFilter;
+    
+    $.get(url, function(data) {
+        let html = '';
+        
+        if (data.length === 0) {
+            html = '<div class="alert alert-warning">Tidak ada data analisa</div>';
+        } else {
+            data.forEach(item => {
+                const badgeClass = item.status === 'Open' ? 'danger' : (item.status === 'Progress' ? 'warning' : 'success');
+                html += `
+                    <div class="card mb-2 cursor-pointer hover-shadow" onclick="loadAnalisaDetail(${item.id})">
+                        <div class="card-body p-3">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="mb-0">${item.nomen}</h6>
+                                <span class="badge bg-${badgeClass}">${item.status}</span>
+                            </div>
+                            <small class="text-muted d-block">${item.nama || 'Tanpa Nama'}</small>
+                            <small class="text-muted d-block">
+                                <i class="fas fa-tag me-1"></i>${item.jenis_anomali}
+                            </small>
+                            <small class="text-muted">
+                                <i class="fas fa-clock me-1"></i>${item.updated_at}
+                            </small>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        $('#analisa-list').html(html);
+        
+        // Update counts
+        const counts = {open: 0, progress: 0, closed: 0};
+        data.forEach(item => {
+            if (item.status === 'Open') counts.open++;
+            else if (item.status === 'Progress') counts.progress++;
+            else counts.closed++;
+        });
+        
+        $('#count-open').text(counts.open);
+        $('#count-progress').text(counts.progress);
+        $('#count-closed').text(counts.closed);
+    });
+}
+
+// Load detail analisa
+function loadAnalisaDetail(analisa_id) {
+    $.get('/api/analisa_detail/' + analisa_id, function(data) {
+        currentAnalisa = data;
+        
+        // Show form
+        $('#analisa-empty').hide();
+        $('#analisa-form').show();
+        
+        // Fill profil pelanggan
+        $('#form-nomen').text(data.nomen);
+        $('#form-nama').text(data.nama || 'Tanpa Nama');
+        $('#form-rayon').text(data.rayon);
+        $('#form-kubikasi').text(data.kubikasi + ' m³');
+        $('#form-alamat').text(data.alamat || '-');
+        
+        // Fill form
+        $('#analisa-id').val(data.id);
+        $('#analisa-nomen').val(data.nomen);
+        $('#analisa-jenis').val(data.jenis_anomali);
+        $('#analisa-tim').val(data.analisa_tim);
+        $('#analisa-kesimpulan').val(data.kesimpulan);
+        $('#analisa-rekomendasi').val(data.rekomendasi);
+        $('#analisa-user').val(data.user_editor);
+        $(`#status-${data.status.toLowerCase()}`).prop('checked', true);
+        
+        // Show audit trail
+        $('#audit-info').html(`
+            Dibuat/Update: ${data.updated_at}<br>
+            Oleh: ${data.user_editor}
+        `);
+        $('#audit-trail').show();
+        $('#btn-delete').show();
+        
+        // Load history
+        loadHistorySingkat(data.nomen);
+    });
+}
+
+// Show form baru
+function showFormAnalisaBaru() {
+    const nomen = prompt('Masukkan NOMEN pelanggan:');
+    
+    if (!nomen) return;
+    
+    // Load profil pelanggan
+    $.get('/api/profil_pelanggan/' + nomen, function(data) {
+        currentAnalisa = null;
+        
+        // Show form
+        $('#analisa-empty').hide();
+        $('#analisa-form').show();
+        
+        // Fill profil
+        $('#form-nomen').text(data.master.nomen);
+        $('#form-nama').text(data.master.nama || 'Tanpa Nama');
+        $('#form-rayon').text(data.master.rayon);
+        $('#form-kubikasi').text(data.master.kubikasi + ' m³');
+        $('#form-alamat').text(data.master.alamat || '-');
+        
+        // Reset form
+        $('#formAnalisaManual')[0].reset();
+        $('#analisa-id').val('');
+        $('#analisa-nomen').val(nomen);
+        $('#status-open').prop('checked', true);
+        $('#audit-trail').hide();
+        $('#btn-delete').hide();
+        
+        // Load history
+        loadHistorySingkat(nomen);
+    }).fail(function() {
+        alert('Nomen tidak ditemukan!');
+    });
+}
+
+// Load history singkat
+function loadHistorySingkat(nomen) {
+    $.get('/api/history_pembayaran?nomen=' + nomen, function(data) {
+        if (data.length > 0) {
+            const last = data[0];
+            $('#history-last-payment').html(`
+                <strong>${formatRupiah(last.jumlah_bayar)}</strong><br>
+                <small>${last.tgl_bayar}</small>
+            `);
+        } else {
+            $('#history-last-payment').text('Belum ada data');
+        }
+    });
+}
+
+// Save analisa
+$('#formAnalisaManual').submit(function(e) {
+    e.preventDefault();
+    
+    const formData = {
+        id: $('#analisa-id').val() || null,
+        nomen: $('#analisa-nomen').val(),
+        jenis_anomali: $('#analisa-jenis').val(),
+        analisa_tim: $('#analisa-tim').val(),
+        kesimpulan: $('#analisa-kesimpulan').val(),
+        rekomendasi: $('#analisa-rekomendasi').val() + '\n' + $('#analisa-rekomendasi-detail').val(),
+        status: $('input[name="status"]:checked').val(),
+        user_editor: $('#analisa-user').val()
+    };
+    
+    $.ajax({
+        url: '/api/analisa_save',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(formData),
+        success: function(response) {
+            alert('✅ Analisa berhasil disimpan!');
+            loadAnalisaList();
+            if (response.id) {
+                loadAnalisaDetail(response.id);
+            }
+        },
+        error: function() {
+            alert('❌ Gagal menyimpan analisa!');
+        }
+    });
+});
+
+// Cancel
+function cancelAnalisa() {
+    $('#analisa-form').hide();
+    $('#analisa-empty').show();
+}
+
+// Delete
+function deleteAnalisa() {
+    if (!confirm('Yakin hapus analisa ini?')) return;
+    
+    const id = $('#analisa-id').val();
+    // TODO: Implement delete API
+    alert('Delete feature coming soon!');
+}
+
+// Filter
+function filterAnalisa(status) {
+    loadAnalisaList(status);
+}
+
+// View full history
+function viewFullHistory() {
+    const nomen = $('#form-nomen').text();
+    $('#historyNomenSearch').val(nomen);
+    $('button[data-bs-target="#tab-history"]').tab('show');
+    setTimeout(() => searchHistory(), 500);
+}
+
+// Load on tab show
+$('button[data-bs-target="#tab-analisa"]').on('shown.bs.tab', function() {
+    loadAnalisaList();
+});
+
+.hover-shadow:hover {
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+</script>
