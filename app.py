@@ -189,19 +189,28 @@ def api_kpi():
         last_month = cek_tgl['last_date'][:7] if cek_tgl['last_date'] else datetime.now().strftime('%Y-%m')
         
         # ========================================
-        # 1. TOTAL PELANGGAN (hanya dari MC, tidak terpengaruh upload lain)
+        # 1. TOTAL PELANGGAN & PEMAKAIAN AIR (Rayon 34/35 dari MC)
         # ========================================
-        kpi['total_pelanggan'] = db.execute('SELECT COUNT(*) as t FROM master_pelanggan').fetchone()['t']
+        pelanggan_data = db.execute('''
+            SELECT 
+                COUNT(*) as total_pelanggan,
+                SUM(kubikasi) as total_kubikasi
+            FROM master_pelanggan
+            WHERE rayon IN ('34', '35')
+        ''').fetchone()
+        
+        kpi['total_pelanggan'] = pelanggan_data['total_pelanggan'] or 0
+        kpi['total_kubikasi'] = pelanggan_data['total_kubikasi'] or 0
         
         # ========================================
-        # 2. TARGET MC
+        # 2. TARGET MC (Rayon 34/35)
         # ========================================
         target_data = db.execute('''
             SELECT 
                 COUNT(*) as total_nomen,
                 SUM(target_mc) as total_target
             FROM master_pelanggan
-            WHERE target_mc > 0
+            WHERE rayon IN ('34', '35') AND target_mc > 0
         ''').fetchone()
         
         kpi['target'] = {
@@ -264,20 +273,6 @@ def api_kpi():
         
         kpi['collection']['undue_nomen'] = collection_undue['nomen_undue'] or 0
         kpi['collection']['undue_nominal'] = collection_undue['nominal_undue'] or 0
-        
-        # ========================================
-        # 3b. TOTAL PEMAKAIAN AIR (dari MC.KUBIKASI untuk Rayon 34/35 saja)
-        # ========================================
-        pemakaian_air = db.execute('''
-            SELECT 
-                SUM(kubikasi) as total_kubikasi
-            FROM master_pelanggan
-            WHERE rayon IN ('34', '35')
-        ''').fetchone()
-        
-        kpi['pemakaian_air'] = {
-            'total_volume': pemakaian_air['total_kubikasi'] or 0
-        }
         kpi['collection']['undue_nominal'] = collection_undue['nominal_undue'] or 0
         kpi['collection']['undue_volume'] = collection_undue['volume_undue'] or 0
         
