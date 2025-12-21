@@ -58,10 +58,14 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nomen TEXT,
                 tgl_bayar TEXT,
-                jumlah_bayar REAL,
+                jumlah_bayar REAL DEFAULT 0,
+                volume_air REAL DEFAULT 0,
+                tipe_bayar TEXT DEFAULT 'current',
+                bill_period TEXT,
                 sumber_file TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(nomen) REFERENCES master_pelanggan(nomen)
+                FOREIGN KEY(nomen) REFERENCES master_pelanggan(nomen),
+                UNIQUE(nomen, tgl_bayar, jumlah_bayar, bill_period)
             )
         ''')
 
@@ -222,35 +226,49 @@ def api_kpi():
         # ========================================
         # 3. COLLECTION (Detail Current & Undue)
         # ========================================
-        # LOGIKA BENAR:
-        # - CURRENT  = Pemakaian bulan LALU dibayar bulan INI (normal payment)
-        # - UNDUE    = Pemakaian bulan INI dibayar bulan INI (bayar lebih cepat)
-        
-        # Untuk membedakan Current vs Undue, kita perlu tahu periode tagihan
-        # Asumsi: Jika tidak ada field pembeda, kita anggap semua Current dulu
-        # Untuk implementasi penuh, perlu tambah field 'tipe_bayar' atau 'periode_tagihan' di collection_harian
-        
         collection_total = db.execute(f'''
             SELECT 
                 COUNT(DISTINCT nomen) as total_nomen,
-                SUM(jumlah_bayar) as total_bayar
+                SUM(jumlah_bayar) as total_bayar,
+                SUM(volume_air) as total_volume
             FROM collection_harian
             WHERE strftime('%Y-%m', tgl_bayar) = ?
         ''', (last_month,)).fetchone()
         
         kpi['collection'] = {
             'total_nomen': collection_total['total_nomen'] or 0,
-            'total_nominal': collection_total['total_bayar'] or 0
+            'total_nominal': collection_total['total_bayar'] or 0,
+            'total_volume': collection_total['total_volume'] or 0
         }
         
-        # TODO: Pisahkan Current dan Undue
-        # Untuk saat ini, anggap 90% Current, 10% Undue (placeholder)
-        # Implementasi real perlu field tambahan di database
-        total_coll = kpi['collection']['total_nominal']
-        kpi['collection']['current_nomen'] = collection_total['total_nomen'] or 0
-        kpi['collection']['current_nominal'] = int(total_coll * 0.9)  # 90% current (placeholder)
-        kpi['collection']['undue_nomen'] = 0  # Perlu field tipe_bayar
-        kpi['collection']['undue_nominal'] = int(total_coll * 0.1)  # 10% undue (placeholder)
+        # Pisahkan Current dan Undue berdasarkan tipe_bayar
+        collection_current = db.execute(f'''
+            SELECT 
+                COUNT(DISTINCT nomen) as nomen_current,
+                SUM(jumlah_bayar) as nominal_current,
+                SUM(volume_air) as volume_current
+            FROM collection_harian
+            WHERE strftime('%Y-%m', tgl_bayar) = ?
+            AND tipe_bayar = 'current'
+        ''', (last_month,)).fetchone()
+        
+        collection_undue = db.execute(f'''
+            SELECT 
+                COUNT(DISTINCT nomen) as nomen_undue,
+                SUM(jumlah_bayar) as nominal_undue,
+                SUM(volume_air) as volume_undue
+            FROM collection_harian
+            WHERE strftime('%Y-%m', tgl_bayar) = ?
+            AND tipe_bayar = 'undue'
+        ''', (last_month,)).fetchone()
+        
+        kpi['collection']['current_nomen'] = collection_current['nomen_current'] or 0
+        kpi['collection']['current_nominal'] = collection_current['nominal_current'] or 0
+        kpi['collection']['current_volume'] = collection_current['volume_current'] or 0
+        
+        kpi['collection']['undue_nomen'] = collection_undue['nomen_undue'] or 0
+        kpi['collection']['undue_nominal'] = collection_undue['nominal_undue'] or 0
+        kpi['collection']['undue_volume'] = collection_undue['volume_undue'] or 0
         
         # ========================================
         # 4. COLLECTION RATE
@@ -567,17 +585,14 @@ def upload_file():
                 # Field mapping untuk DAILY
                 rename_dict = {}
                 
-                # Field NOMEN dari NOTAG (DAILY) - PENTING!
-                # NOTAG di DAILY = NOTAGIHAN di MC
-                if 'NOTAG' in df.columns:
-                    rename_dict['NOTAG'] = 'nomen'
-                elif 'NO_SAMBUNGAN' in df.columns:
-                    rename_dict['NO_SAMBUNGAN'] = 'nomen'
+                # PENTING: NOMEN adalah ID pelanggan yang link ke MC.NOMEN
+                if 'NOMEN' in df.columns:
+                    rename_dict['NOMEN'] = 'nomen'
                 else:
-                    flash('❌ Format Collection salah! Butuh kolom NOTAG', 'danger')
+                    flash('❌ Format Collection salah! Butuh kolom NOMEN', 'danger')
                     return redirect(url_for('index'))
                 
-                # Field TANGGAL dari PAY_DT (DAILY)
+                # Field TANGGAL dari PAY_DT
                 if 'PAY_DT' in df.columns:
                     rename_dict['PAY_DT'] = 'tgl_bayar'
                 elif 'TGL_BAYAR' in df.columns:
@@ -589,9 +604,13 @@ def upload_file():
                 elif 'JUMLAH' in df.columns:
                     rename_dict['JUMLAH'] = 'jumlah_bayar'
                 
-                # Field RAYON untuk validasi
-                if 'RAYON' in df.columns:
-                    rename_dict['RAYON'] = 'rayon_check'
+                # Field VOLUME AIR dari VOL_COLLECT
+                if 'VOL_COLLECT' in df.columns:
+                    rename_dict['VOL_COLLECT'] = 'volume_air'
+                
+                # Field BILL_PERIOD untuk deteksi Current vs Undue
+                if 'BILL_PERIOD' in df.columns:
+                    rename_dict['BILL_PERIOD'] = 'bill_period'
                 
                 df = df.rename(columns=rename_dict)
                 
@@ -611,9 +630,47 @@ def upload_file():
                 else:
                     df['jumlah_bayar'] = 0
                 
+                # Clean volume air
+                if 'volume_air' not in df.columns:
+                    df['volume_air'] = 0
+                else:
+                    df['volume_air'] = df['volume_air'].apply(lambda x: abs(float(x)) if pd.notna(x) else 0)
+                
+                # Deteksi tipe bayar: Current vs Undue berdasarkan BILL_PERIOD
+                if 'bill_period' in df.columns:
+                    # Parse bill_period (format: "Nov/2025")
+                    def parse_bill_period(bp):
+                        if pd.isna(bp) or bp == '':
+                            return None
+                        try:
+                            parts = str(bp).split('/')
+                            if len(parts) == 2:
+                                month_names = {'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+                                             'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+                                             'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'}
+                                month_str = month_names.get(parts[0], '01')
+                                return f"{parts[1]}-{month_str}"
+                        except:
+                            pass
+                        return None
+                    
+                    df['bill_period_parsed'] = df['bill_period'].apply(parse_bill_period)
+                    
+                    # Current: bill_period = bulan lalu, dibayar bulan ini
+                    # Undue: bill_period = bulan ini, dibayar bulan ini
+                    current_month = datetime.now().strftime('%Y-%m')
+                    last_month = (datetime.now().replace(day=1) - pd.Timedelta(days=1)).strftime('%Y-%m')
+                    
+                    df['tipe_bayar'] = df['bill_period_parsed'].apply(
+                        lambda x: 'current' if x == last_month else ('undue' if x == current_month else 'current')
+                    )
+                else:
+                    df['tipe_bayar'] = 'current'
+                    df['bill_period'] = ''
+                
                 df['sumber_file'] = file.filename
                 
-                # VALIDASI CEPAT: Ambil semua nomen MC sekali saja (tanpa loop!)
+                # VALIDASI CEPAT
                 mc_nomens_result = conn.execute("SELECT nomen FROM master_pelanggan").fetchall()
                 mc_nomen_set = set([str(row['nomen']).strip() for row in mc_nomens_result])
                 
@@ -621,7 +678,7 @@ def upload_file():
                     flash('⚠️ MC kosong. Upload MC terlebih dahulu!', 'warning')
                     return redirect(url_for('index'))
                 
-                # Clean dan filter dengan set operation (super cepat!)
+                # Clean dan filter
                 df['nomen'] = df['nomen'].astype(str).str.strip()
                 df_valid = df[df['nomen'].isin(mc_nomen_set)].copy()
                 
@@ -629,9 +686,19 @@ def upload_file():
                     flash('⚠️ Tidak ada data Collection yang cocok dengan MC.', 'warning')
                     return redirect(url_for('index'))
                 
-                # Insert langsung (pandas to_sql sudah optimal)
-                cols = ['nomen', 'tgl_bayar', 'jumlah_bayar', 'sumber_file']
-                df_valid[cols].to_sql('collection_harian', conn, if_exists='append', index=False)
+                # Insert dengan ON CONFLICT IGNORE untuk hapus double
+                cols = ['nomen', 'tgl_bayar', 'jumlah_bayar', 'volume_air', 'tipe_bayar', 'bill_period', 'sumber_file']
+                
+                for _, row in df_valid[cols].iterrows():
+                    try:
+                        conn.execute('''
+                            INSERT OR IGNORE INTO collection_harian 
+                            (nomen, tgl_bayar, jumlah_bayar, volume_air, tipe_bayar, bill_period, sumber_file)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ''', tuple(row))
+                    except:
+                        pass
+                conn.commit()
                 
                 skipped = len(df) - len(df_valid)
                 msg = f'✅ Collection: {len(df_valid):,} transaksi'
