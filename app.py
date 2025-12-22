@@ -5,6 +5,16 @@ from flask import Flask, render_template, g, request, redirect, url_for, flash, 
 from werkzeug.utils import secure_filename
 from datetime import datetime
 
+# Import anomaly detection system
+import sys
+sys.path.insert(0, os.path.dirname(__file__))
+try:
+    from app_anomaly_detection import register_anomaly_routes
+    ANOMALY_AVAILABLE = True
+except ImportError:
+    ANOMALY_AVAILABLE = False
+    print("⚠️ Warning: Anomaly detection module not found")
+
 # === KONFIGURASI ===
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'SUNTER-ADMIN-MODE'
@@ -1123,6 +1133,13 @@ def api_belum_bayar_breakdown():
 @app.route('/logout')
 def auth_bypass():
     return redirect(url_for('index'))
+
+# Register anomaly detection routes
+if ANOMALY_AVAILABLE:
+    register_anomaly_routes(app, get_db)
+    print("✅ Anomaly Detection System: ACTIVE")
+else:
+    print("⚠️  Anomaly Detection System: DISABLED")
 
 if __name__ == '__main__':
     if not os.path.exists(DB_PATH):
