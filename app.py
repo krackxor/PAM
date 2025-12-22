@@ -8,12 +8,20 @@ from datetime import datetime
 # Import anomaly detection system
 import sys
 sys.path.insert(0, os.path.dirname(__file__))
+
 try:
     from app_anomaly_detection import register_anomaly_routes
     ANOMALY_AVAILABLE = True
 except ImportError:
     ANOMALY_AVAILABLE = False
     print("⚠️ Warning: Anomaly detection module not found")
+
+try:
+    from app_analisa_api import register_analisa_routes, init_analisa_tables
+    ANALISA_AVAILABLE = True
+except ImportError:
+    ANALISA_AVAILABLE = False
+    print("⚠️ Warning: Analisa API module not found")
 
 # === KONFIGURASI ===
 app = Flask(__name__)
@@ -194,8 +202,15 @@ def init_db():
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_sbrs_nomen ON sbrs_data(nomen)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_sbrs_periode ON sbrs_data(periode_bulan, periode_tahun)')
         
+        # Initialize Analisa tables if available
+        if ANALISA_AVAILABLE:
+            init_analisa_tables(db)
+        
         db.commit()
         print("✅ Database initialized with SBRS support")
+        if ANALISA_AVAILABLE:
+            print("✅ Analisa tables initialized")
+
 
 # === HELPER FUNCTIONS ===
 def clean_nomen(val):
@@ -1346,6 +1361,13 @@ if ANOMALY_AVAILABLE:
     print("✅ Anomaly Detection System: ACTIVE")
 else:
     print("⚠️  Anomaly Detection System: DISABLED")
+
+# Register analisa routes
+if ANALISA_AVAILABLE:
+    register_analisa_routes(app, get_db)
+    print("✅ Analisa Manual System: ACTIVE")
+else:
+    print("⚠️  Analisa Manual System: DISABLED")
 
 if __name__ == '__main__':
     if not os.path.exists(DB_PATH):
