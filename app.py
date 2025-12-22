@@ -1305,6 +1305,9 @@ def get_periode_label(bulan, tahun):
 def upload_multi():
     """
     Upload multiple files dengan auto-detect periode & file type
+    
+    Optional:
+    - manual_periode_override: {"filename": {"bulan": 5, "tahun": 2025}}
     """
     if not AUTO_DETECT_AVAILABLE:
         return jsonify({'error': 'Auto-detect module not available'}), 500
@@ -1316,6 +1319,16 @@ def upload_multi():
     
     if not files or files[0].filename == '':
         return jsonify({'error': 'No files selected'}), 400
+    
+    # Check if there's manual override
+    manual_override = request.form.get('manual_override')
+    override_dict = {}
+    if manual_override:
+        try:
+            import json
+            override_dict = json.loads(manual_override)
+        except:
+            pass
     
     results = []
     db = get_db()
@@ -1344,6 +1357,13 @@ def upload_multi():
             periode_tahun = detection['periode_tahun']
             periode_label = detection['periode_label']
             detect_method = detection['method']
+            
+            # Apply manual override if exists
+            if filename in override_dict:
+                periode_bulan = override_dict[filename].get('bulan', periode_bulan)
+                periode_tahun = override_dict[filename].get('tahun', periode_tahun)
+                periode_label = get_periode_label(periode_bulan, periode_tahun)
+                detect_method = 'manual_override'
             
             # Check duplicate periode
             existing = db.execute('''
