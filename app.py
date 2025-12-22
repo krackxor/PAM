@@ -756,6 +756,212 @@ def upload_file():
                 msg += f' ({skipped:,} skipped)'
             flash(msg, 'success')
         
+        # === UPLOAD SBRS ===
+        elif tipe == 'sbrs':
+            print(f"📊 Processing SBRS upload...")
+            print(f"Original columns: {df.columns.tolist()}")
+            
+            # Mapping SBRS columns (flexible untuk berbagai format)
+            rename_dict = {}
+            
+            # Account/Nomen
+            for col in ['cmr_account', 'ACCOUNT', 'NOPEN', 'NOMEN', 'CMR_ACCOUNT']:
+                if col in df.columns:
+                    rename_dict[col] = 'cmr_account'
+                    break
+            
+            # Name
+            for col in ['cmr_name', 'NAMA', 'NAME', 'CMR_NAME']:
+                if col in df.columns:
+                    rename_dict[col] = 'cmr_name'
+                    break
+            
+            # Address
+            for col in ['cmr_address', 'ALAMAT', 'ADDRESS', 'CMR_ADDRESS']:
+                if col in df.columns:
+                    rename_dict[col] = 'cmr_address'
+                    break
+            
+            # Route
+            for col in ['cmr_route', 'ROUTE', 'RUTE', 'CMR_ROUTE']:
+                if col in df.columns:
+                    rename_dict[col] = 'cmr_route'
+                    break
+            
+            # Previous Reading
+            for col in ['cmr_prev_read', 'STAND_LALU', 'PREV_READ', 'CMR_PREV_READ', 'STAND_AWAL']:
+                if col in df.columns:
+                    rename_dict[col] = 'cmr_prev_read'
+                    break
+            
+            # Current Reading
+            for col in ['cmr_reading', 'STAND_INI', 'READING', 'CMR_READING', 'STAND_AKHIR']:
+                if col in df.columns:
+                    rename_dict[col] = 'cmr_reading'
+                    break
+            
+            # Stand/Kubikasi (PENTING!)
+            for col in ['SB_Stand', 'PAKAI', 'KUBIKASI', 'USAGE', 'STAND', 'SB_STAND']:
+                if col in df.columns:
+                    rename_dict[col] = 'SB_Stand'
+                    break
+            
+            # Read Method
+            for col in ['Read_Method', 'METODE', 'METHOD', 'READ_METHOD']:
+                if col in df.columns:
+                    rename_dict[col] = 'Read_Method'
+                    break
+            
+            # Bill Period
+            for col in ['Bill_Period', 'PERIODE', 'PERIOD', 'BILL_PERIOD']:
+                if col in df.columns:
+                    rename_dict[col] = 'Bill_Period'
+                    break
+            
+            # Bill Amount
+            for col in ['Bill_Amount', 'TAGIHAN', 'AMOUNT', 'BILL_AMOUNT']:
+                if col in df.columns:
+                    rename_dict[col] = 'Bill_Amount'
+                    break
+            
+            # Skip Code
+            for col in ['cmr_skip_code', 'SKIP_CODE', 'SKIP', 'CMR_SKIP_CODE']:
+                if col in df.columns:
+                    rename_dict[col] = 'cmr_skip_code'
+                    break
+            
+            # Trouble Code
+            for col in ['cmr_trbl1_code', 'TROUBLE', 'TROUBLE_CODE', 'CMR_TRBL1_CODE']:
+                if col in df.columns:
+                    rename_dict[col] = 'cmr_trbl1_code'
+                    break
+            
+            # Special Message
+            for col in ['cmr_chg_spcl_msg', 'SPECIAL_MSG', 'MESSAGE', 'CMR_CHG_SPCL_MSG']:
+                if col in df.columns:
+                    rename_dict[col] = 'cmr_chg_spcl_msg'
+                    break
+            
+            # Tariff
+            for col in ['Tariff', 'TARIF', 'TARIFF']:
+                if col in df.columns:
+                    rename_dict[col] = 'Tariff'
+                    break
+            
+            # Meter Make
+            for col in ['Meter_Make_1', 'METER_MAKE', 'MERK_METER', 'METER_MAKE_1']:
+                if col in df.columns:
+                    rename_dict[col] = 'Meter_Make_1'
+                    break
+            
+            # Meter Number
+            for col in ['cmr_mtr_num', 'NOMOR_METER', 'METER_NUM', 'CMR_MTR_NUM']:
+                if col in df.columns:
+                    rename_dict[col] = 'cmr_mtr_num'
+                    break
+            
+            # Read Date
+            for col in ['cmr_rd_date', 'TGL_BACA', 'READ_DATE', 'CMR_RD_DATE']:
+                if col in df.columns:
+                    rename_dict[col] = 'cmr_rd_date'
+                    break
+            
+            # Meter Reader ID
+            for col in ['cmr_mrid', 'READER_ID', 'MRID', 'CMR_MRID']:
+                if col in df.columns:
+                    rename_dict[col] = 'cmr_mrid'
+                    break
+            
+            print(f"Mapping dict: {rename_dict}")
+            
+            # Rename columns
+            if rename_dict:
+                df = df.rename(columns=rename_dict)
+            
+            # Validate critical fields
+            if 'cmr_account' not in df.columns:
+                flash('❌ SBRS: Need cmr_account column!', 'danger')
+                return redirect(url_for('index'))
+            
+            if 'SB_Stand' not in df.columns:
+                flash('❌ SBRS: Need SB_Stand (kubikasi) column!', 'danger')
+                return redirect(url_for('index'))
+            
+            # Clean and process data
+            df['cmr_account'] = df['cmr_account'].astype(str).str.strip()
+            df = df.dropna(subset=['cmr_account'])
+            df = df[df['cmr_account'] != '']
+            df = df[df['cmr_account'] != 'nan']
+            
+            # Process numeric fields
+            numeric_fields = ['cmr_prev_read', 'cmr_reading', 'SB_Stand', 'Bill_Amount']
+            for field in numeric_fields:
+                if field in df.columns:
+                    df[field] = pd.to_numeric(df[field], errors='coerce').fillna(0)
+            
+            # Process Read_Method (uppercase)
+            if 'Read_Method' in df.columns:
+                df['Read_Method'] = df['Read_Method'].astype(str).str.upper().str.strip()
+                df['Read_Method'] = df['Read_Method'].replace('NAN', 'ACTUAL')
+            else:
+                df['Read_Method'] = 'ACTUAL'
+            
+            # Process Bill_Period
+            if 'Bill_Period' in df.columns:
+                df['Bill_Period'] = df['Bill_Period'].astype(str).str.strip()
+            else:
+                # Generate dari periode upload
+                if periode_bulan and periode_tahun:
+                    df['Bill_Period'] = f"{periode_tahun}{str(periode_bulan).zfill(2)}"
+                else:
+                    df['Bill_Period'] = datetime.now().strftime('%Y%m')
+            
+            # Fill missing optional fields
+            optional_fields = {
+                'cmr_name': '',
+                'cmr_address': '',
+                'cmr_route': '',
+                'cmr_skip_code': '',
+                'cmr_trbl1_code': '',
+                'cmr_chg_spcl_msg': '',
+                'Tariff': '',
+                'Meter_Make_1': '',
+                'cmr_mtr_num': '',
+                'cmr_rd_date': '',
+                'cmr_mrid': ''
+            }
+            
+            for field, default_val in optional_fields.items():
+                if field not in df.columns:
+                    df[field] = default_val
+            
+            # Add metadata
+            df['periode_bulan'] = periode_bulan if periode_bulan else 0
+            df['periode_tahun'] = periode_tahun if periode_tahun else 0
+            df['upload_id'] = upload_id if upload_id else 0
+            
+            # Select columns for database
+            cols_db = [
+                'cmr_account', 'cmr_name', 'cmr_address', 'cmr_route',
+                'cmr_prev_read', 'cmr_reading', 'SB_Stand',
+                'cmr_skip_code', 'cmr_trbl1_code', 'cmr_chg_spcl_msg',
+                'Tariff', 'Bill_Period', 'Bill_Amount', 'Read_Method',
+                'Meter_Make_1', 'cmr_mtr_num', 'cmr_rd_date', 'cmr_mrid',
+                'periode_bulan', 'periode_tahun', 'upload_id'
+            ]
+            
+            # Check which columns exist
+            cols_to_save = [col for col in cols_db if col in df.columns]
+            
+            print(f"Columns to save: {cols_to_save}")
+            print(f"Sample SB_Stand values: {df['SB_Stand'].head().tolist()}")
+            print(f"SB_Stand statistics: min={df['SB_Stand'].min()}, max={df['SB_Stand'].max()}, avg={df['SB_Stand'].mean():.2f}")
+            
+            # Save to database (REPLACE untuk re-upload)
+            df[cols_to_save].to_sql('sbrs_data', conn, if_exists='replace', index=False)
+            
+            flash(f'✅ SBRS: {len(df):,} records uploaded | Period: {df["Bill_Period"].iloc[0]} | Stand range: {df["SB_Stand"].min():.0f}-{df["SB_Stand"].max():.0f} m³', 'success')
+        
         # === UPLOAD MB ===
         elif tipe == 'mb':
             # Implementation sama dengan sebelumnya
