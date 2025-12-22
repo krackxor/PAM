@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     
     <style>
         :root {
@@ -1231,6 +1232,7 @@
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
     let chartRayon, chartTren;
@@ -2009,11 +2011,11 @@
                         <table class="table table-hover" id="fileListTable">
                             <thead class="table-light">
                                 <tr>
-                                    <th width="40%">File Name</th>
+                                    <th width="35%">File Name</th>
                                     <th width="15%">Type</th>
                                     <th width="20%">Periode</th>
                                     <th width="15%">Size</th>
-                                    <th width="10%">Action</th>
+                                    <th width="15%">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="fileListBody">
@@ -2209,6 +2211,11 @@
             const fileType = guessFileType(file.name);
             const fileSize = formatFileSize(file.size);
             const periode = guessPeriodeFromFilename(file.name);
+            
+            // Store detected periode in file object for later override
+            if (!file.detectedPeriode) {
+                file.detectedPeriode = periode;
+            }
 
             const row = `
                 <tr>
@@ -2220,13 +2227,17 @@
                         <span class="file-type-badge badge-${fileType}">${fileType}</span>
                     </td>
                     <td>
-                        <small class="text-muted">
-                            ${periode || '<i class="fas fa-robot me-1"></i>Auto-detect'}
+                        <small class="text-muted" id="periode-${index}">
+                            ${file.customPeriode || periode || '<i class="fas fa-robot me-1"></i>Auto-detect'}
                         </small>
+                        ${file.customPeriode ? '<span class="badge bg-warning text-dark ms-1">Manual</span>' : ''}
                     </td>
                     <td><small class="text-muted">${fileSize}</small></td>
                     <td>
-                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeFile(${index})">
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1" onclick="editPeriode(${index})" title="Edit Periode">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeFile(${index})" title="Remove">
                             <i class="fas fa-times"></i>
                         </button>
                     </td>
@@ -2280,6 +2291,93 @@
         $('#fileInputMulti').val('');
     }
 
+    function editPeriode(index) {
+        const file = selectedFiles[index];
+        const currentPeriode = file.customPeriode || file.detectedPeriode || '';
+        
+        // Extract bulan/tahun from current periode if exists
+        let defaultBulan = '';
+        let defaultTahun = '';
+        if (currentPeriode) {
+            const match = currentPeriode.match(/(\d{1,2})[\/\-](\d{4})/);
+            if (match) {
+                defaultBulan = match[1];
+                defaultTahun = match[2];
+            } else {
+                const match2 = currentPeriode.match(/(\d{4})(\d{2})/);
+                if (match2) {
+                    defaultBulan = match2[2];
+                    defaultTahun = match2[1];
+                }
+            }
+        }
+        
+        // Show SweetAlert2 input
+        Swal.fire({
+            title: 'Edit Periode Manual',
+            html: `
+                <div class="mb-3 text-start">
+                    <label class="form-label fw-bold">File: ${file.name}</label>
+                </div>
+                <div class="row">
+                    <div class="col-6">
+                        <label class="form-label">Bulan (1-12)</label>
+                        <input type="number" id="inputBulan" class="form-control" 
+                               min="1" max="12" value="${defaultBulan}" 
+                               placeholder="Bulan (1-12)">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Tahun</label>
+                        <input type="number" id="inputTahun" class="form-control" 
+                               min="2020" max="2030" value="${defaultTahun}" 
+                               placeholder="Tahun (2025)">
+                    </div>
+                </div>
+                <div class="alert alert-warning mt-3 small text-start">
+                    <i class="fas fa-info-circle me-1"></i>
+                    <strong>Penting:</strong><br>
+                    • MC/MB/ARDEBT: Input bulan DATA (bukan TGL di file)<br>
+                    • Contoh: TGL_CATAT 19/06 = Data Mei → Input: <strong>5</strong>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Set Periode',
+            cancelButtonText: 'Cancel',
+            confirmButtonColor: '#667eea',
+            preConfirm: () => {
+                const bulan = parseInt(document.getElementById('inputBulan').value);
+                const tahun = parseInt(document.getElementById('inputTahun').value);
+                
+                if (!bulan || bulan < 1 || bulan > 12) {
+                    Swal.showValidationMessage('Bulan harus 1-12');
+                    return false;
+                }
+                if (!tahun || tahun < 2020 || tahun > 2030) {
+                    Swal.showValidationMessage('Tahun tidak valid');
+                    return false;
+                }
+                
+                return { bulan, tahun };
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                const { bulan, tahun } = result.value;
+                const bulanNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 
+                                    'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
+                
+                // Set custom periode
+                file.customPeriode = `${bulanNames[bulan]} ${tahun}`;
+                file.customBulan = bulan;
+                file.customTahun = tahun;
+                
+                // Refresh display
+                displayFileList();
+                
+                showToast(`Periode diset: ${file.customPeriode}`, 'success');
+            }
+        });
+    }
+
     // ==========================================
     // UPLOAD FUNCTION
     // ==========================================
@@ -2287,9 +2385,26 @@
         if (selectedFiles.length === 0) return;
 
         const formData = new FormData();
+        
+        // Add files
         selectedFiles.forEach(file => {
             formData.append('files[]', file);
         });
+        
+        // Add manual overrides if any
+        const manualOverrides = {};
+        selectedFiles.forEach(file => {
+            if (file.customBulan && file.customTahun) {
+                manualOverrides[file.name] = {
+                    bulan: file.customBulan,
+                    tahun: file.customTahun
+                };
+            }
+        });
+        
+        if (Object.keys(manualOverrides).length > 0) {
+            formData.append('manual_override', JSON.stringify(manualOverrides));
+        }
 
         // Show progress
         $('#uploadProgress').show();
