@@ -310,6 +310,47 @@
             outline: none;
         }
 
+        /* Periode Selector Styling */
+        .periode-selector-wrapper {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
+            transition: var(--transition);
+        }
+
+        .periode-selector-wrapper:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+        }
+
+        .periode-selector-wrapper label {
+            margin-bottom: 4px;
+            display: block;
+            font-size: 0.75rem;
+        }
+
+        .periode-selector {
+            border: none;
+            background: transparent;
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: #1e293b;
+            padding: 0;
+            cursor: pointer;
+        }
+
+        .periode-selector:focus {
+            outline: none;
+            box-shadow: none;
+        }
+
+        .periode-selector option {
+            padding: 10px;
+            font-weight: 600;
+        }
+
         /* FIX: Chart container dengan height tetap */
         .chart-container {
             position: relative;
@@ -406,11 +447,13 @@
             </select>
         </div>
         <div class="col-md-5">
-            <div style="background: white; padding: 10px 16px; border-radius: 12px; text-align: center;">
-                <small class="fw-bold">
-                    <i class="fas fa-calendar-alt me-1"></i> Periode: 
-                    <span id="labelPeriode" class="badge bg-dark ms-1">-</span>
-                </small>
+            <div class="periode-selector-wrapper">
+                <label class="text-muted small mb-1 fw-bold">
+                    <i class="fas fa-calendar-alt me-1"></i> Pilih Periode:
+                </label>
+                <select class="form-select periode-selector" id="periodeSelector" onchange="changePeriode()">
+                    <option value="">Loading periode...</option>
+                </select>
             </div>
         </div>
         <div class="col-md-4">
@@ -1243,6 +1286,152 @@
     let currentAnomalyType = null;
     
     // Generate periode options
+    // ==========================================
+    // PERIODE MANAGEMENT - DYNAMIC FROM DATABASE
+    // ==========================================
+    
+    let currentPeriode = null;
+    let currentPeriodeBulan = null;
+    let currentPeriodeTahun = null;
+    let availablePeriodes = [];
+
+    /**
+     * Load available periodes from database
+     */
+    function loadAvailablePeriodes() {
+        console.log('📅 Loading available periodes from database...');
+        
+        $.ajax({
+            url: '/api/available_periodes',
+            method: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    availablePeriodes = response.periodes;
+                    console.log(`✅ Loaded ${response.count} periodes:`, availablePeriodes);
+                    
+                    // Populate selector
+                    const selector = $('#periodeSelector');
+                    selector.empty();
+                    
+                    if (availablePeriodes.length === 0) {
+                        selector.append('<option value="">No data uploaded yet</option>');
+                        console.warn('⚠️  No periodes found in database');
+                        return;
+                    }
+                    
+                    availablePeriodes.forEach((p, index) => {
+                        const option = $('<option>')
+                            .val(p.value)
+                            .text(`${p.label} (${p.file_count} files)`)
+                            .data('bulan', p.bulan)
+                            .data('tahun', p.tahun)
+                            .data('file_count', p.file_count);
+                        
+                        // Select latest (first) by default
+                        if (p.is_latest) {
+                            option.attr('selected', 'selected');
+                            currentPeriode = p.value;
+                            currentPeriodeBulan = p.bulan;
+                            currentPeriodeTahun = p.tahun;
+                        }
+                        
+                        selector.append(option);
+                    });
+                    
+                    console.log(`✅ Periode selector populated. Current: ${currentPeriode} (${currentPeriodeBulan}/${currentPeriodeTahun})`);
+                    
+                    // Load dashboard with selected periode
+                    if (currentPeriode) {
+                        loadDashboardWithPeriode();
+                    }
+                } else {
+                    console.error('❌ Failed to load periodes:', response.error);
+                    showToast('Failed to load periodes', 'error');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('❌ Error loading periodes:', error);
+                showToast('Error loading periodes', 'error');
+                
+                // Fallback: Use current month
+                useFallbackPeriode();
+            }
+        });
+    }
+
+    /**
+     * Use fallback periode (current month) if API fails
+     */
+    function useFallbackPeriode() {
+        const now = new Date();
+        const bulan = now.getMonth() + 1;
+        const tahun = now.getFullYear();
+        const bulanNames = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+                           'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+        
+        currentPeriodeBulan = bulan;
+        currentPeriodeTahun = tahun;
+        currentPeriode = `${tahun}-${String(bulan).padStart(2, '0')}`;
+        
+        $('#periodeSelector').html(`<option value="${currentPeriode}">${bulanNames[bulan]} ${tahun}</option>`);
+        
+        console.log(`⚠️  Using fallback periode: ${currentPeriode}`);
+    }
+
+    /**
+     * Change periode when user selects from dropdown
+     */
+    function changePeriode() {
+        const selector = $('#periodeSelector');
+        const selected = selector.find('option:selected');
+        
+        currentPeriode = selector.val();
+        currentPeriodeBulan = selected.data('bulan');
+        currentPeriodeTahun = selected.data('tahun');
+        
+        console.log(`📅 Periode changed to: ${currentPeriode} (Bulan: ${currentPeriodeBulan}, Tahun: ${currentPeriodeTahun})`);
+        
+        // Show loading indicator
+        showToast(`Loading data untuk ${selected.text()}...`, 'info');
+        
+        // Reload dashboard with new periode
+        loadDashboardWithPeriode();
+    }
+
+    /**
+     * Load all dashboard components with current periode filter
+     */
+    function loadDashboardWithPeriode() {
+        if (!currentPeriodeBulan || !currentPeriodeTahun) {
+            console.warn('⚠️  No periode selected');
+            return;
+        }
+        
+        console.log(`🔄 Loading dashboard for periode: ${currentPeriodeBulan}/${currentPeriodeTahun}`);
+        
+        // Reload all dashboard data
+        updateKPI();
+        loadChartRayon();
+        loadChartTren();
+        loadCollectionData();
+        
+        // If anomaly tab is active, reload it
+        if ($('#tab-meter').hasClass('active')) {
+            loadAnomalySummary();
+        }
+        
+        // If belum bayar tab is active, reload it
+        if ($('#tab-belum-bayar').hasClass('active')) {
+            loadBelumBayar();
+        }
+        
+        showToast('Dashboard updated successfully!', 'success');
+    }
+
+    // ==========================================
+    // END PERIODE MANAGEMENT
+    // ==========================================
+
     function initPeriodeOptions() {
         const today = new Date();
         const currentMonth = today.getMonth() + 1;
@@ -1589,14 +1778,24 @@
     });
 
     $(document).ready(function() {
-        // Initialize periode options
+        console.log('🚀 Sunter Dashboard initializing...');
+        
+        // Load available periodes from database (NEW!)
+        loadAvailablePeriodes();
+        
+        // Initialize old periode options (for modal upload)
         initPeriodeOptions();
         
+        // Load dashboard data after short delay
         setTimeout(() => {
-            updateKPI();
-            loadChartRayon();
-            loadChartTren();
-            loadCollectionData();
+            // These will be called again by loadAvailablePeriodes after periode is selected
+            // This is just fallback in case API fails
+            if (!currentPeriodeBulan) {
+                updateKPI();
+                loadChartRayon();
+                loadChartTren();
+                loadCollectionData();
+            }
         }, 500);
         
         setTimeout(() => {
