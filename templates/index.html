@@ -8,7 +8,6 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/static/responsive_improvements.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     
     <style>
@@ -389,6 +388,10 @@
             </span>
             <button class="btn btn-modern btn-gradient-success" data-bs-toggle="modal" data-bs-target="#modalUpload">
                 <i class="fas fa-cloud-upload-alt me-2"></i> UPLOAD
+            </button>
+            <button class="btn btn-modern btn-gradient-primary" data-bs-toggle="modal" data-bs-target="#modalUploadMulti">
+                <i class="fas fa-magic me-2"></i> UPLOAD MULTI
+                <span class="badge bg-warning text-dark ms-2">AUTO</span>
             </button>
         </div>
     </div>
@@ -926,784 +929,11 @@
         </div>
 
         <div class="tab-pane fade" id="tab-analisa">
-    
-    <!-- Header with Quick Stats -->
-    <div class="row mb-4">
-        <div class="col-md-3 col-6 mb-3">
-            <div class="kpi-card border-start border-primary border-4">
-                <small class="text-muted d-block">Total Analisa</small>
-                <h3 class="fw-bold mb-0 text-primary" id="analisa-total">0</h3>
+            <div class="kpi-card">
+                <h5 class="fw-bold">Tab ANALISA</h5>
+                <p class="text-muted">Coming soon - Team collaboration</p>
             </div>
         </div>
-        <div class="col-md-3 col-6 mb-3">
-            <div class="kpi-card border-start border-warning border-4">
-                <small class="text-muted d-block">Pending</small>
-                <h3 class="fw-bold mb-0 text-warning" id="analisa-pending">0</h3>
-            </div>
-        </div>
-        <div class="col-md-3 col-6 mb-3">
-            <div class="kpi-card border-start border-info border-4">
-                <small class="text-muted d-block">In Progress</small>
-                <h3 class="fw-bold mb-0 text-info" id="analisa-progress">0</h3>
-            </div>
-        </div>
-        <div class="col-md-3 col-6 mb-3">
-            <div class="kpi-card border-start border-success border-4">
-                <small class="text-muted d-block">Completed</small>
-                <h3 class="fw-bold mb-0 text-success" id="analisa-completed">0</h3>
-            </div>
-        </div>
-    </div>
-
-    <!-- Action Bar -->
-    <div class="kpi-card mb-4">
-        <div class="row align-items-center">
-            <div class="col-md-4 mb-2 mb-md-0">
-                <button class="btn btn-modern btn-gradient-primary w-100" onclick="createAnalisa()">
-                    <i class="fas fa-plus me-2"></i>Buat Analisa Baru
-                </button>
-            </div>
-            <div class="col-md-4 mb-2 mb-md-0">
-                <select class="form-select filter-select" id="filterStatus" onchange="filterAnalisaByStatus()">
-                    <option value="all">Semua Status</option>
-                    <option value="pending">Pending</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                    <option value="rejected">Rejected</option>
-                </select>
-            </div>
-            <div class="col-md-4">
-                <select class="form-select filter-select" id="filterJenis" onchange="filterAnalisaByJenis()">
-                    <option value="all">Semua Jenis</option>
-                    <option value="extreme">Extreme</option>
-                    <option value="zero">Zero</option>
-                    <option value="negatif">Negatif</option>
-                    <option value="salah_catat">Salah Catat</option>
-                    <option value="rebill">Rebill</option>
-                    <option value="estimasi">Estimasi</option>
-                    <option value="custom">Custom</option>
-                </select>
-            </div>
-        </div>
-    </div>
-
-    <!-- Analisa List (Kanban Style) -->
-    <div class="row" id="analisaKanban">
-        
-        <!-- Column: Pending -->
-        <div class="col-md-4 mb-3">
-            <div class="kpi-card" style="min-height: 400px;">
-                <h6 class="fw-bold text-warning mb-3">
-                    <i class="fas fa-clock me-2"></i>PENDING
-                    <span class="badge bg-warning ms-2" id="badge-pending">0</span>
-                </h6>
-                <div class="analisa-column" id="column-pending" style="max-height: 500px; overflow-y: auto;">
-                    <!-- Cards will be inserted here -->
-                </div>
-            </div>
-        </div>
-
-        <!-- Column: In Progress -->
-        <div class="col-md-4 mb-3">
-            <div class="kpi-card" style="min-height: 400px;">
-                <h6 class="fw-bold text-info mb-3">
-                    <i class="fas fa-spinner me-2"></i>IN PROGRESS
-                    <span class="badge bg-info ms-2" id="badge-progress">0</span>
-                </h6>
-                <div class="analisa-column" id="column-in_progress" style="max-height: 500px; overflow-y: auto;">
-                    <!-- Cards will be inserted here -->
-                </div>
-            </div>
-        </div>
-
-        <!-- Column: Completed -->
-        <div class="col-md-4 mb-3">
-            <div class="kpi-card" style="min-height: 400px;">
-                <h6 class="fw-bold text-success mb-3">
-                    <i class="fas fa-check-circle me-2"></i>COMPLETED
-                    <span class="badge bg-success ms-2" id="badge-completed">0</span>
-                </h6>
-                <div class="analisa-column" id="column-completed" style="max-height: 500px; overflow-y: auto;">
-                    <!-- Cards will be inserted here -->
-                </div>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- Alternative: Table View (Hidden by default) -->
-    <div class="kpi-card" id="analisaTableView" style="display: none;">
-        <div class="d-flex justify-content-between mb-3">
-            <h5 class="fw-bold">Daftar Analisa</h5>
-            <button class="btn btn-sm btn-outline-primary" onclick="toggleView()">
-                <i class="fas fa-columns me-1"></i>Kanban View
-            </button>
-        </div>
-        <table id="tableAnalisa" class="table table-striped table-hover">
-            <thead class="table-dark">
-                <tr>
-                    <th>ID</th>
-                    <th>Nomen</th>
-                    <th>Nama</th>
-                    <th>Jenis</th>
-                    <th>Status</th>
-                    <th>Assigned To</th>
-                    <th>Created</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-    </div>
-
-    <!-- View Toggle Button -->
-    <div class="text-center mt-3">
-        <button class="btn btn-modern btn-gradient-primary" onclick="toggleView()">
-            <i class="fas fa-exchange-alt me-2"></i>
-            <span id="toggleViewText">Switch to Table View</span>
-        </button>
-    </div>
-
-</div>
-
-<!-- MODAL: Create/Edit Analisa -->
-<div class="modal fade" id="modalAnalisa" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content" style="border-radius: 24px;">
-            <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 24px 24px 0 0;">
-                <h5 class="modal-title">
-                    <i class="fas fa-clipboard-check me-2"></i>
-                    <span id="modalAnalisaTitle">Buat Analisa Baru</span>
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-4">
-                <form id="formAnalisa">
-                    <input type="hidden" id="analisa-id" value="">
-                    
-                    <!-- Customer Selection -->
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Pilih Pelanggan</label>
-                        <div class="input-group">
-                            <input type="text" class="form-control filter-select" id="analisa-nomen" placeholder="Masukkan NOMEN" required>
-                            <button type="button" class="btn btn-modern btn-gradient-primary" onclick="searchNomen()">
-                                <i class="fas fa-search"></i>
-                            </button>
-                        </div>
-                        <div id="nomenSearchResult" class="mt-2"></div>
-                    </div>
-
-                    <!-- Customer Info Display -->
-                    <div class="alert alert-info" id="customerInfo" style="display: none;">
-                        <h6 class="fw-bold">Informasi Pelanggan</h6>
-                        <div class="row">
-                            <div class="col-6"><strong>Nama:</strong> <span id="info-nama">-</span></div>
-                            <div class="col-6"><strong>Alamat:</strong> <span id="info-alamat">-</span></div>
-                            <div class="col-6"><strong>Rayon:</strong> <span id="info-rayon">-</span></div>
-                            <div class="col-6"><strong>Tarif:</strong> <span id="info-tarif">-</span></div>
-                        </div>
-                    </div>
-
-                    <!-- Jenis Anomali -->
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Jenis Anomali</label>
-                        <select class="form-select filter-select" id="analisa-jenis" required>
-                            <option value="">-- Pilih Jenis --</option>
-                            <option value="extreme">Pemakaian Extreme</option>
-                            <option value="zero">Zero Usage</option>
-                            <option value="negatif">Stand Negatif</option>
-                            <option value="salah_catat">Salah Catat</option>
-                            <option value="rebill">Rebill</option>
-                            <option value="estimasi">Estimasi</option>
-                            <option value="custom">Custom/Lainnya</option>
-                        </select>
-                    </div>
-
-                    <!-- Deskripsi -->
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Deskripsi Masalah</label>
-                        <textarea class="form-control filter-select" id="analisa-deskripsi" rows="4" placeholder="Jelaskan detail masalah yang ditemukan..." required></textarea>
-                    </div>
-
-                    <!-- Priority -->
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Priority</label>
-                        <select class="form-select filter-select" id="analisa-priority">
-                            <option value="low">Low</option>
-                            <option value="medium" selected>Medium</option>
-                            <option value="high">High</option>
-                            <option value="critical">Critical</option>
-                        </select>
-                    </div>
-
-                    <!-- Assign To -->
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Assign To</label>
-                        <select class="form-select filter-select" id="analisa-assigned">
-                            <option value="">-- Pilih Petugas --</option>
-                            <option value="team_collection">Team Collection</option>
-                            <option value="team_meter">Team Meter</option>
-                            <option value="team_billing">Team Billing</option>
-                            <option value="supervisor">Supervisor</option>
-                        </select>
-                    </div>
-
-                    <!-- Due Date -->
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Target Selesai</label>
-                        <input type="date" class="form-control filter-select" id="analisa-due-date">
-                    </div>
-
-                </form>
-            </div>
-            <div class="modal-footer border-0">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                <button type="button" class="btn btn-modern btn-gradient-primary" onclick="saveAnalisa()">
-                    <i class="fas fa-save me-2"></i>Simpan
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- MODAL: View Analisa Detail -->
-<div class="modal fade" id="modalAnalisaDetail" tabindex="-1">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content" style="border-radius: 24px;">
-            <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 24px 24px 0 0;">
-                <div>
-                    <h5 class="modal-title">
-                        <i class="fas fa-file-alt me-2"></i>Detail Analisa #<span id="detail-id">-</span>
-                    </h5>
-                    <small id="detail-created-at">-</small>
-                </div>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-4">
-                
-                <!-- Status & Actions Bar -->
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <div>
-                        <span class="badge bg-warning p-2" id="detail-status-badge">PENDING</span>
-                        <span class="badge bg-info p-2 ms-2" id="detail-jenis-badge">-</span>
-                        <span class="badge bg-danger p-2 ms-2" id="detail-priority-badge">-</span>
-                    </div>
-                    <div class="btn-group">
-                        <button class="btn btn-sm btn-outline-success" onclick="updateStatus('completed')">
-                            <i class="fas fa-check"></i> Complete
-                        </button>
-                        <button class="btn btn-sm btn-outline-danger" onclick="updateStatus('rejected')">
-                            <i class="fas fa-times"></i> Reject
-                        </button>
-                        <button class="btn btn-sm btn-outline-primary" onclick="editAnalisa()">
-                            <i class="fas fa-edit"></i> Edit
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Customer Info -->
-                <div class="kpi-card mb-4">
-                    <h6 class="fw-bold mb-3">
-                        <i class="fas fa-user me-2"></i>Informasi Pelanggan
-                    </h6>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <p><strong>NOMEN:</strong> <span id="detail-nomen">-</span></p>
-                            <p><strong>Nama:</strong> <span id="detail-nama">-</span></p>
-                            <p><strong>Alamat:</strong> <span id="detail-alamat">-</span></p>
-                        </div>
-                        <div class="col-md-6">
-                            <p><strong>Rayon:</strong> <span id="detail-rayon">-</span></p>
-                            <p><strong>Tarif:</strong> <span id="detail-tarif">-</span></p>
-                            <p><strong>Kubikasi:</strong> <span id="detail-kubikasi">-</span> m³</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Problem Description -->
-                <div class="kpi-card mb-4">
-                    <h6 class="fw-bold mb-3">
-                        <i class="fas fa-exclamation-triangle me-2"></i>Deskripsi Masalah
-                    </h6>
-                    <p id="detail-deskripsi" class="text-muted">-</p>
-                </div>
-
-                <!-- Assignment Info -->
-                <div class="kpi-card mb-4">
-                    <h6 class="fw-bold mb-3">
-                        <i class="fas fa-tasks me-2"></i>Assignment
-                    </h6>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <p><strong>Assigned To:</strong> <span id="detail-assigned">-</span></p>
-                        </div>
-                        <div class="col-md-6">
-                            <p><strong>Due Date:</strong> <span id="detail-due-date">-</span></p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Activity Log -->
-                <div class="kpi-card mb-4">
-                    <h6 class="fw-bold mb-3">
-                        <i class="fas fa-history me-2"></i>Activity Log
-                    </h6>
-                    <div id="activityLog">
-                        <!-- Activity items will be inserted here -->
-                    </div>
-                </div>
-
-                <!-- Add Comment Section -->
-                <div class="kpi-card">
-                    <h6 class="fw-bold mb-3">
-                        <i class="fas fa-comments me-2"></i>Comments
-                    </h6>
-                    <div id="commentsList" class="mb-3">
-                        <!-- Comments will be inserted here -->
-                    </div>
-                    <div class="input-group">
-                        <input type="text" class="form-control filter-select" id="newComment" placeholder="Tambah komentar...">
-                        <button class="btn btn-modern btn-gradient-primary" onclick="addComment()">
-                            <i class="fas fa-paper-plane"></i>
-                        </button>
-                    </div>
-                </div>
-
-            </div>
-            <div class="modal-footer border-0">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
-                <button type="button" class="btn btn-modern btn-gradient-primary" onclick="printAnalisa()">
-                    <i class="fas fa-print me-2"></i>Print
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<style>
-    /* Kanban Card Styles */
-    .analisa-card {
-        background: white;
-        border-radius: 12px;
-        padding: 15px;
-        margin-bottom: 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        cursor: pointer;
-        transition: all 0.3s ease;
-        border-left: 4px solid;
-    }
-
-    .analisa-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-    }
-
-    .analisa-card.priority-low { border-left-color: #10b981; }
-    .analisa-card.priority-medium { border-left-color: #f59e0b; }
-    .analisa-card.priority-high { border-left-color: #ef4444; }
-    .analisa-card.priority-critical { border-left-color: #dc2626; animation: pulse 2s infinite; }
-
-    .analisa-card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 10px;
-    }
-
-    .analisa-card-body {
-        font-size: 0.9rem;
-        color: #64748b;
-    }
-
-    .analisa-card-footer {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-top: 10px;
-        padding-top: 10px;
-        border-top: 1px solid #e2e8f0;
-        font-size: 0.8rem;
-    }
-
-    /* Activity Log Item */
-    .activity-item {
-        padding: 12px;
-        margin-bottom: 8px;
-        background: #f8fafc;
-        border-radius: 8px;
-        border-left: 3px solid var(--primary);
-    }
-
-    .activity-item .activity-icon {
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background: var(--primary);
-        color: white;
-        margin-right: 10px;
-    }
-
-    /* Comment Item */
-    .comment-item {
-        padding: 10px;
-        margin-bottom: 8px;
-        background: #f1f5f9;
-        border-radius: 8px;
-    }
-
-    .comment-item .comment-author {
-        font-weight: 600;
-        color: var(--primary);
-        margin-bottom: 4px;
-    }
-
-    .comment-item .comment-time {
-        font-size: 0.75rem;
-        color: #64748b;
-    }
-
-    /* Mobile responsive */
-    @media (max-width: 768px) {
-        .analisa-card {
-            padding: 12px;
-        }
-
-        .analisa-card-body {
-            font-size: 0.85rem;
-        }
-
-        #analisaKanban .col-md-4 {
-            margin-bottom: 15px;
-        }
-
-        .kpi-card {
-            min-height: auto !important;
-        }
-
-        .analisa-column {
-            max-height: 300px !important;
-        }
-    }
-</style>
-
-<script>
-    let currentView = 'kanban'; // or 'table'
-    let currentAnalisaId = null;
-    let analisaData = [];
-
-    // ===== LOAD ANALISA DATA =====
-    function loadAnalisaData() {
-        showToast('Loading analisa data...', 'info');
-        
-        $.get('/api/analisa/list', function(data) {
-            analisaData = data;
-            renderKanbanView(data);
-            updateStats(data);
-            showToast('Analisa loaded!', 'success');
-        }).fail(function() {
-            showToast('Failed to load analisa', 'error');
-        });
-    }
-
-    // ===== RENDER KANBAN VIEW =====
-    function renderKanbanView(data) {
-        // Clear columns
-        $('#column-pending').empty();
-        $('#column-in_progress').empty();
-        $('#column-completed').empty();
-
-        // Count by status
-        let counts = {
-            pending: 0,
-            in_progress: 0,
-            completed: 0
-        };
-
-        // Render cards
-        data.forEach(function(item) {
-            const card = createAnalisaCard(item);
-            $(`#column-${item.status}`).append(card);
-            counts[item.status] = (counts[item.status] || 0) + 1;
-        });
-
-        // Update badges
-        $('#badge-pending').text(counts.pending || 0);
-        $('#badge-progress').text(counts.in_progress || 0);
-        $('#badge-completed').text(counts.completed || 0);
-    }
-
-    // ===== CREATE ANALISA CARD =====
-    function createAnalisaCard(item) {
-        const priorityClass = `priority-${item.priority || 'medium'}`;
-        const jenisIcon = getJenisIcon(item.jenis_anomali);
-        
-        return $(`
-            <div class="analisa-card ${priorityClass}" onclick="viewAnalisaDetail(${item.id})">
-                <div class="analisa-card-header">
-                    <strong>#${item.id}</strong>
-                    <span class="badge bg-${getPriorityColor(item.priority)}">${item.priority}</span>
-                </div>
-                <div class="analisa-card-body">
-                    <p class="mb-1"><i class="${jenisIcon} me-1"></i> ${item.jenis_anomali}</p>
-                    <p class="mb-1"><strong>${item.nomen}</strong> - ${item.nama || 'No name'}</p>
-                    <p class="mb-0 text-truncate" style="max-width: 100%;">${item.deskripsi || 'No description'}</p>
-                </div>
-                <div class="analisa-card-footer">
-                    <small class="text-muted">${item.assigned_to || 'Unassigned'}</small>
-                    <small class="text-muted">${formatDate(item.created_at)}</small>
-                </div>
-            </div>
-        `);
-    }
-
-    // ===== UPDATE STATS =====
-    function updateStats(data) {
-        const total = data.length;
-        const pending = data.filter(d => d.status === 'pending').length;
-        const progress = data.filter(d => d.status === 'in_progress').length;
-        const completed = data.filter(d => d.status === 'completed').length;
-
-        $('#analisa-total').text(total);
-        $('#analisa-pending').text(pending);
-        $('#analisa-progress').text(progress);
-        $('#analisa-completed').text(completed);
-    }
-
-    // ===== CREATE NEW ANALISA =====
-    function createAnalisa() {
-        $('#modalAnalisaTitle').text('Buat Analisa Baru');
-        $('#analisa-id').val('');
-        $('#formAnalisa')[0].reset();
-        $('#customerInfo').hide();
-        $('#modalAnalisa').modal('show');
-    }
-
-    // ===== SAVE ANALISA =====
-    function saveAnalisa() {
-        const id = $('#analisa-id').val();
-        const data = {
-            nomen: $('#analisa-nomen').val(),
-            jenis_anomali: $('#analisa-jenis').val(),
-            deskripsi: $('#analisa-deskripsi').val(),
-            priority: $('#analisa-priority').val(),
-            assigned_to: $('#analisa-assigned').val(),
-            due_date: $('#analisa-due-date').val()
-        };
-
-        if (!data.nomen || !data.jenis_anomali || !data.deskripsi) {
-            showToast('Please fill required fields', 'error');
-            return;
-        }
-
-        const url = id ? `/api/analisa/update/${id}` : '/api/analisa/create';
-        const method = id ? 'PUT' : 'POST';
-
-        $.ajax({
-            url: url,
-            method: method,
-            contentType: 'application/json',
-            data: JSON.stringify(data),
-            success: function(response) {
-                showToast('Analisa saved!', 'success');
-                $('#modalAnalisa').modal('hide');
-                loadAnalisaData();
-            },
-            error: function() {
-                showToast('Failed to save analisa', 'error');
-            }
-        });
-    }
-
-    // ===== VIEW DETAIL =====
-    function viewAnalisaDetail(id) {
-        currentAnalisaId = id;
-        
-        $.get(`/api/analisa/detail/${id}`, function(data) {
-            // Fill modal with data
-            $('#detail-id').text(data.id);
-            $('#detail-nomen').text(data.nomen);
-            $('#detail-nama').text(data.nama || '-');
-            $('#detail-alamat').text(data.alamat || '-');
-            $('#detail-rayon').text(data.rayon || '-');
-            $('#detail-deskripsi').text(data.deskripsi);
-            $('#detail-status-badge').text(data.status.toUpperCase()).removeClass().addClass(`badge bg-${getStatusColor(data.status)} p-2`);
-            $('#detail-jenis-badge').text(data.jenis_anomali);
-            $('#detail-priority-badge').text(data.priority);
-            $('#detail-assigned').text(data.assigned_to || 'Unassigned');
-            $('#detail-due-date').text(data.due_date || '-');
-            $('#detail-created-at').text('Created: ' + formatDate(data.created_at));
-            
-            // Load comments and activity
-            loadComments(id);
-            loadActivity(id);
-            
-            $('#modalAnalisaDetail').modal('show');
-        });
-    }
-
-    // ===== HELPER FUNCTIONS =====
-    function getJenisIcon(jenis) {
-        const icons = {
-            'extreme': 'fas fa-chart-line',
-            'zero': 'fas fa-circle-notch',
-            'negatif': 'fas fa-minus-circle',
-            'salah_catat': 'fas fa-exclamation-triangle',
-            'rebill': 'fas fa-rotate-left',
-            'estimasi': 'fas fa-calculator',
-            'custom': 'fas fa-question-circle'
-        };
-        return icons[jenis] || 'fas fa-file';
-    }
-
-    function getPriorityColor(priority) {
-        const colors = {
-            'low': 'success',
-            'medium': 'warning',
-            'high': 'danger',
-            'critical': 'dark'
-        };
-        return colors[priority] || 'secondary';
-    }
-
-    function getStatusColor(status) {
-        const colors = {
-            'pending': 'warning',
-            'in_progress': 'info',
-            'completed': 'success',
-            'rejected': 'danger'
-        };
-        return colors[status] || 'secondary';
-    }
-
-    function formatDate(dateStr) {
-        if (!dateStr) return '-';
-        const date = new Date(dateStr);
-        return date.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
-    }
-
-    function toggleView() {
-        if (currentView === 'kanban') {
-            $('#analisaKanban').hide();
-            $('#analisaTableView').show();
-            $('#toggleViewText').text('Switch to Kanban View');
-            currentView = 'table';
-            renderTableView();
-        } else {
-            $('#analisaKanban').show();
-            $('#analisaTableView').hide();
-            $('#toggleViewText').text('Switch to Table View');
-            currentView = 'kanban';
-        }
-    }
-
-    function renderTableView() {
-        // TODO: Implement DataTable view
-        showToast('Table view coming soon!', 'info');
-    }
-
-    function searchNomen() {
-        const nomen = $('#analisa-nomen').val();
-        if (!nomen) return;
-        
-        $.get(`/api/customer/search?nomen=${nomen}`, function(data) {
-            if (data) {
-                $('#info-nama').text(data.nama || '-');
-                $('#info-alamat').text(data.alamat || '-');
-                $('#info-rayon').text(data.rayon || '-');
-                $('#info-tarif').text(data.tarif || '-');
-                $('#customerInfo').show();
-            }
-        });
-    }
-
-    function updateStatus(newStatus) {
-        $.ajax({
-            url: `/api/analisa/update-status/${currentAnalisaId}`,
-            method: 'PUT',
-            contentType: 'application/json',
-            data: JSON.stringify({ status: newStatus }),
-            success: function() {
-                showToast('Status updated!', 'success');
-                $('#modalAnalisaDetail').modal('hide');
-                loadAnalisaData();
-            }
-        });
-    }
-
-    function addComment() {
-        const comment = $('#newComment').val();
-        if (!comment) return;
-        
-        $.ajax({
-            url: `/api/analisa/comment/${currentAnalisaId}`,
-            method: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({ comment: comment }),
-            success: function() {
-                $('#newComment').val('');
-                loadComments(currentAnalisaId);
-                showToast('Comment added!', 'success');
-            }
-        });
-    }
-
-    function loadComments(id) {
-        $.get(`/api/analisa/comments/${id}`, function(data) {
-            const html = data.map(c => `
-                <div class="comment-item">
-                    <div class="comment-author">${c.user}</div>
-                    <div>${c.comment}</div>
-                    <div class="comment-time">${formatDate(c.created_at)}</div>
-                </div>
-            `).join('');
-            $('#commentsList').html(html || '<p class="text-muted">No comments yet</p>');
-        });
-    }
-
-    function loadActivity(id) {
-        $.get(`/api/analisa/activity/${id}`, function(data) {
-            const html = data.map(a => `
-                <div class="activity-item">
-                    <span class="activity-icon"><i class="fas fa-${a.icon}"></i></span>
-                    <strong>${a.action}</strong> by ${a.user} - ${formatDate(a.created_at)}
-                </div>
-            `).join('');
-            $('#activityLog').html(html || '<p class="text-muted">No activity yet</p>');
-        });
-    }
-
-    function filterAnalisaByStatus() {
-        const status = $('#filterStatus').val();
-        if (status === 'all') {
-            renderKanbanView(analisaData);
-        } else {
-            const filtered = analisaData.filter(d => d.status === status);
-            renderKanbanView(filtered);
-        }
-    }
-
-    function filterAnalisaByJenis() {
-        const jenis = $('#filterJenis').val();
-        if (jenis === 'all') {
-            renderKanbanView(analisaData);
-        } else {
-            const filtered = analisaData.filter(d => d.jenis_anomali === jenis);
-            renderKanbanView(filtered);
-        }
-    }
-
-    function printAnalisa() {
-        window.print();
-    }
-
-    // ===== AUTO-LOAD ON TAB SHOW =====
-    $('button[data-bs-target="#tab-analisa"]').on('shown.bs.tab', function() {
-        loadAnalisaData();
-    });
-</script>
 
     </div>
 </div>
@@ -2699,6 +1929,475 @@
     $(document).on('click', '.anomaly-card', function() {
         const anomalyType = $(this).data('anomaly');
         loadAnomalyDetail(anomalyType);
+    });
+</script>
+
+<!-- MODAL: MULTI-FILE UPLOAD WITH AUTO-DETECT -->
+<div class="modal fade" id="modalUploadMulti" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content" style="border-radius: 24px;">
+            
+            <!-- Header -->
+            <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 24px 24px 0 0;">
+                <div>
+                    <h5 class="modal-title fw-bold">
+                        <i class="fas fa-magic me-2"></i>Upload Multi-File (AUTO-DETECT)
+                    </h5>
+                    <small>✨ System otomatis detect tipe file & periode - No manual input!</small>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <!-- Body -->
+            <div class="modal-body p-4">
+                
+                <!-- Info Alert -->
+                <div class="alert alert-info border-0 mb-4">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h6 class="fw-bold mb-2">
+                                <i class="fas fa-robot me-2"></i>Automatic Detection
+                            </h6>
+                            <ul class="mb-0 small">
+                                <li>✅ <strong>Tipe file</strong> dideteksi dari struktur kolom</li>
+                                <li>✅ <strong>Periode</strong> dideteksi dari tanggal di file</li>
+                                <li>✅ Upload <strong>multiple files</strong> sekaligus (drag & drop)</li>
+                                <li>✅ System <strong>prevent duplicate</strong> periode otomatis</li>
+                            </ul>
+                            <div class="mt-2 p-2 bg-warning bg-opacity-10 rounded">
+                                <small class="text-dark">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    <strong>PENTING:</strong> MC/MB/ARDEBT dengan TGL bulan 6 = Periode MEI | SBRS/MAINBILL/COLLECTION dengan TGL bulan 7 = Periode JULI
+                                </small>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <i class="fas fa-robot fa-4x text-primary opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Drop Zone -->
+                <div class="upload-drop-zone" id="dropZone">
+                    <div class="text-center py-5">
+                        <i class="fas fa-cloud-upload-alt fa-5x text-primary mb-3 drop-icon"></i>
+                        <h5 class="fw-bold">Drag & Drop Files Here</h5>
+                        <p class="text-muted">atau</p>
+                        <button type="button" class="btn btn-modern btn-gradient-primary btn-lg px-5" onclick="$('#fileInputMulti').click()">
+                            <i class="fas fa-folder-open me-2"></i>Browse Files
+                        </button>
+                        <input type="file" id="fileInputMulti" multiple accept=".xls,.xlsx,.csv,.txt" style="display: none;">
+                        <p class="text-muted small mt-3 mb-0">
+                            Supported: .xls, .xlsx, .csv, .txt | Max 100MB per file
+                        </p>
+                    </div>
+                </div>
+
+                <!-- File List -->
+                <div id="fileListContainer" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-3 mt-4">
+                        <h6 class="fw-bold mb-0">
+                            <i class="fas fa-list me-2"></i>Files to Upload
+                            <span class="badge bg-primary ms-2" id="fileCount">0</span>
+                        </h6>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearAllFiles()">
+                            <i class="fas fa-trash me-1"></i>Clear All
+                        </button>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="fileListTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th width="40%">File Name</th>
+                                    <th width="15%">Type</th>
+                                    <th width="20%">Periode</th>
+                                    <th width="15%">Size</th>
+                                    <th width="10%">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fileListBody">
+                                <!-- Files will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Upload Progress -->
+                <div id="uploadProgress" style="display: none;">
+                    <div class="alert alert-info border-0 mt-4">
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="spinner-border spinner-border-sm me-2"></div>
+                            <strong>Uploading... <span id="uploadProgressText">0%</span></strong>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 id="uploadProgressBar" 
+                                 style="width: 0%">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upload Results -->
+                <div id="uploadResults" style="display: none;">
+                    <h6 class="fw-bold mt-4 mb-3">
+                        <i class="fas fa-check-circle me-2"></i>Upload Results
+                    </h6>
+                    <div id="uploadResultsContent"></div>
+                </div>
+
+            </div>
+
+            <!-- Footer -->
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-modern btn-gradient-primary px-4" id="btnUploadMulti" disabled>
+                    <i class="fas fa-upload me-2"></i>Upload <span id="uploadFileCount">0</span> Files
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Drop Zone Styling */
+    .upload-drop-zone {
+        border: 3px dashed #cbd5e1;
+        border-radius: 20px;
+        background: #f8fafc;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+
+    .upload-drop-zone:hover {
+        border-color: #667eea;
+        background: rgba(102, 126, 234, 0.05);
+    }
+
+    .upload-drop-zone.drag-over {
+        border-color: #667eea;
+        background: rgba(102, 126, 234, 0.1);
+        transform: scale(1.02);
+    }
+
+    .drop-icon {
+        animation: bounce 2s infinite;
+    }
+
+    @keyframes bounce {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-10px); }
+    }
+
+    /* File List Table */
+    #fileListTable tbody tr {
+        transition: all 0.2s;
+    }
+
+    #fileListTable tbody tr:hover {
+        background: rgba(102, 126, 234, 0.05);
+        transform: translateX(5px);
+    }
+
+    .file-type-badge {
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 4px 8px;
+        border-radius: 6px;
+    }
+
+    .badge-MC { background: #ef4444; color: white; }
+    .badge-COLLECTION { background: #10b981; color: white; }
+    .badge-SBRS { background: #3b82f6; color: white; }
+    .badge-MB { background: #f59e0b; color: white; }
+    .badge-MAINBILL { background: #8b5cf6; color: white; }
+    .badge-ARDEBT { background: #dc2626; color: white; }
+    .badge-UNKNOWN { background: #6b7280; color: white; }
+
+    /* Results */
+    .result-item {
+        padding: 12px;
+        margin-bottom: 8px;
+        border-radius: 12px;
+        border-left: 4px solid;
+    }
+
+    .result-item.success {
+        background: rgba(16, 185, 129, 0.1);
+        border-left-color: #10b981;
+    }
+
+    .result-item.error {
+        background: rgba(239, 68, 68, 0.1);
+        border-left-color: #ef4444;
+    }
+
+    .result-item.warning {
+        background: rgba(245, 158, 11, 0.1);
+        border-left-color: #f59e0b;
+    }
+</style>
+
+<script>
+    let selectedFiles = [];
+
+    // ==========================================
+    // DRAG & DROP HANDLERS
+    // ==========================================
+    const dropZone = document.getElementById('dropZone');
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+            dropZone.classList.add('drag-over');
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+            dropZone.classList.remove('drag-over');
+        }, false);
+    });
+
+    dropZone.addEventListener('drop', handleDrop, false);
+
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        handleFiles(files);
+    }
+
+    // File input change
+    document.getElementById('fileInputMulti').addEventListener('change', function(e) {
+        handleFiles(e.target.files);
+    });
+
+    // ==========================================
+    // FILE HANDLING
+    // ==========================================
+    function handleFiles(files) {
+        selectedFiles = Array.from(files);
+        displayFileList();
+    }
+
+    function displayFileList() {
+        if (selectedFiles.length === 0) {
+            $('#fileListContainer').hide();
+            $('#btnUploadMulti').prop('disabled', true);
+            return;
+        }
+
+        $('#fileListContainer').show();
+        $('#fileCount').text(selectedFiles.length);
+        $('#uploadFileCount').text(selectedFiles.length);
+        $('#btnUploadMulti').prop('disabled', false);
+
+        const tbody = $('#fileListBody');
+        tbody.empty();
+
+        selectedFiles.forEach((file, index) => {
+            const fileType = guessFileType(file.name);
+            const fileSize = formatFileSize(file.size);
+            const periode = guessPeriodeFromFilename(file.name);
+
+            const row = `
+                <tr>
+                    <td>
+                        <i class="fas fa-file-excel text-success me-2"></i>
+                        <strong>${file.name}</strong>
+                    </td>
+                    <td>
+                        <span class="file-type-badge badge-${fileType}">${fileType}</span>
+                    </td>
+                    <td>
+                        <small class="text-muted">
+                            ${periode || '<i class="fas fa-robot me-1"></i>Auto-detect'}
+                        </small>
+                    </td>
+                    <td><small class="text-muted">${fileSize}</small></td>
+                    <td>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeFile(${index})">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+            tbody.append(row);
+        });
+    }
+
+    function guessFileType(filename) {
+        const fn = filename.toUpperCase();
+        if (fn.includes('COLLECTION') || fn.includes('COLL')) return 'COLLECTION';
+        if (fn.includes('SBRS')) return 'SBRS';
+        if (fn.includes('MC') || fn.includes('MASTER')) return 'MC';
+        if (fn.includes('MB')) return 'MB';
+        if (fn.includes('MAINBILL') || fn.includes('BILL')) return 'MAINBILL';
+        if (fn.includes('ARDEBT') || fn.includes('DEBT')) return 'ARDEBT';
+        return 'UNKNOWN';
+    }
+
+    function guessPeriodeFromFilename(filename) {
+        // Try to extract periode from filename
+        const patterns = [
+            /(\d{4})(\d{2})/,  // 202512
+            /(\d{4})[-_](\d{1,2})/,  // 2025-12 or 2025_12
+        ];
+
+        for (const pattern of patterns) {
+            const match = filename.match(pattern);
+            if (match) {
+                return match[0];
+            }
+        }
+        return null;
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / 1048576).toFixed(1) + ' MB';
+    }
+
+    function removeFile(index) {
+        selectedFiles.splice(index, 1);
+        displayFileList();
+    }
+
+    function clearAllFiles() {
+        selectedFiles = [];
+        displayFileList();
+        $('#fileInputMulti').val('');
+    }
+
+    // ==========================================
+    // UPLOAD FUNCTION
+    // ==========================================
+    $('#btnUploadMulti').click(function() {
+        if (selectedFiles.length === 0) return;
+
+        const formData = new FormData();
+        selectedFiles.forEach(file => {
+            formData.append('files[]', file);
+        });
+
+        // Show progress
+        $('#uploadProgress').show();
+        $('#btnUploadMulti').prop('disabled', true);
+
+        $.ajax({
+            url: '/upload_multi',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            xhr: function() {
+                const xhr = new window.XMLHttpRequest();
+                xhr.upload.addEventListener('progress', function(e) {
+                    if (e.lengthComputable) {
+                        const percent = Math.round((e.loaded / e.total) * 100);
+                        $('#uploadProgressBar').css('width', percent + '%');
+                        $('#uploadProgressText').text(percent + '%');
+                    }
+                }, false);
+                return xhr;
+            },
+            success: function(response) {
+                $('#uploadProgress').hide();
+                displayUploadResults(response);
+                
+                // Refresh data
+                setTimeout(() => {
+                    location.reload();
+                }, 2000);
+            },
+            error: function(xhr) {
+                $('#uploadProgress').hide();
+                $('#btnUploadMulti').prop('disabled', false);
+                showToast('Upload failed: ' + xhr.responseText, 'error');
+            }
+        });
+    });
+
+    // ==========================================
+    // DISPLAY RESULTS
+    // ==========================================
+    function displayUploadResults(response) {
+        $('#uploadResults').show();
+        const content = $('#uploadResultsContent');
+        content.empty();
+
+        // Summary
+        const summary = response.summary;
+        const summaryHtml = `
+            <div class="alert alert-info border-0 mb-3">
+                <div class="row text-center">
+                    <div class="col-4">
+                        <h4 class="mb-0 text-success">${summary.success}</h4>
+                        <small>Success</small>
+                    </div>
+                    <div class="col-4">
+                        <h4 class="mb-0 text-warning">${summary.warning}</h4>
+                        <small>Warning</small>
+                    </div>
+                    <div class="col-4">
+                        <h4 class="mb-0 text-danger">${summary.error}</h4>
+                        <small>Error</small>
+                    </div>
+                </div>
+            </div>
+        `;
+        content.append(summaryHtml);
+
+        // Details
+        response.results.forEach(result => {
+            const icon = result.status === 'success' ? 'fa-check-circle' : 
+                        result.status === 'error' ? 'fa-times-circle' : 'fa-exclamation-triangle';
+            
+            const resultHtml = `
+                <div class="result-item ${result.status}">
+                    <div class="d-flex align-items-start">
+                        <i class="fas ${icon} fa-2x me-3"></i>
+                        <div class="flex-grow-1">
+                            <strong>${result.filename}</strong>
+                            <p class="mb-1 small">${result.message}</p>
+                            ${result.file_type ? `
+                                <div class="mt-2">
+                                    <span class="file-type-badge badge-${result.file_type} me-2">${result.file_type}</span>
+                                    ${result.periode ? `<span class="badge bg-secondary">${result.periode}</span>` : ''}
+                                    ${result.row_count ? `<span class="badge bg-info ms-2">${result.row_count.toLocaleString()} rows</span>` : ''}
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+            content.append(resultHtml);
+        });
+
+        // Clear selected files
+        selectedFiles = [];
+        displayFileList();
+    }
+
+    // ==========================================
+    // MODAL RESET
+    // ==========================================
+    $('#modalUploadMulti').on('hidden.bs.modal', function() {
+        clearAllFiles();
+        $('#uploadProgress').hide();
+        $('#uploadResults').hide();
+        $('#btnUploadMulti').prop('disabled', false);
     });
 </script>
 
