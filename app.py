@@ -1080,104 +1080,12 @@ def api_history_pembayaran():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# === API: ANALISA LIST ===
-@app.route('/api/analisa_list')
-def api_analisa_list():
-    """List analisa manual"""
-    db = get_db()
-    
-    try:
-        status_filter = request.args.get('status', 'all')
-        
-        if status_filter == 'all':
-            analisa = db.execute('''
-                SELECT 
-                    a.id, a.nomen, m.nama, m.rayon,
-                    a.jenis_anomali, a.status, a.updated_at
-                FROM analisa_manual a
-                LEFT JOIN master_pelanggan m ON a.nomen = m.nomen
-                ORDER BY a.updated_at DESC
-            ''').fetchall()
-        else:
-            analisa = db.execute('''
-                SELECT 
-                    a.id, a.nomen, m.nama, m.rayon,
-                    a.jenis_anomali, a.status, a.updated_at
-                FROM analisa_manual a
-                LEFT JOIN master_pelanggan m ON a.nomen = m.nomen
-                WHERE a.status = ?
-                ORDER BY a.updated_at DESC
-            ''', (status_filter,)).fetchall()
-        
-        return jsonify([dict(row) for row in analisa])
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# === API: ANALISA DETAIL ===
-@app.route('/api/analisa_detail/<int:analisa_id>')
-def api_analisa_detail(analisa_id):
-    """Detail analisa manual"""
-    db = get_db()
-    
-    try:
-        analisa = db.execute('''
-            SELECT 
-                a.*, m.nama, m.alamat, m.rayon, m.kubikasi, m.target_mc
-            FROM analisa_manual a
-            LEFT JOIN master_pelanggan m ON a.nomen = m.nomen
-            WHERE a.id = ?
-        ''', (analisa_id,)).fetchone()
-        
-        if analisa:
-            return jsonify(dict(analisa))
-        else:
-            return jsonify({'error': 'Analisa not found'}), 404
-            
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# === API: ANALISA SAVE ===
-@app.route('/api/analisa_save', methods=['POST'])
-def api_analisa_save():
-    """Simpan/update analisa manual"""
-    db = get_db()
-    
-    try:
-        data = request.json
-        analisa_id = data.get('id')
-        
-        if analisa_id:
-            db.execute('''
-                UPDATE analisa_manual
-                SET jenis_anomali = ?, analisa_tim = ?, kesimpulan = ?,
-                    rekomendasi = ?, status = ?, user_editor = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            ''', (
-                data.get('jenis_anomali'), data.get('analisa_tim'),
-                data.get('kesimpulan'), data.get('rekomendasi'),
-                data.get('status'), data.get('user_editor', 'Admin'),
-                analisa_id
-            ))
-            db.commit()
-            return jsonify({'success': True, 'id': analisa_id})
-        else:
-            cursor = db.execute('''
-                INSERT INTO analisa_manual 
-                (nomen, jenis_anomali, analisa_tim, kesimpulan, rekomendasi, status, user_editor)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                data.get('nomen'), data.get('jenis_anomali'),
-                data.get('analisa_tim'), data.get('kesimpulan'),
-                data.get('rekomendasi'), data.get('status', 'Open'),
-                data.get('user_editor', 'Admin')
-            ))
-            db.commit()
-            return jsonify({'success': True, 'id': cursor.lastrowid})
-            
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+# ========================================
+# ANALISA API - HANDLED BY app_analisa_api.py
+# ========================================
+# Routes /api/analisa/list, /api/analisa/detail, etc
+# sudah didefinisikan di app_analisa_api.py
+# Tidak perlu duplikasi di sini
 
 # === API: PROFIL PELANGGAN ===
 @app.route('/api/profil_pelanggan/<nomen>')
