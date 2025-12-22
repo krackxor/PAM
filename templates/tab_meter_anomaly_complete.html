@@ -1,0 +1,710 @@
+<!-- tab_meter_anomaly.html -->
+<!-- TAB METER - ANOMALY DETECTION SYSTEM -->
+
+<div class="tab-pane fade" id="tab-meter">
+    
+    <!-- Header -->
+    <div class="alert alert-info border-0 mb-4">
+        <div class="d-flex align-items-center">
+            <i class="fas fa-info-circle fa-2x me-3"></i>
+            <div>
+                <h6 class="fw-bold mb-1">🔍 Sistem Deteksi Anomali Meter</h6>
+                <small>Analisis otomatis untuk mendeteksi pola tidak normal dalam pencatatan meter air. Klik setiap kategori untuk detail.</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Cards - 7 Anomaly Types -->
+    <div class="row mb-4" id="anomalyCards">
+        
+        <!-- 1. PEMAKAIAN EXTREME -->
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="kpi-card anomaly-card" data-anomaly="extreme" style="cursor: pointer; border-left: 4px solid #ef4444;">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="text-muted text-uppercase mb-2">
+                            <i class="fas fa-chart-line text-danger me-2"></i>Extreme
+                        </h6>
+                        <div class="kpi-number text-danger" id="anomaly-extreme-count">
+                            <div class="skeleton" style="width: 80px; height: 40px;"></div>
+                        </div>
+                        <small class="text-muted">Pemakaian >100 m³</small>
+                    </div>
+                    <span class="badge bg-danger">HOT</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. PEMAKAIAN TURUN -->
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="kpi-card anomaly-card" data-anomaly="turun" style="cursor: pointer; border-left: 4px solid #f59e0b;">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="text-muted text-uppercase mb-2">
+                            <i class="fas fa-arrow-trend-down text-warning me-2"></i>Turun
+                        </h6>
+                        <div class="kpi-number text-warning" id="anomaly-turun-count">
+                            <div class="skeleton" style="width: 80px; height: 40px;"></div>
+                        </div>
+                        <small class="text-muted">Turun >50%</small>
+                    </div>
+                    <span class="badge bg-warning">WATCH</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. ZERO USAGE -->
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="kpi-card anomaly-card" data-anomaly="zero" style="cursor: pointer; border-left: 4px solid #6b7280;">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="text-muted text-uppercase mb-2">
+                            <i class="fas fa-circle-notch text-secondary me-2"></i>Zero
+                        </h6>
+                        <div class="kpi-number text-secondary" id="anomaly-zero-count">
+                            <div class="skeleton" style="width: 80px; height: 40px;"></div>
+                        </div>
+                        <small class="text-muted">Tidak ada pakai</small>
+                    </div>
+                    <span class="badge bg-secondary">CHECK</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. STAND NEGATIF -->
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="kpi-card anomaly-card" data-anomaly="negatif" style="cursor: pointer; border-left: 4px solid #dc2626;">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="text-muted text-uppercase mb-2">
+                            <i class="fas fa-minus-circle text-danger me-2"></i>Negatif
+                        </h6>
+                        <div class="kpi-number text-danger" id="anomaly-negatif-count">
+                            <div class="skeleton" style="width: 80px; height: 40px;"></div>
+                        </div>
+                        <small class="text-muted">Stand < 0</small>
+                    </div>
+                    <span class="badge bg-danger">ERROR</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. SALAH CATAT -->
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="kpi-card anomaly-card" data-anomaly="salah_catat" style="cursor: pointer; border-left: 4px solid #7c3aed;">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="text-muted text-uppercase mb-2">
+                            <i class="fas fa-exclamation-triangle text-purple me-2"></i>Salah Catat
+                        </h6>
+                        <div class="kpi-number" style="color: #7c3aed;" id="anomaly-salah_catat-count">
+                            <div class="skeleton" style="width: 80px; height: 40px;"></div>
+                        </div>
+                        <small class="text-muted">Reading < Prev</small>
+                    </div>
+                    <span class="badge" style="background: #7c3aed;">FIX</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. REBILL -->
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="kpi-card anomaly-card" data-anomaly="rebill" style="cursor: pointer; border-left: 4px solid #0ea5e9;">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="text-muted text-uppercase mb-2">
+                            <i class="fas fa-rotate-left text-info me-2"></i>Rebill
+                        </h6>
+                        <div class="kpi-number text-info" id="anomaly-rebill-count">
+                            <div class="skeleton" style="width: 80px; height: 40px;"></div>
+                        </div>
+                        <small class="text-muted">Koreksi tagihan</small>
+                    </div>
+                    <span class="badge bg-info">REBILL</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 7. ESTIMASI -->
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="kpi-card anomaly-card" data-anomaly="estimasi" style="cursor: pointer; border-left: 4px solid #10b981;">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="text-muted text-uppercase mb-2">
+                            <i class="fas fa-calculator text-success me-2"></i>Estimasi
+                        </h6>
+                        <div class="kpi-number text-success" id="anomaly-estimasi-count">
+                            <div class="skeleton" style="width: 80px; height: 40px;"></div>
+                        </div>
+                        <small class="text-muted">Non-ACTUAL</small>
+                    </div>
+                    <span class="badge bg-success">EST</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- TOTAL -->
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="kpi-card" style="border-left: 4px solid #667eea;">
+                <h6 class="text-muted text-uppercase mb-2">
+                    <i class="fas fa-shield-alt text-primary me-2"></i>Total Anomali
+                </h6>
+                <div class="kpi-number text-primary" id="anomaly-total-count">0</div>
+                <small class="text-muted">Dari semua kategori</small>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Detail Table Section -->
+    <div class="kpi-card" id="detailSection" style="display: none;">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h5 class="fw-bold mb-1">
+                    <i class="fas fa-list me-2"></i>Detail: <span id="detailTitle">-</span>
+                </h5>
+                <small class="text-muted" id="detailSubtitle">Klik baris untuk analisa manual</small>
+            </div>
+            <div>
+                <button class="btn btn-modern btn-gradient-primary btn-sm me-2" onclick="refreshAnomalyDetail()">
+                    <i class="fas fa-sync me-1"></i> Refresh
+                </button>
+                <button class="btn btn-modern btn-gradient-success btn-sm" onclick="exportAnomalyDetail()">
+                    <i class="fas fa-file-excel me-1"></i> Export
+                </button>
+            </div>
+        </div>
+
+        <!-- Alert Info -->
+        <div class="alert alert-warning border-0" id="detailAlert">
+            <i class="fas fa-info-circle me-2"></i>
+            <span id="detailAlertText">Klik salah satu kategori anomali di atas untuk melihat detail</span>
+        </div>
+
+        <!-- Table -->
+        <div class="table-responsive">
+            <table id="tableAnomalyDetail" class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>No</th>
+                        <th>Account</th>
+                        <th>Nama</th>
+                        <th>Alamat</th>
+                        <th>Route</th>
+                        <th>Prev Read</th>
+                        <th>Reading</th>
+                        <th>Stand (m³)</th>
+                        <th>Tarif</th>
+                        <th>Tagihan</th>
+                        <th>Method</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Data loaded via AJAX -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<!-- MODAL: ANALISA MANUAL -->
+<div class="modal fade" id="modalAnalisaManual" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content" style="border-radius: 24px;">
+            
+            <!-- Header -->
+            <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 24px 24px 0 0;">
+                <div>
+                    <h5 class="modal-title fw-bold">
+                        <i class="fas fa-microscope me-2"></i>Analisa Manual
+                    </h5>
+                    <small>History Lengkap Multi-Periode</small>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <!-- Body -->
+            <div class="modal-body p-4">
+                
+                <!-- Customer Info Card -->
+                <div class="kpi-card mb-4" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-2">
+                                <i class="fas fa-user me-2"></i>Informasi Pelanggan
+                            </h6>
+                            <table class="table table-sm table-borderless">
+                                <tr>
+                                    <td class="fw-bold">Account:</td>
+                                    <td id="modal-account">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">Nama:</td>
+                                    <td id="modal-name">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">Alamat:</td>
+                                    <td id="modal-address">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">Route:</td>
+                                    <td id="modal-route">-</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-2">
+                                <i class="fas fa-gauge me-2"></i>Informasi Meter
+                            </h6>
+                            <table class="table table-sm table-borderless">
+                                <tr>
+                                    <td class="fw-bold">Meter Make:</td>
+                                    <td id="modal-meter-make">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">Meter Number:</td>
+                                    <td id="modal-meter-num">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">Total Periods:</td>
+                                    <td id="modal-total-periods">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">Anomalies:</td>
+                                    <td id="modal-anomalies">-</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistics Cards -->
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="kpi-card text-center">
+                            <small class="text-muted d-block">Rata-rata Kubikasi</small>
+                            <div class="kpi-number" style="font-size: 1.8rem;" id="modal-avg">0 m³</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="kpi-card text-center">
+                            <small class="text-muted d-block">Maksimum</small>
+                            <div class="kpi-number text-danger" style="font-size: 1.8rem;" id="modal-max">0 m³</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="kpi-card text-center">
+                            <small class="text-muted d-block">Minimum</small>
+                            <div class="kpi-number text-success" style="font-size: 1.8rem;" id="modal-min">0 m³</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart -->
+                <div class="kpi-card mb-4">
+                    <h6 class="text-muted text-uppercase mb-3">
+                        <i class="fas fa-chart-line me-2"></i>Tren Pemakaian
+                    </h6>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="chartHistory"></canvas>
+                    </div>
+                </div>
+
+                <!-- History Table -->
+                <div class="kpi-card">
+                    <h6 class="text-muted text-uppercase mb-3">
+                        <i class="fas fa-history me-2"></i>History Detail
+                    </h6>
+                    <div class="table-responsive">
+                        <table id="tableHistory" class="table table-striped table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Periode</th>
+                                    <th>Tgl Baca</th>
+                                    <th>Prev Read</th>
+                                    <th>Reading</th>
+                                    <th>Stand (m³)</th>
+                                    <th>Skip Code</th>
+                                    <th>Trouble</th>
+                                    <th>Special Msg</th>
+                                    <th>Tarif</th>
+                                    <th>Tagihan</th>
+                                    <th>Method</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Data loaded via AJAX -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Footer -->
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                <button type="button" class="btn btn-modern btn-gradient-primary" onclick="printAnalisa()">
+                    <i class="fas fa-print me-2"></i>Print
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<style>
+    .anomaly-card {
+        transition: all 0.3s ease;
+    }
+
+    .anomaly-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+    }
+
+    .anomaly-card.active {
+        border: 2px solid #667eea;
+        box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+    }
+
+    .table-hover tbody tr {
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .table-hover tbody tr:hover {
+        background: rgba(102, 126, 234, 0.1);
+        transform: scale(1.01);
+    }
+</style>
+
+<script>
+    let currentAnomalyType = null;
+    let chartHistory = null;
+    let tableAnomalyDetail = null;
+
+    // ===== LOAD ANOMALY SUMMARY =====
+    function loadAnomalySummary() {
+        showToast('Loading anomaly detection...', 'info');
+        
+        $.get('/api/anomaly/summary', function(data) {
+            if (!data.periode) {
+                showToast('No SBRS data found', 'error');
+                return;
+            }
+
+            const anomalies = data.anomalies;
+            
+            // Update counts
+            $('#anomaly-extreme-count').text(anomalies.extreme.count || 0);
+            $('#anomaly-turun-count').text(anomalies.turun.count || 0);
+            $('#anomaly-zero-count').text(anomalies.zero.count || 0);
+            $('#anomaly-negatif-count').text(anomalies.negatif.count || 0);
+            $('#anomaly-salah_catat-count').text(anomalies.salah_catat.count || 0);
+            $('#anomaly-rebill-count').text(anomalies.rebill.count || 0);
+            $('#anomaly-estimasi-count').text(anomalies.estimasi.count || 0);
+            
+            // Calculate total
+            const total = (anomalies.extreme.count || 0) +
+                         (anomalies.turun.count || 0) +
+                         (anomalies.zero.count || 0) +
+                         (anomalies.negatif.count || 0) +
+                         (anomalies.salah_catat.count || 0) +
+                         (anomalies.rebill.count || 0) +
+                         (anomalies.estimasi.count || 0);
+            
+            $('#anomaly-total-count').text(total);
+            
+            showToast('Anomaly detection complete!', 'success');
+        }).fail(function() {
+            showToast('Failed to load anomaly summary', 'error');
+        });
+    }
+
+    // ===== LOAD ANOMALY DETAIL =====
+    function loadAnomalyDetail(anomalyType) {
+        currentAnomalyType = anomalyType;
+        
+        // Update UI
+        $('.anomaly-card').removeClass('active');
+        $(`.anomaly-card[data-anomaly="${anomalyType}"]`).addClass('active');
+        
+        // Show detail section
+        $('#detailSection').slideDown();
+        
+        // Update title
+        const titles = {
+            'extreme': 'Pemakaian Extreme (>100 m³)',
+            'turun': 'Pemakaian Turun (>50%)',
+            'zero': 'Zero Usage (0 m³)',
+            'negatif': 'Stand Negatif (<0)',
+            'salah_catat': 'Salah Catat (Reading < Prev)',
+            'rebill': 'Rebill (Koreksi)',
+            'estimasi': 'Estimasi (Non-ACTUAL)'
+        };
+        $('#detailTitle').text(titles[anomalyType] || anomalyType);
+        
+        // Show loading
+        showToast(`Loading ${anomalyType} details...`, 'info');
+        
+        // Load data
+        $.get(`/api/anomaly/${anomalyType}`, function(data) {
+            // Destroy existing table
+            if (tableAnomalyDetail) {
+                tableAnomalyDetail.destroy();
+            }
+            
+            // Initialize DataTable
+            tableAnomalyDetail = $('#tableAnomalyDetail').DataTable({
+                data: data,
+                columns: [
+                    { 
+                        data: null,
+                        render: function(data, type, row, meta) {
+                            return meta.row + 1;
+                        }
+                    },
+                    { data: 'cmr_account' },
+                    { data: 'cmr_name', defaultContent: '-' },
+                    { data: 'cmr_address', defaultContent: '-' },
+                    { data: 'cmr_route', defaultContent: '-' },
+                    { 
+                        data: 'cmr_prev_read',
+                        render: function(data) {
+                            return new Intl.NumberFormat('id-ID').format(data || 0);
+                        }
+                    },
+                    { 
+                        data: 'cmr_reading',
+                        render: function(data) {
+                            return new Intl.NumberFormat('id-ID').format(data || 0);
+                        }
+                    },
+                    { 
+                        data: 'SB_Stand',
+                        render: function(data) {
+                            const color = data > 100 ? 'danger' : data < 0 ? 'danger' : data === 0 ? 'secondary' : 'primary';
+                            return `<span class="badge bg-${color}">${data || 0} m³</span>`;
+                        }
+                    },
+                    { data: 'Tariff', defaultContent: '-' },
+                    { 
+                        data: 'Bill_Amount',
+                        render: $.fn.dataTable.render.number('.', ',', 0, 'Rp ')
+                    },
+                    { 
+                        data: 'Read_Method',
+                        render: function(data) {
+                            const color = data === 'ACTUAL' ? 'success' : 'warning';
+                            return `<span class="badge bg-${color}">${data || '-'}</span>`;
+                        }
+                    },
+                    {
+                        data: null,
+                        render: function(data, type, row) {
+                            return `
+                                <button class="btn btn-sm btn-outline-primary" onclick="openAnalisaManual('${row.cmr_account}')">
+                                    <i class="fas fa-microscope"></i> Analisa
+                                </button>
+                            `;
+                        }
+                    }
+                ],
+                pageLength: 25,
+                order: [[7, 'desc']], // Sort by Stand
+                language: {
+                    search: "🔍 Cari:",
+                    lengthMenu: "Tampilkan _MENU_",
+                    info: "_START_ - _END_ dari _TOTAL_",
+                    paginate: {
+                        first: "⏮️",
+                        last: "⏭️",
+                        next: "▶️",
+                        previous: "◀️"
+                    }
+                }
+            });
+            
+            // Add row click event
+            $('#tableAnomalyDetail tbody').on('click', 'tr', function() {
+                const rowData = tableAnomalyDetail.row(this).data();
+                if (rowData) {
+                    openAnalisaManual(rowData.cmr_account);
+                }
+            });
+            
+            showToast(`Loaded ${data.length} records`, 'success');
+        }).fail(function() {
+            showToast('Failed to load detail', 'error');
+        });
+    }
+
+    // ===== OPEN ANALISA MANUAL MODAL =====
+    function openAnalisaManual(cmrAccount) {
+        showToast(`Loading history for ${cmrAccount}...`, 'info');
+        
+        // Load history data
+        $.get(`/api/anomaly/history/${cmrAccount}`, function(data) {
+            // Fill customer info
+            $('#modal-account').text(data.customer_info.cmr_account);
+            $('#modal-name').text(data.customer_info.cmr_name || '-');
+            $('#modal-address').text(data.customer_info.cmr_address || '-');
+            $('#modal-route').text(data.customer_info.cmr_route || '-');
+            $('#modal-meter-make').text(data.customer_info.Meter_Make_1 || '-');
+            $('#modal-meter-num').text(data.customer_info.cmr_mtr_num || '-');
+            $('#modal-total-periods').text(data.statistics.total_periods);
+            
+            // Anomalies badges
+            const anomalyBadges = data.statistics.anomaly_types.map(a => 
+                `<span class="badge bg-danger me-1">${a}</span>`
+            ).join('');
+            $('#modal-anomalies').html(anomalyBadges || '<span class="text-muted">No anomalies</span>');
+            
+            // Statistics
+            $('#modal-avg').text(data.statistics.avg_kubikasi + ' m³');
+            $('#modal-max').text(data.statistics.max_kubikasi + ' m³');
+            $('#modal-min').text(data.statistics.min_kubikasi + ' m³');
+            
+            // Load chart
+            loadHistoryChart(cmrAccount);
+            
+            // Fill history table
+            const tbody = $('#tableHistory tbody');
+            tbody.empty();
+            
+            data.history.forEach(function(row) {
+                const tr = $('<tr>');
+                tr.append(`<td>${row.Bill_Period || '-'}</td>`);
+                tr.append(`<td>${row.cmr_rd_date || '-'}</td>`);
+                tr.append(`<td>${new Intl.NumberFormat('id-ID').format(row.cmr_prev_read || 0)}</td>`);
+                tr.append(`<td>${new Intl.NumberFormat('id-ID').format(row.cmr_reading || 0)}</td>`);
+                
+                // Highlight anomalies
+                const standClass = row.SB_Stand > 100 ? 'text-danger fw-bold' : 
+                                  row.SB_Stand < 0 ? 'text-danger fw-bold' : 
+                                  row.SB_Stand === 0 ? 'text-secondary' : '';
+                tr.append(`<td class="${standClass}">${row.SB_Stand || 0} m³</td>`);
+                
+                tr.append(`<td>${row.cmr_skip_code || '-'}</td>`);
+                tr.append(`<td>${row.cmr_trbl1_code || '-'}</td>`);
+                tr.append(`<td>${row.cmr_chg_spcl_msg || '-'}</td>`);
+                tr.append(`<td>${row.Tariff || '-'}</td>`);
+                tr.append(`<td>${formatRupiah(row.Bill_Amount || 0)}</td>`);
+                
+                const methodBadge = row.Read_Method === 'ACTUAL' ? 
+                    '<span class="badge bg-success">ACTUAL</span>' :
+                    '<span class="badge bg-warning">EST</span>';
+                tr.append(`<td>${methodBadge}</td>`);
+                
+                tbody.append(tr);
+            });
+            
+            // Show modal
+            $('#modalAnalisaManual').modal('show');
+            showToast('History loaded!', 'success');
+            
+        }).fail(function() {
+            showToast('Failed to load history', 'error');
+        });
+    }
+
+    // ===== LOAD HISTORY CHART =====
+    function loadHistoryChart(cmrAccount) {
+        $.get(`/api/anomaly/chart/${cmrAccount}`, function(data) {
+            const ctx = document.getElementById('chartHistory');
+            if (chartHistory) chartHistory.destroy();
+            
+            chartHistory = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.map(d => d.Bill_Period),
+                    datasets: [{
+                        label: 'Kubikasi (m³)',
+                        data: data.map(d => d.SB_Stand),
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 6,
+                        pointHoverRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: function(context) {
+                                    const index = context.dataIndex;
+                                    const method = data[index].Read_Method;
+                                    const bill = data[index].Bill_Amount;
+                                    return [
+                                        `Method: ${method}`,
+                                        `Bill: Rp ${new Intl.NumberFormat('id-ID').format(bill)}`
+                                    ];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Kubikasi (m³)' }
+                        }
+                    }
+                }
+            });
+        });
+    }
+
+    // ===== HELPER FUNCTIONS =====
+    function refreshAnomalyDetail() {
+        if (currentAnomalyType) {
+            loadAnomalyDetail(currentAnomalyType);
+        }
+    }
+
+    function exportAnomalyDetail() {
+        if (!tableAnomalyDetail) {
+            showToast('No data to export', 'error');
+            return;
+        }
+        
+        showToast('Preparing export...', 'info');
+        
+        const data = tableAnomalyDetail.rows().data();
+        let csv = 'No,Account,Nama,Alamat,Route,Prev Read,Reading,Stand,Tarif,Tagihan,Method\n';
+        
+        data.each(function(row, index) {
+            csv += `${index + 1},"${row.cmr_account}","${row.cmr_name || ''}","${row.cmr_address || ''}","${row.cmr_route || ''}",${row.cmr_prev_read || 0},${row.cmr_reading || 0},${row.SB_Stand || 0},"${row.Tariff || ''}",${row.Bill_Amount || 0},"${row.Read_Method || ''}"\n`;
+        });
+        
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Anomaly_${currentAnomalyType}_${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+        
+        showToast('Export complete!', 'success');
+    }
+
+    function printAnalisa() {
+        window.print();
+    }
+
+    // ===== CARD CLICK EVENTS =====
+    $('.anomaly-card').click(function() {
+        const anomalyType = $(this).data('anomaly');
+        loadAnomalyDetail(anomalyType);
+    });
+
+    // ===== AUTO-LOAD ON TAB SHOW =====
+    $('button[data-bs-target="#tab-meter"]').on('shown.bs.tab', function() {
+        loadAnomalySummary();
+    });
+</script>
