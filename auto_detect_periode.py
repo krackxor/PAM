@@ -125,15 +125,10 @@ def detect_periode_from_content(df, file_type):
                 first_date = df[date_col].iloc[0]
                 parsed = parse_date(str(first_date))
                 if parsed:
-                    bulan, tahun = parsed
-                    # RULE: Periode = Bulan tanggal - 1
-                    # Contoh: TGL_CATAT 19/06/2025 → Periode MEI 2025
-                    bulan_periode = bulan - 1
-                    tahun_periode = tahun
-                    if bulan_periode < 1:
-                        bulan_periode = 12
-                        tahun_periode -= 1
-                    return (bulan_periode, tahun_periode)
+                    # RULE FIXED: Simpan periode sesuai TGL_CATAT
+                    # Dashboard akan handle display mapping
+                    # Contoh: TGL_CATAT 19/11/2025 → Periode November (11)
+                    return parsed
         
         # ===== MB (Manual Bayar) =====
         elif file_type == 'MB':
@@ -148,15 +143,10 @@ def detect_periode_from_content(df, file_type):
                 first_date = df[date_col].iloc[0]
                 parsed = parse_date(str(first_date))
                 if parsed:
-                    bulan, tahun = parsed
-                    # RULE: Periode = Bulan tanggal - 1
-                    # Contoh: TGL_BAYAR 04/06/2025 → Periode MEI 2025
-                    bulan_periode = bulan - 1
-                    tahun_periode = tahun
-                    if bulan_periode < 1:
-                        bulan_periode = 12
-                        tahun_periode -= 1
-                    return (bulan_periode, tahun_periode)
+                    # RULE FIXED: Simpan periode sesuai TGL_BAYAR
+                    # Dashboard akan handle display mapping
+                    # Contoh: TGL_BAYAR 04/11/2025 → Periode November (11)
+                    return parsed
         
         # ===== ARDEBT (AR Debt) =====
         elif file_type == 'ARDEBT':
@@ -171,15 +161,10 @@ def detect_periode_from_content(df, file_type):
                 first_date = df[date_col].iloc[0]
                 parsed = parse_date(str(first_date))
                 if parsed:
-                    bulan, tahun = parsed
-                    # RULE: Periode = Bulan tanggal - 1
+                    # RULE FIXED: Simpan periode sesuai tanggal
+                    # Dashboard akan handle display mapping
                     # Sama seperti MC/MB
-                    bulan_periode = bulan - 1
-                    tahun_periode = tahun
-                    if bulan_periode < 1:
-                        bulan_periode = 12
-                        tahun_periode -= 1
-                    return (bulan_periode, tahun_periode)
+                    return parsed
         
         # ===== COLLECTION =====
         elif file_type == 'COLLECTION':
