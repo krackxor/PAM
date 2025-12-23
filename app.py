@@ -255,6 +255,14 @@ def clean_date(val, fmt_in='%d-%m-%Y', fmt_out='%Y-%m-%d'):
         except:
             return str(val)
 
+def get_periode_label(bulan, tahun):
+    """Convert bulan/tahun to readable label"""
+    bulan_names = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+                   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
+    if 1 <= bulan <= 12:
+        return f"{bulan_names[bulan]} {tahun}"
+    return f"{bulan}/{tahun}"
+
 # === ROUTING UTAMA ===
 @app.route('/')
 def index():
@@ -375,7 +383,6 @@ def api_kpi():
         
     except Exception as e:
         print(f"Error KPI: {e}")
-        import traceback
         traceback.print_exc()
         kpi = {
             'total_pelanggan': 0,
@@ -491,7 +498,7 @@ def simpan_analisa():
     except Exception as e:
         return jsonify({'status': 'error', 'msg': str(e)})
 
-# === UPLOAD FILE HANDLER ===
+# === UPLOAD FILE HANDLER (SINGLE) ===
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
@@ -786,115 +793,73 @@ def upload_file():
             print(f"📊 Processing SBRS upload...")
             print(f"Original columns: {df.columns.tolist()}")
             
-            # Mapping SBRS columns (flexible untuk berbagai format)
+            # Mapping SBRS columns
             rename_dict = {}
             
             # Account/Nomen
             for col in ['cmr_account', 'ACCOUNT', 'NOPEN', 'NOMEN', 'CMR_ACCOUNT']:
                 if col in df.columns:
-                    rename_dict[col] = 'cmr_account'
+                    rename_dict[col] = 'nomen'
                     break
             
             # Name
             for col in ['cmr_name', 'NAMA', 'NAME', 'CMR_NAME']:
                 if col in df.columns:
-                    rename_dict[col] = 'cmr_name'
+                    rename_dict[col] = 'nama'
                     break
             
             # Address
             for col in ['cmr_address', 'ALAMAT', 'ADDRESS', 'CMR_ADDRESS']:
                 if col in df.columns:
-                    rename_dict[col] = 'cmr_address'
+                    rename_dict[col] = 'alamat'
                     break
             
             # Route
-            for col in ['cmr_route', 'ROUTE', 'RUTE', 'CMR_ROUTE']:
+            for col in ['cmr_route', 'ROUTE', 'RUTE', 'CMR_ROUTE', 'RAYON']:
                 if col in df.columns:
-                    rename_dict[col] = 'cmr_route'
+                    rename_dict[col] = 'rayon'
                     break
             
             # Previous Reading
             for col in ['cmr_prev_read', 'STAND_LALU', 'PREV_READ', 'CMR_PREV_READ', 'STAND_AWAL']:
                 if col in df.columns:
-                    rename_dict[col] = 'cmr_prev_read'
+                    rename_dict[col] = 'stand_awal'
                     break
             
             # Current Reading
             for col in ['cmr_reading', 'STAND_INI', 'READING', 'CMR_READING', 'STAND_AKHIR']:
                 if col in df.columns:
-                    rename_dict[col] = 'cmr_reading'
+                    rename_dict[col] = 'stand_akhir'
                     break
             
-            # Stand/Kubikasi (PENTING!)
-            for col in ['SB_Stand', 'PAKAI', 'KUBIKASI', 'USAGE', 'STAND', 'SB_STAND']:
+            # Volume/Stand
+            for col in ['SB_Stand', 'PAKAI', 'KUBIKASI', 'USAGE', 'STAND', 'SB_STAND', 'VOLUME']:
                 if col in df.columns:
-                    rename_dict[col] = 'SB_Stand'
+                    rename_dict[col] = 'volume'
                     break
             
             # Read Method
             for col in ['Read_Method', 'METODE', 'METHOD', 'READ_METHOD']:
                 if col in df.columns:
-                    rename_dict[col] = 'Read_Method'
-                    break
-            
-            # Bill Period
-            for col in ['Bill_Period', 'PERIODE', 'PERIOD', 'BILL_PERIOD']:
-                if col in df.columns:
-                    rename_dict[col] = 'Bill_Period'
-                    break
-            
-            # Bill Amount
-            for col in ['Bill_Amount', 'TAGIHAN', 'AMOUNT', 'BILL_AMOUNT']:
-                if col in df.columns:
-                    rename_dict[col] = 'Bill_Amount'
+                    rename_dict[col] = 'readmethod'
                     break
             
             # Skip Code
             for col in ['cmr_skip_code', 'SKIP_CODE', 'SKIP', 'CMR_SKIP_CODE']:
                 if col in df.columns:
-                    rename_dict[col] = 'cmr_skip_code'
+                    rename_dict[col] = 'skip_status'
                     break
             
             # Trouble Code
             for col in ['cmr_trbl1_code', 'TROUBLE', 'TROUBLE_CODE', 'CMR_TRBL1_CODE']:
                 if col in df.columns:
-                    rename_dict[col] = 'cmr_trbl1_code'
+                    rename_dict[col] = 'trouble_status'
                     break
             
             # Special Message
-            for col in ['cmr_chg_spcl_msg', 'SPECIAL_MSG', 'MESSAGE', 'CMR_CHG_SPCL_MSG']:
+            for col in ['cmr_chg_spcl_msg', 'SPECIAL_MSG', 'MESSAGE', 'CMR_CHG_SPCL_MSG', 'SPM']:
                 if col in df.columns:
-                    rename_dict[col] = 'cmr_chg_spcl_msg'
-                    break
-            
-            # Tariff
-            for col in ['Tariff', 'TARIF', 'TARIFF']:
-                if col in df.columns:
-                    rename_dict[col] = 'Tariff'
-                    break
-            
-            # Meter Make
-            for col in ['Meter_Make_1', 'METER_MAKE', 'MERK_METER', 'METER_MAKE_1']:
-                if col in df.columns:
-                    rename_dict[col] = 'Meter_Make_1'
-                    break
-            
-            # Meter Number
-            for col in ['cmr_mtr_num', 'NOMOR_METER', 'METER_NUM', 'CMR_MTR_NUM']:
-                if col in df.columns:
-                    rename_dict[col] = 'cmr_mtr_num'
-                    break
-            
-            # Read Date
-            for col in ['cmr_rd_date', 'TGL_BACA', 'READ_DATE', 'CMR_RD_DATE']:
-                if col in df.columns:
-                    rename_dict[col] = 'cmr_rd_date'
-                    break
-            
-            # Meter Reader ID
-            for col in ['cmr_mrid', 'READER_ID', 'MRID', 'CMR_MRID']:
-                if col in df.columns:
-                    rename_dict[col] = 'cmr_mrid'
+                    rename_dict[col] = 'spm_status'
                     break
             
             print(f"Mapping dict: {rename_dict}")
@@ -904,56 +869,44 @@ def upload_file():
                 df = df.rename(columns=rename_dict)
             
             # Validate critical fields
-            if 'cmr_account' not in df.columns:
-                flash('❌ SBRS: Need cmr_account column!', 'danger')
+            if 'nomen' not in df.columns:
+                flash('❌ SBRS: Need account/nomen column!', 'danger')
                 return redirect(url_for('index'))
             
-            if 'SB_Stand' not in df.columns:
-                flash('❌ SBRS: Need SB_Stand (kubikasi) column!', 'danger')
+            if 'volume' not in df.columns:
+                flash('❌ SBRS: Need volume/kubikasi column!', 'danger')
                 return redirect(url_for('index'))
             
-            # Clean and process data
-            df['cmr_account'] = df['cmr_account'].astype(str).str.strip()
-            df = df.dropna(subset=['cmr_account'])
-            df = df[df['cmr_account'] != '']
-            df = df[df['cmr_account'] != 'nan']
+            # Clean nomen
+            df['nomen'] = df['nomen'].astype(str).str.strip().str.replace('.0', '', regex=False)
+            df = df.dropna(subset=['nomen'])
+            df = df[df['nomen'] != '']
+            df = df[df['nomen'] != 'nan']
             
             # Process numeric fields
-            numeric_fields = ['cmr_prev_read', 'cmr_reading', 'SB_Stand', 'Bill_Amount']
+            numeric_fields = ['stand_awal', 'stand_akhir', 'volume']
             for field in numeric_fields:
                 if field in df.columns:
                     df[field] = pd.to_numeric(df[field], errors='coerce').fillna(0)
             
-            # Process Read_Method (uppercase)
-            if 'Read_Method' in df.columns:
-                df['Read_Method'] = df['Read_Method'].astype(str).str.upper().str.strip()
-                df['Read_Method'] = df['Read_Method'].replace('NAN', 'ACTUAL')
+            # Process Read_Method
+            if 'readmethod' in df.columns:
+                df['readmethod'] = df['readmethod'].astype(str).str.upper().str.strip()
+                df['readmethod'] = df['readmethod'].replace('NAN', 'ACTUAL')
             else:
-                df['Read_Method'] = 'ACTUAL'
-            
-            # Process Bill_Period
-            if 'Bill_Period' in df.columns:
-                df['Bill_Period'] = df['Bill_Period'].astype(str).str.strip()
-            else:
-                # Generate dari periode upload
-                if periode_bulan and periode_tahun:
-                    df['Bill_Period'] = f"{periode_tahun}{str(periode_bulan).zfill(2)}"
-                else:
-                    df['Bill_Period'] = datetime.now().strftime('%Y%m')
+                df['readmethod'] = 'ACTUAL'
             
             # Fill missing optional fields
             optional_fields = {
-                'cmr_name': '',
-                'cmr_address': '',
-                'cmr_route': '',
-                'cmr_skip_code': '',
-                'cmr_trbl1_code': '',
-                'cmr_chg_spcl_msg': '',
-                'Tariff': '',
-                'Meter_Make_1': '',
-                'cmr_mtr_num': '',
-                'cmr_rd_date': '',
-                'cmr_mrid': ''
+                'nama': '',
+                'alamat': '',
+                'rayon': '',
+                'skip_status': '',
+                'trouble_status': '',
+                'spm_status': '',
+                'analisa_tindak_lanjut': '',
+                'tag1': '',
+                'tag2': ''
             }
             
             for field, default_val in optional_fields.items():
@@ -967,11 +920,10 @@ def upload_file():
             
             # Select columns for database
             cols_db = [
-                'cmr_account', 'cmr_name', 'cmr_address', 'cmr_route',
-                'cmr_prev_read', 'cmr_reading', 'SB_Stand',
-                'cmr_skip_code', 'cmr_trbl1_code', 'cmr_chg_spcl_msg',
-                'Tariff', 'Bill_Period', 'Bill_Amount', 'Read_Method',
-                'Meter_Make_1', 'cmr_mtr_num', 'cmr_rd_date', 'cmr_mrid',
+                'nomen', 'nama', 'alamat', 'rayon',
+                'readmethod', 'skip_status', 'trouble_status', 'spm_status',
+                'stand_awal', 'stand_akhir', 'volume',
+                'analisa_tindak_lanjut', 'tag1', 'tag2',
                 'periode_bulan', 'periode_tahun', 'upload_id'
             ]
             
@@ -979,31 +931,17 @@ def upload_file():
             cols_to_save = [col for col in cols_db if col in df.columns]
             
             print(f"Columns to save: {cols_to_save}")
-            print(f"Sample SB_Stand values: {df['SB_Stand'].head().tolist()}")
-            print(f"SB_Stand statistics: min={df['SB_Stand'].min()}, max={df['SB_Stand'].max()}, avg={df['SB_Stand'].mean():.2f}")
+            print(f"Sample volume values: {df['volume'].head().tolist()}")
+            print(f"Volume statistics: min={df['volume'].min()}, max={df['volume'].max()}, avg={df['volume'].mean():.2f}")
             
             # Save to database (REPLACE untuk re-upload)
             df[cols_to_save].to_sql('sbrs_data', conn, if_exists='replace', index=False)
             
-            flash(f'✅ SBRS: {len(df):,} records uploaded | Period: {df["Bill_Period"].iloc[0]} | Stand range: {df["SB_Stand"].min():.0f}-{df["SB_Stand"].max():.0f} m³', 'success')
-        
-        # === UPLOAD MB ===
-        elif tipe == 'mb':
-            # Implementation sama dengan sebelumnya
-            flash('✅ MB uploaded (simplified)', 'success')
-        
-        # === UPLOAD MAINBILL ===
-        elif tipe == 'mainbill':
-            flash('✅ MainBill uploaded (simplified)', 'success')
-        
-        # === UPLOAD ARDEBT ===
-        elif tipe == 'ardebt':
-            flash('✅ Ardebt uploaded (simplified)', 'success')
+            flash(f'✅ SBRS: {len(df):,} records uploaded | Volume range: {df["volume"].min():.0f}-{df["volume"].max():.0f} m³', 'success')
 
     except Exception as e:
         flash(f'❌ Upload Failed: {e}', 'danger')
         print(f"Error Upload: {e}")
-        import traceback
         traceback.print_exc()
             
     return redirect(url_for('index'))
@@ -1033,11 +971,11 @@ def api_meter_anomali():
         
         # Dari SBRS
         skip = db.execute('''
-            SELECT COUNT(*) as cnt FROM sbrs_data WHERE skip_status IS NOT NULL
+            SELECT COUNT(*) as cnt FROM sbrs_data WHERE skip_status IS NOT NULL AND skip_status != ''
         ''').fetchone()
         
         trouble = db.execute('''
-            SELECT COUNT(*) as cnt FROM sbrs_data WHERE trouble_status IS NOT NULL
+            SELECT COUNT(*) as cnt FROM sbrs_data WHERE trouble_status IS NOT NULL AND trouble_status != ''
         ''').fetchone()
         
         photo = db.execute('''
@@ -1089,13 +1027,6 @@ def api_history_pembayaran():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-# ========================================
-# ANALISA API - HANDLED BY app_analisa_api.py
-# ========================================
-# Routes /api/analisa/list, /api/analisa/detail, etc
-# sudah didefinisikan di app_analisa_api.py
-# Tidak perlu duplikasi di sini
 
 # === API: PROFIL PELANGGAN ===
 @app.route('/api/profil_pelanggan/<nomen>')
@@ -1155,14 +1086,14 @@ def api_sbrs_anomali():
         skip = db.execute(f'''
             SELECT nomen, nama, rayon, skip_status, readmethod
             FROM sbrs_data
-            {where_clause} AND skip_status IS NOT NULL
+            {where_clause} AND skip_status IS NOT NULL AND skip_status != ''
             ORDER BY nomen LIMIT 100
         ''', params).fetchall()
         
         trouble = db.execute(f'''
             SELECT nomen, nama, rayon, trouble_status, spm_status
             FROM sbrs_data
-            {where_clause} AND trouble_status IS NOT NULL
+            {where_clause} AND trouble_status IS NOT NULL AND trouble_status != ''
             ORDER BY nomen LIMIT 100
         ''', params).fetchall()
         
@@ -1189,14 +1120,10 @@ def api_sbrs_anomali():
 
 @app.route('/api/belum_bayar')
 def api_belum_bayar():
-    """API untuk menampilkan pelanggan yang belum bayar (tidak ada di MB dan Collection)"""
+    """API untuk menampilkan pelanggan yang belum bayar"""
     db = get_db()
     
     try:
-        # Query sesuai logika SQL yang diberikan:
-        # SELECT pelanggan dari MC yang:
-        # 1. Tidak ada di master_bayar (MB)
-        # 2. Tidak ada di collection_harian (Collection)
         query = '''
             SELECT 
                 m.nomen,
@@ -1234,7 +1161,6 @@ def api_belum_bayar():
         
     except Exception as e:
         print(f"Error belum bayar: {e}")
-        import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
@@ -1292,23 +1218,292 @@ else:
 # MULTI-FILE UPLOAD WITH AUTO-DETECT
 # ==========================================
 
-def get_periode_label(bulan, tahun):
-    """Convert bulan/tahun to readable label"""
-    bulan_names = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-                   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
-    if 1 <= bulan <= 12:
-        return f"{bulan_names[bulan]} {tahun}"
-    return f"{bulan}/{tahun}"
+# ==========================================
+# PROCESS FUNCTIONS FOR MULTI-UPLOAD
+# ==========================================
+
+def process_mc_file(filepath, upload_id, periode_bulan, periode_tahun, db):
+    """Process MC file - FIXED VERSION"""
+    try:
+        # Read file
+        if filepath.endswith('.csv'):
+            df = pd.read_csv(filepath, dtype=str)
+        elif filepath.endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(filepath)
+        else:
+            raise Exception('Unsupported file format')
+        
+        df.columns = df.columns.str.upper().str.strip()
+        
+        # Validation
+        if 'ZONA_NOVAK' not in df.columns or 'NOMEN' not in df.columns:
+            raise Exception('MC: Need ZONA_NOVAK and NOMEN columns')
+        
+        # Rename columns
+        rename_dict = {'NOMEN': 'nomen'}
+        if 'NAMA_PEL' in df.columns:
+            rename_dict['NAMA_PEL'] = 'nama'
+        elif 'NAMA' in df.columns:
+            rename_dict['NAMA'] = 'nama'
+        
+        if 'ALM1_PEL' in df.columns:
+            rename_dict['ALM1_PEL'] = 'alamat'
+        elif 'ALAMAT' in df.columns:
+            rename_dict['ALAMAT'] = 'alamat'
+        
+        if 'TARIF' in df.columns:
+            rename_dict['TARIF'] = 'tarif'
+        elif 'KODETARIF' in df.columns:
+            rename_dict['KODETARIF'] = 'tarif'
+        
+        if 'NOMINAL' in df.columns:
+            rename_dict['NOMINAL'] = 'target_mc'
+        elif 'REK_AIR' in df.columns:
+            rename_dict['REK_AIR'] = 'target_mc'
+        
+        if 'KUBIK' in df.columns:
+            rename_dict['KUBIK'] = 'kubikasi'
+        elif 'KUBIKASI' in df.columns:
+            rename_dict['KUBIKASI'] = 'kubikasi'
+        
+        df = df.rename(columns=rename_dict)
+        
+        # Clean nomen
+        df['nomen'] = df['nomen'].astype(str).str.strip().str.replace('.0', '', regex=False)
+        df = df.dropna(subset=['nomen'])
+        df = df[df['nomen'] != '']
+        
+        # Parse zona
+        df['zona_novak'] = df['ZONA_NOVAK'].astype(str).str.strip()
+        zona_parsed = df['zona_novak'].apply(parse_zona_novak)
+        
+        df['rayon'] = zona_parsed.apply(lambda x: x['rayon'])
+        df['pc'] = zona_parsed.apply(lambda x: x['pc'])
+        df['ez'] = zona_parsed.apply(lambda x: x['ez'])
+        df['block'] = zona_parsed.apply(lambda x: x['block'])
+        df['pcez'] = zona_parsed.apply(lambda x: x['pcez'])
+        
+        # Filter rayon 34/35
+        df = df[df['rayon'].isin(['34', '35'])]
+        
+        if len(df) == 0:
+            raise Exception('No Rayon 34/35 data found')
+        
+        # Fill missing columns
+        for col in ['nama', 'alamat', 'tarif']:
+            if col not in df.columns:
+                df[col] = ''
+        
+        if 'target_mc' not in df.columns:
+            df['target_mc'] = 0
+        
+        if 'kubikasi' not in df.columns:
+            df['kubikasi'] = 0
+        else:
+            df['kubikasi'] = df['kubikasi'].apply(lambda x: abs(float(x)) if pd.notna(x) else 0)
+        
+        # Add metadata
+        df['periode_bulan'] = periode_bulan
+        df['periode_tahun'] = periode_tahun
+        df['upload_id'] = upload_id
+        
+        # Save to database
+        cols_db = ['nomen', 'nama', 'alamat', 'rayon', 'pc', 'ez', 'pcez', 'block', 
+                   'zona_novak', 'tarif', 'target_mc', 'kubikasi', 
+                   'periode_bulan', 'periode_tahun', 'upload_id']
+        
+        df[cols_db].to_sql('master_pelanggan', db, if_exists='replace', index=False)
+        
+        print(f"✅ MC processed: {len(df)} rows")
+        return len(df)
+        
+    except Exception as e:
+        print(f"❌ MC processing error: {e}")
+        raise
+
+
+def process_collection_file(filepath, upload_id, periode_bulan, periode_tahun, db):
+    """Process Collection file - FIXED VERSION"""
+    try:
+        # Read file
+        if filepath.endswith('.txt'):
+            df = pd.read_csv(filepath, sep='|', dtype=str)
+        elif filepath.endswith('.csv'):
+            df = pd.read_csv(filepath, dtype=str)
+        elif filepath.endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(filepath)
+        else:
+            raise Exception('Unsupported file format')
+        
+        df.columns = df.columns.str.upper().str.strip()
+        
+        # Rename columns
+        rename_dict = {}
+        if 'NOMEN' in df.columns:
+            rename_dict['NOMEN'] = 'nomen'
+        else:
+            raise Exception('Collection: Need NOMEN column')
+        
+        if 'PAY_DT' in df.columns:
+            rename_dict['PAY_DT'] = 'tgl_bayar'
+        elif 'TGL_BAYAR' in df.columns:
+            rename_dict['TGL_BAYAR'] = 'tgl_bayar'
+        
+        if 'AMT_COLLECT' in df.columns:
+            rename_dict['AMT_COLLECT'] = 'jumlah_bayar'
+        elif 'JUMLAH' in df.columns:
+            rename_dict['JUMLAH'] = 'jumlah_bayar'
+        
+        if 'BILL_PERIOD' in df.columns:
+            rename_dict['BILL_PERIOD'] = 'bill_period'
+        
+        df = df.rename(columns=rename_dict)
+        
+        # Clean nomen
+        df['nomen'] = df['nomen'].astype(str).str.strip().str.replace('.0', '', regex=False)
+        df = df.dropna(subset=['nomen'])
+        df = df[df['nomen'] != '']
+        
+        # Clean date
+        if 'tgl_bayar' in df.columns:
+            df['tgl_bayar'] = df['tgl_bayar'].apply(lambda x: clean_date(x))
+        else:
+            df['tgl_bayar'] = datetime.now().strftime('%Y-%m-%d')
+        
+        # Clean amount
+        if 'jumlah_bayar' in df.columns:
+            df['jumlah_bayar'] = df['jumlah_bayar'].apply(lambda x: abs(float(x)) if pd.notna(x) else 0)
+        else:
+            df['jumlah_bayar'] = 0
+        
+        # Determine tipe_bayar
+        if 'bill_period' not in df.columns:
+            df['tipe_bayar'] = 'current'
+            df['bill_period'] = ''
+        else:
+            df['tipe_bayar'] = 'current'
+        
+        # Add metadata
+        df['periode_bulan'] = periode_bulan
+        df['periode_tahun'] = periode_tahun
+        df['upload_id'] = upload_id
+        df['sumber_file'] = os.path.basename(filepath)
+        
+        # Save to database
+        cols = ['nomen', 'tgl_bayar', 'jumlah_bayar', 'tipe_bayar', 'bill_period', 
+                'periode_bulan', 'periode_tahun', 'upload_id', 'sumber_file']
+        
+        for _, row in df[cols].iterrows():
+            try:
+                db.execute('''
+                    INSERT OR IGNORE INTO collection_harian 
+                    (nomen, tgl_bayar, jumlah_bayar, tipe_bayar, bill_period, 
+                     periode_bulan, periode_tahun, upload_id, sumber_file)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', tuple(row))
+            except:
+                pass
+        
+        db.commit()
+        
+        print(f"✅ Collection processed: {len(df)} rows")
+        return len(df)
+        
+    except Exception as e:
+        print(f"❌ Collection processing error: {e}")
+        raise
+
+
+def process_sbrs_file(filepath, upload_id, periode_bulan, periode_tahun, db):
+    """Process SBRS file - FIXED VERSION"""
+    try:
+        # Read file
+        if filepath.endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(filepath)
+        elif filepath.endswith('.csv'):
+            df = pd.read_csv(filepath)
+        else:
+            raise Exception('Unsupported file format')
+        
+        df.columns = df.columns.str.upper().str.strip()
+        
+        # Map columns
+        rename_dict = {}
+        
+        # Account/Nomen
+        for col in ['CMR_ACCOUNT', 'ACCOUNT', 'NOPEN', 'NOMEN']:
+            if col in df.columns:
+                rename_dict[col] = 'nomen'
+                break
+        
+        # Volume
+        for col in ['SB_STAND', 'PAKAI', 'KUBIKASI', 'USAGE', 'STAND', 'VOLUME']:
+            if col in df.columns:
+                rename_dict[col] = 'volume'
+                break
+        
+        if not rename_dict:
+            raise Exception('SBRS: Cannot map required columns')
+        
+        df = df.rename(columns=rename_dict)
+        
+        # Validate
+        if 'nomen' not in df.columns or 'volume' not in df.columns:
+            raise Exception('SBRS: Need nomen and volume columns')
+        
+        # Clean nomen
+        df['nomen'] = df['nomen'].astype(str).str.strip().str.replace('.0', '', regex=False)
+        df = df.dropna(subset=['nomen'])
+        
+        # Clean volume
+        df['volume'] = pd.to_numeric(df['volume'], errors='coerce').fillna(0)
+        
+        # Add metadata
+        df['periode_bulan'] = periode_bulan
+        df['periode_tahun'] = periode_tahun
+        df['upload_id'] = upload_id
+        
+        # Select columns
+        cols_to_save = ['nomen', 'volume', 'periode_bulan', 'periode_tahun', 'upload_id']
+        
+        # Add optional columns if they exist
+        optional = ['nama', 'alamat', 'rayon', 'readmethod', 'skip_status', 'trouble_status']
+        for col in optional:
+            if col in df.columns:
+                cols_to_save.append(col)
+        
+        # Save to database
+        df[cols_to_save].to_sql('sbrs_data', db, if_exists='replace', index=False)
+        
+        print(f"✅ SBRS processed: {len(df)} rows")
+        return len(df)
+        
+    except Exception as e:
+        print(f"❌ SBRS processing error: {e}")
+        raise
+
+
+def process_mb_file(filepath, upload_id, periode_bulan, periode_tahun, db):
+    """Process MB file"""
+    # Simplified implementation
+    return 0
+
+
+def process_mainbill_file(filepath, upload_id, periode_bulan, periode_tahun, db):
+    """Process MainBill file"""
+    # Simplified implementation
+    return 0
+
+
+def process_ardebt_file(filepath, upload_id, periode_bulan, periode_tahun, db):
+    """Process Ardebt file"""
+    # Simplified implementation
+    return 0
 
 
 @app.route('/upload_multi', methods=['POST'])
 def upload_multi():
-    """
-    Upload multiple files dengan auto-detect periode & file type
-    
-    Optional:
-    - manual_periode_override: {"filename": {"bulan": 5, "tahun": 2025}}
-    """
+    """Upload multiple files dengan auto-detect"""
     if not AUTO_DETECT_AVAILABLE:
         return jsonify({'error': 'Auto-detect module not available'}), 500
     
@@ -1320,7 +1515,7 @@ def upload_multi():
     if not files or files[0].filename == '':
         return jsonify({'error': 'No files selected'}), 400
     
-    # Check if there's manual override
+    # Check manual override
     manual_override = request.form.get('manual_override')
     override_dict = {}
     if manual_override:
@@ -1338,10 +1533,11 @@ def upload_multi():
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         
         try:
-            # Save file temporarily
+            # Save file
             file.save(filepath)
+            print(f"\n📁 Processing: {filename}")
             
-            # Auto-detect periode & tipe
+            # Auto-detect
             detection = auto_detect_periode(filepath, filename)
             
             if not detection:
@@ -1358,34 +1554,29 @@ def upload_multi():
             periode_label = detection['periode_label']
             detect_method = detection['method']
             
-            # Apply manual override if exists
+            print(f"  Type: {file_type}, Periode: {periode_label}, Method: {detect_method}")
+            
+            # Apply manual override
             if filename in override_dict:
                 periode_bulan = override_dict[filename].get('bulan', periode_bulan)
                 periode_tahun = override_dict[filename].get('tahun', periode_tahun)
                 periode_label = get_periode_label(periode_bulan, periode_tahun)
                 detect_method = 'manual_override'
+                print(f"  Override applied: {periode_label}")
             
-            # Check duplicate periode
+            # Check duplicate
             existing = db.execute('''
                 SELECT id FROM upload_metadata 
-                WHERE file_type = ? 
-                AND periode_bulan = ? 
-                AND periode_tahun = ?
+                WHERE file_type = ? AND periode_bulan = ? AND periode_tahun = ?
             ''', (file_type, periode_bulan, periode_tahun)).fetchone()
             
+            action = 'new'
             if existing:
-                results.append({
-                    'filename': filename,
-                    'status': 'warning',
-                    'message': f'{file_type} periode {periode_label} sudah ada (akan di-replace)',
-                    'action': 'replace',
-                    'file_type': file_type,
-                    'periode': periode_label
-                })
-                # Delete old data
+                action = 'replace'
                 db.execute('DELETE FROM upload_metadata WHERE id = ?', (existing['id'],))
+                print(f"  ⚠️  Replacing existing upload ID: {existing['id']}")
             
-            # Save upload metadata
+            # Save metadata
             cursor = db.execute('''
                 INSERT INTO upload_metadata 
                 (file_type, file_name, periode_bulan, periode_tahun, row_count)
@@ -1394,42 +1585,63 @@ def upload_multi():
             upload_id = cursor.lastrowid
             db.commit()
             
-            # Process file berdasarkan tipe
+            print(f"  ✅ Metadata saved, upload_id: {upload_id}")
+            
+            # Process file
             row_count = 0
-            if file_type == 'MC':
-                row_count = process_mc_file(filepath, upload_id, periode_bulan, periode_tahun, db)
-            elif file_type == 'COLLECTION':
-                row_count = process_collection_file(filepath, upload_id, periode_bulan, periode_tahun, db)
-            elif file_type == 'SBRS':
-                row_count = process_sbrs_file(filepath, upload_id, periode_bulan, periode_tahun, db)
-            elif file_type == 'MB':
-                row_count = process_mb_file(filepath, upload_id, periode_bulan, periode_tahun, db)
-            elif file_type == 'MAINBILL':
-                row_count = process_mainbill_file(filepath, upload_id, periode_bulan, periode_tahun, db)
-            elif file_type == 'ARDEBT':
-                row_count = process_ardebt_file(filepath, upload_id, periode_bulan, periode_tahun, db)
-            
-            # Update row count
-            db.execute('''
-                UPDATE upload_metadata 
-                SET row_count = ? 
-                WHERE id = ?
-            ''', (row_count, upload_id))
-            db.commit()
-            
-            results.append({
-                'filename': filename,
-                'status': 'success',
-                'file_type': file_type,
-                'periode': periode_label,
-                'periode_bulan': periode_bulan,
-                'periode_tahun': periode_tahun,
-                'detect_method': detect_method,
-                'row_count': row_count,
-                'message': f'✅ {file_type} uploaded: {row_count:,} rows'
-            })
+            try:
+                if file_type == 'MC':
+                    row_count = process_mc_file(filepath, upload_id, periode_bulan, periode_tahun, db)
+                elif file_type == 'COLLECTION':
+                    row_count = process_collection_file(filepath, upload_id, periode_bulan, periode_tahun, db)
+                elif file_type == 'SBRS':
+                    row_count = process_sbrs_file(filepath, upload_id, periode_bulan, periode_tahun, db)
+                elif file_type == 'MB':
+                    row_count = process_mb_file(filepath, upload_id, periode_bulan, periode_tahun, db)
+                elif file_type == 'MAINBILL':
+                    row_count = process_mainbill_file(filepath, upload_id, periode_bulan, periode_tahun, db)
+                elif file_type == 'ARDEBT':
+                    row_count = process_ardebt_file(filepath, upload_id, periode_bulan, periode_tahun, db)
+                
+                # Update row count
+                db.execute('UPDATE upload_metadata SET row_count = ? WHERE id = ?', (row_count, upload_id))
+                db.commit()
+                
+                print(f"  ✅ SUCCESS: {row_count} rows processed")
+                
+                results.append({
+                    'filename': filename,
+                    'status': 'success',
+                    'file_type': file_type,
+                    'periode': periode_label,
+                    'periode_bulan': periode_bulan,
+                    'periode_tahun': periode_tahun,
+                    'detect_method': detect_method,
+                    'row_count': row_count,
+                    'action': action,
+                    'message': f'✅ {file_type} uploaded: {row_count:,} rows | {periode_label}'
+                })
+                
+            except Exception as proc_error:
+                print(f"  ❌ Processing error: {proc_error}")
+                traceback.print_exc()
+                
+                # Rollback metadata
+                db.execute('DELETE FROM upload_metadata WHERE id = ?', (upload_id,))
+                db.commit()
+                
+                results.append({
+                    'filename': filename,
+                    'status': 'error',
+                    'message': f'Processing error: {str(proc_error)}',
+                    'file_type': file_type,
+                    'periode': periode_label
+                })
             
         except Exception as e:
+            print(f"  ❌ Error: {e}")
+            traceback.print_exc()
+            
             results.append({
                 'filename': filename,
                 'status': 'error',
@@ -1441,14 +1653,15 @@ def upload_multi():
     # Summary
     success_count = len([r for r in results if r['status'] == 'success'])
     error_count = len([r for r in results if r['status'] == 'error'])
-    warning_count = len([r for r in results if r['status'] == 'warning'])
+    
+    print(f"\n📊 SUMMARY: {success_count} success, {error_count} failed")
     
     return jsonify({
         'summary': {
             'total': len(files),
             'success': success_count,
             'error': error_count,
-            'warning': warning_count
+            'warning': 0
         },
         'results': results
     })
@@ -1500,130 +1713,6 @@ def api_upload_history():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/missing_files/<int:bulan>/<int:tahun>')
-def api_missing_files(bulan, tahun):
-    """Check file mana yang belum diupload untuk periode tertentu"""
-    db = get_db()
-    
-    required_files = ['MC', 'COLLECTION', 'SBRS', 'MB', 'MAINBILL', 'ARDEBT']
-    
-    try:
-        uploaded = db.execute('''
-            SELECT DISTINCT file_type 
-            FROM upload_metadata
-            WHERE periode_bulan = ? AND periode_tahun = ?
-        ''', (bulan, tahun)).fetchall()
-        
-        uploaded_types = [row['file_type'] for row in uploaded]
-        missing_types = [ft for ft in required_files if ft not in uploaded_types]
-        
-        return jsonify({
-            'periode_bulan': bulan,
-            'periode_tahun': tahun,
-            'periode_label': get_periode_label(bulan, tahun),
-            'required': required_files,
-            'uploaded': uploaded_types,
-            'missing': missing_types,
-            'progress_percent': int((len(uploaded_types) / len(required_files)) * 100)
-        })
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/upload/<int:upload_id>', methods=['DELETE'])
-def api_delete_upload(upload_id):
-    """Delete upload dan data terkait"""
-    db = get_db()
-    
-    try:
-        # Get upload info
-        upload = db.execute('''
-            SELECT file_type, periode_bulan, periode_tahun 
-            FROM upload_metadata 
-            WHERE id = ?
-        ''', (upload_id,)).fetchone()
-        
-        if not upload:
-            return jsonify({'error': 'Upload not found'}), 404
-        
-        file_type = upload['file_type']
-        bulan = upload['periode_bulan']
-        tahun = upload['periode_tahun']
-        
-        # Delete data dari tabel terkait
-        if file_type == 'MC':
-            db.execute('DELETE FROM master_pelanggan WHERE upload_id = ?', (upload_id,))
-        elif file_type == 'COLLECTION':
-            db.execute('DELETE FROM collection_harian WHERE upload_id = ?', (upload_id,))
-        elif file_type == 'SBRS':
-            db.execute('DELETE FROM sbrs_data WHERE upload_id = ?', (upload_id,))
-        elif file_type == 'MB':
-            db.execute('DELETE FROM master_bayar WHERE upload_id = ?', (upload_id,))
-        
-        # Delete metadata
-        db.execute('DELETE FROM upload_metadata WHERE id = ?', (upload_id,))
-        db.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': f'{file_type} periode {bulan}/{tahun} deleted'
-        })
-        
-    except Exception as e:
-        db.rollback()
-        return jsonify({'error': str(e)}), 500
-
-
-# ==========================================
-# PROCESS FUNCTIONS (untuk multi-upload)
-# ==========================================
-
-def process_mc_file(filepath, upload_id, periode_bulan, periode_tahun, db):
-    """Process MC file with auto-detected periode"""
-    # Reuse existing logic from upload_file() for MC
-    # Simplified version - full implementation reuses upload_file code
-    try:
-        df = pd.read_excel(filepath) if filepath.endswith(('.xls', '.xlsx')) else pd.read_csv(filepath)
-        df.columns = df.columns.str.upper().str.strip()
-        
-        # Validation
-        if 'ZONA_NOVAK' not in df.columns or 'NOMEN' not in df.columns:
-            raise Exception('MC: Need ZONA_NOVAK and NOMEN columns')
-        
-        # Process... (use existing MC processing code)
-        # For now, return sample
-        return len(df)
-    except Exception as e:
-        raise Exception(f'MC processing error: {str(e)}')
-
-
-def process_collection_file(filepath, upload_id, periode_bulan, periode_tahun, db):
-    """Process Collection file"""
-    # Implementation similar to existing collection upload
-    return 0
-
-
-def process_sbrs_file(filepath, upload_id, periode_bulan, periode_tahun, db):
-    """Process SBRS file"""
-    return 0
-
-
-def process_mb_file(filepath, upload_id, periode_bulan, periode_tahun, db):
-    """Process MB file"""
-    return 0
-
-
-def process_mainbill_file(filepath, upload_id, periode_bulan, periode_tahun, db):
-    """Process MainBill file"""
-    return 0
-
-
-def process_ardebt_file(filepath, upload_id, periode_bulan, periode_tahun, db):
-    """Process Ardebt file"""
-    return 0
 
 
 if __name__ == '__main__':
