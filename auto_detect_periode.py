@@ -128,8 +128,10 @@ def detect_periode_from_content(df, file_type):
     Deteksi periode dari isi file dengan LOGIKA BISNIS PDAM yang benar
     
     CRITICAL RULES:
-    - MC, MB, ARDEBT: Periode = Bulan dari tanggal MINUS 1 bulan (data bulan lalu)
-    - COLLECTION, MAINBILL, SBRS: Periode = Bulan dari tanggal (data bulan ini)
+    - MC, MB, ARDEBT: Data bulan ini untuk PERIODE BULAN DEPAN
+      (MC November → Periode Desember)
+    - COLLECTION, MAINBILL, SBRS: Data bulan ini untuk PERIODE BULAN INI
+      (Collection Desember → Periode Desember)
     
     Returns: (bulan, tahun) atau (None, None)
     """
@@ -137,6 +139,7 @@ def detect_periode_from_content(df, file_type):
         cols = [c.upper().strip() for c in df.columns]
         
         # ===== MC (Master Customer) =====
+        # MC November → Periode Desember
         if file_type == 'MC':
             # Cari kolom TGL_CATAT
             date_col = None
@@ -150,9 +153,16 @@ def detect_periode_from_content(df, file_type):
                 first_date = df[date_col].iloc[0]
                 parsed = parse_date(str(first_date))
                 if parsed:
-                    return parsed
+                    bulan, tahun = parsed
+                    # OFFSET: +1 bulan (MC Nov → Periode Des)
+                    bulan += 1
+                    if bulan > 12:
+                        bulan = 1
+                        tahun += 1
+                    return (bulan, tahun)
         
         # ===== MB (Manual Bayar) =====
+        # MB November → Periode Desember
         elif file_type == 'MB':
             # Cari kolom TGL_BAYAR
             date_col = None
@@ -165,9 +175,16 @@ def detect_periode_from_content(df, file_type):
                 first_date = df[date_col].iloc[0]
                 parsed = parse_date(str(first_date))
                 if parsed:
-                    return parsed
+                    bulan, tahun = parsed
+                    # OFFSET: +1 bulan (MB Nov → Periode Des)
+                    bulan += 1
+                    if bulan > 12:
+                        bulan = 1
+                        tahun += 1
+                    return (bulan, tahun)
         
         # ===== ARDEBT (AR Debt) =====
+        # ARDEBT November → Periode Desember
         elif file_type == 'ARDEBT':
             # Cari kolom TGL_CATAT atau tanggal lain
             date_col = None
@@ -180,9 +197,16 @@ def detect_periode_from_content(df, file_type):
                 first_date = df[date_col].iloc[0]
                 parsed = parse_date(str(first_date))
                 if parsed:
-                    return parsed
+                    bulan, tahun = parsed
+                    # OFFSET: +1 bulan (ARDEBT Nov → Periode Des)
+                    bulan += 1
+                    if bulan > 12:
+                        bulan = 1
+                        tahun += 1
+                    return (bulan, tahun)
         
         # ===== COLLECTION =====
+        # Collection Desember → Periode Desember (NO OFFSET)
         elif file_type == 'COLLECTION':
             # Cari kolom PAY_DT atau TGL_BAYAR
             date_col = None
@@ -195,9 +219,10 @@ def detect_periode_from_content(df, file_type):
                 first_date = df[date_col].iloc[0]
                 parsed = parse_date(str(first_date))
                 if parsed:
-                    return parsed
+                    return parsed  # NO OFFSET
         
         # ===== MAINBILL =====
+        # MainBill Desember → Periode Desember (NO OFFSET)
         elif file_type == 'MAINBILL':
             # Cari kolom FREEZE_DT
             date_col = None
@@ -212,7 +237,7 @@ def detect_periode_from_content(df, file_type):
                 # Coba parse sebagai tanggal
                 parsed = parse_date(first_value)
                 if parsed:
-                    return parsed
+                    return parsed  # NO OFFSET
                 
                 # Fallback: Format MMM/YYYY
                 if '/' in first_value:
@@ -224,9 +249,10 @@ def detect_periode_from_content(df, file_type):
                         bulan = BULAN_ENGLISH.get(month_str) or BULAN_INDONESIA.get(month_str)
                         tahun = validate_tahun(year_str)
                         if bulan and tahun:
-                            return (bulan, tahun)
+                            return (bulan, tahun)  # NO OFFSET
         
         # ===== SBRS =====
+        # SBRS Desember → Periode Desember (NO OFFSET)
         elif file_type == 'SBRS':
             # Priority 1: Cari kolom cmr_rd_date (format: DDMMYYYY)
             if 'CMR_RD_DATE' in cols:
@@ -243,7 +269,7 @@ def detect_periode_from_content(df, file_type):
                     year = validate_tahun(year)
                     
                     if month and year:
-                        return (month, year)
+                        return (month, year)  # NO OFFSET
             
             # Priority 2: READ_DATE atau TGL_BACA
             for col_name in ['READ_DATE', 'TGL_BACA', 'CMR_RD_DATE']:
@@ -252,7 +278,7 @@ def detect_periode_from_content(df, file_type):
                     first_date = df[date_col].iloc[0]
                     parsed = parse_date(str(first_date))
                     if parsed:
-                        return parsed
+                        return parsed  # NO OFFSET
             
             # Priority 3: BILL_PERIOD (format: YYYYMM)
             if 'BILL_PERIOD' in cols:
@@ -264,7 +290,7 @@ def detect_periode_from_content(df, file_type):
                     tahun = validate_tahun(first_period[:4])
                     bulan = validate_bulan(first_period[4:6])
                     if tahun and bulan:
-                        return (bulan, tahun)
+                        return (bulan, tahun)  # NO OFFSET
         
     except Exception as e:
         print(f"Error detect periode from content: {e}")
@@ -415,6 +441,24 @@ def auto_detect_periode(filepath, filename='', file_type=None):
     """
     AUTO-DETECT PERIODE (Main Function) - FIXED VERSION
     
+    PERIODE LOGIC (PDAM BUSINESS RULES):
+    
+    Periode Desember 2025 terdiri dari:
+    - MC November 2025 (offset +1)
+    - MB November 2025 (offset +1)
+    - ARDEBT November 2025 (offset +1)
+    - Collection Desember 2025 (no offset)
+    - SBRS Desember 2025 (no offset)
+    - MainBill Desember 2025 (no offset)
+    
+    Periode November 2025 terdiri dari:
+    - MC Oktober 2025 (offset +1)
+    - MB Oktober 2025 (offset +1)
+    - ARDEBT Oktober 2025 (offset +1)
+    - Collection November 2025 (no offset)
+    - SBRS November 2025 (no offset)
+    - MainBill November 2025 (no offset)
+    
     Args:
         filepath: Path ke file
         filename: Nama file (opsional)
@@ -464,6 +508,16 @@ def auto_detect_periode(filepath, filename='', file_type=None):
     if not bulan or not tahun:
         bulan, tahun = detect_periode_from_filename(filename)
         method = 'from_filename'
+        
+        # Apply offset jika dari filename
+        if bulan and tahun:
+            if file_type in ['MC', 'MB', 'ARDEBT']:
+                print(f"📅 Applying +1 month offset for {file_type}: {bulan}/{tahun}", end=' → ')
+                bulan += 1
+                if bulan > 12:
+                    bulan = 1
+                    tahun += 1
+                print(f"{bulan}/{tahun}")
     
     # PRIORITAS 3: Gunakan tanggal upload
     if not bulan or not tahun:
