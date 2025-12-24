@@ -1499,11 +1499,15 @@ def process_mb_file(filepath, upload_id, periode_bulan, periode_tahun, db):
         if not tgl_col:
             raise Exception(f'TGL_BAYAR column not found. Available columns: {list(df.columns)}')
         
-        # Find JUMLAH column (more flexible)
+        # Find JUMLAH column (more flexible but exclude TGL_BAYAR)
         jumlah_col = None
         for col in df.columns:
             col_upper = col.upper()
-            if any(x in col_upper for x in ['JUMLAH', 'BAYAR', 'NOMINAL', 'AMOUNT', 'TOTAL', 'NILAI']):
+            # Skip if this is a date column
+            if 'TGL' in col_upper or 'TANGGAL' in col_upper or 'DATE' in col_upper:
+                continue
+            # Now check for amount keywords
+            if any(x in col_upper for x in ['JUMLAH', 'NOMINAL', 'AMOUNT', 'TOTAL', 'NILAI']):
                 jumlah_col = col
                 print(f"  ✓ JUMLAH column: {col}")
                 break
