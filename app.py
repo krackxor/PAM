@@ -116,6 +116,9 @@ def init_db():
                 nomen TEXT,
                 tgl_bayar TEXT,
                 jumlah_bayar REAL DEFAULT 0,
+                periode_bulan INTEGER,
+                periode_tahun INTEGER,
+                upload_id INTEGER,
                 periode TEXT,
                 sumber_file TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -126,11 +129,15 @@ def init_db():
         # 4. MainBill
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS mainbill (
-                nomen TEXT PRIMARY KEY,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nomen TEXT,
                 tgl_tagihan TEXT,
                 total_tagihan REAL DEFAULT 0,
                 pcezbk TEXT,
                 tarif TEXT,
+                periode_bulan INTEGER,
+                periode_tahun INTEGER,
+                upload_id INTEGER,
                 periode TEXT,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(nomen) REFERENCES master_pelanggan(nomen)
@@ -140,8 +147,12 @@ def init_db():
         # 5. Ardebt
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS ardebt (
-                nomen TEXT PRIMARY KEY,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nomen TEXT,
                 saldo_tunggakan REAL DEFAULT 0,
+                periode_bulan INTEGER,
+                periode_tahun INTEGER,
+                upload_id INTEGER,
                 periode TEXT,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(nomen) REFERENCES master_pelanggan(nomen)
@@ -1519,7 +1530,7 @@ def process_mb_file(filepath, upload_id, periode_bulan, periode_tahun, db):
         rename_dict = {
             nomen_col: 'nomen',
             tgl_col: 'tgl_bayar',
-            jumlah_col: 'jumlah'
+            jumlah_col: 'jumlah_bayar'  # Match database schema
         }
         
         df = df.rename(columns=rename_dict)
@@ -1553,17 +1564,17 @@ def process_mb_file(filepath, upload_id, periode_bulan, periode_tahun, db):
         if len(df) == 0:
             raise Exception('No valid TGL_BAYAR found after parsing')
         
-        # Clean jumlah
-        df['jumlah'] = pd.to_numeric(df['jumlah'], errors='coerce')
-        df['jumlah'] = df['jumlah'].fillna(0)
+        # Clean jumlah_bayar
+        df['jumlah_bayar'] = pd.to_numeric(df['jumlah_bayar'], errors='coerce')
+        df['jumlah_bayar'] = df['jumlah_bayar'].fillna(0)
         
         # Add metadata
         df['periode_bulan'] = periode_bulan
         df['periode_tahun'] = periode_tahun
         df['upload_id'] = upload_id
         
-        # Save to database
-        cols_to_save = ['nomen', 'tgl_bayar', 'jumlah', 'periode_bulan', 'periode_tahun', 'upload_id']
+        # Save to database - match schema columns
+        cols_to_save = ['nomen', 'tgl_bayar', 'jumlah_bayar', 'periode_bulan', 'periode_tahun', 'upload_id']
         df[cols_to_save].to_sql('master_bayar', db, if_exists='append', index=False)
         
         print(f"✅ MB processed: {len(df)} rows")
