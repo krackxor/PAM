@@ -1,7 +1,30 @@
 # auto_detect_periode.py
 """
-AUTO-DETECT PERIODE FROM FILE - FIXED VERSION
-Deteksi periode dari isi file atau nama file dengan proper error handling
+AUTO-DETECT PERIODE FROM FILE - CONTENT FIRST VERSION
+
+PRIORITY ORDER:
+1. **FROM FILE CONTENT** (header/date columns) - PRIMARY & MOST RELIABLE
+2. From filename - FALLBACK only
+3. From upload date - LAST RESORT
+
+DETECTION LOGIC:
+- MC: Read TGL_CATAT → +1 month
+  Example: TGL_CATAT 19/06/2025 → Periode Juli (07) 2025
+  
+- MB: Read TGL_BAYAR → +1 month
+  Example: TGL_BAYAR 04/06/2025 → Periode Juli (07) 2025
+  
+- ARDEBT: Read TGL_CATAT → +1 month
+  Example: TGL_CATAT 15/06/2025 → Periode Juli (07) 2025
+  
+- Collection: Read PAY_DT → same month
+  Example: PAY_DT 01-07-2025 → Periode Juli (07) 2025
+  
+- SBRS: Read cmr_rd_date → same month
+  Example: cmr_rd_date 22072025 → Periode Juli (07) 2025
+  
+- MainBill: Read FREEZE_DT → same month
+  Example: FREEZE_DT 12/07/2025 → Periode Juli (07) 2025
 """
 
 import re
@@ -72,13 +95,46 @@ def validate_tahun(tahun):
 # ==========================================
 def auto_detect_file_type(df, filename=''):
     """
-    Auto-detect tipe file berdasarkan struktur kolom
+    Auto-detect tipe file berdasarkan struktur kolom DAN nama file
     
     Returns: 'MC', 'COLLECTION', 'SBRS', 'MB', 'MAINBILL', 'ARDEBT', atau None
     """
     cols = [c.upper().strip() for c in df.columns]
     filename_upper = filename.upper()
     
+    # PRIORITY 1: Check filename first (more reliable)
+    # Use word boundaries to avoid false matches
+    import re
+    
+    # MB: Must be standalone word or at start/end
+    if re.search(r'\bMB\b|^MB_|_MB_|_MB\.|^MB\.', filename_upper):
+        return 'MB'
+    
+    # MC: Must be standalone word or at start/end (but not part of MB, MC)
+    if re.search(r'\bMC\b|^MC_|_MC_|_MC\.|^MC\.', filename_upper) and 'MB' not in filename_upper:
+        return 'MC'
+    
+    # MASTER: Strong indicator for MC
+    if 'MASTER' in filename_upper:
+        return 'MC'
+    
+    # SBRS: Check filename
+    if 'SBRS' in filename_upper:
+        return 'SBRS'
+    
+    # Collection: Check filename
+    if 'COLLECTION' in filename_upper or 'COLL' in filename_upper:
+        return 'COLLECTION'
+    
+    # MainBill: Check filename
+    if 'MAINBILL' in filename_upper or re.search(r'\bBILL\b', filename_upper):
+        return 'MAINBILL'
+    
+    # Ardebt: Check filename
+    if 'ARDEBT' in filename_upper or 'DEBT' in filename_upper:
+        return 'ARDEBT'
+    
+    # PRIORITY 2: Check column structure
     # MC: Ada kolom ZONA_NOVAK, NOMEN, NAMA_PEL
     if any(x in cols for x in ['ZONA_NOVAK', 'ZONA NOVAK']):
         return 'MC'
@@ -101,20 +157,6 @@ def auto_detect_file_type(df, filename=''):
     
     # Ardebt: Ada SUMOF atau SALDO atau struktur tunggakan
     if any(x in cols for x in ['SUMOFJUMLAH', 'SALDO_TUNGGAKAN', 'SALDO']):
-        return 'ARDEBT'
-    
-    # Fallback: dari nama file
-    if 'COLLECTION' in filename_upper or 'COLL' in filename_upper:
-        return 'COLLECTION'
-    if 'SBRS' in filename_upper:
-        return 'SBRS'
-    if 'MC' in filename_upper or 'MASTER' in filename_upper:
-        return 'MC'
-    if 'MB' in filename_upper:
-        return 'MB'
-    if 'MAINBILL' in filename_upper or 'BILL' in filename_upper:
-        return 'MAINBILL'
-    if 'ARDEBT' in filename_upper or 'DEBT' in filename_upper:
         return 'ARDEBT'
     
     return None
@@ -309,6 +351,7 @@ def detect_periode_from_filename(filename):
     
     Contoh:
     - MC_202512.xls → (12, 2025)
+    - MB_1125.xls → (11, 2025)
     - Collection_DES_2025.txt → (12, 2025)
     - SBRS_Desember_2025.xlsx → (12, 2025)
     
@@ -323,6 +366,27 @@ def detect_periode_from_filename(filename):
         bulan = validate_bulan(match.group(2))
         if tahun and bulan:
             return (bulan, tahun)
+    
+    # Pattern 1b: MMYY (1125 = November 25 = November 2025)
+    match = re.search(r'[_\-](\d{2})(\d{2})[_\.\-]', filename)
+    if match:
+        bulan_str = match.group(1)
+        tahun_str = match.group(2)
+        
+        # Try as MMYY
+        bulan = validate_bulan(bulan_str)
+        if bulan:
+            # Convert YY to YYYY
+            yy = int(tahun_str)
+            if yy >= 20 and yy <= 30:  # 2020-2030
+                tahun = 2000 + yy
+            elif yy >= 0 and yy <= 19:  # 2000-2019 (unlikely)
+                tahun = 2000 + yy
+            else:
+                tahun = None
+            
+            if tahun and validate_tahun(tahun):
+                return (bulan, tahun)
     
     # Pattern 2: YYYY-MM atau YYYY_MM
     match = re.search(r'(\d{4})[-_](\d{1,2})', filename)
@@ -439,25 +503,29 @@ def parse_date(date_str):
 # ==========================================
 def auto_detect_periode(filepath, filename='', file_type=None):
     """
-    AUTO-DETECT PERIODE (Main Function) - FIXED VERSION
+    AUTO-DETECT PERIODE (Main Function) - CONTENT FIRST VERSION
     
     PERIODE LOGIC (PDAM BUSINESS RULES):
     
-    Periode Desember 2025 terdiri dari:
-    - MC November 2025 (offset +1)
-    - MB November 2025 (offset +1)
-    - ARDEBT November 2025 (offset +1)
-    - Collection Desember 2025 (no offset)
-    - SBRS Desember 2025 (no offset)
-    - MainBill Desember 2025 (no offset)
+    Detection Priority:
+    1. DARI ISI FILE (header/content) - PRIMARY METHOD
+    2. Dari nama file - FALLBACK
+    3. Dari tanggal upload - LAST RESORT
     
-    Periode November 2025 terdiri dari:
-    - MC Oktober 2025 (offset +1)
-    - MB Oktober 2025 (offset +1)
-    - ARDEBT Oktober 2025 (offset +1)
-    - Collection November 2025 (no offset)
-    - SBRS November 2025 (no offset)
-    - MainBill November 2025 (no offset)
+    Offset Rules:
+    - MC: TGL_CATAT + 1 bulan
+    - MB: TGL_BAYAR + 1 bulan
+    - ARDEBT: TGL_CATAT + 1 bulan
+    - Collection: PAY_DT (no offset)
+    - SBRS: cmr_rd_date (no offset)
+    - MainBill: FREEZE_DT (no offset)
+    
+    Examples:
+    - MC: TGL_CATAT 19/06/2025 → Periode Juli (07) 2025
+    - MB: TGL_BAYAR 04/06/2025 → Periode Juli (07) 2025
+    - Collection: PAY_DT 01-07-2025 → Periode Juli (07) 2025
+    - MainBill: FREEZE_DT 12/07/2025 → Periode Juli (07) 2025
+    - SBRS: cmr_rd_date 22072025 → Periode Juli (07) 2025
     
     Args:
         filepath: Path ke file
@@ -469,7 +537,7 @@ def auto_detect_periode(filepath, filename='', file_type=None):
             'file_type': str,
             'periode_bulan': int,
             'periode_tahun': int,
-            'periode_label': str (contoh: "Desember 2025"),
+            'periode_label': str (contoh: "Juli 2025"),
             'method': str (contoh: "from_content", "from_filename", "from_upload_date")
         }
         atau None jika gagal
@@ -500,17 +568,24 @@ def auto_detect_periode(filepath, filename='', file_type=None):
         print(f"⚠️ Cannot detect file type: {filename}")
         return None
     
-    # PRIORITAS 1: Detect dari content
-    bulan, tahun = detect_periode_from_content(df, file_type)
-    method = 'from_content'
+    print(f"📂 File Type: {file_type}")
     
-    # PRIORITAS 2: Detect dari filename
-    if not bulan or not tahun:
+    # PRIORITAS 1: Detect dari content (PRIMARY - MOST RELIABLE)
+    bulan, tahun = detect_periode_from_content(df, file_type)
+    
+    if bulan and tahun:
+        method = 'from_content'
+        print(f"✅ Period detected from content: {bulan}/{tahun}")
+    else:
+        # PRIORITAS 2: Detect dari filename (FALLBACK)
+        print("⚠️ Cannot detect from content, trying filename...")
         bulan, tahun = detect_periode_from_filename(filename)
-        method = 'from_filename'
         
-        # Apply offset jika dari filename
         if bulan and tahun:
+            method = 'from_filename'
+            print(f"✅ Period detected from filename: {bulan}/{tahun}")
+            
+            # Apply offset jika dari filename
             if file_type in ['MC', 'MB', 'ARDEBT']:
                 print(f"📅 Applying +1 month offset for {file_type}: {bulan}/{tahun}", end=' → ')
                 bulan += 1
@@ -518,14 +593,13 @@ def auto_detect_periode(filepath, filename='', file_type=None):
                     bulan = 1
                     tahun += 1
                 print(f"{bulan}/{tahun}")
-    
-    # PRIORITAS 3: Gunakan tanggal upload
-    if not bulan or not tahun:
-        now = datetime.now()
-        bulan = now.month
-        tahun = now.year
-        method = 'from_upload_date'
-        print(f"⚠️ Using upload date for {filename}: {bulan}/{tahun}")
+        else:
+            # PRIORITAS 3: Gunakan tanggal upload (LAST RESORT)
+            now = datetime.now()
+            bulan = now.month
+            tahun = now.year
+            method = 'from_upload_date'
+            print(f"⚠️ Using upload date for {filename}: {bulan}/{tahun}")
     
     # FINAL VALIDATION
     bulan = validate_bulan(bulan)
@@ -549,6 +623,8 @@ def auto_detect_periode(filepath, filename='', file_type=None):
     else:
         periode_label = f"{bulan}/{tahun}"
     
+    print(f"🎯 Final Periode: {periode_label} (method: {method})")
+    
     return {
         'file_type': file_type,
         'periode_bulan': bulan,
@@ -562,25 +638,111 @@ def auto_detect_periode(filepath, filename='', file_type=None):
 # TEST FUNCTION
 # ==========================================
 if __name__ == '__main__':
-    # Test dengan nama file
-    test_files = [
-        'MC_202512.xls',
-        'Collection_DES_2025.txt',
-        'SBRS_Desember_2025.xlsx',
-        'MB_2025_12.csv',
-        'MainBill_JAN_2026.xls',
-        'ARDEBT_2025-11.xlsx',
-        'SBRS_FINAL_1225.xls'
+    import pandas as pd
+    import tempfile
+    import os
+    
+    print("=" * 70)
+    print("TEST AUTO-DETECT PERIODE - CONTENT FIRST")
+    print("=" * 70)
+    
+    test_cases = [
+        {
+            'name': 'MC with TGL_CATAT',
+            'filename': 'MC_test.xls',
+            'data': pd.DataFrame({
+                'ZONA_NOVAK': ['A', 'B'],
+                'NOMEN': ['123', '456'],
+                'TGL_CATAT': ['19/06/2025', '20/06/2025']
+            }),
+            'expected_type': 'MC',
+            'expected_periode': 'Juli 2025'
+        },
+        {
+            'name': 'MB with TGL_BAYAR',
+            'filename': 'MB_test.xls',
+            'data': pd.DataFrame({
+                'TGL_BAYAR': ['04/06/2025', '05/06/2025'],
+                'JUMLAH': [1000, 2000],
+                'NOMEN': ['123', '456']
+            }),
+            'expected_type': 'MB',
+            'expected_periode': 'Juli 2025'
+        },
+        {
+            'name': 'Collection with PAY_DT',
+            'filename': 'Collection_test.txt',
+            'data': pd.DataFrame({
+                'PAY_DT': ['01-07-2025', '02-07-2025'],
+                'NOMEN': ['123', '456'],
+                'AMT_COLLECT': [1000, 2000]
+            }),
+            'expected_type': 'COLLECTION',
+            'expected_periode': 'Juli 2025'
+        },
+        {
+            'name': 'SBRS with cmr_rd_date',
+            'filename': 'SBRS_test.xls',
+            'data': pd.DataFrame({
+                'CMR_ACCOUNT': ['123', '456'],
+                'cmr_rd_date': ['22072025', '23072025'],
+                'SB_STAND': [100, 150]
+            }),
+            'expected_type': 'SBRS',
+            'expected_periode': 'Juli 2025'
+        },
+        {
+            'name': 'MainBill with FREEZE_DT',
+            'filename': 'MainBill_test.xls',
+            'data': pd.DataFrame({
+                'FREEZE_DT': ['12/07/2025', '13/07/2025'],
+                'TOTAL_TAGIHAN': [50000, 60000],
+                'BILL_CYCLE': ['202507', '202507']
+            }),
+            'expected_type': 'MAINBILL',
+            'expected_periode': 'Juli 2025'
+        }
     ]
     
-    print("=" * 60)
-    print("TEST AUTO-DETECT PERIODE")
-    print("=" * 60)
+    for i, test in enumerate(test_cases, 1):
+        print(f"\n{'='*70}")
+        print(f"TEST {i}: {test['name']}")
+        print(f"{'='*70}")
+        
+        # Create temp file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.xlsx', delete=False) as f:
+            temp_path = f.name
+        
+        try:
+            # Save test data
+            test['data'].to_excel(temp_path, index=False)
+            
+            # Run detection
+            result = auto_detect_periode(temp_path, test['filename'])
+            
+            if result:
+                print(f"✅ SUCCESS")
+                print(f"   File Type: {result['file_type']} (expected: {test['expected_type']})")
+                print(f"   Periode: {result['periode_label']} (expected: {test['expected_periode']})")
+                print(f"   Method: {result['method']}")
+                
+                # Check if matches expected
+                if result['file_type'] == test['expected_type'] and result['periode_label'] == test['expected_periode']:
+                    print(f"   ✅ MATCH!")
+                else:
+                    print(f"   ❌ MISMATCH!")
+            else:
+                print(f"❌ FAILED - No result")
+                
+        except Exception as e:
+            print(f"❌ ERROR: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            # Cleanup
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
     
-    for filename in test_files:
-        bulan, tahun = detect_periode_from_filename(filename)
-        print(f"\n📄 {filename}")
-        if bulan and tahun:
-            print(f"   ✅ Detected: Bulan {bulan}, Tahun {tahun}")
-        else:
-            print(f"   ❌ Failed to detect")
+    print(f"\n{'='*70}")
+    print("TEST COMPLETE")
+    print(f"{'='*70}")
