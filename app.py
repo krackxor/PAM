@@ -277,7 +277,49 @@ def get_periode_label(bulan, tahun):
 # === ROUTING UTAMA ===
 @app.route('/')
 def index():
-    return render_template('index.html')
+    """Main index with navigation"""
+    try:
+        return render_template('index.html')
+    except:
+        # Fallback jika template tidak ada
+        return '''
+        <!DOCTYPE html>
+        <html lang="id">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>PDAM Sunter Dashboard</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+                .container { background: white; border-radius: 20px; padding: 50px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 600px; width: 100%; }
+                h1 { font-size: 36px; color: #1e293b; margin-bottom: 10px; }
+                .subtitle { color: #64748b; margin-bottom: 40px; font-size: 18px; }
+                .menu { display: grid; gap: 15px; }
+                .menu-item { display: block; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 18px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: all 0.3s; }
+                .menu-item:hover { transform: translateY(-3px); box-shadow: 0 6px 25px rgba(0,0,0,0.3); }
+                .menu-item .icon { font-size: 24px; margin-right: 10px; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🚰 PDAM Sunter</h1>
+                <div class="subtitle">Sistem Monitoring & Analytics</div>
+                <div class="menu">
+                    <a href="/collection_dashboard" class="menu-item">
+                        <span class="icon">📊</span> Collection Dashboard
+                    </a>
+                    <a href="/api/kpi_summary" class="menu-item">
+                        <span class="icon">📈</span> KPI Summary
+                    </a>
+                    <a href="/api/collection_data" class="menu-item">
+                        <span class="icon">💰</span> Collection Data
+                    </a>
+                </div>
+            </div>
+        </body>
+        </html>
+        '''
 
 # === API: AVAILABLE PERIODES (NEW!) ===
 @app.route('/api/available_periodes')
@@ -1136,6 +1178,82 @@ def api_belum_bayar_breakdown():
 @app.route('/logout')
 def auth_bypass():
     return redirect(url_for('index'))
+
+
+@app.route('/menu')
+def menu():
+    """Navigation menu page"""
+    return '''
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Menu - PDAM Sunter</title>
+        <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; padding: 20px; }
+            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 15px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center; }
+            .header h1 { font-size: 36px; margin-bottom: 10px; }
+            .header .subtitle { font-size: 16px; opacity: 0.9; }
+            .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; max-width: 1200px; margin: 0 auto; }
+            .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); text-decoration: none; display: block; transition: all 0.3s; }
+            .card:hover { transform: translateY(-5px); box-shadow: 0 8px 30px rgba(0,0,0,0.15); }
+            .card .icon { font-size: 48px; margin-bottom: 15px; }
+            .card .title { font-size: 22px; font-weight: bold; color: #1e293b; margin-bottom: 10px; }
+            .card .desc { color: #64748b; font-size: 14px; line-height: 1.6; }
+            .card.primary { border-left: 5px solid #3b82f6; }
+            .card.success { border-left: 5px solid #10b981; }
+            .card.warning { border-left: 5px solid #f59e0b; }
+            .card.danger { border-left: 5px solid #ef4444; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>🚰 PDAM Sunter Dashboard</h1>
+            <div class="subtitle">Sistem Monitoring & Analytics</div>
+        </div>
+        
+        <div class="grid">
+            <a href="/collection_dashboard" class="card primary">
+                <div class="icon">📊</div>
+                <div class="title">Collection Dashboard</div>
+                <div class="desc">Dashboard lengkap dengan grafik, tabel, dan analytics collection performance per rayon dan PCEZ</div>
+            </a>
+            
+            <a href="/api/kpi_summary" class="card success" target="_blank">
+                <div class="icon">📈</div>
+                <div class="title">KPI Summary</div>
+                <div class="desc">Summary KPI performance termasuk target, collection rate, dan tunggakan</div>
+            </a>
+            
+            <a href="/api/collection_data" class="card warning" target="_blank">
+                <div class="icon">💰</div>
+                <div class="title">Collection Data</div>
+                <div class="desc">Data transaksi collection lengkap dengan detail pelanggan</div>
+            </a>
+            
+            <a href="/api/belum_bayar" class="card danger" target="_blank">
+                <div class="icon">⚠️</div>
+                <div class="title">Belum Bayar</div>
+                <div class="desc">Daftar pelanggan yang belum melakukan pembayaran</div>
+            </a>
+            
+            <a href="/api/anomaly/summary" class="card primary" target="_blank">
+                <div class="icon">🔍</div>
+                <div class="title">Anomaly Detection</div>
+                <div class="desc">Deteksi anomali pemakaian air (zero usage, extreme, negatif, dll)</div>
+            </a>
+            
+            <a href="/api/breakdown_rayon" class="card success" target="_blank">
+                <div class="icon">📍</div>
+                <div class="title">Breakdown Rayon</div>
+                <div class="desc">Performance breakdown per rayon (34 dan 35)</div>
+            </a>
+        </div>
+    </body>
+    </html>
+    '''
 
 
 @app.route('/collection_dashboard')
