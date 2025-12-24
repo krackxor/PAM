@@ -1,7 +1,7 @@
 # auto_detect_periode.py
 """
-AUTO-DETECT PERIODE FROM FILE
-Deteksi periode dari isi file atau nama file
+AUTO-DETECT PERIODE FROM FILE - FIXED VERSION
+Deteksi periode dari isi file atau nama file dengan proper error handling
 """
 
 import re
@@ -40,6 +40,31 @@ BULAN_ENGLISH = {
     'nov': 11, 'november': 11,
     'dec': 12, 'december': 12
 }
+
+
+# ==========================================
+# HELPER: VALIDATE BULAN
+# ==========================================
+def validate_bulan(bulan):
+    """Validate bulan is between 1-12"""
+    try:
+        bulan = int(bulan)
+        if 1 <= bulan <= 12:
+            return bulan
+    except:
+        pass
+    return None
+
+
+def validate_tahun(tahun):
+    """Validate tahun is reasonable (2020-2030)"""
+    try:
+        tahun = int(tahun)
+        if 2020 <= tahun <= 2030:
+            return tahun
+    except:
+        pass
+    return None
 
 
 # ==========================================
@@ -125,9 +150,6 @@ def detect_periode_from_content(df, file_type):
                 first_date = df[date_col].iloc[0]
                 parsed = parse_date(str(first_date))
                 if parsed:
-                    # RULE FIXED: Simpan periode sesuai TGL_CATAT
-                    # Dashboard akan handle display mapping
-                    # Contoh: TGL_CATAT 19/11/2025 → Periode November (11)
                     return parsed
         
         # ===== MB (Manual Bayar) =====
@@ -143,9 +165,6 @@ def detect_periode_from_content(df, file_type):
                 first_date = df[date_col].iloc[0]
                 parsed = parse_date(str(first_date))
                 if parsed:
-                    # RULE FIXED: Simpan periode sesuai TGL_BAYAR
-                    # Dashboard akan handle display mapping
-                    # Contoh: TGL_BAYAR 04/11/2025 → Periode November (11)
                     return parsed
         
         # ===== ARDEBT (AR Debt) =====
@@ -161,9 +180,6 @@ def detect_periode_from_content(df, file_type):
                 first_date = df[date_col].iloc[0]
                 parsed = parse_date(str(first_date))
                 if parsed:
-                    # RULE FIXED: Simpan periode sesuai tanggal
-                    # Dashboard akan handle display mapping
-                    # Sama seperti MC/MB
                     return parsed
         
         # ===== COLLECTION =====
@@ -179,8 +195,6 @@ def detect_periode_from_content(df, file_type):
                 first_date = df[date_col].iloc[0]
                 parsed = parse_date(str(first_date))
                 if parsed:
-                    # RULE: Periode = Bulan tanggal (SAMA)
-                    # Contoh: PAY_DT 01-07-2025 → Periode JULI 2025
                     return parsed
         
         # ===== MAINBILL =====
@@ -198,8 +212,6 @@ def detect_periode_from_content(df, file_type):
                 # Coba parse sebagai tanggal
                 parsed = parse_date(first_value)
                 if parsed:
-                    # RULE: Periode = Bulan tanggal (SAMA)
-                    # Contoh: FREEZE_DT 12/07/2025 → Periode JULI 2025
                     return parsed
                 
                 # Fallback: Format MMM/YYYY
@@ -210,8 +222,9 @@ def detect_periode_from_content(df, file_type):
                         year_str = parts[1].strip()
                         
                         bulan = BULAN_ENGLISH.get(month_str) or BULAN_INDONESIA.get(month_str)
-                        if bulan and year_str.isdigit():
-                            return (bulan, int(year_str))
+                        tahun = validate_tahun(year_str)
+                        if bulan and tahun:
+                            return (bulan, tahun)
         
         # ===== SBRS =====
         elif file_type == 'SBRS':
@@ -226,9 +239,10 @@ def detect_periode_from_content(df, file_type):
                     month = int(first_date[2:4])
                     year = int(first_date[4:8])
                     
-                    if 1 <= month <= 12 and 2020 <= year <= 2030:
-                        # RULE: Periode = Bulan dari tanggal (SAMA)
-                        # Contoh: cmr_rd_date 22072025 → Periode JULI 2025
+                    month = validate_bulan(month)
+                    year = validate_tahun(year)
+                    
+                    if month and year:
                         return (month, year)
             
             # Priority 2: READ_DATE atau TGL_BACA
@@ -238,7 +252,6 @@ def detect_periode_from_content(df, file_type):
                     first_date = df[date_col].iloc[0]
                     parsed = parse_date(str(first_date))
                     if parsed:
-                        # RULE: Periode = Bulan dari tanggal (SAMA)
                         return parsed
             
             # Priority 3: BILL_PERIOD (format: YYYYMM)
@@ -248,9 +261,10 @@ def detect_periode_from_content(df, file_type):
                 
                 # Format: YYYYMM (202507)
                 if len(first_period) == 6 and first_period.isdigit():
-                    tahun = int(first_period[:4])
-                    bulan = int(first_period[4:6])
-                    return (bulan, tahun)
+                    tahun = validate_tahun(first_period[:4])
+                    bulan = validate_bulan(first_period[4:6])
+                    if tahun and bulan:
+                        return (bulan, tahun)
         
     except Exception as e:
         print(f"Error detect periode from content: {e}")
@@ -279,17 +293,17 @@ def detect_periode_from_filename(filename):
     # Pattern 1: YYYYMM (202512)
     match = re.search(r'(\d{4})(\d{2})', filename)
     if match:
-        tahun = int(match.group(1))
-        bulan = int(match.group(2))
-        if 1 <= bulan <= 12 and 2020 <= tahun <= 2030:
+        tahun = validate_tahun(match.group(1))
+        bulan = validate_bulan(match.group(2))
+        if tahun and bulan:
             return (bulan, tahun)
     
     # Pattern 2: YYYY-MM atau YYYY_MM
     match = re.search(r'(\d{4})[-_](\d{1,2})', filename)
     if match:
-        tahun = int(match.group(1))
-        bulan = int(match.group(2))
-        if 1 <= bulan <= 12 and 2020 <= tahun <= 2030:
+        tahun = validate_tahun(match.group(1))
+        bulan = validate_bulan(match.group(2))
+        if tahun and bulan:
             return (bulan, tahun)
     
     # Pattern 3: Nama bulan + tahun (DES_2025, DESEMBER_2025, DEC_2025)
@@ -297,8 +311,8 @@ def detect_periode_from_filename(filename):
         pattern = rf'{month_name.upper()}[_\s-]*(\d{{4}})'
         match = re.search(pattern, filename_upper)
         if match:
-            tahun = int(match.group(1))
-            if 2020 <= tahun <= 2030:
+            tahun = validate_tahun(match.group(1))
+            if tahun:
                 return (month_num, tahun)
     
     # Pattern 4: Tahun + nama bulan (2025_DES, 2025_DESEMBER)
@@ -306,8 +320,8 @@ def detect_periode_from_filename(filename):
         pattern = rf'(\d{{4}})[_\s-]*{month_name.upper()}'
         match = re.search(pattern, filename_upper)
         if match:
-            tahun = int(match.group(1))
-            if 2020 <= tahun <= 2030:
+            tahun = validate_tahun(match.group(1))
+            if tahun:
                 return (month_num, tahun)
     
     return (None, None)
@@ -341,7 +355,10 @@ def parse_date(date_str):
             month = int(date_str[2:4])
             year = int(date_str[4:8])
             
-            if 1 <= day <= 31 and 1 <= month <= 12 and 2020 <= year <= 2030:
+            month = validate_bulan(month)
+            year = validate_tahun(year)
+            
+            if month and year and 1 <= day <= 31:
                 return (month, year)
         except:
             pass
@@ -353,14 +370,14 @@ def parse_date(date_str):
                 parts = date_str.split(sep)
                 if len(parts) == 3:
                     day, month, year = parts
-                    bulan = int(month)
-                    tahun = int(year)
+                    bulan = validate_bulan(month)
+                    tahun = validate_tahun(year)
                     
                     # Fix year jika 2 digit
-                    if tahun < 100:
-                        tahun += 2000
+                    if tahun is None and len(year) == 2:
+                        tahun = validate_tahun(2000 + int(year))
                     
-                    if 1 <= bulan <= 12 and 2020 <= tahun <= 2030:
+                    if bulan and tahun:
                         return (bulan, tahun)
         except:
             continue
@@ -370,9 +387,9 @@ def parse_date(date_str):
         if '-' in date_str and len(date_str) >= 10:
             parts = date_str.split('-')
             if len(parts) >= 3 and len(parts[0]) == 4:  # Year first
-                year = int(parts[0])
-                month = int(parts[1])
-                if 1 <= month <= 12 and 2020 <= year <= 2030:
+                year = validate_tahun(parts[0])
+                month = validate_bulan(parts[1])
+                if year and month:
                     return (month, year)
     except:
         pass
@@ -381,7 +398,10 @@ def parse_date(date_str):
     try:
         dt = pd.to_datetime(date_str, errors='coerce')
         if pd.notna(dt):
-            return (dt.month, dt.year)
+            bulan = validate_bulan(dt.month)
+            tahun = validate_tahun(dt.year)
+            if bulan and tahun:
+                return (bulan, tahun)
     except:
         pass
     
@@ -393,7 +413,7 @@ def parse_date(date_str):
 # ==========================================
 def auto_detect_periode(filepath, filename='', file_type=None):
     """
-    AUTO-DETECT PERIODE (Main Function)
+    AUTO-DETECT PERIODE (Main Function) - FIXED VERSION
     
     Args:
         filepath: Path ke file
@@ -408,6 +428,7 @@ def auto_detect_periode(filepath, filename='', file_type=None):
             'periode_label': str (contoh: "Desember 2025"),
             'method': str (contoh: "from_content", "from_filename", "from_upload_date")
         }
+        atau None jika gagal
     """
     if not filename:
         filename = filepath.split('/')[-1]
@@ -421,9 +442,10 @@ def auto_detect_periode(filepath, filename='', file_type=None):
         elif filepath.endswith('.txt'):
             df = pd.read_csv(filepath, sep='|', nrows=10)
         else:
+            print(f"⚠️ Unsupported file format: {filepath}")
             return None
     except Exception as e:
-        print(f"Error reading file: {e}")
+        print(f"❌ Error reading file {filename}: {e}")
         return None
     
     # Auto-detect tipe file jika belum ada
@@ -451,10 +473,27 @@ def auto_detect_periode(filepath, filename='', file_type=None):
         method = 'from_upload_date'
         print(f"⚠️ Using upload date for {filename}: {bulan}/{tahun}")
     
-    # Buat label periode
+    # FINAL VALIDATION
+    bulan = validate_bulan(bulan)
+    tahun = validate_tahun(tahun)
+    
+    if not bulan or not tahun:
+        print(f"❌ Invalid bulan/tahun for {filename}: bulan={bulan}, tahun={tahun}")
+        # Fallback to current date
+        now = datetime.now()
+        bulan = now.month
+        tahun = now.year
+        method = 'fallback'
+    
+    # Buat label periode (SAFE - index 0 akan always be empty string)
     bulan_names = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
                    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
-    periode_label = f"{bulan_names[bulan]} {tahun}"
+    
+    # SAFE ACCESS - make sure bulan is valid
+    if 1 <= bulan <= 12:
+        periode_label = f"{bulan_names[bulan]} {tahun}"
+    else:
+        periode_label = f"{bulan}/{tahun}"
     
     return {
         'file_type': file_type,
@@ -476,7 +515,8 @@ if __name__ == '__main__':
         'SBRS_Desember_2025.xlsx',
         'MB_2025_12.csv',
         'MainBill_JAN_2026.xls',
-        'ARDEBT_2025-11.xlsx'
+        'ARDEBT_2025-11.xlsx',
+        'SBRS_FINAL_1225.xls'
     ]
     
     print("=" * 60)
