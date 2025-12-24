@@ -1,0 +1,501 @@
+<!-- TAB: COLLECTION DASHBOARD (INTEGRATED) -->
+<div class="tab-pane fade" id="tab-collection-dashboard">
+    
+    <!-- Periode Header -->
+    <div class="alert alert-info border-0 mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="fw-bold mb-1">
+                    <i class="fas fa-chart-line me-2"></i>Collection Analytics Dashboard
+                </h5>
+                <small id="dashboard-periode-label">Loading periode...</small>
+            </div>
+            <button class="btn btn-modern btn-gradient-primary btn-sm" onclick="refreshCollectionDashboard()">
+                <i class="fas fa-sync me-1"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="stats-grid mb-4">
+        <div class="stat-card primary">
+            <div class="label">Total Target</div>
+            <div class="value" id="cd-totalTarget">-</div>
+            <div class="subvalue" id="cd-totalPelanggan">- pelanggan</div>
+        </div>
+        
+        <div class="stat-card success">
+            <div class="label">Total Collection</div>
+            <div class="value" id="cd-totalCollection">-</div>
+            <div class="subvalue" id="cd-pelangganBayar">- pelanggan bayar</div>
+        </div>
+        
+        <div class="stat-card warning">
+            <div class="label">Belum Bayar</div>
+            <div class="value" id="cd-pelangganBelumBayar">-</div>
+            <div class="subvalue" id="cd-selisihNominal">Selisih: -</div>
+        </div>
+        
+        <div class="stat-card" id="cd-performanceCard">
+            <div class="label">Performance</div>
+            <div class="value" id="cd-performancePct">-</div>
+            <div class="subvalue">Collection Rate</div>
+        </div>
+    </div>
+
+    <!-- Charts Grid -->
+    <div class="row g-3 mb-4">
+        <div class="col-lg-6">
+            <div class="kpi-card">
+                <h6 class="fw-bold mb-3">
+                    <i class="fas fa-chart-line me-2"></i>Tren Collection Harian
+                </h6>
+                <div class="chart-container" style="height: 300px;">
+                    <canvas id="cd-dailyTrendChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-6">
+            <div class="kpi-card">
+                <h6 class="fw-bold mb-3">
+                    <i class="fas fa-chart-bar me-2"></i>Performance by Rayon
+                </h6>
+                <div class="chart-container" style="height: 300px;">
+                    <canvas id="cd-rayonChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-6">
+            <div class="kpi-card">
+                <h6 class="fw-bold mb-3">
+                    <i class="fas fa-chart-pie me-2"></i>Distribusi Pembayaran
+                </h6>
+                <div class="chart-container" style="height: 300px;">
+                    <canvas id="cd-distributionChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-6">
+            <div class="kpi-card">
+                <h6 class="fw-bold mb-3">
+                    <i class="fas fa-map-marker-alt me-2"></i>Performance by PCEZ (Top 10)
+                </h6>
+                <div class="chart-container" style="height: 300px;">
+                    <canvas id="cd-pcezChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Payers Table -->
+    <div class="kpi-card mb-4">
+        <h6 class="fw-bold mb-3">
+            <i class="fas fa-trophy me-2"></i>Top 20 Pembayar Terbesar
+        </h6>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover" id="cd-topPayersTable">
+                <thead class="table-dark">
+                    <tr>
+                        <th>No</th>
+                        <th>Nomen</th>
+                        <th>Nama</th>
+                        <th>Alamat</th>
+                        <th>PCEZ</th>
+                        <th>Total Bayar</th>
+                        <th>Transaksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">
+                            <i class="fas fa-spinner fa-spin me-2"></i>Loading...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- PCEZ Performance Table -->
+    <div class="kpi-card">
+        <h6 class="fw-bold mb-3">
+            <i class="fas fa-table me-2"></i>Performance by PCEZ
+        </h6>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover" id="cd-pcezTable">
+                <thead class="table-dark">
+                    <tr>
+                        <th>PCEZ</th>
+                        <th>Rayon</th>
+                        <th>Total</th>
+                        <th>Bayar</th>
+                        <th>Target</th>
+                        <th>Collection</th>
+                        <th>Performance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">
+                            <i class="fas fa-spinner fa-spin me-2"></i>Loading...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<style>
+    /* Stats Grid - Reuse from collection dashboard */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    
+    .stat-card {
+        background: white;
+        padding: 25px;
+        border-radius: 12px;
+        box-shadow: 0 2px 15px rgba(0,0,0,0.08);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 25px rgba(0,0,0,0.15);
+    }
+    
+    .stat-card .label {
+        font-size: 14px;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 10px;
+    }
+    
+    .stat-card .value {
+        font-size: 32px;
+        font-weight: bold;
+        color: #1e293b;
+        margin-bottom: 5px;
+    }
+    
+    .stat-card .subvalue {
+        font-size: 14px;
+        color: #94a3b8;
+    }
+    
+    .stat-card.success .value { color: #10b981; }
+    .stat-card.warning .value { color: #f59e0b; }
+    .stat-card.danger .value { color: #ef4444; }
+    .stat-card.primary .value { color: #3b82f6; }
+
+    @media (max-width: 768px) {
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<script>
+    // Collection Dashboard Charts
+    let cdDailyTrendChart, cdRayonChart, cdDistributionChart, cdPcezChart;
+
+    // ===== LOAD COLLECTION DASHBOARD =====
+    function loadCollectionDashboard() {
+        if (!currentPeriodeBulan || !currentPeriodeTahun) {
+            showToast('Silakan pilih periode terlebih dahulu', 'warning');
+            return;
+        }
+
+        showToast('Loading collection dashboard...', 'info');
+        
+        // Load all components
+        Promise.all([
+            loadCollectionSummary(),
+            loadCollectionDailyTrend(),
+            loadCollectionRayonChart(),
+            loadCollectionDistribution(),
+            loadCollectionPCEZChart(),
+            loadCollectionTopPayers(),
+            loadCollectionPCEZTable()
+        ]).then(() => {
+            showToast('Collection dashboard loaded!', 'success');
+        }).catch((error) => {
+            console.error('Error loading collection dashboard:', error);
+            showToast('Failed to load dashboard', 'error');
+        });
+    }
+
+    // ===== LOAD SUMMARY =====
+    function loadCollectionSummary() {
+        return $.get('/api/collection/summary').then(function(data) {
+            if (!data.success) {
+                throw new Error(data.message || 'Failed to load summary');
+            }
+            
+            // Update periode label
+            $('#dashboard-periode-label').text(`Periode: ${data.periode}`);
+            
+            // Update stats
+            const s = data.summary;
+            $('#cd-totalTarget').text(formatRupiah(s.total_target));
+            $('#cd-totalPelanggan').text(`${formatNumber(s.total_pelanggan)} pelanggan`);
+            
+            $('#cd-totalCollection').text(formatRupiah(s.total_collection));
+            $('#cd-pelangganBayar').text(`${formatNumber(s.pelanggan_bayar)} pelanggan`);
+            
+            $('#cd-pelangganBelumBayar').text(formatNumber(s.pelanggan_belum_bayar));
+            $('#cd-selisihNominal').text(`Selisih: ${formatRupiah(s.selisih)}`);
+            
+            $('#cd-performancePct').text(s.performance_pct.toFixed(2) + '%');
+            
+            // Color code performance
+            const perfCard = $('#cd-performanceCard');
+            perfCard.removeClass('success warning danger');
+            if (s.performance_pct >= 90) {
+                perfCard.addClass('success');
+            } else if (s.performance_pct >= 75) {
+                perfCard.addClass('warning');
+            } else {
+                perfCard.addClass('danger');
+            }
+
+            return data;
+        });
+    }
+
+    // ===== LOAD DAILY TREND =====
+    function loadCollectionDailyTrend() {
+        return $.get('/api/collection/daily_trend').then(function(data) {
+            if (!data.success) return;
+            
+            const ctx = document.getElementById('cd-dailyTrendChart');
+            if (cdDailyTrendChart) cdDailyTrendChart.destroy();
+            
+            cdDailyTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.data.map(d => d.tanggal),
+                    datasets: [
+                        {
+                            label: 'Harian',
+                            data: data.data.map(d => d.total_harian),
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Kumulatif',
+                            data: data.data.map(d => d.kumulatif),
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: v => 'Rp ' + (v / 1e6).toFixed(0) + 'M'
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    }
+
+    // ===== LOAD RAYON CHART =====
+    function loadCollectionRayonChart() {
+        return $.get('/api/collection/summary').then(function(data) {
+            if (!data.success) return;
+            
+            const rayonData = data.by_rayon || [];
+            const ctx = document.getElementById('cd-rayonChart');
+            if (cdRayonChart) cdRayonChart.destroy();
+            
+            cdRayonChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: rayonData.map(r => `Rayon ${r.rayon}`),
+                    datasets: [
+                        {
+                            label: 'Target',
+                            data: rayonData.map(r => r.target),
+                            backgroundColor: '#cbd5e1'
+                        },
+                        {
+                            label: 'Collection',
+                            data: rayonData.map(r => r.collection),
+                            backgroundColor: '#10b981'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: v => 'Rp ' + (v / 1e6).toFixed(0) + 'M'
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    }
+
+    // ===== LOAD DISTRIBUTION =====
+    function loadCollectionDistribution() {
+        return $.get('/api/collection/payment_distribution').then(function(data) {
+            if (!data.success) return;
+            
+            const ctx = document.getElementById('cd-distributionChart');
+            if (cdDistributionChart) cdDistributionChart.destroy();
+            
+            cdDistributionChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: data.data.map(d => d.range_bayar),
+                    datasets: [{
+                        data: data.data.map(d => d.jumlah_transaksi),
+                        backgroundColor: [
+                            '#3b82f6', '#10b981', '#f59e0b', 
+                            '#ef4444', '#8b5cf6', '#ec4899'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right' }
+                    }
+                }
+            });
+        });
+    }
+
+    // ===== LOAD PCEZ CHART =====
+    function loadCollectionPCEZChart() {
+        return $.get('/api/collection/by_pcez').then(function(data) {
+            if (!data.success) return;
+            
+            const top10 = data.data.slice(0, 10);
+            const ctx = document.getElementById('cd-pcezChart');
+            if (cdPcezChart) cdPcezChart.destroy();
+            
+            cdPcezChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: top10.map(d => d.pcez),
+                    datasets: [{
+                        label: 'Performance %',
+                        data: top10.map(d => d.performance_pct),
+                        backgroundColor: top10.map(d => 
+                            d.performance_pct >= 90 ? '#10b981' :
+                            d.performance_pct >= 75 ? '#f59e0b' : '#ef4444'
+                        )
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: v => v + '%'
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    }
+
+    // ===== LOAD TOP PAYERS =====
+    function loadCollectionTopPayers() {
+        return $.get('/api/collection/top_payers').then(function(data) {
+            if (!data.success) {
+                $('#cd-topPayersTable tbody').html('<tr><td colspan="7" class="text-center text-muted">No data</td></tr>');
+                return;
+            }
+            
+            let html = '';
+            data.data.forEach((row, idx) => {
+                html += `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td>${row.nomen || '-'}</td>
+                        <td>${row.nama || '-'}</td>
+                        <td>${row.alamat || '-'}</td>
+                        <td>${row.pcez || '-'}</td>
+                        <td><strong>${formatRupiah(row.total_bayar)}</strong></td>
+                        <td>${row.jumlah_transaksi}x</td>
+                    </tr>
+                `;
+            });
+            
+            $('#cd-topPayersTable tbody').html(html);
+        });
+    }
+
+    // ===== LOAD PCEZ TABLE =====
+    function loadCollectionPCEZTable() {
+        return $.get('/api/collection/by_pcez').then(function(data) {
+            if (!data.success) {
+                $('#cd-pcezTable tbody').html('<tr><td colspan="7" class="text-center text-muted">No data</td></tr>');
+                return;
+            }
+            
+            let html = '';
+            data.data.forEach(row => {
+                const perfClass = row.performance_pct >= 90 ? 'success' : 
+                                 row.performance_pct >= 75 ? 'warning' : 'danger';
+                html += `
+                    <tr>
+                        <td><strong>${row.pcez}</strong></td>
+                        <td>${row.rayon}</td>
+                        <td>${formatNumber(row.total_pelanggan)}</td>
+                        <td>${formatNumber(row.pelanggan_bayar)}</td>
+                        <td>${formatRupiah(row.target)}</td>
+                        <td>${formatRupiah(row.collection)}</td>
+                        <td><span class="badge bg-${perfClass}">${row.performance_pct}%</span></td>
+                    </tr>
+                `;
+            });
+            
+            $('#cd-pcezTable tbody').html(html);
+        });
+    }
+
+    // ===== REFRESH DASHBOARD =====
+    function refreshCollectionDashboard() {
+        loadCollectionDashboard();
+    }
+
+    // ===== AUTO-LOAD ON TAB SHOW =====
+    $('button[data-bs-target="#tab-collection-dashboard"]').on('shown.bs.tab', function() {
+        loadCollectionDashboard();
+    });
+</script>
