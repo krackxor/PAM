@@ -1454,18 +1454,245 @@ def process_sbrs_file(filepath, upload_id, periode_bulan, periode_tahun, db):
 
 
 def process_mb_file(filepath, upload_id, periode_bulan, periode_tahun, db):
-    """Process MB file"""
-    return 0
+    """Process MB (Manual Bayar) file"""
+    try:
+        # Read file
+        if filepath.endswith('.txt'):
+            df = pd.read_csv(filepath, sep='|', dtype=str)
+        elif filepath.endswith('.csv'):
+            df = pd.read_csv(filepath, dtype=str)
+        elif filepath.endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(filepath)
+        else:
+            raise Exception('Unsupported file format')
+        
+        # Normalize column names
+        df.columns = df.columns.str.upper().str.strip()
+        
+        print(f"MB Columns: {list(df.columns)}")
+        
+        # Map columns (flexible)
+        required = ['NOMEN', 'TGL_BAYAR', 'JUMLAH']
+        
+        # Find NOMEN column
+        nomen_col = None
+        for col in df.columns:
+            if 'NOMEN' in col or 'NOPEL' in col:
+                nomen_col = col
+                break
+        
+        if not nomen_col:
+            raise Exception('NOMEN column not found')
+        
+        # Find TGL_BAYAR column
+        tgl_col = None
+        for col in df.columns:
+            if 'TGL' in col and 'BAYAR' in col:
+                tgl_col = col
+                break
+        
+        if not tgl_col:
+            raise Exception('TGL_BAYAR column not found')
+        
+        # Find JUMLAH column
+        jumlah_col = None
+        for col in df.columns:
+            if 'JUMLAH' in col or 'BAYAR' in col or 'NOMINAL' in col:
+                jumlah_col = col
+                break
+        
+        if not jumlah_col:
+            raise Exception('JUMLAH column not found')
+        
+        # Rename columns
+        rename_dict = {
+            nomen_col: 'nomen',
+            tgl_col: 'tgl_bayar',
+            jumlah_col: 'jumlah'
+        }
+        
+        df = df.rename(columns=rename_dict)
+        
+        # Clean data
+        df['nomen'] = df['nomen'].astype(str).str.strip().str.replace('.0', '', regex=False)
+        df = df[df['nomen'].notna() & (df['nomen'] != '') & (df['nomen'] != 'nan')]
+        
+        # Parse date
+        def parse_tgl_bayar(tgl_str):
+            try:
+                # Try various formats
+                for fmt in ['%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%d.%m.%Y']:
+                    try:
+                        return pd.to_datetime(tgl_str, format=fmt).strftime('%Y-%m-%d')
+                    except:
+                        continue
+                return pd.to_datetime(tgl_str).strftime('%Y-%m-%d')
+            except:
+                return None
+        
+        df['tgl_bayar'] = df['tgl_bayar'].apply(parse_tgl_bayar)
+        df = df[df['tgl_bayar'].notna()]
+        
+        # Clean jumlah
+        df['jumlah'] = pd.to_numeric(df['jumlah'], errors='coerce')
+        df['jumlah'] = df['jumlah'].fillna(0)
+        
+        # Add metadata
+        df['periode_bulan'] = periode_bulan
+        df['periode_tahun'] = periode_tahun
+        df['upload_id'] = upload_id
+        
+        # Save to database
+        cols_to_save = ['nomen', 'tgl_bayar', 'jumlah', 'periode_bulan', 'periode_tahun', 'upload_id']
+        df[cols_to_save].to_sql('master_bayar', db, if_exists='append', index=False)
+        
+        print(f"✅ MB processed: {len(df)} rows")
+        return len(df)
+        
+    except Exception as e:
+        print(f"❌ MB processing error: {e}")
+        traceback.print_exc()
+        raise
 
 
 def process_mainbill_file(filepath, upload_id, periode_bulan, periode_tahun, db):
     """Process MainBill file"""
-    return 0
+    try:
+        # Read file
+        if filepath.endswith('.txt'):
+            df = pd.read_csv(filepath, sep='|', dtype=str)
+        elif filepath.endswith('.csv'):
+            df = pd.read_csv(filepath, dtype=str)
+        elif filepath.endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(filepath)
+        else:
+            raise Exception('Unsupported file format')
+        
+        # Normalize column names
+        df.columns = df.columns.str.upper().str.strip()
+        
+        print(f"MainBill Columns: {list(df.columns)}")
+        
+        # Find key columns (flexible mapping)
+        nomen_col = None
+        for col in df.columns:
+            if any(x in col for x in ['NOMEN', 'NOPEL', 'ACCOUNT', 'CUSTOMER']):
+                nomen_col = col
+                break
+        
+        if not nomen_col:
+            raise Exception('NOMEN column not found')
+        
+        # Find tagihan column
+        tagihan_col = None
+        for col in df.columns:
+            if any(x in col for x in ['TAGIHAN', 'TOTAL', 'BILL', 'AMOUNT']):
+                tagihan_col = col
+                break
+        
+        # Rename
+        rename_dict = {nomen_col: 'nomen'}
+        if tagihan_col:
+            rename_dict[tagihan_col] = 'total_tagihan'
+        
+        df = df.rename(columns=rename_dict)
+        
+        # Clean nomen
+        df['nomen'] = df['nomen'].astype(str).str.strip().str.replace('.0', '', regex=False)
+        df = df[df['nomen'].notna() & (df['nomen'] != '') & (df['nomen'] != 'nan')]
+        
+        # Clean tagihan if exists
+        if 'total_tagihan' in df.columns:
+            df['total_tagihan'] = pd.to_numeric(df['total_tagihan'], errors='coerce').fillna(0)
+        else:
+            df['total_tagihan'] = 0
+        
+        # Add metadata
+        df['periode_bulan'] = periode_bulan
+        df['periode_tahun'] = periode_tahun
+        df['upload_id'] = upload_id
+        
+        # Save to database
+        cols_to_save = ['nomen', 'total_tagihan', 'periode_bulan', 'periode_tahun', 'upload_id']
+        df[cols_to_save].to_sql('mainbill', db, if_exists='append', index=False)
+        
+        print(f"✅ MainBill processed: {len(df)} rows")
+        return len(df)
+        
+    except Exception as e:
+        print(f"❌ MainBill processing error: {e}")
+        traceback.print_exc()
+        raise
 
 
 def process_ardebt_file(filepath, upload_id, periode_bulan, periode_tahun, db):
-    """Process Ardebt file"""
-    return 0
+    """Process Ardebt (AR Debt) file"""
+    try:
+        # Read file
+        if filepath.endswith('.txt'):
+            df = pd.read_csv(filepath, sep='|', dtype=str)
+        elif filepath.endswith('.csv'):
+            df = pd.read_csv(filepath, dtype=str)
+        elif filepath.endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(filepath)
+        else:
+            raise Exception('Unsupported file format')
+        
+        # Normalize column names
+        df.columns = df.columns.str.upper().str.strip()
+        
+        print(f"Ardebt Columns: {list(df.columns)}")
+        
+        # Find key columns (flexible mapping)
+        nomen_col = None
+        for col in df.columns:
+            if any(x in col for x in ['NOMEN', 'NOPEL', 'ACCOUNT', 'CUSTOMER']):
+                nomen_col = col
+                break
+        
+        if not nomen_col:
+            raise Exception('NOMEN column not found')
+        
+        # Find saldo column
+        saldo_col = None
+        for col in df.columns:
+            if any(x in col for x in ['SALDO', 'JUMLAH', 'TOTAL', 'DEBT', 'TUNGGAKAN']):
+                saldo_col = col
+                break
+        
+        # Rename
+        rename_dict = {nomen_col: 'nomen'}
+        if saldo_col:
+            rename_dict[saldo_col] = 'saldo_tunggakan'
+        
+        df = df.rename(columns=rename_dict)
+        
+        # Clean nomen
+        df['nomen'] = df['nomen'].astype(str).str.strip().str.replace('.0', '', regex=False)
+        df = df[df['nomen'].notna() & (df['nomen'] != '') & (df['nomen'] != 'nan')]
+        
+        # Clean saldo if exists
+        if 'saldo_tunggakan' in df.columns:
+            df['saldo_tunggakan'] = pd.to_numeric(df['saldo_tunggakan'], errors='coerce').fillna(0)
+        else:
+            df['saldo_tunggakan'] = 0
+        
+        # Add metadata
+        df['periode_bulan'] = periode_bulan
+        df['periode_tahun'] = periode_tahun
+        df['upload_id'] = upload_id
+        
+        # Save to database
+        cols_to_save = ['nomen', 'saldo_tunggakan', 'periode_bulan', 'periode_tahun', 'upload_id']
+        df[cols_to_save].to_sql('ardebt', db, if_exists='append', index=False)
+        
+        print(f"✅ Ardebt processed: {len(df)} rows")
+        return len(df)
+        
+    except Exception as e:
+        print(f"❌ Ardebt processing error: {e}")
+        traceback.print_exc()
+        raise
 
 
 @app.route('/upload_multi', methods=['POST'])
