@@ -819,12 +819,258 @@ def api_belum_bayar_breakdown():
 def auth_bypass():
     return redirect(url_for('index'))
 
-# Register anomaly detection routes
+# ==========================================
+# ANOMALY DETECTION API ROUTES (BUILT-IN)
+# ==========================================
+
+@app.route('/api/anomaly/summary')
+def api_anomaly_summary():
+    """Summary count untuk setiap jenis anomali dari SBRS"""
+    db = get_db()
+    
+    try:
+        # Ambil periode terakhir dari SBRS
+        periode_query = """
+            SELECT periode_bulan, periode_tahun 
+            FROM sbrs_data 
+            WHERE periode_bulan IS NOT NULL AND periode_tahun IS NOT NULL
+            ORDER BY periode_tahun DESC, periode_bulan DESC 
+            LIMIT 1
+        """
+        periode_row = db.execute(periode_query).fetchone()
+        
+        if not periode_row:
+            return jsonify({
+                'periode': None,
+                'anomalies': {
+                    'extreme': {'count': 0},
+                    'turun': {'count': 0},
+                    'zero': {'count': 0},
+                    'negatif': {'count': 0},
+                    'salah_catat': {'count': 0},
+                    'rebill': {'count': 0},
+                    'estimasi': {'count': 0}
+                }
+            })
+        
+        periode_bulan = periode_row[0]
+        periode_tahun = periode_row[1]
+        
+        # Format periode untuk display
+        bulan_names = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 
+                      'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des']
+        periode_label = f"{bulan_names[periode_bulan]} {periode_tahun}"
+        
+        # Query untuk hitung setiap anomali
+        anomalies = {}
+        
+        # 1. PEMAKAIAN EXTREME (>100 m3)
+        extreme_query = """
+            SELECT COUNT(DISTINCT nomen) as count
+            FROM sbrs_data
+            WHERE periode_bulan = ? AND periode_tahun = ?
+            AND volume > 100
+        """
+        extreme = db.execute(extreme_query, (periode_bulan, periode_tahun)).fetchone()
+        anomalies['extreme'] = {'count': extreme[0] or 0}
+        
+        # 2. ZERO USAGE (volume = 0)
+        zero_query = """
+            SELECT COUNT(DISTINCT nomen) as count
+            FROM sbrs_data
+            WHERE periode_bulan = ? AND periode_tahun = ?
+            AND volume = 0
+        """
+        zero = db.execute(zero_query, (periode_bulan, periode_tahun)).fetchone()
+        anomalies['zero'] = {'count': zero[0] or 0}
+        
+        # 3. STAND NEGATIF (volume < 0)
+        negatif_query = """
+            SELECT COUNT(DISTINCT nomen) as count
+            FROM sbrs_data
+            WHERE periode_bulan = ? AND periode_tahun = ?
+            AND volume < 0
+        """
+        negatif = db.execute(negatif_query, (periode_bulan, periode_tahun)).fetchone()
+        anomalies['negatif'] = {'count': negatif[0] or 0}
+        
+        # 4. SALAH CATAT (stand_akhir < stand_awal)
+        salah_query = """
+            SELECT COUNT(DISTINCT nomen) as count
+            FROM sbrs_data
+            WHERE periode_bulan = ? AND periode_tahun = ?
+            AND stand_akhir < stand_awal
+            AND stand_awal > 0
+        """
+        salah = db.execute(salah_query, (periode_bulan, periode_tahun)).fetchone()
+        anomalies['salah_catat'] = {'count': salah[0] or 0}
+        
+        # 5. REBILL (ada flag rebill di spm_status)
+        rebill_query = """
+            SELECT COUNT(DISTINCT nomen) as count
+            FROM sbrs_data
+            WHERE periode_bulan = ? AND periode_tahun = ?
+            AND (spm_status LIKE '%REBILL%' OR spm_status LIKE '%rebill%')
+        """
+        rebill = db.execute(rebill_query, (periode_bulan, periode_tahun)).fetchone()
+        anomalies['rebill'] = {'count': rebill[0] or 0}
+        
+        # 6. ESTIMASI (readmethod != 'ACTUAL')
+        estimasi_query = """
+            SELECT COUNT(DISTINCT nomen) as count
+            FROM sbrs_data
+            WHERE periode_bulan = ? AND periode_tahun = ?
+            AND (readmethod != 'ACTUAL' OR (skip_status IS NOT NULL AND skip_status != ''))
+        """
+        estimasi = db.execute(estimasi_query, (periode_bulan, periode_tahun)).fetchone()
+        anomalies['estimasi'] = {'count': estimasi[0] or 0}
+        
+        # 7. PEMAKAIAN TURUN (placeholder - butuh data periode sebelumnya)
+        anomalies['turun'] = {'count': 0}
+        
+        return jsonify({
+            'periode': periode_label,
+            'periode_bulan': periode_bulan,
+            'periode_tahun': periode_tahun,
+            'anomalies': anomalies
+        })
+        
+    except Exception as e:
+        print(f"Error anomaly summary: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
+@app.route('/api/anomaly/<anomaly_type>')
+def api_anomaly_detail(anomaly_type):
+    """Detail data untuk jenis anomali tertentu"""
+    db = get_db()
+    
+    try:
+        # Ambil periode terakhir
+        periode_query = """
+            SELECT periode_bulan, periode_tahun 
+            FROM sbrs_data 
+            WHERE periode_bulan IS NOT NULL AND periode_tahun IS NOT NULL
+            ORDER BY periode_tahun DESC, periode_bulan DESC 
+            LIMIT 1
+        """
+        periode_row = db.execute(periode_query).fetchone()
+        
+        if not periode_row:
+            return jsonify({'data': []})
+        
+        periode_bulan = periode_row[0]
+        periode_tahun = periode_row[1]
+        
+        # Query berdasarkan tipe anomali
+        if anomaly_type == 'extreme':
+            query = """
+                SELECT s.nomen, s.nama, s.alamat, s.rayon, s.volume,
+                       s.stand_awal, s.stand_akhir, s.readmethod
+                FROM sbrs_data s
+                WHERE s.periode_bulan = ? AND s.periode_tahun = ?
+                AND s.volume > 100
+                ORDER BY s.volume DESC
+                LIMIT 100
+            """
+            rows = db.execute(query, (periode_bulan, periode_tahun)).fetchall()
+            
+        elif anomaly_type == 'turun':
+            # Placeholder - need previous period data
+            return jsonify({'data': []})
+            
+        elif anomaly_type == 'zero':
+            query = """
+                SELECT nomen, nama, alamat, rayon, volume,
+                       readmethod, skip_status, trouble_status
+                FROM sbrs_data
+                WHERE periode_bulan = ? AND periode_tahun = ?
+                AND volume = 0
+                ORDER BY nomen
+                LIMIT 100
+            """
+            rows = db.execute(query, (periode_bulan, periode_tahun)).fetchall()
+            
+        elif anomaly_type == 'negatif':
+            query = """
+                SELECT nomen, nama, alamat, rayon, volume,
+                       stand_awal, stand_akhir
+                FROM sbrs_data
+                WHERE periode_bulan = ? AND periode_tahun = ?
+                AND volume < 0
+                ORDER BY volume ASC
+                LIMIT 100
+            """
+            rows = db.execute(query, (periode_bulan, periode_tahun)).fetchall()
+            
+        elif anomaly_type == 'salah_catat':
+            query = """
+                SELECT nomen, nama, alamat, rayon,
+                       stand_awal, stand_akhir, volume
+                FROM sbrs_data
+                WHERE periode_bulan = ? AND periode_tahun = ?
+                AND stand_akhir < stand_awal
+                AND stand_awal > 0
+                ORDER BY (stand_awal - stand_akhir) DESC
+                LIMIT 100
+            """
+            rows = db.execute(query, (periode_bulan, periode_tahun)).fetchall()
+            
+        elif anomaly_type == 'rebill':
+            query = """
+                SELECT nomen, nama, alamat, rayon, volume,
+                       spm_status
+                FROM sbrs_data
+                WHERE periode_bulan = ? AND periode_tahun = ?
+                AND (spm_status LIKE '%REBILL%' OR spm_status LIKE '%rebill%')
+                ORDER BY nomen
+                LIMIT 100
+            """
+            rows = db.execute(query, (periode_bulan, periode_tahun)).fetchall()
+            
+        elif anomaly_type == 'estimasi':
+            query = """
+                SELECT nomen, nama, alamat, rayon, volume,
+                       readmethod, skip_status
+                FROM sbrs_data
+                WHERE periode_bulan = ? AND periode_tahun = ?
+                AND (readmethod != 'ACTUAL' OR (skip_status IS NOT NULL AND skip_status != ''))
+                ORDER BY nomen
+                LIMIT 100
+            """
+            rows = db.execute(query, (periode_bulan, periode_tahun)).fetchall()
+        else:
+            return jsonify({'error': 'Invalid anomaly type'}), 400
+        
+        # Convert to dict
+        data = []
+        for row in rows:
+            data.append(dict(row))
+        
+        return jsonify({'data': data})
+        
+    except Exception as e:
+        print(f"Error anomaly detail: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
+# Register anomaly detection routes (if external module available)
 if ANOMALY_AVAILABLE:
-    register_anomaly_routes(app, get_db)
-    print("✅ Anomaly Detection System: ACTIVE")
+    try:
+        register_anomaly_routes(app, get_db)
+        print("✅ Anomaly Detection System: ACTIVE (External)")
+    except:
+        print("⚠️  External Anomaly module failed, using built-in")
 else:
-    print("⚠️  Anomaly Detection System: DISABLED")
+    print("✅ Anomaly Detection System: ACTIVE (Built-in)")
 
 # Register analisa routes
 if ANALISA_AVAILABLE:
