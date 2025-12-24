@@ -1140,22 +1140,179 @@ def auth_bypass():
 
 @app.route('/collection_dashboard')
 def collection_dashboard():
-    """Serve Collection Dashboard HTML"""
-    import os
-    dashboard_path = os.path.join(os.path.dirname(__file__), 'collection_dashboard.html')
-    
-    if os.path.exists(dashboard_path):
-        with open(dashboard_path, 'r', encoding='utf-8') as f:
-            return f.read()
-    else:
-        return '''
-        <html>
-        <body>
-        <h1>Error: Dashboard file not found</h1>
-        <p>Please ensure collection_dashboard.html is in the same directory as app.py</p>
-        </body>
-        </html>
-        ''', 404
+    """Collection Dashboard - Embedded HTML"""
+    html_content = '''<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collection Dashboard - PDAM Sunter</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 15px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .header h1 { font-size: 32px; margin-bottom: 10px; }
+        .header .periode { font-size: 18px; opacity: 0.9; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 2px 15px rgba(0,0,0,0.08); transition: transform 0.3s ease, box-shadow 0.3s ease; }
+        .stat-card:hover { transform: translateY(-5px); box-shadow: 0 5px 25px rgba(0,0,0,0.15); }
+        .stat-card .label { font-size: 14px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+        .stat-card .value { font-size: 32px; font-weight: bold; color: #1e293b; margin-bottom: 5px; }
+        .stat-card .subvalue { font-size: 14px; color: #94a3b8; }
+        .stat-card.success .value { color: #10b981; }
+        .stat-card.warning .value { color: #f59e0b; }
+        .stat-card.danger .value { color: #ef4444; }
+        .stat-card.primary .value { color: #3b82f6; }
+        .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .chart-container { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 2px 15px rgba(0,0,0,0.08); }
+        .chart-container h2 { font-size: 20px; color: #1e293b; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #e2e8f0; }
+        .chart-wrapper { position: relative; height: 350px; }
+        .table-container { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 2px 15px rgba(0,0,0,0.08); margin-bottom: 30px; overflow-x: auto; }
+        .table-container h2 { font-size: 20px; color: #1e293b; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #e2e8f0; }
+        table { width: 100%; border-collapse: collapse; }
+        thead { background: #f8fafc; }
+        th { padding: 12px; text-align: left; font-weight: 600; color: #475569; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #e2e8f0; }
+        td { padding: 12px; border-bottom: 1px solid #f1f5f9; color: #1e293b; }
+        tbody tr:hover { background: #f8fafc; }
+        .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .badge.success { background: #dcfce7; color: #166534; }
+        .badge.warning { background: #fef3c7; color: #92400e; }
+        .badge.danger { background: #fee2e2; color: #991b1b; }
+        @media (max-width: 768px) {
+            .stats-grid, .chart-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Collection Dashboard</h1>
+        <div class="periode" id="periode">Loading...</div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card primary">
+            <div class="label">Total Target</div>
+            <div class="value" id="totalTarget">-</div>
+            <div class="subvalue" id="totalPelanggan">- pelanggan</div>
+        </div>
+        <div class="stat-card success">
+            <div class="label">Total Collection</div>
+            <div class="value" id="totalCollection">-</div>
+            <div class="subvalue" id="pelangganBayar">- pelanggan bayar</div>
+        </div>
+        <div class="stat-card warning">
+            <div class="label">Belum Bayar</div>
+            <div class="value" id="pelangganBelumBayar">-</div>
+            <div class="subvalue" id="selisihNominal">Selisih: -</div>
+        </div>
+        <div class="stat-card" id="performanceCard">
+            <div class="label">Performance</div>
+            <div class="value" id="performancePct">-</div>
+            <div class="subvalue">Collection Rate</div>
+        </div>
+    </div>
+
+    <div class="chart-grid">
+        <div class="chart-container">
+            <h2>📈 Tren Collection Harian</h2>
+            <div class="chart-wrapper"><canvas id="dailyTrendChart"></canvas></div>
+        </div>
+        <div class="chart-container">
+            <h2>🎯 Performance by Rayon</h2>
+            <div class="chart-wrapper"><canvas id="rayonChart"></canvas></div>
+        </div>
+    </div>
+
+    <div class="chart-grid">
+        <div class="chart-container">
+            <h2>💰 Distribusi Pembayaran</h2>
+            <div class="chart-wrapper"><canvas id="distributionChart"></canvas></div>
+        </div>
+        <div class="chart-container">
+            <h2>📍 Performance by PCEZ (Top 10)</h2>
+            <div class="chart-wrapper"><canvas id="pcezChart"></canvas></div>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <h2>🏆 Top 20 Pembayar Terbesar</h2>
+        <div id="topPayersTable">Loading...</div>
+    </div>
+
+    <div class="table-container">
+        <h2>📊 Performance by PCEZ</h2>
+        <div id="pcezTable">Loading...</div>
+    </div>
+
+    <script>
+        function formatRupiah(v){return'Rp '+Math.round(v).toLocaleString('id-ID')}
+        function formatNumber(v){return Math.round(v).toLocaleString('id-ID')}
+        const chartOpts={responsive:!0,maintainAspectRatio:!1,plugins:{legend:{position:'top'}}};
+        
+        async function loadDashboard(){
+            try{
+                const r=await fetch('/api/collection/summary'),d=await r.json();
+                if(!d.success)throw new Error(d.message||'Failed');
+                document.getElementById('periode').textContent=`Periode: ${d.periode}`;
+                const s=d.summary;
+                document.getElementById('totalTarget').textContent=formatRupiah(s.total_target);
+                document.getElementById('totalPelanggan').textContent=`${formatNumber(s.total_pelanggan)} pelanggan`;
+                document.getElementById('totalCollection').textContent=formatRupiah(s.total_collection);
+                document.getElementById('pelangganBayar').textContent=`${formatNumber(s.pelanggan_bayar)} pelanggan`;
+                document.getElementById('pelangganBelumBayar').textContent=formatNumber(s.pelanggan_belum_bayar);
+                document.getElementById('selisihNominal').textContent=`Selisih: ${formatRupiah(s.selisih)}`;
+                document.getElementById('performancePct').textContent=s.performance_pct.toFixed(2)+'%';
+                const pc=document.getElementById('performanceCard');
+                pc.classList.add(s.performance_pct>=90?'success':s.performance_pct>=75?'warning':'danger');
+                await Promise.all([loadDailyTrend(),loadRayonChart(d.by_rayon),loadDistribution(),loadPCEZChart(),loadTopPayers(),loadPCEZTable()]);
+            }catch(e){console.error(e);document.body.innerHTML=`<div style="background:#fee2e2;color:#991b1b;padding:20px;border-radius:8px;margin:20px"><h2>Error</h2><p>${e.message}</p></div>`}
+        }
+        
+        async function loadDailyTrend(){
+            const r=await fetch('/api/collection/daily_trend'),d=await r.json();
+            if(!d.success)return;
+            new Chart(document.getElementById('dailyTrendChart'),{type:'line',data:{labels:d.data.map(x=>x.tanggal),datasets:[{label:'Harian',data:d.data.map(x=>x.total_harian),borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,0.1)',fill:!0,tension:0.4},{label:'Kumulatif',data:d.data.map(x=>x.kumulatif),borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.1)',fill:!0,tension:0.4}]},options:{...chartOpts,scales:{y:{beginAtZero:!0,ticks:{callback:v=>'Rp '+(v/1e6).toFixed(0)+'M'}}}}});
+        }
+        
+        function loadRayonChart(rd){
+            new Chart(document.getElementById('rayonChart'),{type:'bar',data:{labels:rd.map(r=>`Rayon ${r.rayon}`),datasets:[{label:'Target',data:rd.map(r=>r.target),backgroundColor:'#cbd5e1'},{label:'Collection',data:rd.map(r=>r.collection),backgroundColor:'#10b981'}]},options:{...chartOpts,scales:{y:{beginAtZero:!0,ticks:{callback:v=>'Rp '+(v/1e6).toFixed(0)+'M'}}}}});
+        }
+        
+        async function loadDistribution(){
+            const r=await fetch('/api/collection/payment_distribution'),d=await r.json();
+            if(!d.success)return;
+            new Chart(document.getElementById('distributionChart'),{type:'doughnut',data:{labels:d.data.map(x=>x.range_bayar),datasets:[{data:d.data.map(x=>x.jumlah_transaksi),backgroundColor:['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899']}]},options:{...chartOpts,plugins:{legend:{position:'right'}}}});
+        }
+        
+        async function loadPCEZChart(){
+            const r=await fetch('/api/collection/by_pcez'),d=await r.json();
+            if(!d.success)return;
+            const t10=d.data.slice(0,10);
+            new Chart(document.getElementById('pcezChart'),{type:'bar',data:{labels:t10.map(x=>x.pcez),datasets:[{label:'Performance %',data:t10.map(x=>x.performance_pct),backgroundColor:t10.map(x=>x.performance_pct>=90?'#10b981':x.performance_pct>=75?'#f59e0b':'#ef4444')}]},options:{...chartOpts,scales:{y:{beginAtZero:!0,max:100,ticks:{callback:v=>v+'%'}}}}});
+        }
+        
+        async function loadTopPayers(){
+            const r=await fetch('/api/collection/top_payers'),d=await r.json();
+            if(!d.success){document.getElementById('topPayersTable').innerHTML='<p>No data</p>';return}
+            let h='<table><thead><tr><th>No</th><th>Nomen</th><th>Nama</th><th>Alamat</th><th>PCEZ</th><th>Total Bayar</th><th>Transaksi</th></tr></thead><tbody>';
+            d.data.forEach((x,i)=>{h+=`<tr><td>${i+1}</td><td>${x.nomen||'-'}</td><td>${x.nama||'-'}</td><td>${x.alamat||'-'}</td><td>${x.pcez||'-'}</td><td><strong>${formatRupiah(x.total_bayar)}</strong></td><td>${x.jumlah_transaksi}x</td></tr>`});
+            document.getElementById('topPayersTable').innerHTML=h+'</tbody></table>';
+        }
+        
+        async function loadPCEZTable(){
+            const r=await fetch('/api/collection/by_pcez'),d=await r.json();
+            if(!d.success){document.getElementById('pcezTable').innerHTML='<p>No data</p>';return}
+            let h='<table><thead><tr><th>PCEZ</th><th>Rayon</th><th>Total</th><th>Bayar</th><th>Target</th><th>Collection</th><th>Perf</th></tr></thead><tbody>';
+            d.data.forEach(x=>{const c=x.performance_pct>=90?'success':x.performance_pct>=75?'warning':'danger';h+=`<tr><td><strong>${x.pcez}</strong></td><td>${x.rayon}</td><td>${formatNumber(x.total_pelanggan)}</td><td>${formatNumber(x.pelanggan_bayar)}</td><td>${formatRupiah(x.target)}</td><td>${formatRupiah(x.collection)}</td><td><span class="badge ${c}">${x.performance_pct}%</span></td></tr>`});
+            document.getElementById('pcezTable').innerHTML=h+'</tbody></table>';
+        }
+        
+        loadDashboard();
+    </script>
+</body>
+</html>'''
+    return html_content
 
 # ==========================================
 # ANOMALY DETECTION API ROUTES (BUILT-IN)
