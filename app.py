@@ -547,6 +547,313 @@ def api_tren_harian():
     rows = db.execute(query, (last_month, last_month)).fetchall()
     return jsonify([dict(row) for row in rows])
 
+
+# === NEW: COLLECTION ANALYTICS DASHBOARD APIs ===
+
+@app.route('/api/collection/summary')
+def api_collection_summary():
+    """Summary collection untuk dashboard"""
+    db = get_db()
+    
+    try:
+        # Get latest periode
+        periode_query = """
+            SELECT periode_bulan, periode_tahun 
+            FROM collection_harian 
+            WHERE periode_bulan IS NOT NULL AND periode_tahun IS NOT NULL
+            ORDER BY periode_tahun DESC, periode_bulan DESC 
+            LIMIT 1
+        """
+        periode_row = db.execute(periode_query).fetchone()
+        
+        if not periode_row:
+            return jsonify({
+                'success': False,
+                'message': 'No collection data found'
+            })
+        
+        periode_bulan = periode_row[0]
+        periode_tahun = periode_row[1]
+        
+        # Format periode label
+        bulan_names = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 
+                      'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des']
+        periode_label = f"{bulan_names[periode_bulan]} {periode_tahun}"
+        
+        # 1. Total Target vs Collection
+        target_query = """
+            SELECT 
+                COUNT(DISTINCT m.nomen) as total_pelanggan,
+                SUM(m.target_mc) as total_target
+            FROM master_pelanggan m
+            WHERE m.rayon IN ('34', '35')
+        """
+        target = db.execute(target_query).fetchone()
+        
+        collection_query = """
+            SELECT 
+                COUNT(DISTINCT c.nomen) as pelanggan_bayar,
+                SUM(c.jumlah_bayar) as total_collection
+            FROM collection_harian c
+            WHERE c.periode_bulan = ? AND c.periode_tahun = ?
+        """
+        collection = db.execute(collection_query, (periode_bulan, periode_tahun)).fetchone()
+        
+        total_target = target[1] or 0
+        total_collection = collection[1] or 0
+        
+        # 2. Performance percentage
+        performance_pct = (total_collection / total_target * 100) if total_target > 0 else 0
+        
+        # 3. Breakdown by rayon
+        rayon_query = """
+            SELECT 
+                m.rayon,
+                COUNT(DISTINCT m.nomen) as total_pelanggan,
+                SUM(m.target_mc) as target,
+                COUNT(DISTINCT c.nomen) as pelanggan_bayar,
+                SUM(c.jumlah_bayar) as collection
+            FROM master_pelanggan m
+            LEFT JOIN collection_harian c ON m.nomen = c.nomen 
+                AND c.periode_bulan = ? AND c.periode_tahun = ?
+            WHERE m.rayon IN ('34', '35')
+            GROUP BY m.rayon
+        """
+        rayon_data = db.execute(rayon_query, (periode_bulan, periode_tahun)).fetchall()
+        
+        return jsonify({
+            'success': True,
+            'periode': periode_label,
+            'periode_bulan': periode_bulan,
+            'periode_tahun': periode_tahun,
+            'summary': {
+                'total_pelanggan': target[0] or 0,
+                'pelanggan_bayar': collection[0] or 0,
+                'pelanggan_belum_bayar': (target[0] or 0) - (collection[0] or 0),
+                'total_target': total_target,
+                'total_collection': total_collection,
+                'selisih': total_target - total_collection,
+                'performance_pct': round(performance_pct, 2)
+            },
+            'by_rayon': [dict(row) for row in rayon_data]
+        })
+        
+    except Exception as e:
+        print(f"Error collection summary: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/collection/by_pcez')
+def api_collection_by_pcez():
+    """Collection performance by PCEZ"""
+    db = get_db()
+    
+    try:
+        # Get latest periode
+        periode_query = """
+            SELECT periode_bulan, periode_tahun 
+            FROM collection_harian 
+            WHERE periode_bulan IS NOT NULL
+            ORDER BY periode_tahun DESC, periode_bulan DESC 
+            LIMIT 1
+        """
+        periode_row = db.execute(periode_query).fetchone()
+        
+        if not periode_row:
+            return jsonify({'success': False, 'data': []})
+        
+        periode_bulan, periode_tahun = periode_row[0], periode_row[1]
+        
+        # Performance by PCEZ
+        query = """
+            SELECT 
+                m.pcez,
+                m.rayon,
+                COUNT(DISTINCT m.nomen) as total_pelanggan,
+                SUM(m.target_mc) as target,
+                COUNT(DISTINCT c.nomen) as pelanggan_bayar,
+                SUM(c.jumlah_bayar) as collection,
+                ROUND(SUM(c.jumlah_bayar) * 100.0 / SUM(m.target_mc), 2) as performance_pct
+            FROM master_pelanggan m
+            LEFT JOIN collection_harian c ON m.nomen = c.nomen 
+                AND c.periode_bulan = ? AND c.periode_tahun = ?
+            WHERE m.rayon IN ('34', '35') AND m.pcez IS NOT NULL AND m.pcez != ''
+            GROUP BY m.pcez, m.rayon
+            ORDER BY m.rayon, m.pcez
+        """
+        
+        rows = db.execute(query, (periode_bulan, periode_tahun)).fetchall()
+        
+        return jsonify({
+            'success': True,
+            'data': [dict(row) for row in rows]
+        })
+        
+    except Exception as e:
+        print(f"Error by PCEZ: {e}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/collection/top_payers')
+def api_collection_top_payers():
+    """Top 20 pembayar terbesar"""
+    db = get_db()
+    
+    try:
+        # Get latest periode
+        periode_query = """
+            SELECT periode_bulan, periode_tahun 
+            FROM collection_harian 
+            WHERE periode_bulan IS NOT NULL
+            ORDER BY periode_tahun DESC, periode_bulan DESC 
+            LIMIT 1
+        """
+        periode_row = db.execute(periode_query).fetchone()
+        
+        if not periode_row:
+            return jsonify({'success': False, 'data': []})
+        
+        periode_bulan, periode_tahun = periode_row[0], periode_row[1]
+        
+        # Top payers
+        query = """
+            SELECT 
+                c.nomen,
+                m.nama,
+                m.alamat,
+                m.rayon,
+                m.pcez,
+                SUM(c.jumlah_bayar) as total_bayar,
+                COUNT(*) as jumlah_transaksi
+            FROM collection_harian c
+            LEFT JOIN master_pelanggan m ON c.nomen = m.nomen
+            WHERE c.periode_bulan = ? AND c.periode_tahun = ?
+            GROUP BY c.nomen, m.nama, m.alamat, m.rayon, m.pcez
+            ORDER BY total_bayar DESC
+            LIMIT 20
+        """
+        
+        rows = db.execute(query, (periode_bulan, periode_tahun)).fetchall()
+        
+        return jsonify({
+            'success': True,
+            'data': [dict(row) for row in rows]
+        })
+        
+    except Exception as e:
+        print(f"Error top payers: {e}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/collection/daily_trend')
+def api_collection_daily_trend():
+    """Tren collection harian dengan moving average"""
+    db = get_db()
+    
+    try:
+        # Get latest periode
+        periode_query = """
+            SELECT periode_bulan, periode_tahun 
+            FROM collection_harian 
+            WHERE periode_bulan IS NOT NULL
+            ORDER BY periode_tahun DESC, periode_bulan DESC 
+            LIMIT 1
+        """
+        periode_row = db.execute(periode_query).fetchone()
+        
+        if not periode_row:
+            return jsonify({'success': False, 'data': []})
+        
+        periode_bulan, periode_tahun = periode_row[0], periode_row[1]
+        
+        # Daily trend
+        query = """
+            SELECT 
+                strftime('%d', c.tgl_bayar) as tanggal,
+                c.tgl_bayar,
+                COUNT(DISTINCT c.nomen) as jumlah_pelanggan,
+                SUM(c.jumlah_bayar) as total_harian,
+                (SELECT SUM(jumlah_bayar) 
+                 FROM collection_harian 
+                 WHERE periode_bulan = ? AND periode_tahun = ?
+                 AND tgl_bayar <= c.tgl_bayar) as kumulatif
+            FROM collection_harian c
+            WHERE c.periode_bulan = ? AND c.periode_tahun = ?
+            GROUP BY c.tgl_bayar
+            ORDER BY c.tgl_bayar ASC
+        """
+        
+        rows = db.execute(query, (periode_bulan, periode_tahun, periode_bulan, periode_tahun)).fetchall()
+        
+        return jsonify({
+            'success': True,
+            'data': [dict(row) for row in rows]
+        })
+        
+    except Exception as e:
+        print(f"Error daily trend: {e}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/collection/payment_distribution')
+def api_collection_payment_distribution():
+    """Distribusi pembayaran by amount ranges"""
+    db = get_db()
+    
+    try:
+        # Get latest periode
+        periode_query = """
+            SELECT periode_bulan, periode_tahun 
+            FROM collection_harian 
+            WHERE periode_bulan IS NOT NULL
+            ORDER BY periode_tahun DESC, periode_bulan DESC 
+            LIMIT 1
+        """
+        periode_row = db.execute(periode_query).fetchone()
+        
+        if not periode_row:
+            return jsonify({'success': False, 'data': []})
+        
+        periode_bulan, periode_tahun = periode_row[0], periode_row[1]
+        
+        # Distribution by amount ranges
+        query = """
+            SELECT 
+                CASE 
+                    WHEN jumlah_bayar < 50000 THEN '< 50K'
+                    WHEN jumlah_bayar < 100000 THEN '50K - 100K'
+                    WHEN jumlah_bayar < 200000 THEN '100K - 200K'
+                    WHEN jumlah_bayar < 500000 THEN '200K - 500K'
+                    WHEN jumlah_bayar < 1000000 THEN '500K - 1M'
+                    ELSE '> 1M'
+                END as range_bayar,
+                COUNT(*) as jumlah_transaksi,
+                SUM(jumlah_bayar) as total_nilai
+            FROM collection_harian
+            WHERE periode_bulan = ? AND periode_tahun = ?
+            GROUP BY range_bayar
+            ORDER BY MIN(jumlah_bayar)
+        """
+        
+        rows = db.execute(query, (periode_bulan, periode_tahun)).fetchall()
+        
+        return jsonify({
+            'success': True,
+            'data': [dict(row) for row in rows]
+        })
+        
+    except Exception as e:
+        print(f"Error payment distribution: {e}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/simpan_analisa', methods=['POST'])
 def simpan_analisa():
     try:
@@ -829,6 +1136,26 @@ def api_belum_bayar_breakdown():
 @app.route('/logout')
 def auth_bypass():
     return redirect(url_for('index'))
+
+
+@app.route('/collection_dashboard')
+def collection_dashboard():
+    """Serve Collection Dashboard HTML"""
+    import os
+    dashboard_path = os.path.join(os.path.dirname(__file__), 'collection_dashboard.html')
+    
+    if os.path.exists(dashboard_path):
+        with open(dashboard_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    else:
+        return '''
+        <html>
+        <body>
+        <h1>Error: Dashboard file not found</h1>
+        <p>Please ensure collection_dashboard.html is in the same directory as app.py</p>
+        </body>
+        </html>
+        ''', 404
 
 # ==========================================
 # ANOMALY DETECTION API ROUTES (BUILT-IN)
