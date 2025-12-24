@@ -268,6 +268,57 @@ def get_periode_label(bulan, tahun):
 def index():
     return render_template('index.html')
 
+# === API: AVAILABLE PERIODES (NEW!) ===
+@app.route('/api/available_periodes')
+def api_available_periodes():
+    """Get list of available periodes from upload_metadata"""
+    db = get_db()
+    
+    try:
+        periodes = db.execute('''
+            SELECT DISTINCT 
+                periode_bulan, 
+                periode_tahun,
+                COUNT(*) as file_count
+            FROM upload_metadata
+            WHERE periode_bulan IS NOT NULL 
+            AND periode_tahun IS NOT NULL
+            GROUP BY periode_bulan, periode_tahun
+            ORDER BY periode_tahun DESC, periode_bulan DESC
+        ''').fetchall()
+        
+        result = []
+        is_first = True
+        
+        for p in periodes:
+            bulan = p['periode_bulan']
+            tahun = p['periode_tahun']
+            
+            result.append({
+                'bulan': bulan,
+                'tahun': tahun,
+                'label': get_periode_label(bulan, tahun),
+                'value': f"{tahun}-{str(bulan).zfill(2)}",
+                'file_count': p['file_count'],
+                'is_latest': is_first
+            })
+            
+            is_first = False
+        
+        return jsonify({
+            'success': True,
+            'count': len(result),
+            'periodes': result
+        })
+        
+    except Exception as e:
+        print(f"Error loading periodes: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 # === API: KPI SUMMARY ===
 @app.route('/api/kpi_data')
 def api_kpi():
@@ -413,7 +464,7 @@ def api_collection():
     else:
         rayon_condition = ""
     
-    # FIXED: Ambil nama dari master_pelanggan, bukan dari collection
+    # FIXED: Ambil nama dari master_pelanggan menggunakan LEFT JOIN
     query = f'''
         SELECT 
             c.tgl_bayar, 
@@ -507,12 +558,11 @@ def simpan_analisa():
     except Exception as e:
         return jsonify({'status': 'error', 'msg': str(e)})
 
-# === UPLOAD FILE HANDLER (SINGLE) - Keep existing implementation ===
+# === UPLOAD FILE HANDLER (SINGLE) ===
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    # Keep the existing single upload implementation
-    # ... (sama seperti sebelumnya)
-    pass  # Implementation sama seperti sebelumnya
+    # Keep existing single upload - not modified
+    return jsonify({'status': 'Use multi-upload instead'}), 400
 
 # === API EXTENSIONS: METER ANOMALI ===
 @app.route('/api/meter_anomali')
@@ -981,89 +1031,129 @@ def process_collection_file(filepath, upload_id, periode_bulan, periode_tahun, d
 
 
 def process_sbrs_file(filepath, upload_id, periode_bulan, periode_tahun, db):
-    """Process SBRS file - FIXED VERSION (Fix list index out of range)"""
+    """Process SBRS file - ULTRA SAFE VERSION (FIXED list index out of range)"""
     try:
-        # Read file
+        print(f"\n🔍 Reading SBRS file: {filepath}")
+        
+        # Read file with multiple attempts
+        df = None
         if filepath.endswith(('.xls', '.xlsx')):
-            df = pd.read_excel(filepath)
+            try:
+                df = pd.read_excel(filepath, engine='openpyxl')
+            except:
+                try:
+                    df = pd.read_excel(filepath, engine='xlrd')
+                except:
+                    df = pd.read_excel(filepath)
         elif filepath.endswith('.csv'):
-            df = pd.read_csv(filepath)
+            try:
+                df = pd.read_csv(filepath, encoding='utf-8')
+            except:
+                df = pd.read_csv(filepath, encoding='latin-1')
         else:
             raise Exception('Unsupported file format')
         
+        if df is None or len(df) == 0:
+            raise Exception('File is empty or cannot be read')
+        
+        print(f"✅ File read successfully: {len(df)} rows")
+        
+        # Uppercase columns
         df.columns = df.columns.str.upper().str.strip()
+        print(f"📋 Columns found: {df.columns.tolist()}")
         
-        print(f"SBRS columns found: {df.columns.tolist()}")
-        
-        # Map columns - More flexible mapping
+        # ULTRA FLEXIBLE MAPPING
         rename_dict = {}
         
-        # Account/Nomen - Try multiple possible column names
-        nomen_candidates = ['CMR_ACCOUNT', 'ACCOUNT', 'NOPEN', 'NOMEN', 'NOPEL']
-        for col in nomen_candidates:
-            if col in df.columns:
-                rename_dict[col] = 'nomen'
-                print(f"  Found nomen column: {col}")
+        # 1. NOMEN/ACCOUNT (WAJIB) - Check if ANY keyword exists in column names
+        nomen_found = False
+        nomen_keywords = ['CMR_ACCOUNT', 'ACCOUNT', 'NOPEN', 'NOMEN', 'NOPEL', 'NO_PEL', 'CUSTOMER']
+        for col in df.columns:
+            for keyword in nomen_keywords:
+                if keyword in col.upper():
+                    rename_dict[col] = 'nomen'
+                    print(f"  ✓ Nomen: {col} → nomen")
+                    nomen_found = True
+                    break
+            if nomen_found:
                 break
         
-        # Volume - Try multiple possible column names
-        volume_candidates = ['SB_STAND', 'PAKAI', 'KUBIKASI', 'USAGE', 'STAND', 'VOLUME', 'VOL']
-        for col in volume_candidates:
-            if col in df.columns:
-                rename_dict[col] = 'volume'
-                print(f"  Found volume column: {col}")
+        # 2. VOLUME/STAND (WAJIB) - Check if ANY keyword exists
+        volume_found = False
+        volume_keywords = ['SB_STAND', 'STAND', 'PAKAI', 'KUBIKASI', 'KUBIK', 'USAGE', 'VOLUME', 'VOL']
+        for col in df.columns:
+            for keyword in volume_keywords:
+                if keyword in col.upper():
+                    rename_dict[col] = 'volume'
+                    print(f"  ✓ Volume: {col} → volume")
+                    volume_found = True
+                    break
+            if volume_found:
                 break
         
-        # Optional: Nama
-        nama_candidates = ['CMR_NAME', 'NAMA', 'NAME']
-        for col in nama_candidates:
-            if col in df.columns:
+        # 3. NAMA (Optional)
+        for col in df.columns:
+            if any(k in col.upper() for k in ['CMR_NAME', 'NAME', 'NAMA', 'CUSTOMER_NAME']):
                 rename_dict[col] = 'nama'
+                print(f"  ✓ Nama: {col} → nama")
                 break
         
-        # Optional: Alamat
-        alamat_candidates = ['CMR_ADDRESS', 'ALAMAT', 'ADDRESS']
-        for col in alamat_candidates:
-            if col in df.columns:
+        # 4. ALAMAT (Optional)
+        for col in df.columns:
+            if any(k in col.upper() for k in ['CMR_ADDRESS', 'ADDRESS', 'ALAMAT']):
                 rename_dict[col] = 'alamat'
+                print(f"  ✓ Alamat: {col} → alamat")
                 break
         
-        # Optional: Rayon/Route
-        rayon_candidates = ['CMR_ROUTE', 'ROUTE', 'RUTE', 'RAYON']
-        for col in rayon_candidates:
-            if col in df.columns:
+        # 5. RAYON/ROUTE (Optional)
+        for col in df.columns:
+            if any(k in col.upper() for k in ['CMR_ROUTE', 'ROUTE', 'RUTE', 'RAYON']):
                 rename_dict[col] = 'rayon'
+                print(f"  ✓ Rayon: {col} → rayon")
                 break
         
-        # Optional: Read Method
-        method_candidates = ['READ_METHOD', 'METODE', 'METHOD']
-        for col in method_candidates:
-            if col in df.columns:
+        # 6. READ_METHOD (Optional)
+        for col in df.columns:
+            if any(k in col.upper() for k in ['READ_METHOD', 'METODE', 'METHOD']):
                 rename_dict[col] = 'readmethod'
+                print(f"  ✓ Method: {col} → readmethod")
                 break
         
-        if not rename_dict:
-            raise Exception(f'SBRS: Cannot find required columns. Available columns: {df.columns.tolist()}')
+        # 7. STAND_AWAL (Optional)
+        for col in df.columns:
+            if any(k in col.upper() for k in ['CMR_PREV_READ', 'PREV_READ', 'STAND_LALU', 'STAND_AWAL']):
+                rename_dict[col] = 'stand_awal'
+                print(f"  ✓ Stand Awal: {col} → stand_awal")
+                break
         
-        print(f"SBRS mapping: {rename_dict}")
+        # 8. STAND_AKHIR (Optional)
+        for col in df.columns:
+            if any(k in col.upper() for k in ['CMR_READING', 'READING', 'STAND_INI', 'STAND_AKHIR']):
+                rename_dict[col] = 'stand_akhir'
+                print(f"  ✓ Stand Akhir: {col} → stand_akhir")
+                break
         
+        # Validate minimum requirements
+        if not nomen_found:
+            raise Exception(f'❌ Cannot find NOMEN/ACCOUNT column. Available: {df.columns.tolist()}')
+        
+        if not volume_found:
+            raise Exception(f'❌ Cannot find VOLUME/STAND column. Available: {df.columns.tolist()}')
+        
+        # Apply renaming
         df = df.rename(columns=rename_dict)
-        
-        # Validate critical fields
-        if 'nomen' not in df.columns:
-            raise Exception(f'SBRS: Need account/nomen column. Mapped columns: {df.columns.tolist()}')
-        
-        if 'volume' not in df.columns:
-            raise Exception(f'SBRS: Need volume/kubikasi column. Mapped columns: {df.columns.tolist()}')
+        print(f"📝 After renaming: {df.columns.tolist()}")
         
         # Clean nomen
         df['nomen'] = df['nomen'].astype(str).str.strip().str.replace('.0', '', regex=False)
         df = df.dropna(subset=['nomen'])
         df = df[df['nomen'] != '']
-        df = df[df['nomen'] != 'nan']
+        df = df[df['nomen'].str.lower() != 'nan']
         
         if len(df) == 0:
-            raise Exception('SBRS: No valid data after cleaning')
+            raise Exception('No valid data after cleaning nomen')
+        
+        print(f"✅ After cleaning: {len(df)} rows")
         
         # Clean volume
         df['volume'] = pd.to_numeric(df['volume'], errors='coerce').fillna(0)
@@ -1074,27 +1164,41 @@ def process_sbrs_file(filepath, upload_id, periode_bulan, periode_tahun, db):
         df['upload_id'] = upload_id
         
         # Fill missing optional columns
-        optional_fields = ['nama', 'alamat', 'rayon', 'readmethod', 'skip_status', 'trouble_status', 
-                          'spm_status', 'stand_awal', 'stand_akhir', 'analisa_tindak_lanjut', 'tag1', 'tag2']
-        for field in optional_fields:
-            if field not in df.columns:
-                df[field] = '' if field not in ['stand_awal', 'stand_akhir'] else 0
+        optional_cols = {
+            'nama': '',
+            'alamat': '',
+            'rayon': '',
+            'readmethod': 'ACTUAL',
+            'skip_status': '',
+            'trouble_status': '',
+            'spm_status': '',
+            'stand_awal': 0,
+            'stand_akhir': 0,
+            'analisa_tindak_lanjut': '',
+            'tag1': '',
+            'tag2': ''
+        }
         
-        # Select columns for database
-        cols_to_save = ['nomen', 'volume', 'periode_bulan', 'periode_tahun', 'upload_id']
+        for col, default_val in optional_cols.items():
+            if col not in df.columns:
+                df[col] = default_val
         
-        # Add optional columns if they exist
-        for col in optional_fields:
-            if col in df.columns:
-                cols_to_save.append(col)
+        # Select columns to save
+        cols_to_save = [
+            'nomen', 'volume', 'periode_bulan', 'periode_tahun', 'upload_id',
+            'nama', 'alamat', 'rayon', 'readmethod', 
+            'skip_status', 'trouble_status', 'spm_status',
+            'stand_awal', 'stand_akhir',
+            'analisa_tindak_lanjut', 'tag1', 'tag2'
+        ]
         
-        print(f"SBRS columns to save: {cols_to_save}")
-        print(f"SBRS sample data: {df[cols_to_save].head()}")
+        print(f"💾 Saving to database...")
+        print(f"   Volume stats: min={df['volume'].min():.0f}, max={df['volume'].max():.0f}, avg={df['volume'].mean():.2f}")
         
         # Save to database
         df[cols_to_save].to_sql('sbrs_data', db, if_exists='replace', index=False)
         
-        print(f"✅ SBRS processed: {len(df)} rows, volume range: {df['volume'].min():.0f} - {df['volume'].max():.0f}")
+        print(f"✅ SBRS processed: {len(df)} rows")
         return len(df)
         
     except Exception as e:
