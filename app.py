@@ -1258,14 +1258,38 @@ def upload_multi():
             file.save(filepath)
             print(f"\n📁 Processing: {filename}")
             
-            # Auto-detect
-            detection = auto_detect_periode(filepath, filename)
+            # Auto-detect with error handling
+            detection = None
+            try:
+                detection = auto_detect_periode(filepath, filename)
+            except Exception as detect_error:
+                print(f"❌ Auto-detect error for {filename}: {detect_error}")
+                traceback.print_exc()
+                results.append({
+                    'filename': filename,
+                    'status': 'error',
+                    'message': f'Auto-detect failed: {str(detect_error)}'
+                })
+                continue
             
             if not detection:
                 results.append({
                     'filename': filename,
                     'status': 'error',
-                    'message': 'Cannot detect file type or periode'
+                    'message': 'Cannot detect file type or periode - please set manually'
+                })
+                continue
+            
+            # Validate detection results
+            file_type = detection.get('file_type')
+            periode_bulan = detection.get('periode_bulan')
+            periode_tahun = detection.get('periode_tahun')
+            
+            if not file_type or not periode_bulan or not periode_tahun:
+                results.append({
+                    'filename': filename,
+                    'status': 'error',
+                    'message': f'Incomplete detection: type={file_type}, bulan={periode_bulan}, tahun={periode_tahun}'
                 })
                 continue
             
