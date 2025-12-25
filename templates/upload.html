@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Upload Data - SUNTER{% endblock %}
+{% block title %}Smart Upload - SUNTER{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
@@ -8,25 +8,13 @@
         <div class="col-md-6">
             <div class="card shadow-sm border-0">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="fas fa-upload mr-2"></i>Smart Upload Center</h5>
+                    <h5 class="mb-0"><i class="fas fa-magic mr-2"></i>Smart Upload Center</h5>
                 </div>
                 <div class="card-body">
+                    <p class="text-muted small">Sistem akan otomatis mendeteksi tipe data (SBRS, Collection, MC, dll) dan periode berdasarkan isi file Anda.</p>
                     <form id="uploadForm">
-                        <div class="form-group mb-3">
-                            <label class="font-weight-bold">1. Jenis Data (Opsional):</label>
-                            <select class="form-control" name="file_type" id="file_type">
-                                <option value="">-- Auto-Detect (Otomatis) --</option>
-                                <option value="sbrs">Data SBRS (Pembacaan Meter)</option>
-                                <option value="collection">Data Collection (Penagihan)</option>
-                                <option value="mc">Data MC (Master Customer)</option>
-                                <option value="mb">Data MB (Manual Bayar)</option>
-                                <option value="ardebt">Data Ardebt (Piutang)</option>
-                            </select>
-                            <small class="text-muted">Gunakan Auto-Detect untuk membiarkan sistem mengenali file berdasarkan isi & nama file.</small>
-                        </div>
-
                         <div class="form-group mb-4">
-                            <label class="font-weight-bold">2. Pilih File (Excel/CSV):</label>
+                            <label class="font-weight-bold">Pilih File (Excel/CSV):</label>
                             <div class="custom-file">
                                 <input type="file" class="custom-file-input" name="file" id="fileInput" accept=".xlsx, .xls, .csv, .txt" required>
                                 <label class="custom-file-label" for="fileInput">Pilih file...</label>
@@ -34,14 +22,14 @@
                         </div>
 
                         <button type="submit" class="btn btn-primary btn-block shadow-sm py-2 fw-bold" id="submitBtn">
-                            <i class="fas fa-play mr-1"></i> MULAI PROSES UPLOAD
+                            <i class="fas fa-play mr-1"></i> MULAI PROSES OTOMATIS
                         </button>
                     </form>
 
                     <div id="statusArea" class="mt-4 d-none">
                         <div class="alert alert-info border-0 shadow-sm" id="statusMessage">
                             <div class="spinner-border spinner-border-sm mr-2" role="status"></div>
-                            Sedang menganalisa dan memproses file...
+                            Menganalisa struktur file...
                         </div>
                         <div class="progress" style="height: 10px;">
                             <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
@@ -56,7 +44,7 @@
 
 {% block extra_js %}
 <script>
-// Update nama file di label input bootstrap
+// Update nama file di label
 $('.custom-file-input').on('change', function() {
     let fileName = $(this).val().split('\\').pop();
     $(this).next('.custom-file-label').addClass("selected").html(fileName);
@@ -64,17 +52,15 @@ $('.custom-file-input').on('change', function() {
 
 $('#uploadForm').on('submit', function(e) {
     e.preventDefault();
-    
     const formData = new FormData(this);
     const submitBtn = $('#submitBtn');
     const statusArea = $('#statusArea');
     const statusMessage = $('#statusMessage');
 
-    // Tampilkan loading dan status
     submitBtn.prop('disabled', true);
     statusArea.removeClass('d-none');
     statusMessage.removeClass('alert-success alert-danger').addClass('alert-info')
-                 .html('<div class="spinner-border spinner-border-sm mr-2"></div> Menganalisa struktur file dan mencocokkan periode...');
+                 .html('<div class="spinner-border spinner-border-sm mr-2"></div> Sedang membaca isi file dan mencocokkan periode...');
 
     $.ajax({
         url: '/api/upload',
@@ -84,18 +70,11 @@ $('#uploadForm').on('submit', function(e) {
         contentType: false,
         success: function(response) {
             statusMessage.removeClass('alert-info').addClass('alert-success')
-                .html('<strong><i class="fas fa-check-circle mr-1"></i> Berhasil!</strong> ' + 
-                     (response.message || 'Data telah berhasil dideteksi dan diperbarui.'));
-            
-            submitBtn.prop('disabled', false);
-            // Kembali ke dashboard setelah 2.5 detik
+                .html('<strong><i class="fas fa-check-circle mr-1"></i> Berhasil!</strong> ' + response.message);
             setTimeout(() => { window.location.href = '/'; }, 2500);
         },
         error: function(xhr) {
-            let errorMsg = 'Gagal memproses file.';
-            if (xhr.responseJSON && xhr.responseJSON.error) {
-                errorMsg = xhr.responseJSON.error;
-            }
+            let errorMsg = xhr.responseJSON ? xhr.responseJSON.error : 'Gagal memproses file.';
             statusMessage.removeClass('alert-info').addClass('alert-danger')
                 .html('<strong><i class="fas fa-exclamation-triangle mr-1"></i> Error:</strong> ' + errorMsg);
             submitBtn.prop('disabled', false);
