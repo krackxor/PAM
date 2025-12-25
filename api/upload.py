@@ -17,7 +17,6 @@ def register_upload_routes(app, get_db):
             return jsonify({'error': 'No selected file'}), 400
 
         filename = secure_filename(file.filename)
-        # Mengambil UPLOAD_FOLDER dari config.py
         upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
         
         if not os.path.exists(upload_folder):
@@ -27,8 +26,7 @@ def register_upload_routes(app, get_db):
         file.save(filepath)
 
         try:
-            # --- LOGIKA INTERNAL AUTO DETECT (Content & Filename) ---
-            # Membaca header file untuk menentukan tipe
+            # --- INTERNAL AUTO DETECT ---
             if filename.lower().endswith('.csv'):
                 df_sample = pd.read_csv(filepath, nrows=5)
             elif filename.lower().endswith(('.xls', '.xlsx')):
@@ -40,10 +38,10 @@ def register_upload_routes(app, get_db):
             filename_upper = filename.upper()
             detected_type = None
 
-            # A. Deteksi Tipe Berdasarkan Kolom & Nama
-            if 'SBRS' in filename_upper or 'CMR_ACCOUNT' in cols or 'SB_STAND' in cols:
+            # Deteksi Tipe
+            if 'SBRS' in filename_upper or 'CMR_ACCOUNT' in cols:
                 detected_type = 'SBRS'
-            elif 'COLLECTION' in filename_upper or 'AMT_COLLECT' in cols or 'PAY_DT' in cols:
+            elif 'COLLECTION' in filename_upper or 'AMT_COLLECT' in cols:
                 detected_type = 'COLLECTION'
             elif 'MC' in filename_upper or 'ZONA_NOVAK' in cols:
                 detected_type = 'MC'
@@ -51,44 +49,37 @@ def register_upload_routes(app, get_db):
                 detected_type = 'MB'
             elif 'ARDEBT' in filename_upper or 'SALDO' in cols:
                 detected_type = 'ARDEBT'
-            elif 'MAINBILL' in filename_upper or 'TOTAL_TAGIHAN' in cols:
-                detected_type = 'MAINBILL'
 
             if not detected_type:
-                return jsonify({'error': 'Sistem tidak mengenali tipe file ini secara otomatis.'}), 400
+                return jsonify({'error': 'Tipe file tidak terdeteksi otomatis'}), 400
 
-            # B. Deteksi Periode (Logika Bisnis PDAM)
-            # Default ke bulan/tahun sekarang
+            # Deteksi Periode (Default & Business Offset)
             now = datetime.now()
             bulan, tahun = now.month, now.year
-            
-            # Khusus MC, MB, ARDEBT: Offset +1 bulan sesuai aturan bisnis
             if detected_type in ['MC', 'MB', 'ARDEBT']:
                 bulan += 1
                 if bulan > 12:
                     bulan = 1
                     tahun += 1
 
-            # --- EKSEKUSI PROCESSOR ---
+            # Proses ke Database
             db = get_db()
-            # Mendapatkan class processor dari ProcessorFactory
             processor = ProcessorFactory.get_processor(detected_type, db)
             
             if not processor:
-                return jsonify({'error': f'Processor untuk {detected_type} tidak ditemukan'}), 400
+                return jsonify({'error': f'Processor {detected_type} tidak ditemukan'}), 400
             
-            # Memproses file ke database
             result = processor.process(filepath, bulan, tahun)
             
             return jsonify({
                 'success': True,
-                'message': f'Berhasil: File {detected_type} terdeteksi untuk periode {bulan}/{tahun}',
+                'message': f'Berhasil: Data {detected_type} periode {bulan}/{tahun} diproses.',
                 'details': result
             })
 
         except Exception as e:
             if os.path.exists(filepath):
                 os.remove(filepath)
-            return jsonify({'error': f'Gagal memproses file: {str(e)}'}), 500
+            return jsonify({'error': str(e)}), 500
 
-    print("✅ Upload API with Internal Auto-Detect registered")
+    print("✅ Upload API (Internal Auto-Detect) registered")
