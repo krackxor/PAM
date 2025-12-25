@@ -12,7 +12,7 @@ BASE_DIR = Path(__file__).parent
 # Flask Configuration
 class Config:
     """Base configuration"""
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'sunter-dashboard-secret-key-2024'
+    SECRET_KEY = os.environ.get('SECRET_KEY') or '55rytrhtfht6tu8tykmgvwdq243ty5ri68p9iu880dvfq343654jluyo84ewr3rfef'
     
     # Database
     DATABASE_PATH = os.environ.get('DATABASE_PATH') or BASE_DIR / 'database' / 'sunter.db'
