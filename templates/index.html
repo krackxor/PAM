@@ -5,21 +5,27 @@
 {% block content %}
 <div class="container-fluid">
     
-    <!-- Page Header -->
-    <div class="row mb-3">
-        <div class="col-12">
-            <h4 class="mb-1">Dashboard</h4>
-            <p class="text-muted mb-0" style="font-size: 14px;">Monitoring Collection & KPI</p>
+    <div class="row mb-3 align-items-center">
+        <div class="col-md-6">
+            <h4 class="mb-1 fw-bold">Dashboard</h4>
+            <p class="text-muted mb-0" style="font-size: 14px;">Monitoring Collection, KPI & SBRS Anomali</p>
+        </div>
+        <div class="col-md-6 text-md-end mt-2 mt-md-0">
+            <a href="/upload" class="btn btn-warning shadow-sm fw-bold me-2">
+                <i class="fas fa-cloud-upload-alt me-1"></i> UPLOAD DATA
+            </a>
+            <a href="/menu" class="btn btn-outline-primary shadow-sm">
+                <i class="fas fa-th-large me-1"></i> MENU
+            </a>
         </div>
     </div>
     
-    <!-- Period Selector -->
-    <div class="card mb-3">
+    <div class="card mb-3 border-0 shadow-sm">
         <div class="card-body py-3">
-            <form id="periodForm" class="form-inline">
-                <div class="form-group mr-2 mb-2">
-                    <label for="bulan" class="mr-2" style="font-size: 14px;">Bulan:</label>
-                    <select class="form-control form-control-sm" id="bulan" name="bulan">
+            <form id="periodForm" class="row g-3 align-items-center">
+                <div class="col-auto">
+                    <label for="bulan" class="form-label mb-0 small fw-bold">Bulan:</label>
+                    <select class="form-select form-select-sm" id="bulan" name="bulan">
                         <option value="1">Januari</option>
                         <option value="2">Februari</option>
                         <option value="3">Maret</option>
@@ -34,25 +40,33 @@
                         <option value="12" selected>Desember</option>
                     </select>
                 </div>
-                <div class="form-group mr-2 mb-2">
-                    <label for="tahun" class="mr-2" style="font-size: 14px;">Tahun:</label>
-                    <select class="form-control form-control-sm" id="tahun" name="tahun">
+                <div class="col-auto">
+                    <label for="tahun" class="form-label mb-0 small fw-bold">Tahun:</label>
+                    <select class="form-select form-select-sm" id="tahun" name="tahun">
                         <option value="2023">2023</option>
                         <option value="2024" selected>2024</option>
                         <option value="2025">2025</option>
                     </select>
                 </div>
-                <button type="button" class="btn btn-primary btn-sm mb-2" id="loadDataBtn">
-                    <i class="fas fa-sync-alt"></i> Load Data
-                </button>
+                <div class="col-auto pt-4">
+                    <button type="button" class="btn btn-primary btn-sm px-3" id="loadDataBtn">
+                        <i class="fas fa-sync-alt me-1"></i> Load Data
+                    </button>
+                </div>
             </form>
         </div>
     </div>
+
+    <div class="row mb-3" id="anomaly-summary-container">
+        <div class="col-12 text-center py-2">
+            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+            <span class="ms-2 small text-muted">Memeriksa anomali data...</span>
+        </div>
+    </div>
     
-    <!-- KPI Cards -->
     <div class="row mb-3">
         <div class="col-6 col-md-3 mb-3">
-            <div class="card h-100">
+            <div class="card h-100 border-0 shadow-sm">
                 <div class="card-body p-3">
                     <div style="font-size: 13px; color: #6c757d; margin-bottom: 8px;">
                         <i class="fas fa-bullseye"></i> Target MC
@@ -66,7 +80,7 @@
         </div>
         
         <div class="col-6 col-md-3 mb-3">
-            <div class="card h-100">
+            <div class="card h-100 border-0 shadow-sm">
                 <div class="card-body p-3">
                     <div style="font-size: 13px; color: #6c757d; margin-bottom: 8px;">
                         <i class="fas fa-dollar-sign"></i> Collection
@@ -80,7 +94,7 @@
         </div>
         
         <div class="col-6 col-md-3 mb-3">
-            <div class="card h-100">
+            <div class="card h-100 border-0 shadow-sm">
                 <div class="card-body p-3">
                     <div style="font-size: 13px; color: #6c757d; margin-bottom: 8px;">
                         <i class="fas fa-percent"></i> Achievement
@@ -94,7 +108,7 @@
         </div>
         
         <div class="col-6 col-md-3 mb-3">
-            <div class="card h-100">
+            <div class="card h-100 border-0 shadow-sm">
                 <div class="card-body p-3">
                     <div style="font-size: 13px; color: #6c757d; margin-bottom: 8px;">
                         <i class="fas fa-users"></i> Customers
@@ -108,12 +122,11 @@
         </div>
     </div>
     
-    <!-- Charts Row -->
     <div class="row mb-3">
         <div class="col-12 col-md-8 mb-3">
-            <div class="card">
-                <div class="card-header py-2">
-                    <h6 class="mb-0" style="font-size: 14px; font-weight: 600;">Collection Trend</h6>
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white py-2">
+                    <h6 class="mb-0 fw-bold small">Collection Trend</h6>
                 </div>
                 <div class="card-body">
                     <canvas id="collectionChart" style="max-height: 250px;"></canvas>
@@ -122,9 +135,9 @@
         </div>
         
         <div class="col-12 col-md-4 mb-3">
-            <div class="card">
-                <div class="card-header py-2">
-                    <h6 class="mb-0" style="font-size: 14px; font-weight: 600;">By Rayon</h6>
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white py-2">
+                    <h6 class="mb-0 fw-bold small">By Rayon</h6>
                 </div>
                 <div class="card-body">
                     <canvas id="rayonChart" style="max-height: 250px;"></canvas>
@@ -133,15 +146,14 @@
         </div>
     </div>
     
-    <!-- Data Tables -->
-    <div class="card mb-3">
-        <div class="card-header py-2">
-            <h6 class="mb-0" style="font-size: 14px; font-weight: 600;">Recent Collections</h6>
+    <div class="card mb-3 border-0 shadow-sm">
+        <div class="card-header bg-white py-2">
+            <h6 class="mb-0 fw-bold small">Recent Collections</h6>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table id="collectionTable" class="table table-sm table-hover mb-0" style="font-size: 13px;">
-                    <thead class="thead-light">
+                    <thead class="bg-light">
                         <tr>
                             <th>Date</th>
                             <th>Nomen</th>
@@ -160,18 +172,17 @@
         </div>
     </div>
     
-    <!-- SBRS Data Table (FIXED COLUMNS) -->
-    <div class="card">
-        <div class="card-header py-2 d-flex justify-content-between align-items-center">
-            <h6 class="mb-0" style="font-size: 14px; font-weight: 600;">SBRS Data</h6>
-            <button class="btn btn-sm btn-primary" id="refreshSBRS">
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+            <h6 class="mb-0 fw-bold small"><i class="fas fa-table me-2 text-primary"></i>SBRS Data</h6>
+            <button class="btn btn-xs btn-outline-primary py-0" style="font-size: 11px;" id="refreshSBRS">
                 <i class="fas fa-sync-alt"></i> Refresh
             </button>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table id="sbrsTable" class="table table-sm table-hover mb-0" style="font-size: 13px;">
-                    <thead class="thead-light">
+                    <thead class="bg-light">
                         <tr>
                             <th>Nomen</th>
                             <th>Nama</th>
@@ -195,6 +206,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 // Global variables
 let collectionChartInstance = null;
@@ -216,43 +228,67 @@ function formatNumber(num) {
     return new Intl.NumberFormat('id-ID').format(num);
 }
 
+// Load Anomaly Summary from API
+async function loadAnomalySummary() {
+    try {
+        const response = await fetch('/api/anomaly/summary');
+        const data = await response.json();
+        const container = $('#anomaly-summary-container');
+        
+        if (!data.anomalies) {
+            container.html('<div class="col-12 text-center small text-muted">Tidak ada data anomali untuk periode ini.</div>');
+            return;
+        }
+
+        const html = `
+            <div class="col-md-3 col-6 mb-2">
+                <div class="card border-start border-danger border-4 shadow-sm h-100">
+                    <div class="card-body py-2 px-3">
+                        <div class="small text-muted">Zero Usage</div>
+                        <div class="h5 mb-0 fw-bold text-danger">${data.anomalies.zero ? data.anomalies.zero.count : 0}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6 mb-2">
+                <div class="card border-start border-warning border-4 shadow-sm h-100">
+                    <div class="card-body py-2 px-3">
+                        <div class="small text-muted">Stand Negatif</div>
+                        <div class="h5 mb-0 fw-bold text-warning">${data.anomalies.negatif ? data.anomalies.negatif.count : 0}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.html(html);
+    } catch (e) {
+        console.error("Gagal memuat anomali:", e);
+        $('#anomaly-summary-container').html('<div class="col-12 text-center small text-danger">Gagal memuat ringkasan anomali.</div>');
+    }
+}
+
 // Load Dashboard Data
 async function loadDashboardData() {
     const bulan = $('#bulan').val();
     const tahun = $('#tahun').val();
     
     try {
-        // Show loading
         $('#loadDataBtn').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Loading...');
         
-        // Fetch KPI
         const kpiResponse = await fetch(`/api/kpi?bulan=${bulan}&tahun=${tahun}`);
         const kpiData = await kpiResponse.json();
         
-        // Update KPI Cards
         $('#kpi-target').text(formatRupiah(kpiData.target_mc || 0));
         $('#kpi-collection').text(formatRupiah(kpiData.collection_total || 0));
         $('#kpi-percentage').text((kpiData.collection_pct || 0).toFixed(1) + '%');
         $('#kpi-customers').text(formatNumber(kpiData.jumlah_pelanggan || 0));
         
-        // Fetch Collection Daily
         const collectionResponse = await fetch(`/api/collection/daily?bulan=${bulan}&tahun=${tahun}`);
         const collectionData = await collectionResponse.json();
         
-        // Update Chart
         updateCollectionChart(collectionData);
-        
-        // Update Collection Table
         updateCollectionTable(collectionData.slice(0, 10));
-        
-        // Success notification
-        if (window.SunterDashboard && window.SunterDashboard.toast) {
-            SunterDashboard.toast.success('Data loaded successfully');
-        }
         
     } catch (error) {
         console.error('Error loading data:', error);
-        alert('Failed to load data: ' + error.message);
     } finally {
         $('#loadDataBtn').prop('disabled', false).html('<i class="fas fa-sync-alt"></i> Load Data');
     }
@@ -262,11 +298,7 @@ async function loadDashboardData() {
 function updateCollectionChart(data) {
     const ctx = document.getElementById('collectionChart');
     if (!ctx) return;
-    
-    // Destroy existing chart
-    if (collectionChartInstance) {
-        collectionChartInstance.destroy();
-    }
+    if (collectionChartInstance) collectionChartInstance.destroy();
     
     collectionChartInstance = new Chart(ctx, {
         type: 'line',
@@ -284,18 +316,12 @@ function updateCollectionChart(data) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false
-                }
-            },
+            plugins: { legend: { display: false } },
             scales: {
                 y: {
                     beginAtZero: true,
                     ticks: {
-                        callback: function(value) {
-                            return 'Rp ' + (value / 1000000).toFixed(0) + 'M';
-                        }
+                        callback: function(value) { return 'Rp ' + (value / 1000000).toFixed(0) + 'M'; }
                     }
                 }
             }
@@ -305,12 +331,7 @@ function updateCollectionChart(data) {
 
 // Update Collection Table
 function updateCollectionTable(data) {
-    if (collectionTableInstance) {
-        collectionTableInstance.destroy();
-    }
-    
     const tbody = $('#collectionTable tbody');
-    
     if (data.length === 0) {
         tbody.html('<tr><td colspan="5" class="text-center text-muted">No data available</td></tr>');
         return;
@@ -322,27 +343,12 @@ function updateCollectionTable(data) {
             <td>${item.nomen || '-'}</td>
             <td>${item.nama || '-'}</td>
             <td>${formatRupiah(item.total || 0)}</td>
-            <td><span class="badge badge-success badge-sm">Paid</span></td>
+            <td><span class="badge bg-success">Paid</span></td>
         </tr>
     `).join(''));
-    
-    // Initialize DataTable
-    collectionTableInstance = $('#collectionTable').DataTable({
-        pageLength: 10,
-        responsive: true,
-        language: {
-            search: "Cari:",
-            lengthMenu: "Tampilkan _MENU_ data",
-            info: "Menampilkan _START_ - _END_ dari _TOTAL_ data",
-            paginate: {
-                previous: "Prev",
-                next: "Next"
-            }
-        }
-    });
 }
 
-// Load SBRS Data (FIXED COLUMN NAMES)
+// Load SBRS Data
 async function loadSBRSData() {
     const bulan = $('#bulan').val();
     const tahun = $('#tahun').val();
@@ -350,11 +356,6 @@ async function loadSBRSData() {
     try {
         const response = await fetch(`/api/sbrs/data?bulan=${bulan}&tahun=${tahun}`);
         const data = await response.json();
-        
-        if (sbrsTableInstance) {
-            sbrsTableInstance.destroy();
-        }
-        
         const tbody = $('#sbrsTable tbody');
         
         if (!data || data.length === 0) {
@@ -362,7 +363,6 @@ async function loadSBRSData() {
             return;
         }
         
-        // IMPORTANT: Use correct column names (nomen, volume, nama, rayon)
         tbody.html(data.map(item => `
             <tr>
                 <td>${item.nomen || '-'}</td>
@@ -371,25 +371,10 @@ async function loadSBRSData() {
                 <td>${item.volume || 0}</td>
                 <td>${item.readmethod || '-'}</td>
                 <td>
-                    ${item.skip_status ? '<span class="badge badge-warning badge-sm">Skip</span>' : '<span class="badge badge-success badge-sm">OK</span>'}
+                    ${item.skip_status ? '<span class="badge bg-warning">Skip</span>' : '<span class="badge bg-success">OK</span>'}
                 </td>
             </tr>
         `).join(''));
-        
-        // Initialize DataTable
-        sbrsTableInstance = $('#sbrsTable').DataTable({
-            pageLength: 10,
-            responsive: true,
-            language: {
-                search: "Cari:",
-                lengthMenu: "Tampilkan _MENU_ data",
-                info: "Menampilkan _START_ - _END_ dari _TOTAL_ data",
-                paginate: {
-                    previous: "Prev",
-                    next: "Next"
-                }
-            }
-        });
         
     } catch (error) {
         console.error('Error loading SBRS data:', error);
@@ -398,17 +383,16 @@ async function loadSBRSData() {
 
 // Event Listeners
 $(document).ready(function() {
-    // Load initial data
     loadDashboardData();
     loadSBRSData();
+    loadAnomalySummary();
     
-    // Load button
     $('#loadDataBtn').on('click', function() {
         loadDashboardData();
         loadSBRSData();
+        loadAnomalySummary();
     });
     
-    // Refresh SBRS button
     $('#refreshSBRS').on('click', loadSBRSData);
 });
 </script>
