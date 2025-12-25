@@ -6,15 +6,12 @@
     <meta name="theme-color" content="#2563eb">
     <title>{% block title %}SUNTER Dashboard{% endblock %}</title>
     
-    <!-- Existing CSS (if any) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap4.min.css">
     
-    <!-- NEW: Responsive CSS -->
     <link rel="stylesheet" href="/static/css/main.css">
     <link rel="stylesheet" href="/static/css/responsive.css">
     
-    <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     {% block extra_css %}{% endblock %}
@@ -26,46 +23,47 @@
                 padding-left: 12px;
                 padding-right: 12px;
             }
-            
-            /* Compact table pada mobile */
             .table {
                 font-size: 13px;
             }
-            
-            .table th,
-            .table td {
+            .table th, .table td {
                 padding: 8px 4px;
             }
+        }
+        /* Highlight khusus untuk tombol Upload */
+        .nav-link.upload-link {
+            color: #f59e0b !important; /* Warna kuning peringatan */
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
-    <!-- Mobile Hamburger & Drawer -->
     <div class="drawer-overlay" id="drawer-overlay"></div>
     <div class="drawer" id="main-drawer">
         <div class="drawer-header">
-            <h5 style="margin: 0;">Menu</h5>
-            <button class="drawer-close" data-drawer-close style="background: none; border: none; font-size: 24px; cursor: pointer;">×</button>
+            <h5 style="margin: 0;">Menu Navigasi</h5>
+            <button class="drawer-close" id="drawer-close-btn" style="background: none; border: none; font-size: 24px; cursor: pointer;">×</button>
         </div>
         <div class="drawer-body">
             <div class="list-group list-group-flush">
                 <a href="/" class="list-group-item list-group-item-action">
-                    <i class="fas fa-home"></i> Dashboard
+                    <i class="fas fa-home me-2"></i> Dashboard
                 </a>
                 <a href="/collection_dashboard" class="list-group-item list-group-item-action">
-                    <i class="fas fa-dollar-sign"></i> Collection
+                    <i class="fas fa-dollar-sign me-2"></i> Collection
+                </a>
+                <a href="/upload" class="list-group-item list-group-item-action text-warning font-weight-bold">
+                    <i class="fas fa-cloud-upload-alt me-2"></i> Upload Data
                 </a>
                 <a href="/menu" class="list-group-item list-group-item-action">
-                    <i class="fas fa-bars"></i> Menu
+                    <i class="fas fa-bars me-2"></i> Menu Utama
                 </a>
             </div>
         </div>
     </div>
     
-    <!-- Top Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom sticky-top">
+    <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom sticky-top shadow-sm">
         <div class="container-fluid">
-            <!-- Hamburger Button (Mobile) -->
             <button class="hamburger d-lg-none" id="hamburger-btn" style="border: none; background: transparent; margin-right: 10px;">
                 <span style="display: block; width: 24px; height: 2px; background: #333; margin: 4px 0;"></span>
                 <span style="display: block; width: 24px; height: 2px; background: #333; margin: 4px 0;"></span>
@@ -77,92 +75,92 @@
                 <strong>SUNTER</strong>
             </a>
             
-            <!-- Desktop Navigation -->
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ml-auto">
                     <li class="nav-item">
                         <a class="nav-link" href="/">
-                            <i class="fas fa-home"></i>
-                            <span class="d-none d-md-inline">Dashboard</span>
+                            <i class="fas fa-home"></i> <span>Dashboard</span>
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/collection_dashboard">
-                            <i class="fas fa-dollar-sign"></i>
-                            <span class="d-none d-md-inline">Collection</span>
+                            <i class="fas fa-dollar-sign"></i> <span>Collection</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link upload-link" href="/upload">
+                            <i class="fas fa-cloud-upload-alt"></i> <span>Upload</span>
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/menu">
-                            <i class="fas fa-bars"></i>
-                            <span class="d-none d-md-inline">Menu</span>
+                            <i class="fas fa-bars"></i> <span>Menu</span>
                         </a>
                     </li>
                 </ul>
             </div>
             
-            <!-- User Menu -->
-            <div class="ml-2">
+            <div class="ml-2 d-flex align-items-center">
+                <span class="d-none d-sm-inline mr-2 small text-muted">Admin</span>
                 <span class="badge badge-primary" style="width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;">A</span>
             </div>
         </div>
     </nav>
     
-    <!-- Main Content -->
     <main class="py-3">
         {% block content %}{% endblock %}
     </main>
     
-    <!-- Bottom Navigation (Mobile Only) -->
-    <nav class="bottom-nav d-lg-none">
-        <div class="bottom-nav-items">
-            <a href="/" class="bottom-nav-item">
-                <i class="fas fa-home"></i>
-                <span>Home</span>
+    <nav class="bottom-nav d-lg-none border-top bg-white">
+        <div class="bottom-nav-items d-flex justify-content-around py-2">
+            <a href="/" class="bottom-nav-item text-center text-dark">
+                <i class="fas fa-home d-block"></i>
+                <span class="small">Home</span>
             </a>
-            <a href="/collection_dashboard" class="bottom-nav-item">
-                <i class="fas fa-dollar-sign"></i>
-                <span>Collection</span>
+            <a href="/collection_dashboard" class="bottom-nav-item text-center text-dark">
+                <i class="fas fa-dollar-sign d-block"></i>
+                <span class="small">Collect</span>
             </a>
-            <a href="/menu" class="bottom-nav-item">
-                <i class="fas fa-chart-bar"></i>
-                <span>Reports</span>
+            <a href="/upload" class="bottom-nav-item text-center text-warning fw-bold">
+                <i class="fas fa-cloud-upload-alt d-block"></i>
+                <span class="small">Upload</span>
             </a>
-            <a href="/menu" class="bottom-nav-item">
-                <i class="fas fa-cog"></i>
-                <span>Menu</span>
+            <a href="/menu" class="bottom-nav-item text-center text-dark">
+                <i class="fas fa-th-large d-block"></i>
+                <span class="small">Menu</span>
             </a>
         </div>
     </nav>
     
-    <!-- Existing Scripts -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap4.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    <!-- NEW: Responsive JS -->
     <script src="/static/js/main.js"></script>
     
     <script>
-        // Initialize Hamburger Menu
-        document.getElementById('hamburger-btn')?.addEventListener('click', function() {
-            document.getElementById('main-drawer').classList.toggle('active');
-            document.getElementById('drawer-overlay').classList.toggle('active');
-        });
+        // Hamburger & Drawer Logic
+        const hamburgerBtn = document.getElementById('hamburger-btn');
+        const closeBtn = document.getElementById('drawer-close-btn');
+        const drawer = document.getElementById('main-drawer');
+        const overlay = document.getElementById('drawer-overlay');
+
+        function toggleDrawer() {
+            drawer.classList.toggle('active');
+            overlay.classList.toggle('active');
+        }
+
+        hamburgerBtn?.addEventListener('click', toggleDrawer);
+        closeBtn?.addEventListener('click', toggleDrawer);
+        overlay?.addEventListener('click', toggleDrawer);
         
-        // Close drawer on overlay click
-        document.getElementById('drawer-overlay')?.addEventListener('click', function() {
-            document.getElementById('main-drawer').classList.remove('active');
-            this.classList.remove('active');
-        });
-        
-        // Close drawer on menu item click (mobile)
-        document.querySelectorAll('.drawer .list-group-item').forEach(function(item) {
-            item.addEventListener('click', function() {
-                document.getElementById('main-drawer').classList.remove('active');
-                document.getElementById('drawer-overlay').classList.remove('active');
+        // Close drawer on menu item click
+        document.querySelectorAll('.drawer .list-group-item').forEach(item => {
+            item.addEventListener('click', () => {
+                drawer.classList.remove('active');
+                overlay.classList.remove('active');
             });
         });
     </script>
