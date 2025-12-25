@@ -5,14 +5,22 @@ Handles SBRS data with correct column mapping
 
 import pandas as pd
 from processors.base import BaseProcessor
+from core.helpers import clean_nomen
 
 class SBRSProcessor(BaseProcessor):
     """SBRS file processor"""
     
-    def process(self):
-        """Process SBRS file"""
+    def __init__(self, db):
+        # Inisialisasi hanya dengan koneksi database sesuai BaseProcessor terbaru
+        super().__init__(db)
+
+    def process(self, filepath, periode_bulan, periode_tahun):
+        """Process SBRS file dengan parameter dinamis dari Auto-Detect"""
         
-        # Column mapping (flexible search)
+        # 1. Baca file menggunakan method dari BaseProcessor
+        self.read_file(filepath)
+        
+        # 2. Pemetaan kolom (flexible search)
         col_map = {}
         
         # Nomen mapping
@@ -61,19 +69,23 @@ class SBRSProcessor(BaseProcessor):
         # Apply mapping
         self.df = self.df.rename(columns=col_map)
         
-        # Validate critical columns
+        # 3. Validasi kolom kritis
         if 'nomen' not in self.df.columns or 'volume' not in self.df.columns:
-            raise Exception('SBRS: Need nomen and volume columns')
+            raise Exception('SBRS: Kolom nomen (CMR_ACCOUNT) dan volume (SB_STAND) wajib tersedia.')
         
-        # Clean nomen
-        self.clean_nomen_column()
+        # 4. Pembersihan Data
+        # Bersihkan nomen menggunakan helper (sudah diwarisi dari BaseProcessor atau import langsung)
+        self.df['nomen'] = self.df['nomen'].apply(clean_nomen)
+        self.df = self.df.dropna(subset=['nomen'])
+        self.df = self.df[self.df['nomen'] != '']
         
-        # Convert volume to numeric
+        # Konversi volume ke numerik
         self.df['volume'] = pd.to_numeric(self.df['volume'], errors='coerce').fillna(0)
         
-        # Fill missing columns with defaults
-        for col in ['nama', 'alamat', 'rayon', 'readmethod', 'skip_status', 
-                    'trouble_status', 'spm_status', 'analisa_tindak_lanjut', 'tag1', 'tag2']:
+        # Isi kolom opsional dengan nilai default
+        optional_cols = ['nama', 'alamat', 'rayon', 'readmethod', 'skip_status', 
+                        'trouble_status', 'spm_status', 'analisa_tindak_lanjut', 'tag1', 'tag2']
+        for col in optional_cols:
             if col not in self.df.columns:
                 self.df[col] = ''
         
@@ -83,16 +95,20 @@ class SBRSProcessor(BaseProcessor):
             else:
                 self.df[col] = pd.to_numeric(self.df[col], errors='coerce').fillna(0)
         
-        # Add metadata
-        self.add_metadata()
+        # 5. Penambahan Metadata dari Auto-Detect
+        self.df['periode_bulan'] = periode_bulan
+        self.df['periode_tahun'] = periode_tahun
         
-        # Save to database (dengan kolom yang benar)
+        # 6. Simpan ke Database
+        # Catatan: Kolom upload_id opsional jika tidak dikelola oleh sistem Auto-Detect
         cols_db = ['nomen', 'nama', 'alamat', 'rayon', 'readmethod', 'skip_status',
                    'trouble_status', 'spm_status', 'stand_awal', 'stand_akhir', 'volume',
                    'analisa_tindak_lanjut', 'tag1', 'tag2', 
-                   'periode_bulan', 'periode_tahun', 'upload_id']
+                   'periode_bulan', 'periode_tahun']
         
-        self.df[cols_db].to_sql('sbrs_data', self.db, if_exists='append', index=False)
+        # Menyaring hanya kolom yang ada di database
+        final_df = self.df[[c for c in cols_db if c in self.df.columns]]
+        final_df.to_sql('sbrs_data', self.db, if_exists='append', index=False)
         
-        print(f"✅ SBRS saved with correct columns: nomen, volume (not cmr_account, SB_Stand)")
+        print(f"✅ SBRS diproses: {len(self.df)} baris (Periode: {periode_bulan}/{periode_tahun})")
         return len(self.df)
