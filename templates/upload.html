@@ -1,47 +1,100 @@
 {% extends "base.html" %}
 
-{% block title %}Upload Data - PAM Sunter{% endblock %}
+{% block title %}Upload Data - SUNTER{% endblock %}
 
 {% block content %}
-<div class="container mt-5">
+<div class="container mt-4">
     <div class="row justify-content-center">
-        <div class="col-md-8">
+        <div class="col-md-6">
             <div class="card shadow-sm border-0">
-                <div class="card-header bg-primary text-white p-4">
-                    <h4 class="mb-0"><i class="fas fa-cloud-upload-alt me-2"></i> Pusat Upload Data</h4>
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-upload mr-2"></i>Upload Center</h5>
                 </div>
-                <div class="card-body p-4">
-                    <form id="uploadForm" action="/api/upload" method="POST" enctype="multipart/form-data">
-                        <div class="mb-4 text-center">
-                            <label for="fileInput" class="form-label d-block p-5 border-2 border-dashed rounded bg-light cursor-pointer">
-                                <i class="fas fa-file-excel fa-3x text-muted mb-3"></i>
-                                <h5 class="text-dark">Pilih File Excel atau CSV</h5>
-                                <p class="text-muted small">Mendukung SBRS, Collection, MC, dan Ardebt</p>
-                                <input type="file" name="file" id="fileInput" class="form-control d-none" accept=".xlsx, .xls, .csv" required onchange="updateFileName()">
-                                <div id="fileNameDisplay" class="mt-2 fw-bold text-primary"></div>
-                            </label>
+                <div class="card-body">
+                    <form id="uploadForm">
+                        <div class="form-group mb-3">
+                            <label class="font-weight-bold">1. Pilih Jenis Data:</label>
+                            <select class="form-control" name="file_type" id="file_type" required>
+                                <option value="">-- Pilih Jenis File --</option>
+                                <option value="sbrs">Data SBRS (Pembacaan Meter)</option>
+                                <option value="collection">Data Collection (Penagihan)</option>
+                                <option value="mc">Data MC (Master Customer)</option>
+                                <option value="mb">Data MB (Master Bill)</option>
+                                <option value="ardebt">Data Ardebt (Piutang)</option>
+                            </select>
+                            <small class="text-muted">Sistem memerlukan informasi ini untuk memproses kolom database dengan benar.</small>
                         </div>
-                        <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">
-                            <i class="fas fa-upload me-2"></i> MULAI PROSES UPLOAD
+
+                        <div class="form-group mb-4">
+                            <label class="font-weight-bold">2. Pilih File (Excel/CSV):</label>
+                            <div class="custom-file">
+                                <input type="file" class="custom-file-input" name="file" id="fileInput" accept=".xlsx, .xls, .csv" required>
+                                <label class="custom-file-label" for="fileInput">Pilih file...</label>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-block shadow-sm" id="submitBtn">
+                            <i class="fas fa-cloud-upload-alt mr-1"></i> Mulai Proses Upload
                         </button>
                     </form>
-                    <div id="uploadStatus" class="mt-4 d-none">
-                        <div class="progress mb-2">
-                            <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+
+                    <div id="statusArea" class="mt-4 d-none">
+                        <div class="alert alert-info" id="statusMessage">Sedang memproses file...</div>
+                        <div class="progress">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
                         </div>
-                        <p id="statusText" class="text-center small"></p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
-function updateFileName() {
-    const input = document.getElementById('fileInput');
-    const display = document.getElementById('fileNameDisplay');
-    display.innerText = input.files.length > 0 ? "File terpilih: " + input.files[0].name : "";
-}
+// Update nama file di label input
+$('.custom-file-input').on('change', function() {
+    let fileName = $(this).val().split('\\').pop();
+    $(this).next('.custom-file-label').addClass("selected").html(fileName);
+});
+
+$('#uploadForm').on('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const submitBtn = $('#submitBtn');
+    const statusArea = $('#statusArea');
+    const statusMessage = $('#statusMessage');
+
+    // Tampilkan loading
+    submitBtn.prop('disabled', true);
+    statusArea.removeClass('d-none');
+    statusMessage.removeClass('alert-success alert-danger').addClass('alert-info').text('Mengunggah dan memproses data...');
+
+    $.ajax({
+        url: '/api/upload',
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(response) {
+            statusMessage.removeClass('alert-info').addClass('alert-success')
+                .html('<strong>Berhasil!</strong> ' + (response.message || 'Data telah diperbarui.'));
+            submitBtn.prop('disabled', false);
+            // Opsional: Redirect ke dashboard setelah 2 detik
+            setTimeout(() => { window.location.href = '/'; }, 2000);
+        },
+        error: function(xhr) {
+            let errorMsg = 'Gagal mengupload file.';
+            if (xhr.responseJSON && xhr.responseJSON.error) {
+                errorMsg = xhr.responseJSON.error;
+            }
+            statusMessage.removeClass('alert-info').addClass('alert-danger')
+                .html('<strong>Error:</strong> ' + errorMsg);
+            submitBtn.prop('disabled', false);
+        }
+    });
+});
 </script>
 {% endblock %}
