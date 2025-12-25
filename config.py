@@ -1,84 +1,77 @@
+"""
+Application Configuration
+Centralized configuration management
+"""
+
 import os
+from pathlib import Path
 
-# ==========================================
-# 1. PATH CONFIGURATION (PENGATURAN FOLDER)
-# ==========================================
+# Base Directory
+BASE_DIR = Path(__file__).parent
 
-# Mendapatkan direktori root project (tempat file ini berada)
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+# Flask Configuration
+class Config:
+    """Base configuration"""
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'sunter-dashboard-secret-key-2024'
+    
+    # Database
+    DATABASE_PATH = os.environ.get('DATABASE_PATH') or BASE_DIR / 'database' / 'sunter.db'
+    
+    # Upload Settings
+    UPLOAD_FOLDER = BASE_DIR / 'uploads'
+    MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100MB max file size
+    ALLOWED_EXTENSIONS = {'csv', 'xlsx', 'xls', 'txt'}
+    
+    # Pagination
+    ITEMS_PER_PAGE = 50
+    
+    # Session
+    PERMANENT_SESSION_LIFETIME = 3600  # 1 hour
+    
+    # API
+    API_RATE_LIMIT = 100  # requests per minute
+    
+    @staticmethod
+    def init_app(app):
+        """Initialize application with config"""
+        # Create directories if not exist
+        os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
+        os.makedirs(Config.DATABASE_PATH.parent, exist_ok=True)
 
-# Folder utama penyimpanan data
-DATA_DIR = os.path.join(BASE_DIR, 'data')
 
-# Folder khusus untuk menampung file hasil upload
-UPLOAD_FOLDER = os.path.join(DATA_DIR, 'uploads')
+class DevelopmentConfig(Config):
+    """Development configuration"""
+    DEBUG = True
+    TESTING = False
 
-# Lokasi absolut file Database SQLite
-DB_PATH = os.path.join(DATA_DIR, 'sunter.db')
 
-# ==========================================
-# 2. SECURITY & APP CONFIG (KEAMANAN)
-# ==========================================
+class ProductionConfig(Config):
+    """Production configuration"""
+    DEBUG = False
+    TESTING = False
+    
+    # Override with stronger secret key in production
+    SECRET_KEY = os.environ.get('SECRET_KEY')
+    if not SECRET_KEY:
+        raise ValueError("SECRET_KEY must be set in production")
 
-# Secret Key wajib ada untuk fitur Flash Message & Session Flask
-# Di server production, ganti ini dengan string acak yang panjang
-SECRET_KEY = os.environ.get('SECRET_KEY') or 'kunci_rahasia_sunter_dashboard_operasional_2025'
 
-# ==========================================
-# 3. UPLOAD CONFIGURATION (ATURAN UPLOAD)
-# ==========================================
+class TestingConfig(Config):
+    """Testing configuration"""
+    TESTING = True
+    DATABASE_PATH = BASE_DIR / 'database' / 'test.db'
 
-# Daftar ekstensi file yang diizinkan sistem
-# - txt: Format standar SAP untuk Collection & MainBill
-# - csv, xls, xlsx: Format standar laporan MC, SBRS, Ardebt
-ALLOWED_EXTENSIONS = {'txt', 'csv', 'xls', 'xlsx'}
 
-# Batas maksimal ukuran file upload (Contoh: 50 MB)
-# Mencegah server crash jika user upload file terlalu besar
-MAX_CONTENT_LENGTH = 50 * 1024 * 1024 
-
-# ==========================================
-# 4. CONSTANTS (KAMUS TIPE FILE)
-# ==========================================
-# Gunakan variabel ini di processor.py agar tidak salah ketik string manual
-
-FILE_TYPE_MC = 'MC'
-FILE_TYPE_COLLECTION = 'COLLECTION'
-FILE_TYPE_MAINBILL = 'MAINBILL'
-FILE_TYPE_SBRS = 'SBRS'
-FILE_TYPE_ARDEBT = 'ARDEBT'
-
-# Mapping label untuk tampilan di Dropdown HTML (Opsional)
-FILE_TYPE_LABELS = {
-    FILE_TYPE_MC: 'MC (Master Customer - Target)',
-    FILE_TYPE_COLLECTION: 'Collection (Transaksi Harian)',
-    FILE_TYPE_MAINBILL: 'MainBill (Tagihan Final)',
-    FILE_TYPE_SBRS: 'SBRS (Baca Meter)',
-    FILE_TYPE_ARDEBT: 'Ardebt (Saldo Tunggakan)'
+# Configuration mapping
+config = {
+    'development': DevelopmentConfig,
+    'production': ProductionConfig,
+    'testing': TestingConfig,
+    'default': DevelopmentConfig
 }
 
-# ==========================================
-# 5. AUTO-INITIALIZATION (PEMBUATAN FOLDER)
-# ==========================================
 
-def init_environment():
-    """
-    Fungsi ini otomatis dijalankan saat file config di-import.
-    Memastikan folder 'data' dan 'data/uploads' benar-benar ada.
-    """
-    if not os.path.exists(DATA_DIR):
-        try:
-            os.makedirs(DATA_DIR)
-            print(f"[INFO] Membuat folder data: {DATA_DIR}")
-        except OSError as e:
-            print(f"[ERROR] Gagal membuat folder data: {e}")
-
-    if not os.path.exists(UPLOAD_FOLDER):
-        try:
-            os.makedirs(UPLOAD_FOLDER)
-            print(f"[INFO] Membuat folder upload: {UPLOAD_FOLDER}")
-        except OSError as e:
-            print(f"[ERROR] Gagal membuat folder upload: {e}")
-
-# Jalankan inisialisasi folder secara langsung
-init_environment()
+def get_config(env=None):
+    """Get configuration based on environment"""
+    env = env or os.environ.get('FLASK_ENV', 'development')
+    return config.get(env, config['default'])
