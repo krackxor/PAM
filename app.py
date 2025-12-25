@@ -7,6 +7,9 @@ import os
 from flask import Flask, render_template, redirect, url_for
 from werkzeug.utils import secure_filename
 
+# Configuration
+from config import get_config
+
 # Core imports
 from core.database import init_db, get_db, close_db
 from core.helpers import register_helpers
@@ -19,15 +22,15 @@ from api.analisa import register_analisa_routes
 from api.upload import register_upload_routes
 from api.history import register_history_routes
 
-# Configuration
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'SUNTER-ADMIN-MODE'
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB
+# Get configuration
+config_class = get_config()
 
-# Ensure folders exist
-for folder in [app.config['UPLOAD_FOLDER'], 'database']:
-    os.makedirs(folder, exist_ok=True)
+# Initialize Flask app
+app = Flask(__name__)
+app.config.from_object(config_class)
+
+# Initialize config (create folders, etc)
+config_class.init_app(app)
 
 # Register database teardown
 app.teardown_appcontext(close_db)
