@@ -31,5 +31,6 @@ class ProcessorFactory:
         
         processor_class = processors.get(file_type)
         if processor_class:
+            # Mengirimkan db ke constructor processor
             return processor_class(db)
         return None
