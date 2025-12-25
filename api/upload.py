@@ -1,9 +1,9 @@
 import os
+import pandas as pd
 from flask import jsonify, request, current_app
 from werkzeug.utils import secure_filename
 from processors import ProcessorFactory
-# Pastikan file auto_detect_periode.py ada di folder yang bisa diakses (misal root atau modul processors)
-from auto_detect_periode import auto_detect_periode
+from datetime import datetime
 
 def register_upload_routes(app, get_db):
     
@@ -16,58 +16,70 @@ def register_upload_routes(app, get_db):
         if file.filename == '':
             return jsonify({'error': 'No selected file'}), 400
 
-        # Ambil file_type dari form jika ada (manual), jika tidak ada pakai None
-        file_type = request.form.get('file_type')
-        if file_type == "": file_type = None
-
-        if file:
-            filename = secure_filename(file.filename)
-            upload_folder = current_app.config['UPLOAD_FOLDER']
+        filename = secure_filename(file.filename)
+        upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+        
+        if not os.path.exists(upload_folder):
+            os.makedirs(upload_folder)
             
-            if not os.path.exists(upload_folder):
-                os.makedirs(upload_folder)
-                
-            filepath = os.path.join(upload_folder, filename)
-            file.save(filepath)
+        filepath = os.path.join(upload_folder, filename)
+        file.save(filepath)
 
-            try:
-                # 1. JALANKAN AUTO-DETECT (Gunakan script Anda)
-                # Ini akan mendeteksi Tipe File dan Periode sekaligus
-                detection = auto_detect_periode(filepath, filename, file_type)
-                
-                if not detection:
-                    return jsonify({'error': 'Sistem gagal mendeteksi tipe file atau periode. Gunakan format file yang sesuai.'}), 400
-                
-                # Gunakan hasil deteksi
-                detected_type = detection['file_type']
-                bulan = detection['periode_bulan']
-                tahun = detection['periode_tahun']
-                label = detection['periode_label']
+        try:
+            # --- LOGIKA AUTO DETECT LANGSUNG DI SINI ---
+            # Baca sedikit data untuk deteksi kolom
+            if filename.endswith('.csv'):
+                df_sample = pd.read_csv(filepath, nrows=5)
+            else:
+                df_sample = pd.read_excel(filepath, nrows=5)
+            
+            cols = [c.upper().strip() for c in df_sample.columns]
+            filename_upper = filename.upper()
+            detected_type = None
 
-                # 2. PROSES KE DATABASE
-                db = get_db()
-                processor = ProcessorFactory.get_processor(detected_type, db)
-                
-                if not processor:
-                    return jsonify({'error': f'Processor untuk tipe {detected_type} tidak ditemukan'}), 400
-                
-                # Jalankan proses dengan periode hasil deteksi
-                result = processor.process(filepath, bulan, tahun)
-                
-                return jsonify({
-                    'success': True,
-                    'message': f'Berhasil mengunggah data {detected_type} periode {label}',
-                    'details': result,
-                    'detection_method': detection['method']
-                })
+            # 1. Deteksi Tipe Berdasarkan Nama File & Kolom
+            if 'SBRS' in filename_upper or 'CMR_ACCOUNT' in cols or 'SB_STAND' in cols:
+                detected_type = 'SBRS'
+            elif 'COLLECTION' in filename_upper or 'AMT_COLLECT' in cols or 'PAY_DT' in cols:
+                detected_type = 'COLLECTION'
+            elif 'MC' in filename_upper or 'MASTER' in filename_upper or 'ZONA_NOVAK' in cols:
+                detected_type = 'MC'
+            elif 'MB' in filename_upper or 'TGL_BAYAR' in cols:
+                detected_type = 'MB'
+            elif 'ARDEBT' in filename_upper or 'SALDO' in cols:
+                detected_type = 'ARDEBT'
+            elif 'MAINBILL' in filename_upper or 'TOTAL_TAGIHAN' in cols:
+                detected_type = 'MAINBILL'
 
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                return jsonify({'error': f'Gagal memproses file: {str(e)}'}), 500
-            finally:
-                # Opsional: hapus file setelah diproses agar hemat storage
-                # if os.path.exists(filepath): os.remove(filepath)
-                pass
+            if not detected_type:
+                return jsonify({'error': 'Gagal mendeteksi tipe file otomatis. Pastikan nama file atau kolom sesuai.'}), 400
 
-    print("✅ Upload API (Auto-Detect Content Version) registered")
+            # 2. Deteksi Periode (Default ke bulan/tahun sekarang)
+            now = datetime.now()
+            bulan = now.month
+            tahun = now.year
+
+            # --- PROSES KE DATABASE ---
+            db = get_db()
+            processor = ProcessorFactory.get_processor(detected_type, db)
+            
+            if not processor:
+                return jsonify({'error': f'Processor untuk tipe {detected_type} tidak ditemukan'}), 400
+            
+            # Jalankan proses (Gunakan bulan/tahun hasil deteksi atau default)
+            result = processor.process(filepath, bulan, tahun)
+            
+            return jsonify({
+                'success': True,
+                'message': f'Berhasil mendeteksi dan mengunggah data {detected_type}',
+                'detected_as': detected_type,
+                'periode': f"{bulan}/{tahun}",
+                'details': result
+            })
+
+        except Exception as e:
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            return jsonify({'error': f'Gagal memproses file: {str(e)}'}), 500
+
+    print("✅ Upload API (Internal Auto-Detect) registered")
