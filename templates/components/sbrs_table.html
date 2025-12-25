@@ -1,0 +1,267 @@
+<!-- 
+SBRS Table Component
+Reusable component dengan kolom yang BENAR: nomen, volume, nama, rayon
+BUKAN: cmr_account, SB_Stand, cmr_name, cmr_route
+-->
+
+<div class="card">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0" style="font-size: 14px; font-weight: 600;">
+            <i class="fas fa-water"></i> SBRS Data
+        </h6>
+        <div>
+            <button class="btn btn-sm btn-outline-primary" id="filterSBRS">
+                <i class="fas fa-filter"></i> Filter
+            </button>
+            <button class="btn btn-sm btn-primary" id="refreshSBRSComponent">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Filter Section (Collapsible) -->
+    <div class="card-body border-bottom" id="sbrsFilterSection" style="display: none;">
+        <form id="sbrsFilterForm" class="form-inline">
+            <div class="form-group mr-2 mb-2">
+                <label class="mr-2" style="font-size: 13px;">Rayon:</label>
+                <select class="form-control form-control-sm" id="filterRayon">
+                    <option value="">All</option>
+                    <option value="34">34</option>
+                    <option value="35">35</option>
+                </select>
+            </div>
+            <div class="form-group mr-2 mb-2">
+                <label class="mr-2" style="font-size: 13px;">Min Volume:</label>
+                <input type="number" class="form-control form-control-sm" id="filterMinVolume" style="width: 100px;" placeholder="0">
+            </div>
+            <div class="form-group mr-2 mb-2">
+                <label class="mr-2" style="font-size: 13px;">Max Volume:</label>
+                <input type="number" class="form-control form-control-sm" id="filterMaxVolume" style="width: 100px;" placeholder="1000">
+            </div>
+            <button type="button" class="btn btn-sm btn-primary mb-2" id="applySBRSFilter">
+                Apply
+            </button>
+            <button type="button" class="btn btn-sm btn-secondary mb-2 ml-2" id="resetSBRSFilter">
+                Reset
+            </button>
+        </form>
+    </div>
+    
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table id="sbrsComponentTable" class="table table-sm table-hover mb-0" style="font-size: 13px;">
+                <thead class="thead-light">
+                    <tr>
+                        <th>Nomen</th>
+                        <th>Nama</th>
+                        <th>Alamat</th>
+                        <th>Rayon</th>
+                        <th>Volume</th>
+                        <th>Stand Awal</th>
+                        <th>Stand Akhir</th>
+                        <th>Read Method</th>
+                        <th>Skip</th>
+                        <th>Trouble</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="11" class="text-center text-muted py-3">
+                            <i class="fas fa-info-circle"></i> No data available
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="card-footer py-2 text-right" style="font-size: 13px;">
+        <span class="text-muted">Total: <strong id="sbrsTotal">0</strong> records</span>
+    </div>
+</div>
+
+<!-- SBRS Component JavaScript -->
+<script>
+(function() {
+    let sbrsComponentTable = null;
+    let sbrsData = [];
+    
+    // Load SBRS Data
+    async function loadSBRSComponentData(bulan, tahun) {
+        try {
+            const response = await fetch(`/api/sbrs/data?bulan=${bulan}&tahun=${tahun}`);
+            if (!response.ok) {
+                throw new Error('Failed to load SBRS data');
+            }
+            
+            sbrsData = await response.json();
+            renderSBRSTable(sbrsData);
+            
+        } catch (error) {
+            console.error('Error loading SBRS:', error);
+            $('#sbrsComponentTable tbody').html(`
+                <tr>
+                    <td colspan="11" class="text-center text-danger py-3">
+                        <i class="fas fa-exclamation-triangle"></i> ${error.message}
+                    </td>
+                </tr>
+            `);
+        }
+    }
+    
+    // Render SBRS Table
+    function renderSBRSTable(data) {
+        // Destroy existing table
+        if (sbrsComponentTable) {
+            sbrsComponentTable.destroy();
+        }
+        
+        const tbody = $('#sbrsComponentTable tbody');
+        
+        if (!data || data.length === 0) {
+            tbody.html(`
+                <tr>
+                    <td colspan="11" class="text-center text-muted py-3">
+                        <i class="fas fa-inbox"></i> No data available
+                    </td>
+                </tr>
+            `);
+            $('#sbrsTotal').text('0');
+            return;
+        }
+        
+        // CRITICAL: Use correct column names (nomen, volume, nama, rayon)
+        tbody.html(data.map(item => `
+            <tr>
+                <td><code style="font-size: 12px;">${item.nomen || '-'}</code></td>
+                <td>${item.nama || '-'}</td>
+                <td style="max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${item.alamat || '-'}">${item.alamat || '-'}</td>
+                <td><span class="badge badge-info badge-sm">${item.rayon || '-'}</span></td>
+                <td><strong>${parseFloat(item.volume || 0).toFixed(2)}</strong></td>
+                <td>${parseFloat(item.stand_awal || 0).toFixed(2)}</td>
+                <td>${parseFloat(item.stand_akhir || 0).toFixed(2)}</td>
+                <td><small>${item.readmethod || '-'}</small></td>
+                <td>${item.skip_status ? '<span class="badge badge-warning badge-sm">Yes</span>' : '-'}</td>
+                <td>${item.trouble_status ? '<span class="badge badge-danger badge-sm">Yes</span>' : '-'}</td>
+                <td>
+                    <button class="btn btn-xs btn-outline-primary" onclick="viewSBRSDetail('${item.nomen}')" title="View Detail">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join(''));
+        
+        $('#sbrsTotal').text(data.length);
+        
+        // Initialize DataTable
+        sbrsComponentTable = $('#sbrsComponentTable').DataTable({
+            pageLength: 25,
+            responsive: true,
+            order: [[0, 'asc']],
+            language: {
+                search: "Cari:",
+                lengthMenu: "Show _MENU_",
+                info: "_START_-_END_ of _TOTAL_",
+                paginate: {
+                    previous: "<",
+                    next: ">"
+                }
+            },
+            columnDefs: [
+                { targets: [10], orderable: false }  // Action column
+            ]
+        });
+    }
+    
+    // Apply Filter
+    function applySBRSFilter() {
+        const rayon = $('#filterRayon').val();
+        const minVolume = parseFloat($('#filterMinVolume').val()) || 0;
+        const maxVolume = parseFloat($('#filterMaxVolume').val()) || Infinity;
+        
+        let filtered = sbrsData;
+        
+        if (rayon) {
+            filtered = filtered.filter(item => item.rayon === rayon);
+        }
+        
+        filtered = filtered.filter(item => {
+            const vol = parseFloat(item.volume || 0);
+            return vol >= minVolume && vol <= maxVolume;
+        });
+        
+        renderSBRSTable(filtered);
+    }
+    
+    // Reset Filter
+    function resetSBRSFilter() {
+        $('#filterRayon').val('');
+        $('#filterMinVolume').val('');
+        $('#filterMaxVolume').val('');
+        renderSBRSTable(sbrsData);
+    }
+    
+    // View Detail (placeholder)
+    window.viewSBRSDetail = function(nomen) {
+        alert('View detail for nomen: ' + nomen);
+        // Implement modal or redirect to detail page
+    };
+    
+    // Event Listeners
+    $(document).ready(function() {
+        // Toggle filter
+        $('#filterSBRS').on('click', function() {
+            $('#sbrsFilterSection').slideToggle();
+        });
+        
+        // Apply filter
+        $('#applySBRSFilter').on('click', applySBRSFilter);
+        
+        // Reset filter
+        $('#resetSBRSFilter').on('click', resetSBRSFilter);
+        
+        // Refresh data
+        $('#refreshSBRSComponent').on('click', function() {
+            const bulan = $('#bulan').val() || 12;
+            const tahun = $('#tahun').val() || 2024;
+            loadSBRSComponentData(bulan, tahun);
+        });
+        
+        // Auto-load if bulan/tahun available
+        const bulan = $('#bulan').val() || 12;
+        const tahun = $('#tahun').val() || 2024;
+        loadSBRSComponentData(bulan, tahun);
+    });
+    
+    // Export for external use
+    window.SBRSComponent = {
+        load: loadSBRSComponentData,
+        refresh: function() {
+            const bulan = $('#bulan').val() || 12;
+            const tahun = $('#tahun').val() || 2024;
+            loadSBRSComponentData(bulan, tahun);
+        }
+    };
+})();
+</script>
+
+<style>
+/* Component-specific styles */
+.btn-xs {
+    padding: 2px 6px;
+    font-size: 11px;
+}
+
+@media (max-width: 768px) {
+    #sbrsComponentTable {
+        font-size: 11px !important;
+    }
+    
+    #sbrsComponentTable th,
+    #sbrsComponentTable td {
+        padding: 6px 4px !important;
+    }
+}
+</style>
+
