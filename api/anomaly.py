@@ -1,263 +1,155 @@
 """
-Analisa Manual API Endpoints
-Handles manual analysis and case management
+Anomaly Detection API Endpoints
+Handles SBRS data anomaly analysis and summary
 """
 
 from flask import jsonify, request
-from datetime import datetime
+import traceback
 
-def register_analisa_routes(app, get_db):
-    """Register analisa manual routes"""
+def register_anomaly_routes(app, get_db):
+    """Register all anomaly detection routes"""
     
-    @app.route('/api/analisa/list')
-    def analisa_list():
-        """Get list of manual analysis cases"""
+    @app.route('/api/anomaly/summary')
+    def api_anomaly_summary():
+        """Summary count for each anomaly type - FIXED VERSION"""
+        db = get_db()
+        
         try:
-            status = request.args.get('status')  # pending, in_progress, resolved
-            priority = request.args.get('priority')  # low, medium, high
+            # Ambil periode terakhir dari SBRS
+            periode_query = """
+                SELECT periode_bulan, periode_tahun 
+                FROM sbrs_data 
+                WHERE periode_bulan IS NOT NULL AND periode_tahun IS NOT NULL
+                ORDER BY periode_tahun DESC, periode_bulan DESC 
+                LIMIT 1
+            """
+            periode_row = db.execute(periode_query).fetchone()
             
-            db = get_db()
-            cursor = db.cursor()
-            
-            query = 'SELECT * FROM analisa_manual WHERE 1=1'
-            params = []
-            
-            if status:
-                query += ' AND status = ?'
-                params.append(status)
-            
-            if priority:
-                query += ' AND priority = ?'
-                params.append(priority)
-            
-            query += ' ORDER BY created_at DESC'
-            
-            cursor.execute(query, params)
-            rows = cursor.fetchall()
-            
-            data = []
-            for row in rows:
-                data.append({
-                    'id': row['id'],
-                    'nomen': row['nomen'],
-                    'jenis_anomali': row['jenis_anomali'],
-                    'deskripsi': row['deskripsi'],
-                    'status': row['status'],
-                    'priority': row['priority'],
-                    'assigned_to': row['assigned_to'],
-                    'due_date': row['due_date'],
-                    'created_at': row['created_at'],
-                    'updated_at': row['updated_at']
+            if not periode_row:
+                return jsonify({
+                    'periode': None,
+                    'anomalies': {}
                 })
             
-            return jsonify(data)
+            periode_bulan = periode_row[0]
+            periode_tahun = periode_row[1]
             
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-    
-    @app.route('/api/analisa/create', methods=['POST'])
-    def analisa_create():
-        """Create new analysis case"""
-        try:
-            data = request.get_json()
+            # Format periode untuk display
+            bulan_names = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 
+                          'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des']
+            periode_label = f"{bulan_names[periode_bulan]} {periode_tahun}"
             
-            nomen = data.get('nomen')
-            jenis_anomali = data.get('jenis_anomali')
-            deskripsi = data.get('deskripsi')
-            priority = data.get('priority', 'medium')
-            assigned_to = data.get('assigned_to')
-            due_date = data.get('due_date')
+            # Query untuk hitung setiap anomali
+            anomalies = {}
             
-            if not nomen or not jenis_anomali:
-                return jsonify({'error': 'Missing required fields'}), 400
+            # 1. PEMAKAIAN EXTREME (>100 m3 atau >3x avg)
+            extreme_query = """
+                SELECT COUNT(DISTINCT nomen) as count,
+                       SUM(volume) as total_kubikasi,
+                       AVG(volume) as avg_kubikasi
+                FROM sbrs_data
+                WHERE periode_bulan = ? AND periode_tahun = ?
+                AND (volume > 100 OR volume > (
+                    SELECT AVG(volume) * 3 FROM sbrs_data 
+                    WHERE periode_bulan = ? AND periode_tahun = ?
+                ))
+            """
+            extreme = db.execute(extreme_query, (periode_bulan, periode_tahun, periode_bulan, periode_tahun)).fetchone()
+            anomalies['extreme'] = {
+                'count': extreme[0] or 0,
+                'total_kubikasi': extreme[1] or 0,
+                'avg': extreme[2] or 0
+            }
             
-            db = get_db()
-            cursor = db.cursor()
+            # 2. PEMAKAIAN TURUN (turun >50% dari periode sebelumnya)
+            turun_query = """
+                SELECT COUNT(*) as count
+                FROM sbrs_data s1
+                LEFT JOIN sbrs_data s2 ON s1.nomen = s2.nomen 
+                WHERE s1.periode_bulan = ? AND s1.periode_tahun = ?
+                AND (
+                    (s1.periode_bulan = 1 AND s2.periode_bulan = 12 AND s2.periode_tahun = s1.periode_tahun - 1)
+                    OR (s1.periode_bulan > 1 AND s2.periode_bulan = s1.periode_bulan - 1 AND s2.periode_tahun = s1.periode_tahun)
+                )
+                AND s2.volume > 0
+                AND s1.volume < (s2.volume * 0.5)
+            """
+            turun = db.execute(turun_query, (periode_bulan, periode_tahun)).fetchone()
+            anomalies['turun'] = {'count': turun[0] or 0}
             
-            now = datetime.now().isoformat()
+            # 3. ZERO USAGE (volume = 0)
+            zero_query = """
+                SELECT COUNT(DISTINCT nomen) as count
+                FROM sbrs_data
+                WHERE periode_bulan = ? AND periode_tahun = ?
+                AND volume = 0
+            """
+            zero = db.execute(zero_query, (periode_bulan, periode_tahun)).fetchone()
+            anomalies['zero'] = {'count': zero[0] or 0}
             
-            cursor.execute('''
-                INSERT INTO analisa_manual 
-                (nomen, jenis_anomali, deskripsi, status, priority, assigned_to, due_date, created_at, updated_at)
-                VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)
-            ''', (nomen, jenis_anomali, deskripsi, priority, assigned_to, due_date, now, now))
+            # 4. STAND NEGATIF (volume < 0)
+            negatif_query = """
+                SELECT COUNT(DISTINCT nomen) as count,
+                       SUM(volume) as total_negatif
+                FROM sbrs_data
+                WHERE periode_bulan = ? AND periode_tahun = ?
+                AND volume < 0
+            """
+            negatif = db.execute(negatif_query, (periode_bulan, periode_tahun)).fetchone()
+            anomalies['negatif'] = {
+                'count': negatif[0] or 0,
+                'total': negatif[1] or 0
+            }
             
-            analisa_id = cursor.lastrowid
-            
-            # Add activity log
-            cursor.execute('''
-                INSERT INTO analisa_activity (analisa_id, action, user, icon, created_at)
-                VALUES (?, 'created', ?, 'plus-circle', ?)
-            ''', (analisa_id, assigned_to or 'system', now))
-            
-            db.commit()
+            # 5. SALAH CATAT (stand_akhir < stand_awal)
+            salah_query = """
+                SELECT COUNT(DISTINCT nomen) as count
+                FROM sbrs_data
+                WHERE periode_bulan = ? AND periode_tahun = ?
+                AND stand_akhir < stand_awal
+            """
+            salah = db.execute(salah_query, (periode_bulan, periode_tahun)).fetchone()
+            anomalies['salah_catat'] = {'count': salah[0] or 0}
             
             return jsonify({
-                'success': True,
-                'id': analisa_id,
-                'message': 'Analysis case created'
+                'periode': periode_label,
+                'periode_bulan': periode_bulan,
+                'periode_tahun': periode_tahun,
+                'anomalies': anomalies
             })
             
         except Exception as e:
+            traceback.print_exc()
             return jsonify({'error': str(e)}), 500
-    
-    @app.route('/api/analisa/<int:analisa_id>/update', methods=['PUT'])
-    def analisa_update(analisa_id):
-        """Update analysis case"""
+
+    @app.route('/api/anomaly/detail/<anomaly_type>')
+    def api_anomaly_detail(anomaly_type):
+        """Detail data untuk jenis anomali tertentu"""
+        db = get_db()
         try:
-            data = request.get_json()
+            periode_query = "SELECT periode_bulan, periode_tahun FROM sbrs_data ORDER BY periode_tahun DESC, periode_bulan DESC LIMIT 1"
+            periode_row = db.execute(periode_query).fetchone()
+            if not periode_row: 
+                return jsonify({'data': []})
             
-            status = data.get('status')
-            priority = data.get('priority')
-            assigned_to = data.get('assigned_to')
-            due_date = data.get('due_date')
+            p_bulan, p_tahun = periode_row[0], periode_row[1]
             
-            db = get_db()
-            cursor = db.cursor()
-            
-            updates = []
-            params = []
-            
-            if status:
-                updates.append('status = ?')
-                params.append(status)
-            
-            if priority:
-                updates.append('priority = ?')
-                params.append(priority)
-            
-            if assigned_to:
-                updates.append('assigned_to = ?')
-                params.append(assigned_to)
-            
-            if due_date:
-                updates.append('due_date = ?')
-                params.append(due_date)
-            
-            if not updates:
-                return jsonify({'error': 'No fields to update'}), 400
-            
-            now = datetime.now().isoformat()
-            updates.append('updated_at = ?')
-            params.append(now)
-            
-            params.append(analisa_id)
-            
-            query = f"UPDATE analisa_manual SET {', '.join(updates)} WHERE id = ?"
-            cursor.execute(query, params)
-            
-            # Add activity log
-            action = f"updated: {', '.join(data.keys())}"
-            cursor.execute('''
-                INSERT INTO analisa_activity (analisa_id, action, user, icon, created_at)
-                VALUES (?, ?, ?, 'edit', ?)
-            ''', (analisa_id, action, data.get('user', 'system'), now))
-            
-            db.commit()
-            
-            return jsonify({
-                'success': True,
-                'message': 'Analysis case updated'
-            })
+            if anomaly_type == 'zero':
+                query = "SELECT nomen, nama, alamat, volume FROM sbrs_data WHERE periode_bulan=? AND periode_tahun=? AND volume=0 LIMIT 100"
+            elif anomaly_type == 'negatif':
+                query = "SELECT nomen, nama, alamat, volume FROM sbrs_data WHERE periode_bulan=? AND periode_tahun=? AND volume < 0 LIMIT 100"
+            elif anomaly_type == 'extreme':
+                query = """
+                    SELECT nomen, nama, alamat, volume FROM sbrs_data 
+                    WHERE periode_bulan=? AND periode_tahun=? AND volume > 100 LIMIT 100
+                """
+            else:
+                return jsonify({'error': 'Jenis anomali tidak dikenal'}), 400
+                
+            rows = db.execute(query, (p_bulan, p_tahun)).fetchall()
+            return jsonify({'data': [dict(row) for row in rows]})
             
         except Exception as e:
             return jsonify({'error': str(e)}), 500
-    
-    @app.route('/api/analisa/<int:analisa_id>/comments')
-    def analisa_comments(analisa_id):
-        """Get comments for analysis case"""
-        try:
-            db = get_db()
-            cursor = db.cursor()
-            
-            cursor.execute('''
-                SELECT * FROM analisa_comments
-                WHERE analisa_id = ?
-                ORDER BY created_at DESC
-            ''', (analisa_id,))
-            
-            rows = cursor.fetchall()
-            
-            data = []
-            for row in rows:
-                data.append({
-                    'id': row['id'],
-                    'user': row['user'],
-                    'comment': row['comment'],
-                    'created_at': row['created_at']
-                })
-            
-            return jsonify(data)
-            
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-    
-    @app.route('/api/analisa/<int:analisa_id>/comments/add', methods=['POST'])
-    def analisa_add_comment(analisa_id):
-        """Add comment to analysis case"""
-        try:
-            data = request.get_json()
-            
-            user = data.get('user')
-            comment = data.get('comment')
-            
-            if not user or not comment:
-                return jsonify({'error': 'Missing user or comment'}), 400
-            
-            db = get_db()
-            cursor = db.cursor()
-            
-            now = datetime.now().isoformat()
-            
-            cursor.execute('''
-                INSERT INTO analisa_comments (analisa_id, user, comment, created_at)
-                VALUES (?, ?, ?, ?)
-            ''', (analisa_id, user, comment, now))
-            
-            # Add activity log
-            cursor.execute('''
-                INSERT INTO analisa_activity (analisa_id, action, user, icon, created_at)
-                VALUES (?, 'commented', ?, 'message-circle', ?)
-            ''', (analisa_id, user, now))
-            
-            db.commit()
-            
-            return jsonify({
-                'success': True,
-                'message': 'Comment added'
-            })
-            
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-    
-    @app.route('/api/analisa/<int:analisa_id>/activity')
-    def analisa_activity(analisa_id):
-        """Get activity log for analysis case"""
-        try:
-            db = get_db()
-            cursor = db.cursor()
-            
-            cursor.execute('''
-                SELECT * FROM analisa_activity
-                WHERE analisa_id = ?
-                ORDER BY created_at DESC
-            ''', (analisa_id,))
-            
-            rows = cursor.fetchall()
-            
-            data = []
-            for row in rows:
-                data.append({
-                    'id': row['id'],
-                    'action': row['action'],
-                    'user': row['user'],
-                    'icon': row['icon'],
-                    'created_at': row['created_at']
-                })
-            
-            return jsonify(data)
-            
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-    
-    print("✅ Analisa routes registered")
+
+    print("✅ Anomaly Detection routes registered")
