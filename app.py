@@ -65,6 +65,11 @@ def menu():
     """Navigation menu"""
     return render_template('menu.html')
 
+@app.route('/upload')
+def upload_page():
+    """Halaman antar muka untuk upload file"""
+    return render_template('upload.html')
+
 @app.route('/login')
 @app.route('/logout')
 def auth_bypass():
