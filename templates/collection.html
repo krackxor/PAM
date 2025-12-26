@@ -101,7 +101,7 @@
             Monitoring Collection Harian
         </div>
         <button class="btn btn-sm btn-success" id="exportExcelBtn">
-            <i class="fas fa-file-excel"></i> Export Excel
+            <i class="fas fa-file-excel"></i> Export
         </button>
     </div>
     <div class="card-body" style="padding: 0;">
@@ -146,7 +146,6 @@
                     </tr>
                 </tbody>
                 <tfoot id="monitoringTableFooter" style="background: var(--bg-tertiary); font-weight: 700;">
-                    <!-- Total row will be added here -->
                 </tfoot>
             </table>
         </div>
@@ -285,25 +284,13 @@ function updateMonitoringTable(data) {
         return;
     }
     
-    let totalCustUndue = 0, totalRpUndue = 0;
-    let totalCustCurrent = 0, totalRpCurrent = 0;
-    let totalTrx = 0, totalRpTotal = 0;
     let komulatifUndue = 0, komulatifCurrent = 0, komulatifTotal = 0;
     
-    tbody.innerHTML = data.map((item, index) => {
-        // Accumulate totals
-        totalCustUndue += (item.cust_undue || 0);
-        totalRpUndue += (item.rp_undue || 0);
-        totalCustCurrent += (item.cust_current || 0);
-        totalRpCurrent += (item.rp_current || 0);
-        totalTrx += (item.transactions || 0);
-        totalRpTotal += (item.total || 0);
-        
+    tbody.innerHTML = data.map(item => {
         komulatifUndue += (item.rp_undue || 0);
         komulatifCurrent += (item.rp_current || 0);
         komulatifTotal += (item.total || 0);
         
-        // Calculate percentages (example - would need actual target)
         const collPctUndue = ((komulatifUndue / 1000000000) * 100).toFixed(2);
         const collPctCurrent = ((komulatifCurrent / 1000000000) * 100).toFixed(2);
         const collPctTotal = ((komulatifTotal / 1000000000) * 100).toFixed(2);
@@ -311,22 +298,16 @@ function updateMonitoringTable(data) {
         return `
             <tr style="border-bottom: 1px solid var(--border-color);">
                 <td style="text-align: center; font-weight: 600; border-right: 2px solid var(--border-color);">${item.date}</td>
-                
-                <!-- UNDUE -->
                 <td style="text-align: right; background: #fef2f2;">${App.formatNumber(item.cust_undue || 0)}</td>
                 <td style="text-align: right; background: #fef2f2;">${App.formatRupiah(item.rp_undue || 0)}</td>
                 <td style="text-align: right; background: #fef2f2; font-weight: 600;">${App.formatRupiah(komulatifUndue)}</td>
                 <td style="text-align: right; background: #fef2f2;">${collPctUndue}%</td>
                 <td style="text-align: right; background: #fef2f2; border-right: 2px solid var(--border-color);">-</td>
-                
-                <!-- CURRENT -->
                 <td style="text-align: right; background: #f0fdf4;">${App.formatNumber(item.cust_current || 0)}</td>
                 <td style="text-align: right; background: #f0fdf4;">${App.formatRupiah(item.rp_current || 0)}</td>
                 <td style="text-align: right; background: #f0fdf4; font-weight: 600;">${App.formatRupiah(komulatifCurrent)}</td>
                 <td style="text-align: right; background: #f0fdf4;">${collPctCurrent}%</td>
                 <td style="text-align: right; background: #f0fdf4; border-right: 2px solid var(--border-color);">-</td>
-                
-                <!-- TOTAL -->
                 <td style="text-align: right; background: #faf5ff;">${App.formatNumber(item.transactions || 0)}</td>
                 <td style="text-align: right; background: #faf5ff;">${App.formatRupiah(item.total || 0)}</td>
                 <td style="text-align: right; background: #faf5ff; font-weight: 600;">${App.formatRupiah(komulatifTotal)}</td>
@@ -336,21 +317,14 @@ function updateMonitoringTable(data) {
         `;
     }).join('');
     
-    // Add footer totals
     tfoot.innerHTML = `
         <tr>
             <td style="text-align: center;">TOTAL</td>
-            <td style="text-align: right;">${App.formatNumber(totalCustUndue)}</td>
-            <td style="text-align: right;">${App.formatRupiah(totalRpUndue)}</td>
-            <td style="text-align: right;">${App.formatRupiah(komulatifUndue)}</td>
+            <td colspan="3" style="text-align: right;">${App.formatRupiah(komulatifUndue)}</td>
             <td colspan="2"></td>
-            <td style="text-align: right;">${App.formatNumber(totalCustCurrent)}</td>
-            <td style="text-align: right;">${App.formatRupiah(totalRpCurrent)}</td>
-            <td style="text-align: right;">${App.formatRupiah(komulatifCurrent)}</td>
+            <td colspan="3" style="text-align: right;">${App.formatRupiah(komulatifCurrent)}</td>
             <td colspan="2"></td>
-            <td style="text-align: right;">${App.formatNumber(totalTrx)}</td>
-            <td style="text-align: right;">${App.formatRupiah(totalRpTotal)}</td>
-            <td style="text-align: right;">${App.formatRupiah(komulatifTotal)}</td>
+            <td colspan="3" style="text-align: right;">${App.formatRupiah(komulatifTotal)}</td>
             <td colspan="2"></td>
         </tr>
     `;
@@ -380,9 +354,7 @@ function updateChart(data) {
             scales: {
                 y: {
                     beginAtZero: true,
-                    ticks: {
-                        callback: v => 'Rp ' + (v / 1000000).toFixed(0) + 'M'
-                    }
+                    ticks: { callback: v => 'Rp ' + (v / 1000000).toFixed(0) + 'M' }
                 }
             }
         }
@@ -415,334 +387,8 @@ function updateTopTable(data) {
         `).join('');
 }
 
-// Export Excel
 document.getElementById('exportExcelBtn').addEventListener('click', function() {
     App.exportTableToCSV('monitoringTable', 'monitoring_collection.csv');
 });
-</script>
-{% endblock %}
-
-{% block title %}Collection - SUNTER{% endblock %}
-
-{% block content %}
-<!-- Filter Bar -->
-<div class="filter-bar">
-    <div class="filter-row">
-        <div class="filter-item">
-            <div class="filter-label">Bulan</div>
-            <select class="filter-select" id="bulan">
-                <option value="1">Januari</option>
-                <option value="2">Februari</option>
-                <option value="3">Maret</option>
-                <option value="4">April</option>
-                <option value="5">Mei</option>
-                <option value="6">Juni</option>
-                <option value="7">Juli</option>
-                <option value="8">Agustus</option>
-                <option value="9">September</option>
-                <option value="10">Oktober</option>
-                <option value="11">November</option>
-                <option value="12" selected>Desember</option>
-            </select>
-        </div>
-        <div class="filter-item">
-            <div class="filter-label">Tahun</div>
-            <select class="filter-select" id="tahun">
-                <option value="2023">2023</option>
-                <option value="2024" selected>2024</option>
-                <option value="2025">2025</option>
-            </select>
-        </div>
-    </div>
-    <button class="btn btn-primary btn-block" id="loadDataBtn" style="margin-top: 12px;">
-        <i class="fas fa-search"></i>
-        <span>Tampilkan Data</span>
-    </button>
-</div>
-
-<!-- KPI Cards -->
-<div class="row kpi-cards">
-    <div class="col-6 col-md-3">
-        <div class="kpi-card">
-            <div class="kpi-label">
-                <i class="fas fa-bullseye text-primary"></i>
-                Target MC
-            </div>
-            <div class="kpi-value" id="kpi-target">Rp 0</div>
-            <div class="kpi-change up">
-                <i class="fas fa-arrow-up"></i> 0%
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-6 col-md-3">
-        <div class="kpi-card">
-            <div class="kpi-label">
-                <i class="fas fa-check-circle text-success"></i>
-                Collection
-            </div>
-            <div class="kpi-value" id="kpi-collection">Rp 0</div>
-            <div class="kpi-change up" id="kpi-collection-change">
-                <i class="fas fa-arrow-up"></i> 0%
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-6 col-md-3">
-        <div class="kpi-card">
-            <div class="kpi-label">
-                <i class="fas fa-percent text-info"></i>
-                Achievement
-            </div>
-            <div class="kpi-value" id="kpi-percentage">0%</div>
-            <div class="kpi-change" id="kpi-percentage-change">
-                vs target
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-6 col-md-3">
-        <div class="kpi-card">
-            <div class="kpi-label">
-                <i class="fas fa-clock text-warning"></i>
-                Tunggakan
-            </div>
-            <div class="kpi-value" id="kpi-tunggakan">Rp 0</div>
-            <div class="kpi-change down">
-                <i class="fas fa-arrow-down"></i> 0%
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Chart -->
-<div class="card">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-chart-line"></i>
-            Trend Collection
-        </div>
-    </div>
-    <div class="card-body">
-        <div class="chart-container">
-            <canvas id="collectionChart"></canvas>
-        </div>
-    </div>
-</div>
-
-<!-- Tabs -->
-<div class="tabs">
-    <button class="tab active" data-tab="daily">Harian</button>
-    <button class="tab" data-tab="rayon">Per Rayon</button>
-    <button class="tab" data-tab="top">Top 10</button>
-</div>
-
-<!-- Tab: Daily -->
-<div class="card tab-content" id="tab-daily">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-calendar-day"></i>
-            Collection Harian
-        </div>
-    </div>
-    <div class="card-body" style="padding: 0;">
-        <div class="table-responsive">
-            <table class="table" id="dailyTable">
-                <thead>
-                    <tr>
-                        <th>Tanggal</th>
-                        <th>Transaksi</th>
-                        <th>Current</th>
-                        <th>Tunggakan</th>
-                        <th>Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td colspan="5" class="loading">
-                            <div class="spinner"></div>
-                            <p>Loading...</p>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<!-- Tab: Rayon -->
-<div class="card tab-content" id="tab-rayon" style="display: none;">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-map-marked-alt"></i>
-            Per Rayon
-        </div>
-    </div>
-    <div class="card-body" style="padding: 0;">
-        <div class="table-responsive">
-            <table class="table" id="rayonTable">
-                <thead>
-                    <tr>
-                        <th>Rayon</th>
-                        <th>Pelanggan</th>
-                        <th>Collection</th>
-                        <th>%</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr><td colspan="4" class="loading"><div class="spinner"></div></td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<!-- Tab: Top 10 -->
-<div class="card tab-content" id="tab-top" style="display: none;">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-trophy"></i>
-            Top 10 Pembayar
-        </div>
-    </div>
-    <div class="card-body" style="padding: 0;">
-        <div class="table-responsive">
-            <table class="table" id="topTable">
-                <thead>
-                    <tr>
-                        <th>Rank</th>
-                        <th>Nomen</th>
-                        <th>Nama</th>
-                        <th>Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr><td colspan="4" class="loading"><div class="spinner"></div></td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-let collectionChart = null;
-
-// Tab switching
-document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', function() {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        this.classList.add('active');
-        document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
-        document.getElementById('tab-' + this.getAttribute('data-tab')).style.display = 'block';
-    });
-});
-
-// Load data
-document.getElementById('loadDataBtn').addEventListener('click', loadData);
-window.addEventListener('DOMContentLoaded', loadData);
-
-async function loadData() {
-    const bulan = document.getElementById('bulan').value;
-    const tahun = document.getElementById('tahun').value;
-    
-    try {
-        const kpiData = await App.api(`/api/kpi?bulan=${bulan}&tahun=${tahun}`);
-        updateKPI(kpiData);
-        
-        const dailyData = await App.api(`/api/collection/daily?bulan=${bulan}&tahun=${tahun}`);
-        updateDailyTable(dailyData);
-        updateChart(dailyData);
-        
-        const rayonData = await App.api(`/api/collection/by-rayon?bulan=${bulan}&tahun=${tahun}`);
-        updateRayonTable(rayonData);
-        
-        const topData = await App.api(`/api/collection/top-payers?bulan=${bulan}&tahun=${tahun}&limit=10`);
-        updateTopTable(topData);
-    } catch (error) {
-        console.error('Error:', error);
-    }
-}
-
-function updateKPI(data) {
-    document.getElementById('kpi-target').textContent = App.formatRupiah(data.target_mc || 0);
-    document.getElementById('kpi-collection').textContent = App.formatRupiah(data.collection_total || 0);
-    document.getElementById('kpi-percentage').textContent = (data.collection_pct || 0).toFixed(1) + '%';
-    document.getElementById('kpi-tunggakan').textContent = App.formatRupiah(data.collection_tunggakan || 0);
-}
-
-function updateChart(data) {
-    const ctx = document.getElementById('collectionChart');
-    if (collectionChart) collectionChart.destroy();
-    
-    collectionChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.map(d => d.date),
-            datasets: [{
-                label: 'Collection',
-                data: data.map(d => d.total),
-                borderColor: '#1e40af',
-                backgroundColor: 'rgba(30, 64, 175, 0.1)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: v => 'Rp ' + (v / 1000000).toFixed(0) + 'M'
-                    }
-                }
-            }
-        }
-    });
-}
-
-function updateDailyTable(data) {
-    const tbody = document.querySelector('#dailyTable tbody');
-    tbody.innerHTML = data.length === 0 ? '<tr><td colspan="5" class="empty-state">Tidak ada data</td></tr>' :
-        data.map(item => `
-            <tr>
-                <td>${item.date}</td>
-                <td>${item.transactions || 0}</td>
-                <td>${App.formatRupiah(item.current || 0)}</td>
-                <td>${App.formatRupiah(item.tunggakan || 0)}</td>
-                <td><strong>${App.formatRupiah(item.total || 0)}</strong></td>
-            </tr>
-        `).join('');
-}
-
-function updateRayonTable(data) {
-    const tbody = document.querySelector('#rayonTable tbody');
-    tbody.innerHTML = data.length === 0 ? '<tr><td colspan="4" class="empty-state">Tidak ada data</td></tr>' :
-        data.map(item => `
-            <tr>
-                <td><span class="badge badge-info">${item.rayon}</span></td>
-                <td>${App.formatNumber(item.pelanggan || 0)}</td>
-                <td>${App.formatRupiah(item.collection || 0)}</td>
-                <td><strong>${(item.percentage || 0).toFixed(1)}%</strong></td>
-            </tr>
-        `).join('');
-}
-
-function updateTopTable(data) {
-    const tbody = document.querySelector('#topTable tbody');
-    tbody.innerHTML = data.length === 0 ? '<tr><td colspan="4" class="empty-state">Tidak ada data</td></tr>' :
-        data.map((item, i) => `
-            <tr>
-                <td>${i < 3 ? `<i class="fas fa-medal" style="color: ${['#FFD700', '#C0C0C0', '#CD7F32'][i]};"></i>` : (i + 1)}</td>
-                <td><code>${item.nomen}</code></td>
-                <td>${item.nama}</td>
-                <td><strong>${App.formatRupiah(item.total || 0)}</strong></td>
-            </tr>
-        `).join('');
-}
 </script>
 {% endblock %}
