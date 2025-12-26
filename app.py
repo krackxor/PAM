@@ -1,6 +1,6 @@
 """
 SUNTER DASHBOARD - Main Application
-Simplified entry point - delegates to modular components
+Mobile-First dengan Bottom Navigation
 """
 
 import os
@@ -21,6 +21,8 @@ from api.anomaly import register_anomaly_routes
 from api.analisa import register_analisa_routes
 from api.upload import register_upload_routes
 from api.history import register_history_routes
+from api.sbrs import register_sbrs_routes
+from api.belum_bayar import register_belum_bayar_routes  # NEW
 
 # Get configuration
 config_class = get_config()
@@ -29,22 +31,24 @@ config_class = get_config()
 app = Flask(__name__)
 app.config.from_object(config_class)
 
-# Initialize config (create folders, etc)
+# Initialize config
 config_class.init_app(app)
 
 # Register database teardown
 app.teardown_appcontext(close_db)
 
-# Register template helpers (formatRupiah, etc)
+# Register template helpers
 register_helpers(app)
 
-# Register API blueprints/routes
+# Register API routes
 register_kpi_routes(app, get_db)
 register_collection_routes(app, get_db)
 register_anomaly_routes(app, get_db)
 register_analisa_routes(app, get_db)
 register_upload_routes(app, get_db)
 register_history_routes(app, get_db)
+register_sbrs_routes(app, get_db)
+register_belum_bayar_routes(app, get_db)  # NEW
 
 # ==========================================
 # MAIN ROUTES (UI)
@@ -60,6 +64,11 @@ def collection_dashboard():
     """Collection analytics dashboard"""
     return render_template('collection_dashboard.html')
 
+@app.route('/belum-bayar')
+def belum_bayar():
+    """Belum Bayar (Unpaid customers) page"""
+    return render_template('belum_bayar.html')
+
 @app.route('/menu')
 def menu():
     """Navigation menu"""
@@ -67,13 +76,13 @@ def menu():
 
 @app.route('/upload')
 def upload_page():
-    """Halaman antar muka untuk upload file"""
+    """Upload page"""
     return render_template('upload.html')
 
 @app.route('/login')
 @app.route('/logout')
 def auth_bypass():
-    """Bypass authentication (for now)"""
+    """Bypass authentication"""
     return redirect(url_for('index'))
 
 # ==========================================
@@ -100,12 +109,13 @@ if __name__ == '__main__':
         print("✅ Database initialized")
     
     print("=" * 60)
-    print("🚀 SUNTER DASHBOARD STARTING")
+    print("🚀 SUNTER DASHBOARD - MOBILE APP")
     print("=" * 60)
-    print("📌 Modular Architecture:")
-    print("   ✓ Core: Database, Helpers")
-    print("   ✓ Processors: MC, Collection, SBRS, MB, MainBill, Ardebt")
-    print("   ✓ API: KPI, Collection, Anomaly, Analisa, Upload, History")
+    print("📱 Mobile-First Design")
+    print("📌 Features:")
+    print("   ✓ Bottom Navigation")
+    print("   ✓ Collection Dashboard")
+    print("   ✓ Belum Bayar (Unpaid)")
     print("=" * 60)
     print("🌐 Server: http://localhost:5000")
     print("=" * 60)
