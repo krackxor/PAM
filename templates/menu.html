@@ -1,56 +1,220 @@
 {% extends "base.html" %}
 
-{% block title %}Menu Navigasi - PAM Sunter{% endblock %}
+{% block title %}Menu - SUNTER{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <div class="row">
-        <div class="col-12 mb-4">
-            <h2 class="fw-bold"><i class="fas fa-th-large me-2"></i> Menu Navigasi</h2>
-            <p class="text-muted">Pilih modul aplikasi yang ingin Anda akses.</p>
-            <hr>
+<!-- Header -->
+<div class="card" style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color: white; border: none;">
+    <div class="card-body">
+        <h1 style="font-size: 24px; font-weight: 700; margin: 0;">
+            <i class="fas fa-th-large"></i> Menu Lengkap
+        </h1>
+        <p style="font-size: 13px; opacity: 0.9; margin-top: var(--space-2); margin-bottom: 0;">
+            Akses semua fitur dashboard
+        </p>
+    </div>
+</div>
+
+<!-- Main Features -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">
+            <i class="fas fa-star"></i>
+            Fitur Utama
         </div>
     </div>
-
-    <div class="row g-4">
-        <div class="col-md-4">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body text-center p-4">
-                    <div class="icon-box mb-3 mx-auto bg-primary bg-opacity-10 text-primary rounded-circle" style="width: 70px; height: 70px; line-height: 70px;">
-                        <i class="fas fa-chart-line fa-2x"></i>
+    <div class="card-body" style="padding: var(--space-3);">
+        <div class="row" style="gap: var(--space-3); margin: 0;">
+            <!-- Home -->
+            <div class="col-6 col-md-3" style="padding: 0;">
+                <a href="/" style="text-decoration: none;">
+                    <div class="kpi-card" style="text-align: center;">
+                        <i class="fas fa-home" style="font-size: 32px; color: var(--primary); margin-bottom: var(--space-2);"></i>
+                        <div style="font-weight: 600; color: var(--text-primary);">Home</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: var(--space-1);">Dashboard utama</div>
                     </div>
-                    <h5 class="card-title fw-bold">Main Dashboard</h5>
-                    <p class="card-text text-muted small">Ringkasan KPI dan statistik operasional utama.</p>
-                    <a href="{{ url_for('index') }}" class="btn btn-primary w-100">Buka Dashboard</a>
-                </div>
+                </a>
             </div>
-        </div>
-
-        <div class="col-md-4">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body text-center p-4">
-                    <div class="icon-box mb-3 mx-auto bg-success bg-opacity-10 text-success rounded-circle" style="width: 70px; height: 70px; line-height: 70px;">
-                        <i class="fas fa-money-bill-wave fa-2x"></i>
+            
+            <!-- Collection -->
+            <div class="col-6 col-md-3" style="padding: 0;">
+                <a href="/collection" style="text-decoration: none;">
+                    <div class="kpi-card" style="text-align: center;">
+                        <i class="fas fa-wallet" style="font-size: 32px; color: var(--success); margin-bottom: var(--space-2);"></i>
+                        <div style="font-weight: 600; color: var(--text-primary);">Collection</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: var(--space-1);">Data pembayaran</div>
                     </div>
-                    <h5 class="card-title fw-bold">Collection</h5>
-                    <p class="card-text text-muted small">Analisis penagihan, tunggakan, dan efektivitas koleksi.</p>
-                    <a href="{{ url_for('collection_dashboard') }}" class="btn btn-success w-100">Buka Collection</a>
-                </div>
+                </a>
             </div>
-        </div>
-
-        <div class="col-md-4">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body text-center p-4">
-                    <div class="icon-box mb-3 mx-auto bg-danger bg-opacity-10 text-danger rounded-circle" style="width: 70px; height: 70px; line-height: 70px;">
-                        <i class="fas fa-sign-out-alt fa-2x"></i>
+            
+            <!-- Belum Bayar -->
+            <div class="col-6 col-md-3" style="padding: 0;">
+                <a href="/belum-bayar" style="text-decoration: none;">
+                    <div class="kpi-card" style="text-align: center;">
+                        <i class="fas fa-exclamation-circle" style="font-size: 32px; color: var(--danger); margin-bottom: var(--space-2);"></i>
+                        <div style="font-weight: 600; color: var(--text-primary);">Belum Bayar</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: var(--space-1);">Tunggakan</div>
                     </div>
-                    <h5 class="card-title fw-bold">Keluar</h5>
-                    <p class="card-text text-muted small">Keluar dari aplikasi Sunter Dashboard.</p>
-                    <a href="{{ url_for('auth_bypass') }}" class="btn btn-outline-danger w-100">Logout</a>
-                </div>
+                </a>
+            </div>
+            
+            <!-- Upload -->
+            <div class="col-6 col-md-3" style="padding: 0;">
+                <a href="/upload" style="text-decoration: none;">
+                    <div class="kpi-card" style="text-align: center;">
+                        <i class="fas fa-cloud-upload-alt" style="font-size: 32px; color: var(--info); margin-bottom: var(--space-2);"></i>
+                        <div style="font-weight: 600; color: var(--text-primary);">Upload</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: var(--space-1);">Upload data</div>
+                    </div>
+                </a>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Reports & Analysis -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">
+            <i class="fas fa-chart-bar"></i>
+            Laporan & Analisa
+        </div>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        <a href="/collection_dashboard" class="menu-item" style="display: flex; align-items: center; padding: var(--space-4); border-bottom: 1px solid var(--border-color); text-decoration: none; color: inherit;">
+            <div style="width: 40px; height: 40px; border-radius: 50%; background: #dbeafe; display: flex; align-items: center; justify-content: center; margin-right: var(--space-3);">
+                <i class="fas fa-chart-line" style="color: var(--primary);"></i>
+            </div>
+            <div style="flex: 1;">
+                <div style="font-weight: 600; margin-bottom: 2px;">Collection Dashboard</div>
+                <div style="font-size: 12px; color: var(--text-muted);">Dashboard collection lengkap</div>
+            </div>
+            <i class="fas fa-chevron-right" style="color: var(--text-muted);"></i>
+        </a>
+        
+        <a href="/anomaly" class="menu-item" style="display: flex; align-items: center; padding: var(--space-4); border-bottom: 1px solid var(--border-color); text-decoration: none; color: inherit;">
+            <div style="width: 40px; height: 40px; border-radius: 50%; background: #fef3c7; display: flex; align-items: center; justify-content: center; margin-right: var(--space-3);">
+                <i class="fas fa-exclamation-triangle" style="color: var(--warning);"></i>
+            </div>
+            <div style="flex: 1;">
+                <div style="font-weight: 600; margin-bottom: 2px;">Anomaly Detection</div>
+                <div style="font-size: 12px; color: var(--text-muted);">Deteksi anomali pemakaian</div>
+            </div>
+            <i class="fas fa-chevron-right" style="color: var(--text-muted);"></i>
+        </a>
+        
+        <a href="/analisa" class="menu-item" style="display: flex; align-items: center; padding: var(--space-4); text-decoration: none; color: inherit;">
+            <div style="width: 40px; height: 40px; border-radius: 50%; background: #d1fae5; display: flex; align-items: center; justify-content: center; margin-right: var(--space-3);">
+                <i class="fas fa-search" style="color: var(--success);"></i>
+            </div>
+            <div style="flex: 1;">
+                <div style="font-weight: 600; margin-bottom: 2px;">Analisa Data</div>
+                <div style="font-size: 12px; color: var(--text-muted);">Analisa mendalam</div>
+            </div>
+            <i class="fas fa-chevron-right" style="color: var(--text-muted);"></i>
+        </a>
+    </div>
+</div>
+
+<!-- Data Management -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">
+            <i class="fas fa-database"></i>
+            Manajemen Data
+        </div>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        <a href="/history" class="menu-item" style="display: flex; align-items: center; padding: var(--space-4); border-bottom: 1px solid var(--border-color); text-decoration: none; color: inherit;">
+            <div style="width: 40px; height: 40px; border-radius: 50%; background: #e0e7ff; display: flex; align-items: center; justify-content: center; margin-right: var(--space-3);">
+                <i class="fas fa-history" style="color: #6366f1;"></i>
+            </div>
+            <div style="flex: 1;">
+                <div style="font-weight: 600; margin-bottom: 2px;">History Upload</div>
+                <div style="font-size: 12px; color: var(--text-muted);">Riwayat upload data</div>
+            </div>
+            <i class="fas fa-chevron-right" style="color: var(--text-muted);"></i>
+        </a>
+        
+        <a href="#" onclick="alert('Fitur segera hadir'); return false;" class="menu-item" style="display: flex; align-items: center; padding: var(--space-4); text-decoration: none; color: inherit;">
+            <div style="width: 40px; height: 40px; border-radius: 50%; background: #fee2e2; display: flex; align-items: center; justify-content: center; margin-right: var(--space-3);">
+                <i class="fas fa-download" style="color: var(--danger);"></i>
+            </div>
+            <div style="flex: 1;">
+                <div style="font-weight: 600; margin-bottom: 2px;">Export Data</div>
+                <div style="font-size: 12px; color: var(--text-muted);">Download laporan</div>
+            </div>
+            <span class="badge badge-warning" style="font-size: 10px;">Soon</span>
+        </a>
+    </div>
+</div>
+
+<!-- Settings -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">
+            <i class="fas fa-cog"></i>
+            Pengaturan
+        </div>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        <a href="#" onclick="alert('Fitur segera hadir'); return false;" class="menu-item" style="display: flex; align-items: center; padding: var(--space-4); border-bottom: 1px solid var(--border-color); text-decoration: none; color: inherit;">
+            <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center; margin-right: var(--space-3);">
+                <i class="fas fa-user" style="color: var(--text-secondary);"></i>
+            </div>
+            <div style="flex: 1;">
+                <div style="font-weight: 600; margin-bottom: 2px;">Profile</div>
+                <div style="font-size: 12px; color: var(--text-muted);">Pengaturan akun</div>
+            </div>
+            <i class="fas fa-chevron-right" style="color: var(--text-muted);"></i>
+        </a>
+        
+        <a href="#" onclick="alert('Fitur segera hadir'); return false;" class="menu-item" style="display: flex; align-items: center; padding: var(--space-4); text-decoration: none; color: inherit;">
+            <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center; margin-right: var(--space-3);">
+                <i class="fas fa-bell" style="color: var(--text-secondary);"></i>
+            </div>
+            <div style="flex: 1;">
+                <div style="font-weight: 600; margin-bottom: 2px;">Notifikasi</div>
+                <div style="font-size: 12px; color: var(--text-muted);">Pengaturan notifikasi</div>
+            </div>
+            <i class="fas fa-chevron-right" style="color: var(--text-muted);"></i>
+        </a>
+    </div>
+</div>
+
+<!-- Info -->
+<div class="card" style="background: var(--bg-tertiary); border: none;">
+    <div class="card-body" style="text-align: center;">
+        <i class="fas fa-tint" style="font-size: 48px; color: var(--primary); margin-bottom: var(--space-2);"></i>
+        <div style="font-weight: 700; margin-bottom: var(--space-1);">SUNTER Dashboard</div>
+        <div style="font-size: 12px; color: var(--text-muted);">Version 2.0 Mobile-First</div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-top: var(--space-1);">© 2024 PDAM Sunter</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Add tap effect to menu items
+document.querySelectorAll('.menu-item').forEach(item => {
+    item.addEventListener('touchstart', function() {
+        this.style.background = 'var(--bg-secondary)';
+    });
+    item.addEventListener('touchend', function() {
+        setTimeout(() => {
+            this.style.background = '';
+        }, 100);
+    });
+});
+
+// Hover effect for cards
+document.querySelectorAll('.kpi-card').forEach(card => {
+    card.addEventListener('mouseenter', function() {
+        this.style.transform = 'scale(1.02)';
+    });
+    card.addEventListener('mouseleave', function() {
+        this.style.transform = 'scale(1)';
+    });
+});
+</script>
 {% endblock %}
