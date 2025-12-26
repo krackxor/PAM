@@ -1,10 +1,91 @@
 {% extends "base.html" %}
-{% block title %}Halaman Tidak Ditemukan - SUNTER{% endblock %}
+
+{% block title %}404 - Halaman Tidak Ditemukan{% endblock %}
+
 {% block content %}
-<div class="container text-center mt-5">
-    <h1 class="display-1 fw-bold text-primary">404</h1>
-    <h2 class="mb-4">Oops! Halaman Tidak Ditemukan</h2>
-    <p class="text-muted mb-5">Maaf, halaman yang Anda cari tidak tersedia atau telah dipindahkan.</p>
-    <a href="/" class="btn btn-primary px-4 py-2">Kembali ke Dashboard</a>
+<div class="card" style="margin-top: var(--space-6); text-align: center; border: none; box-shadow: none;">
+    <div class="card-body" style="padding: var(--space-6);">
+        <!-- Error Icon -->
+        <div style="margin-bottom: var(--space-4);">
+            <i class="fas fa-exclamation-triangle" style="font-size: 96px; color: var(--warning); opacity: 0.5;"></i>
+        </div>
+        
+        <!-- Error Code -->
+        <h1 style="font-size: 72px; font-weight: 700; color: var(--text-primary); margin: 0; line-height: 1;">
+            404
+        </h1>
+        
+        <!-- Error Message -->
+        <h2 style="font-size: 24px; font-weight: 600; color: var(--text-primary); margin: var(--space-3) 0;">
+            Halaman Tidak Ditemukan
+        </h2>
+        
+        <p style="font-size: 14px; color: var(--text-secondary); max-width: 400px; margin: 0 auto var(--space-5);">
+            Maaf, halaman yang Anda cari tidak ditemukan. 
+            Mungkin halaman telah dipindahkan atau URL salah.
+        </p>
+        
+        <!-- Action Buttons -->
+        <div style="display: flex; gap: var(--space-3); justify-content: center; flex-wrap: wrap;">
+            <a href="/" class="btn btn-primary">
+                <i class="fas fa-home"></i>
+                <span>Kembali ke Home</span>
+            </a>
+            
+            <button onclick="history.back()" class="btn btn-outline">
+                <i class="fas fa-arrow-left"></i>
+                <span>Halaman Sebelumnya</span>
+            </button>
+        </div>
+        
+        <!-- Quick Links -->
+        <div style="margin-top: var(--space-6); padding-top: var(--space-4); border-top: 1px solid var(--border-color);">
+            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: var(--space-3);">
+                Atau coba link berikut:
+            </div>
+            <div style="display: flex; gap: var(--space-2); justify-content: center; flex-wrap: wrap;">
+                <a href="/" style="text-decoration: none; color: var(--primary); font-size: 13px;">
+                    <i class="fas fa-home"></i> Home
+                </a>
+                <span style="color: var(--text-muted);">•</span>
+                <a href="/collection" style="text-decoration: none; color: var(--primary); font-size: 13px;">
+                    <i class="fas fa-wallet"></i> Collection
+                </a>
+                <span style="color: var(--text-muted);">•</span>
+                <a href="/belum-bayar" style="text-decoration: none; color: var(--primary); font-size: 13px;">
+                    <i class="fas fa-exclamation-circle"></i> Belum Bayar
+                </a>
+                <span style="color: var(--text-muted);">•</span>
+                <a href="/upload" style="text-decoration: none; color: var(--primary); font-size: 13px;">
+                    <i class="fas fa-cloud-upload-alt"></i> Upload
+                </a>
+            </div>
+        </div>
+    </div>
 </div>
+
+<!-- Info Card -->
+<div class="card" style="background: var(--bg-tertiary); border: none;">
+    <div class="card-body" style="display: flex; align-items: center; gap: var(--space-3);">
+        <i class="fas fa-info-circle" style="font-size: 32px; color: var(--info);"></i>
+        <div>
+            <div style="font-weight: 600; margin-bottom: var(--space-1);">Butuh Bantuan?</div>
+            <div style="font-size: 13px; color: var(--text-secondary);">
+                Gunakan menu navigasi di bawah untuk mengakses halaman lain
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Log 404 error (optional)
+console.error('404 Error: Page not found -', window.location.pathname);
+
+// Auto-focus on back button after delay
+setTimeout(() => {
+    document.querySelector('.btn-primary').focus();
+}, 500);
+</script>
 {% endblock %}
