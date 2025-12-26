@@ -1,42 +1,215 @@
 {% extends "base.html" %}
 
-{% block title %}Smart Upload - SUNTER{% endblock %}
+{% block title %}Upload - SUNTER{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card shadow-sm border-0">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="fas fa-magic mr-2"></i>Smart Upload Center</h5>
+<!-- Header -->
+<div class="card" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none;">
+    <div class="card-body">
+        <h1 style="font-size: 24px; font-weight: 700; margin: 0;">
+            <i class="fas fa-cloud-upload-alt"></i> Upload Data
+        </h1>
+        <p style="font-size: 13px; opacity: 0.9; margin-top: var(--space-2); margin-bottom: 0;">
+            Upload file Excel untuk update database
+        </p>
+    </div>
+</div>
+
+<!-- Upload Form -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">
+            <i class="fas fa-file-excel"></i>
+            Upload File Excel
+        </div>
+    </div>
+    <div class="card-body">
+        <form id="uploadForm" enctype="multipart/form-data">
+            <!-- File Type Selection -->
+            <div style="margin-bottom: var(--space-4);">
+                <label class="filter-label">Tipe File</label>
+                <select class="filter-select" id="fileType" name="file_type" required>
+                    <option value="">-- Pilih Tipe File --</option>
+                    <option value="master">Master Pelanggan</option>
+                    <option value="collection">Collection Harian</option>
+                    <option value="sbrs">SBRS (Summary By Rayon)</option>
+                </select>
+            </div>
+            
+            <!-- Periode Selection -->
+            <div class="filter-row" style="margin-bottom: var(--space-4);">
+                <div class="filter-item">
+                    <label class="filter-label">Bulan</label>
+                    <select class="filter-select" id="bulan" name="bulan" required>
+                        <option value="1">Januari</option>
+                        <option value="2">Februari</option>
+                        <option value="3">Maret</option>
+                        <option value="4">April</option>
+                        <option value="5">Mei</option>
+                        <option value="6">Juni</option>
+                        <option value="7">Juli</option>
+                        <option value="8">Agustus</option>
+                        <option value="9">September</option>
+                        <option value="10">Oktober</option>
+                        <option value="11">November</option>
+                        <option value="12" selected>Desember</option>
+                    </select>
                 </div>
-                <div class="card-body">
-                    <p class="text-muted small">Sistem akan otomatis mendeteksi tipe data (SBRS, Collection, MC, dll) dan periode berdasarkan isi file Anda.</p>
-                    <form id="uploadForm">
-                        <div class="form-group mb-4">
-                            <label class="font-weight-bold">Pilih File (Excel/CSV):</label>
-                            <div class="custom-file">
-                                <input type="file" class="custom-file-input" name="file" id="fileInput" accept=".xlsx, .xls, .csv, .txt" required>
-                                <label class="custom-file-label" for="fileInput">Pilih file...</label>
-                            </div>
-                        </div>
-
-                        <button type="submit" class="btn btn-primary btn-block shadow-sm py-2 fw-bold" id="submitBtn">
-                            <i class="fas fa-play mr-1"></i> MULAI PROSES OTOMATIS
-                        </button>
-                    </form>
-
-                    <div id="statusArea" class="mt-4 d-none">
-                        <div class="alert alert-info border-0 shadow-sm" id="statusMessage">
-                            <div class="spinner-border spinner-border-sm mr-2" role="status"></div>
-                            Menganalisa struktur file...
-                        </div>
-                        <div class="progress" style="height: 10px;">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
-                        </div>
-                    </div>
+                <div class="filter-item">
+                    <label class="filter-label">Tahun</label>
+                    <select class="filter-select" id="tahun" name="tahun" required>
+                        <option value="2023">2023</option>
+                        <option value="2024" selected>2024</option>
+                        <option value="2025">2025</option>
+                    </select>
                 </div>
             </div>
+            
+            <!-- File Input -->
+            <div style="margin-bottom: var(--space-4);">
+                <label class="filter-label">File Excel (.xlsx, .xls)</label>
+                <div style="position: relative;">
+                    <input 
+                        type="file" 
+                        id="fileInput" 
+                        name="file" 
+                        accept=".xlsx,.xls" 
+                        required
+                        style="display: none;"
+                    >
+                    <button 
+                        type="button" 
+                        class="btn btn-outline btn-block" 
+                        onclick="document.getElementById('fileInput').click()"
+                        style="text-align: left; position: relative;"
+                    >
+                        <i class="fas fa-paperclip"></i>
+                        <span id="fileName">Pilih file...</span>
+                    </button>
+                </div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: var(--space-1);">
+                    <i class="fas fa-info-circle"></i> Max 10MB, format .xlsx atau .xls
+                </div>
+            </div>
+            
+            <!-- Submit Button -->
+            <button type="submit" class="btn btn-primary btn-block" id="uploadBtn">
+                <i class="fas fa-upload"></i>
+                <span>Upload File</span>
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Progress -->
+<div class="card" id="progressCard" style="display: none;">
+    <div class="card-body">
+        <div style="text-align: center; padding: var(--space-4) 0;">
+            <div class="spinner" style="width: 48px; height: 48px; border-width: 4px; margin: 0 auto var(--space-3);"></div>
+            <div style="font-weight: 600; margin-bottom: var(--space-2);">Uploading...</div>
+            <div style="font-size: 13px; color: var(--text-muted);" id="progressText">Memproses file...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Format Guide -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">
+            <i class="fas fa-info-circle"></i>
+            Panduan Format File
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="tabs">
+            <button class="tab active" data-tab="master">Master</button>
+            <button class="tab" data-tab="collection">Collection</button>
+            <button class="tab" data-tab="sbrs">SBRS</button>
+        </div>
+        
+        <!-- Master Format -->
+        <div class="tab-content" id="tab-master">
+            <div style="padding: var(--space-3); background: var(--bg-tertiary); border-radius: var(--radius-md); margin-top: var(--space-3);">
+                <div style="font-weight: 600; margin-bottom: var(--space-2);">
+                    <i class="fas fa-table"></i> Format Master Pelanggan
+                </div>
+                <div style="font-size: 13px; color: var(--text-secondary);">
+                    <strong>Kolom yang diperlukan:</strong><br>
+                    • nomen (Nomor Pelanggan)<br>
+                    • nama (Nama Pelanggan)<br>
+                    • alamat (Alamat)<br>
+                    • rayon (Kode Rayon)<br>
+                    • tarif (Tarif)<br>
+                    • target_mc (Target MC)
+                </div>
+            </div>
+        </div>
+        
+        <!-- Collection Format -->
+        <div class="tab-content" id="tab-collection" style="display: none;">
+            <div style="padding: var(--space-3); background: var(--bg-tertiary); border-radius: var(--radius-md); margin-top: var(--space-3);">
+                <div style="font-weight: 600; margin-bottom: var(--space-2);">
+                    <i class="fas fa-table"></i> Format Collection Harian
+                </div>
+                <div style="font-size: 13px; color: var(--text-secondary);">
+                    <strong>Kolom yang diperlukan:</strong><br>
+                    • nomen (Nomor Pelanggan)<br>
+                    • volume (Volume m³)<br>
+                    • current (Pembayaran Current)<br>
+                    • tunggakan (Pembayaran Tunggakan)<br>
+                    • total (Total Pembayaran)<br>
+                    • tanggal_bayar (Tanggal Bayar)
+                </div>
+            </div>
+        </div>
+        
+        <!-- SBRS Format -->
+        <div class="tab-content" id="tab-sbrs" style="display: none;">
+            <div style="padding: var(--space-3); background: var(--bg-tertiary); border-radius: var(--radius-md); margin-top: var(--space-3);">
+                <div style="font-weight: 600; margin-bottom: var(--space-2);">
+                    <i class="fas fa-table"></i> Format SBRS
+                </div>
+                <div style="font-size: 13px; color: var(--text-secondary);">
+                    <strong>Kolom yang diperlukan:</strong><br>
+                    • rayon (Kode Rayon)<br>
+                    • total_pelanggan (Total Pelanggan)<br>
+                    • sudah_bayar (Sudah Bayar)<br>
+                    • belum_bayar (Belum Bayar)<br>
+                    • total_collection (Total Collection)
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Uploads -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">
+            <i class="fas fa-history"></i>
+            Upload Terakhir
+        </div>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        <div class="table-responsive">
+            <table class="table" id="recentUploads">
+                <thead>
+                    <tr>
+                        <th>Waktu</th>
+                        <th>Tipe</th>
+                        <th>Periode</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="4" class="loading">
+                            <div class="spinner"></div>
+                            <p>Loading...</p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
@@ -44,42 +217,98 @@
 
 {% block extra_js %}
 <script>
-// Update nama file di label
-$('.custom-file-input').on('change', function() {
-    let fileName = $(this).val().split('\\').pop();
-    $(this).next('.custom-file-label').addClass("selected").html(fileName);
-});
-
-$('#uploadForm').on('submit', function(e) {
-    e.preventDefault();
-    const formData = new FormData(this);
-    const submitBtn = $('#submitBtn');
-    const statusArea = $('#statusArea');
-    const statusMessage = $('#statusMessage');
-
-    submitBtn.prop('disabled', true);
-    statusArea.removeClass('d-none');
-    statusMessage.removeClass('alert-success alert-danger').addClass('alert-info')
-                 .html('<div class="spinner-border spinner-border-sm mr-2"></div> Sedang membaca isi file dan mencocokkan periode...');
-
-    $.ajax({
-        url: '/api/upload',
-        type: 'POST',
-        data: formData,
-        processData: false,
-        contentType: false,
-        success: function(response) {
-            statusMessage.removeClass('alert-info').addClass('alert-success')
-                .html('<strong><i class="fas fa-check-circle mr-1"></i> Berhasil!</strong> ' + response.message);
-            setTimeout(() => { window.location.href = '/'; }, 2500);
-        },
-        error: function(xhr) {
-            let errorMsg = xhr.responseJSON ? xhr.responseJSON.error : 'Gagal memproses file.';
-            statusMessage.removeClass('alert-info').addClass('alert-danger')
-                .html('<strong><i class="fas fa-exclamation-triangle mr-1"></i> Error:</strong> ' + errorMsg);
-            submitBtn.prop('disabled', false);
-        }
+// Tab switching
+document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', function() {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+        document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+        document.getElementById('tab-' + this.getAttribute('data-tab')).style.display = 'block';
     });
 });
+
+// File input
+document.getElementById('fileInput').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        document.getElementById('fileName').textContent = file.name;
+    }
+});
+
+// Form submit
+document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const uploadBtn = document.getElementById('uploadBtn');
+    const progressCard = document.getElementById('progressCard');
+    
+    try {
+        // Show progress
+        uploadBtn.disabled = true;
+        uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+        progressCard.style.display = 'block';
+        
+        // Upload
+        const response = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            // Success
+            alert('✅ Upload berhasil!\n\nFile: ' + result.filename + '\nRows: ' + result.rows_processed);
+            
+            // Reset form
+            this.reset();
+            document.getElementById('fileName').textContent = 'Pilih file...';
+            
+            // Reload recent uploads
+            loadRecentUploads();
+        } else {
+            throw new Error(result.error || 'Upload failed');
+        }
+        
+    } catch (error) {
+        alert('❌ Upload gagal!\n\n' + error.message);
+    } finally {
+        // Hide progress
+        uploadBtn.disabled = false;
+        uploadBtn.innerHTML = '<i class="fas fa-upload"></i> <span>Upload File</span>';
+        progressCard.style.display = 'none';
+    }
+});
+
+// Load recent uploads
+async function loadRecentUploads() {
+    try {
+        const response = await fetch('/api/history/uploads?limit=5');
+        const data = await response.json();
+        
+        const tbody = document.querySelector('#recentUploads tbody');
+        
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Belum ada upload</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = data.map(item => `
+            <tr>
+                <td>${item.upload_time}</td>
+                <td><span class="badge badge-info">${item.file_type}</span></td>
+                <td>${item.periode_bulan}/${item.periode_tahun}</td>
+                <td><span class="badge badge-success">Success</span></td>
+            </tr>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Error loading uploads:', error);
+    }
+}
+
+// Load on page load
+window.addEventListener('DOMContentLoaded', loadRecentUploads);
 </script>
 {% endblock %}
