@@ -4,113 +4,74 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#1e40af">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    
     <title>{% block title %}SUNTER Dashboard{% endblock %}</title>
     
+    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <!-- Custom CSS -->
     <link rel="stylesheet" href="/static/css/main.css">
     
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- Top Bar -->
-    <div class="top-bar">
-        <div class="top-bar-title">
+    <!-- Top Navbar -->
+    <nav class="navbar">
+        <a href="/" class="navbar-brand">
             <i class="fas fa-tint"></i>
             <span>SUNTER</span>
-        </div>
-        <div class="top-bar-actions" style="display: flex; gap: 8px;">
-            <button class="top-bar-btn" id="refreshBtn">
-                <i class="fas fa-sync-alt"></i>
-            </button>
-            <button class="top-bar-btn" id="notifBtn">
-                <i class="fas fa-bell"></i>
-            </button>
-        </div>
-    </div>
+        </a>
+        
+        <!-- Desktop Nav (hidden on mobile) -->
+        <ul class="navbar-nav">
+            <li><a href="/" class="nav-link"><i class="fas fa-home"></i> <span>Home</span></a></li>
+            <li><a href="/collection" class="nav-link"><i class="fas fa-wallet"></i> <span>Collection</span></a></li>
+            <li><a href="/belum-bayar" class="nav-link"><i class="fas fa-exclamation-circle"></i> <span>Belum Bayar</span></a></li>
+            <li><a href="/upload" class="nav-link"><i class="fas fa-cloud-upload-alt"></i> <span>Upload</span></a></li>
+        </ul>
+    </nav>
 
     <!-- Main Content -->
-    <div class="main-content">
+    <main>
         {% block content %}{% endblock %}
-    </div>
+    </main>
 
-    <!-- Bottom Navigation -->
+    <!-- Bottom Navigation (Mobile) -->
     <nav class="bottom-nav">
-        <a href="/" class="nav-item {% if request.path == '/' %}active{% endif %}">
+        <a href="/" class="bottom-nav-item {% if request.path == '/' %}active{% endif %}">
             <i class="fas fa-home"></i>
             <span>Home</span>
         </a>
-        <a href="/collection_dashboard" class="nav-item {% if request.path == '/collection_dashboard' %}active{% endif %}">
+        <a href="/collection" class="bottom-nav-item {% if '/collection' in request.path %}active{% endif %}">
             <i class="fas fa-wallet"></i>
             <span>Collection</span>
         </a>
-        <a href="/belum-bayar" class="nav-item {% if request.path == '/belum-bayar' %}active{% endif %}">
+        <a href="/belum-bayar" class="bottom-nav-item {% if 'belum-bayar' in request.path %}active{% endif %}">
             <i class="fas fa-exclamation-circle"></i>
             <span>Belum Bayar</span>
         </a>
-        <a href="/upload" class="nav-item {% if request.path == '/upload' %}active{% endif %}">
+        <a href="/upload" class="bottom-nav-item {% if '/upload' in request.path %}active{% endif %}">
             <i class="fas fa-cloud-upload-alt"></i>
             <span>Upload</span>
         </a>
-        <a href="/menu" class="nav-item {% if request.path == '/menu' %}active{% endif %}">
+        <a href="/menu" class="bottom-nav-item {% if '/menu' in request.path %}active{% endif %}">
             <i class="fas fa-bars"></i>
             <span>Menu</span>
         </a>
     </nav>
 
-    <!-- Loading Overlay -->
-    <div id="pageLoading" style="position: fixed; inset: 0; background: rgba(255,255,255,0.9); display: none; align-items: center; justify-content: center; z-index: 9999;">
-        <div class="spinner"></div>
-    </div>
-
+    <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     
-    <script>
-        const App = {
-            showLoading: function() {
-                document.getElementById('pageLoading').style.display = 'flex';
-            },
-            hideLoading: function() {
-                document.getElementById('pageLoading').style.display = 'none';
-            },
-            formatRupiah: function(amount) {
-                return new Intl.NumberFormat('id-ID', {
-                    style: 'currency',
-                    currency: 'IDR',
-                    minimumFractionDigits: 0
-                }).format(amount);
-            },
-            formatNumber: function(num) {
-                return new Intl.NumberFormat('id-ID').format(num);
-            },
-            toast: function(message) {
-                alert(message);
-            },
-            api: async function(url, options = {}) {
-                try {
-                    App.showLoading();
-                    const response = await fetch(url, options);
-                    const data = await response.json();
-                    if (!response.ok) throw new Error(data.error || 'Request failed');
-                    return data;
-                } catch (error) {
-                    App.toast(error.message);
-                    throw error;
-                } finally {
-                    App.hideLoading();
-                }
-            }
-        };
-        window.App = App;
-        
-        document.getElementById('refreshBtn').addEventListener('click', function() {
-            location.reload();
-        });
-        
-        document.getElementById('notifBtn').addEventListener('click', function() {
-            App.toast('Tidak ada notifikasi baru');
-        });
-    </script>
+    <!-- Custom JS Libraries -->
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/charts.js"></script>
+    <script src="/static/js/tables.js"></script>
     
     {% block extra_js %}{% endblock %}
 </body>
