@@ -152,6 +152,53 @@
     </div>
 </div>
 
+<!-- PCEZ Performance Table (NEW) -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">
+            <i class="fas fa-building"></i>
+            Monitoring Performance per PCEZ
+        </div>
+        <div style="display: flex; gap: 8px;">
+            <select class="filter-select" id="pcezPeriod" style="width: 120px; font-size: 12px;">
+                <option value="daily">Harian</option>
+                <option value="weekly">Mingguan</option>
+                <option value="monthly" selected>Bulanan</option>
+            </select>
+            <button class="btn btn-sm btn-success" id="exportPcezBtn">
+                <i class="fas fa-file-excel"></i> Export
+            </button>
+        </div>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        <div class="table-responsive">
+            <table class="table" id="pcezTable" style="font-size: 12px;">
+                <thead style="background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%); color: white;">
+                    <tr>
+                        <th style="text-align: center;">PCEZ</th>
+                        <th style="text-align: center;">NOMEN<br><small style="opacity: 0.8;">(dari MC)</small></th>
+                        <th style="text-align: center;">NOMINAL<br><small style="opacity: 0.8;">(dari MC)</small></th>
+                        <th style="text-align: center;">BAYAR<br><small style="opacity: 0.8;">(Collection + Tunggakan)</small></th>
+                        <th style="text-align: center;">PERFORMANCE<br><small style="opacity: 0.8;">(Bayar / Nominal)</small></th>
+                        <th style="text-align: center;">SELISIH<br><small style="opacity: 0.8;">(Nominal - Bayar)</small></th>
+                        <th style="text-align: center;">%<br><small style="opacity: 0.8;">(Selisih / Nominal)</small></th>
+                    </tr>
+                </thead>
+                <tbody id="pcezTableBody">
+                    <tr>
+                        <td colspan="7" class="loading">
+                            <div class="spinner"></div>
+                            <p>Loading...</p>
+                        </td>
+                    </tr>
+                </tbody>
+                <tfoot id="pcezTableFooter" style="background: var(--bg-tertiary); font-weight: 700; font-size: 13px;">
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
 <!-- Chart -->
 <div class="card">
     <div class="card-header">
@@ -263,10 +310,102 @@ async function loadData() {
         
         const topData = await App.api(`/api/collection/top-payers?bulan=${bulan}&tahun=${tahun}&limit=10`);
         updateTopTable(topData);
+        
+        // Load PCEZ data
+        loadPcezData();
     } catch (error) {
         console.error('Error:', error);
     }
 }
+
+// PCEZ data loading
+async function loadPcezData() {
+    const bulan = document.getElementById('bulan').value;
+    const tahun = document.getElementById('tahun').value;
+    const period = document.getElementById('pcezPeriod').value;
+    
+    try {
+        const pcezData = await App.api(`/api/collection/pcez?bulan=${bulan}&tahun=${tahun}&period=${period}`);
+        updatePcezTable(pcezData);
+    } catch (error) {
+        console.error('PCEZ Error:', error);
+        // Show empty state if API not ready
+        const tbody = document.getElementById('pcezTableBody');
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><i class="fas fa-info-circle"></i><p>API belum tersedia</p></td></tr>';
+    }
+}
+
+document.getElementById('pcezPeriod').addEventListener('change', loadPcezData);
+
+function updatePcezTable(data) {
+    const tbody = document.getElementById('pcezTableBody');
+    const tfoot = document.getElementById('pcezTableFooter');
+    
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Tidak ada data</td></tr>';
+        tfoot.innerHTML = '';
+        return;
+    }
+    
+    let totalNomen = 0, totalNominal = 0, totalBayar = 0;
+    
+    tbody.innerHTML = data.map((item, index) => {
+        totalNomen += (item.nomen || 0);
+        totalNominal += (item.nominal || 0);
+        totalBayar += (item.bayar || 0);
+        
+        const performance = item.nominal > 0 ? (item.bayar / item.nominal * 100) : 0;
+        const selisih = item.nominal - item.bayar;
+        const pctSelisih = item.nominal > 0 ? (selisih / item.nominal * 100) : 0;
+        
+        // Color coding for performance
+        let perfColor = '#6b7280'; // gray
+        if (performance >= 90) perfColor = '#10b981'; // green
+        else if (performance >= 75) perfColor = '#f59e0b'; // yellow
+        else perfColor = '#ef4444'; // red
+        
+        return `
+            <tr style="border-bottom: 1px solid var(--border-color);">
+                <td style="text-align: center;"><span class="badge badge-info">${item.pcez || '-'}</span></td>
+                <td style="text-align: right;">${App.formatNumber(item.nomen || 0)}</td>
+                <td style="text-align: right; font-weight: 600;">${App.formatRupiah(item.nominal || 0)}</td>
+                <td style="text-align: right; font-weight: 600; color: ${perfColor};">${App.formatRupiah(item.bayar || 0)}</td>
+                <td style="text-align: center;">
+                    <span style="padding: 4px 8px; border-radius: 4px; background: ${perfColor}22; color: ${perfColor}; font-weight: 700;">
+                        ${performance.toFixed(1)}%
+                    </span>
+                </td>
+                <td style="text-align: right; color: ${selisih > 0 ? '#ef4444' : '#10b981'};">${App.formatRupiah(selisih)}</td>
+                <td style="text-align: center; font-weight: 600;">${pctSelisih.toFixed(1)}%</td>
+            </tr>
+        `;
+    }).join('');
+    
+    // Calculate totals
+    const totalPerformance = totalNominal > 0 ? (totalBayar / totalNominal * 100) : 0;
+    const totalSelisih = totalNominal - totalBayar;
+    const totalPctSelisih = totalNominal > 0 ? (totalSelisih / totalNominal * 100) : 0;
+    
+    tfoot.innerHTML = `
+        <tr>
+            <td style="text-align: center;">TOTAL</td>
+            <td style="text-align: right;">${App.formatNumber(totalNomen)}</td>
+            <td style="text-align: right;">${App.formatRupiah(totalNominal)}</td>
+            <td style="text-align: right;">${App.formatRupiah(totalBayar)}</td>
+            <td style="text-align: center; font-size: 14px;">
+                <span style="padding: 6px 12px; border-radius: 6px; background: #0891b2; color: white;">
+                    ${totalPerformance.toFixed(1)}%
+                </span>
+            </td>
+            <td style="text-align: right;">${App.formatRupiah(totalSelisih)}</td>
+            <td style="text-align: center;">${totalPctSelisih.toFixed(1)}%</td>
+        </tr>
+    `;
+}
+
+document.getElementById('exportPcezBtn').addEventListener('click', function() {
+    App.exportTableToCSV('pcezTable', 'pcez_performance.csv');
+});
 
 function updateKPI(data) {
     document.getElementById('kpi-target').textContent = App.formatRupiah(data.target_mc || 0);
