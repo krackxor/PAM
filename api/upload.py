@@ -439,6 +439,9 @@ def process_mc(df, month, year, db):
     df = df.dropna(subset=['nomen'])
     df = df[df['nomen'] != '']
     
+    # Reset index to avoid duplicate index errors
+    df = df.reset_index(drop=True)
+    
     # Clean other fields
     if 'nama' in df.columns:
         df['nama'] = df['nama'].fillna('').astype(str)
@@ -519,6 +522,9 @@ def process_mb(df, month, year, db):
     df = df.dropna(subset=['nomen'])
     df = df[df['nomen'] != '']
     
+    # Reset index to avoid duplicate index errors
+    df = df.reset_index(drop=True)
+    
     # Clean date
     df['tgl_bayar'] = df['tgl_bayar'].apply(clean_date)
     
@@ -597,6 +603,7 @@ def process_collection(df, month, year, db):
     """
     Process Collection (Bayar Harian) file
     FIXED: Better handling of jumlah_bayar column detection and conversion
+    FIXED: Reset index to avoid duplicate index errors
     """
     cursor = db.cursor()
     
@@ -607,6 +614,9 @@ def process_collection(df, month, year, db):
     df['nomen'] = df['nomen'].apply(clean_nomen)
     df = df.dropna(subset=['nomen'])
     df = df[df['nomen'] != '']
+    
+    # CRITICAL: Reset index to avoid duplicate index errors in vectorized operations
+    df = df.reset_index(drop=True)
     
     # Clean date
     df['tgl_bayar'] = df['tgl_bayar'].apply(clean_date)
@@ -632,7 +642,14 @@ def process_collection(df, month, year, db):
     
     # Classify payment type - using vectorized operation
     df['tipe_bayar'] = 'current'
-    df.loc[(df['jumlah_bayar'] > 0) & (df['volume_air'] == 0), 'tipe_bayar'] = 'tunggakan'
+    try:
+        df.loc[(df['jumlah_bayar'] > 0) & (df['volume_air'] == 0), 'tipe_bayar'] = 'tunggakan'
+    except Exception as e:
+        print(f"⚠️  Warning: Cannot classify tipe_bayar using vectorized operation: {e}")
+        # Fallback to iterative method
+        for idx in df.index:
+            if df.at[idx, 'jumlah_bayar'] > 0 and df.at[idx, 'volume_air'] == 0:
+                df.at[idx, 'tipe_bayar'] = 'tunggakan'
     
     df['periode_bulan'] = month
     df['periode_tahun'] = year
