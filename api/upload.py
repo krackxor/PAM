@@ -604,6 +604,7 @@ def process_collection(df, month, year, db):
     Process Collection (Bayar Harian) file
     FIXED: Better handling of jumlah_bayar column detection and conversion
     FIXED: Reset index to avoid duplicate index errors
+    FIXED: Simpler tipe_bayar classification
     """
     cursor = db.cursor()
     
@@ -615,8 +616,13 @@ def process_collection(df, month, year, db):
     df = df.dropna(subset=['nomen'])
     df = df[df['nomen'] != '']
     
-    # CRITICAL: Reset index to avoid duplicate index errors in vectorized operations
+    # CRITICAL: Reset index COMPLETELY - drop old index and create fresh sequential one
     df = df.reset_index(drop=True)
+    
+    # Double check for duplicate indices
+    if df.index.duplicated().any():
+        print("⚠️  Warning: Duplicate indices detected, forcing unique index")
+        df.index = range(len(df))
     
     # Clean date
     df['tgl_bayar'] = df['tgl_bayar'].apply(clean_date)
@@ -640,16 +646,13 @@ def process_collection(df, month, year, db):
         else:
             df['volume_air'] = 0
     
-    # Classify payment type - using vectorized operation
-    df['tipe_bayar'] = 'current'
-    try:
-        df.loc[(df['jumlah_bayar'] > 0) & (df['volume_air'] == 0), 'tipe_bayar'] = 'tunggakan'
-    except Exception as e:
-        print(f"⚠️  Warning: Cannot classify tipe_bayar using vectorized operation: {e}")
-        # Fallback to iterative method
-        for idx in df.index:
-            if df.at[idx, 'jumlah_bayar'] > 0 and df.at[idx, 'volume_air'] == 0:
-                df.at[idx, 'tipe_bayar'] = 'tunggakan'
+    # Classify payment type - SIMPLIFIED using numpy
+    import numpy as np
+    df['tipe_bayar'] = np.where(
+        (df['jumlah_bayar'].values > 0) & (df['volume_air'].values == 0),
+        'tunggakan',
+        'current'
+    )
     
     df['periode_bulan'] = month
     df['periode_tahun'] = year
@@ -686,7 +689,7 @@ def process_collection(df, month, year, db):
     linked = 0
     unlinked = 0
     
-    for _, row in df.iterrows():
+    for idx, row in df.iterrows():
         # Check if nomen exists in MC
         cursor.execute("""
             SELECT 1 FROM master_pelanggan
