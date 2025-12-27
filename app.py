@@ -23,6 +23,7 @@ from api.upload import register_upload_routes
 from api.history import register_history_routes
 from api.sbrs import register_sbrs_routes
 from api.belum_bayar import register_belum_bayar_routes
+from api.pcez_performance import register_pcez_performance_routes
 
 # Get configuration
 config_class = get_config()
@@ -49,6 +50,7 @@ register_upload_routes(app, get_db)
 register_history_routes(app, get_db)
 register_sbrs_routes(app, get_db)
 register_belum_bayar_routes(app, get_db)
+register_pcez_performance_routes(app, get_db)
 
 # ==========================================
 # MAIN ROUTES (UI) - Mobile First
