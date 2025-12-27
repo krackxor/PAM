@@ -1,433 +1,668 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload File - SUNTER Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-{% block title %}Upload - SUNTER{% endblock %}
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1e40af;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --text: #1f2937;
+            --text-muted: #6b7280;
+            --border: #e5e7eb;
+            --bg: #f9fafb;
+        }
 
-{% block content %}
-<!-- Header -->
-<div class="card" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none;">
-    <div class="card-body">
-        <h1 style="font-size: 24px; font-weight: 700; margin: 0;">
-            <i class="fas fa-cloud-upload-alt"></i> Upload Data
-        </h1>
-        <p style="font-size: 13px; opacity: 0.9; margin-top: var(--space-2); margin-bottom: 0;">
-            Upload file Excel untuk update database
-        </p>
-    </div>
-</div>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
 
-<!-- Upload Form -->
-<div class="card">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-file-excel"></i>
-            Upload File Excel
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            color: var(--primary);
+        }
+
+        .header p {
+            color: var(--text-muted);
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            padding: 3rem 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--primary);
+            background: #eff6ff;
+        }
+
+        .upload-zone.dragover {
+            border-color: var(--primary);
+            background: #eff6ff;
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            color: var(--primary);
+            margin-bottom: 1rem;
+        }
+
+        .upload-text {
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-hint {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .selected-file {
+            display: none;
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #f0fdf4;
+            border: 1px solid #86efac;
+            border-radius: 6px;
+        }
+
+        .selected-file.show {
+            display: block;
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .file-icon {
+            font-size: 2rem;
+            color: var(--success);
+        }
+
+        .file-details h4 {
+            margin-bottom: 0.25rem;
+        }
+
+        .file-size {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-primary:disabled {
+            background: var(--border);
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: var(--border);
+            color: var(--text);
+        }
+
+        .btn-secondary:hover {
+            background: #d1d5db;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            display: none;
+        }
+
+        .alert.show {
+            display: block;
+        }
+
+        .alert-info {
+            background: #dbeafe;
+            border: 1px solid #93c5fd;
+            color: #1e40af;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            border: 1px solid #6ee7b7;
+            color: #047857;
+        }
+
+        .alert-danger {
+            background: #fee2e2;
+            border: 1px solid #fca5a5;
+            color: #dc2626;
+        }
+
+        .alert-warning {
+            background: #fef3c7;
+            border: 1px solid #fcd34d;
+            color: #d97706;
+        }
+
+        .loader {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .loader.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid var(--border);
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .result {
+            display: none;
+            margin-top: 1.5rem;
+        }
+
+        .result.show {
+            display: block;
+        }
+
+        .result-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .result-icon {
+            font-size: 2.5rem;
+            color: var(--success);
+        }
+
+        .result-title {
+            font-size: 1.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .result-subtitle {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: var(--bg);
+            padding: 1rem;
+            border-radius: 6px;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .sample-data {
+            margin-top: 1.5rem;
+        }
+
+        .sample-data h4 {
+            margin-bottom: 0.75rem;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--bg);
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        tr:hover {
+            background: var(--bg);
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--primary);
+            text-decoration: none;
+            margin-bottom: 1.5rem;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">
+            <i class="fas fa-arrow-left"></i> Kembali ke Dashboard
+        </a>
+
+        <div class="header">
+            <h1><i class="fas fa-cloud-upload-alt"></i> Upload File</h1>
+            <p>Upload MC, Collection, SBRS, atau file lainnya - Deteksi otomatis!</p>
         </div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-            <label style="display: flex; align-items: center; gap: 4px; font-size: 12px; margin: 0; cursor: pointer;">
-                <input type="checkbox" id="autoDetect" checked style="margin: 0;">
-                <span>Auto Detect</span>
-            </label>
-        </div>
-    </div>
-    <div class="card-body">
-        <form id="uploadForm" enctype="multipart/form-data">
-            <!-- File Input FIRST -->
-            <div style="margin-bottom: var(--space-4);">
-                <label class="filter-label">File Excel (.xlsx, .xls)</label>
-                <div style="position: relative;">
-                    <input 
-                        type="file" 
-                        id="fileInput" 
-                        name="file" 
-                        accept=".xlsx,.xls" 
-                        required
-                        style="display: none;"
-                    >
-                    <button 
-                        type="button" 
-                        class="btn btn-outline btn-block" 
-                        onclick="document.getElementById('fileInput').click()"
-                        style="text-align: left; position: relative;"
-                    >
-                        <i class="fas fa-paperclip"></i>
-                        <span id="fileName">Pilih file...</span>
+
+        <!-- Alert Messages -->
+        <div id="alertContainer"></div>
+
+        <!-- Upload Card -->
+        <div class="card" id="uploadCard">
+            <div class="upload-zone" id="uploadZone">
+                <div class="upload-icon">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                </div>
+                <div class="upload-text">
+                    <strong>Klik untuk pilih file</strong> atau drag & drop di sini
+                </div>
+                <div class="upload-hint">
+                    Mendukung: Excel (.xlsx, .xls), Text (.txt, .csv)
+                </div>
+                <input type="file" id="fileInput" accept=".xlsx,.xls,.txt,.csv">
+            </div>
+
+            <div class="selected-file" id="selectedFile">
+                <div class="file-info">
+                    <div class="file-icon">
+                        <i class="fas fa-file-excel"></i>
+                    </div>
+                    <div class="file-details">
+                        <h4 id="fileName">-</h4>
+                        <div class="file-size" id="fileSize">-</div>
+                    </div>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" id="uploadBtn">
+                        <i class="fas fa-upload"></i> Upload & Proses Otomatis
+                    </button>
+                    <button class="btn btn-secondary" id="cancelBtn">
+                        <i class="fas fa-times"></i> Batal
                     </button>
                 </div>
-                <div style="font-size: 11px; color: var(--text-muted); margin-top: var(--space-1);">
-                    <i class="fas fa-info-circle"></i> Max 10GB, format .xlsx atau .xls
-                </div>
             </div>
-            
-            <!-- Auto Detection Result (shown after file selected) -->
-            <div id="detectionResult" style="display: none; margin-bottom: var(--space-4); padding: var(--space-3); background: var(--bg-secondary); border-radius: var(--radius-md);">
-                <div style="display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2);">
-                    <i class="fas fa-robot" style="color: var(--primary);"></i>
-                    <span style="font-weight: 600;">Auto Detection</span>
-                </div>
-                <div style="font-size: 13px; color: var(--text-secondary);">
-                    <div><strong>File Type:</strong> <span id="detectedType">-</span></div>
-                    <div><strong>Periode:</strong> <span id="detectedPeriode">-</span></div>
-                    <div><strong>Date Column:</strong> <span id="detectedDateCol">-</span></div>
-                </div>
-            </div>
-            
-            <!-- Manual Override (initially hidden, shown when auto-detect off or user wants to change) -->
-            <div id="manualFields" style="display: none;">
-                <!-- File Type Selection -->
-                <div style="margin-bottom: var(--space-4);">
-                    <label class="filter-label">Tipe File</label>
-                    <select class="filter-select" id="fileType" name="file_type" required>
-                        <option value="">-- Pilih Tipe File --</option>
-                        <option value="mc">Master (MC)</option>
-                        <option value="collection">Collection</option>
-                        <option value="mb">Belum Bayar (MB)</option>
-                        <option value="mainbill">Mainbill</option>
-                        <option value="sbrs">SBRS</option>
-                        <option value="ardebt">Ardebt</option>
-                    </select>
-                </div>
-                
-                <!-- Periode Selection -->
-                <div class="filter-row" style="margin-bottom: var(--space-4);">
-                    <div class="filter-item">
-                        <label class="filter-label">Bulan</label>
-                        <select class="filter-select" id="bulan" name="bulan" required>
-                            <option value="1">Januari</option>
-                            <option value="2">Februari</option>
-                            <option value="3">Maret</option>
-                            <option value="4">April</option>
-                            <option value="5">Mei</option>
-                            <option value="6">Juni</option>
-                            <option value="7">Juli</option>
-                            <option value="8">Agustus</option>
-                            <option value="9">September</option>
-                            <option value="10">Oktober</option>
-                            <option value="11">November</option>
-                            <option value="12" selected>Desember</option>
-                        </select>
-                    </div>
-                    <div class="filter-item">
-                        <label class="filter-label">Tahun</label>
-                        <select class="filter-select" id="tahun" name="tahun" required>
-                            <option value="2023">2023</option>
-                            <option value="2024" selected>2024</option>
-                            <option value="2025">2025</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Submit Button -->
-            <button type="submit" class="btn btn-primary btn-block" id="uploadBtn">
-                <i class="fas fa-upload"></i>
-                <span>Upload File</span>
-            </button>
-        </form>
-    </div>
-</div>
+        </div>
 
-<!-- Progress -->
-<div class="card" id="progressCard" style="display: none;">
-    <div class="card-body">
-        <div style="text-align: center; padding: var(--space-4) 0;">
-            <div class="spinner" style="width: 48px; height: 48px; border-width: 4px; margin: 0 auto var(--space-3);"></div>
-            <div style="font-weight: 600; margin-bottom: var(--space-2);">Uploading...</div>
-            <div style="font-size: 13px; color: var(--text-muted);" id="progressText">Memproses file...</div>
+        <!-- Loader -->
+        <div class="loader" id="loader">
+            <div class="spinner"></div>
+            <p>Menganalisis dan memproses file...</p>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">
+                Harap tunggu, ini mungkin memakan waktu beberapa detik
+            </p>
         </div>
-    </div>
-</div>
 
-<!-- Format Guide -->
-<div class="card">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-info-circle"></i>
-            Panduan Format File
-        </div>
-    </div>
-    <div class="card-body">
-        <div class="tabs">
-            <button class="tab active" data-tab="master">Master</button>
-            <button class="tab" data-tab="collection">Collection</button>
-            <button class="tab" data-tab="sbrs">SBRS</button>
-        </div>
-        
-        <!-- Master Format -->
-        <div class="tab-content" id="tab-master">
-            <div style="padding: var(--space-3); background: var(--bg-tertiary); border-radius: var(--radius-md); margin-top: var(--space-3);">
-                <div style="font-weight: 600; margin-bottom: var(--space-2);">
-                    <i class="fas fa-table"></i> Format Master Pelanggan
+        <!-- Result Card -->
+        <div class="card result" id="resultCard">
+            <div class="result-header">
+                <div class="result-icon">
+                    <i class="fas fa-check-circle"></i>
                 </div>
-                <div style="font-size: 13px; color: var(--text-secondary);">
-                    <strong>Kolom yang diperlukan:</strong><br>
-                    • nomen (Nomor Pelanggan)<br>
-                    • nama (Nama Pelanggan)<br>
-                    • alamat (Alamat)<br>
-                    • rayon (Kode Rayon)<br>
-                    • tarif (Tarif)<br>
-                    • target_mc (Target MC)
+                <div>
+                    <h2 class="result-title">Upload Berhasil!</h2>
+                    <p class="result-subtitle" id="resultSubtitle">-</p>
                 </div>
             </div>
-        </div>
-        
-        <!-- Collection Format -->
-        <div class="tab-content" id="tab-collection" style="display: none;">
-            <div style="padding: var(--space-3); background: var(--bg-tertiary); border-radius: var(--radius-md); margin-top: var(--space-3);">
-                <div style="font-weight: 600; margin-bottom: var(--space-2);">
-                    <i class="fas fa-table"></i> Format Collection Harian
-                </div>
-                <div style="font-size: 13px; color: var(--text-secondary);">
-                    <strong>Kolom yang diperlukan:</strong><br>
-                    • nomen (Nomor Pelanggan)<br>
-                    • volume (Volume m³)<br>
-                    • current (Pembayaran Current)<br>
-                    • tunggakan (Pembayaran Tunggakan)<br>
-                    • total (Total Pembayaran)<br>
-                    • tanggal_bayar (Tanggal Bayar)
-                </div>
+
+            <div class="stat-grid" id="statsGrid">
+                <!-- Stats will be inserted here -->
             </div>
-        </div>
-        
-        <!-- SBRS Format -->
-        <div class="tab-content" id="tab-sbrs" style="display: none;">
-            <div style="padding: var(--space-3); background: var(--bg-tertiary); border-radius: var(--radius-md); margin-top: var(--space-3);">
-                <div style="font-weight: 600; margin-bottom: var(--space-2);">
-                    <i class="fas fa-table"></i> Format SBRS
-                </div>
-                <div style="font-size: 13px; color: var(--text-secondary);">
-                    <strong>Kolom yang diperlukan:</strong><br>
-                    • rayon (Kode Rayon)<br>
-                    • total_pelanggan (Total Pelanggan)<br>
-                    • sudah_bayar (Sudah Bayar)<br>
-                    • belum_bayar (Belum Bayar)<br>
-                    • total_collection (Total Collection)
-                </div>
+
+            <div class="sample-data" id="sampleData">
+                <!-- Sample data table will be inserted here -->
+            </div>
+
+            <div class="btn-group">
+                <a href="/" class="btn btn-primary">
+                    <i class="fas fa-home"></i> Ke Dashboard
+                </a>
+                <button class="btn btn-secondary" id="uploadAnotherBtn">
+                    <i class="fas fa-upload"></i> Upload File Lain
+                </button>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Recent Uploads -->
-<div class="card">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-history"></i>
-            Upload Terakhir
-        </div>
-    </div>
-    <div class="card-body" style="padding: 0;">
-        <div class="table-responsive">
-            <table class="table" id="recentUploads">
-                <thead>
-                    <tr>
-                        <th>Waktu</th>
-                        <th>Tipe</th>
-                        <th>Periode</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td colspan="4" class="loading">
-                            <div class="spinner"></div>
-                            <p>Loading...</p>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-{% endblock %}
+    <script>
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const selectedFile = document.getElementById('selectedFile');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const uploadCard = document.getElementById('uploadCard');
+        const loader = document.getElementById('loader');
+        const resultCard = document.getElementById('resultCard');
+        const alertContainer = document.getElementById('alertContainer');
+        const uploadAnotherBtn = document.getElementById('uploadAnotherBtn');
 
-{% block extra_js %}
-<script>
-// Auto detect state
-let autoDetectEnabled = true;
-let detectedData = null;
+        let selectedFileData = null;
 
-// Toggle auto detect
-document.getElementById('autoDetect').addEventListener('change', function() {
-    autoDetectEnabled = this.checked;
-    document.getElementById('manualFields').style.display = autoDetectEnabled ? 'none' : 'block';
-    
-    if (!autoDetectEnabled) {
-        document.getElementById('detectionResult').style.display = 'none';
-    }
-});
-
-// File input change
-document.getElementById('fileInput').addEventListener('change', async function(e) {
-    const file = e.target.files[0];
-    if (file) {
-        // Validate file size (10GB)
-        const maxSize = 10 * 1024 * 1024 * 1024; // 10GB in bytes
-        if (file.size > maxSize) {
-            App.toast('File terlalu besar! Max 10GB', 'error');
-            this.value = '';
-            return;
-        }
-        
-        document.getElementById('fileName').textContent = file.name + ' (' + formatFileSize(file.size) + ')';
-        
-        // Auto detect if enabled
-        if (autoDetectEnabled) {
-            await analyzeFile(file);
-        }
-    }
-});
-
-function formatFileSize(bytes) {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-}
-
-async function analyzeFile(file) {
-    try {
-        console.log('Analyzing file:', file.name, 'Size:', file.size);
-        
-        // Show loading in detection result
-        const detectionResult = document.getElementById('detectionResult');
-        detectionResult.style.display = 'block';
-        document.getElementById('detectedType').textContent = 'Analyzing...';
-        document.getElementById('detectedPeriode').textContent = 'Analyzing...';
-        document.getElementById('detectedDateCol').textContent = 'Analyzing...';
-        
-        // Prepare form data
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        console.log('Sending to /api/upload/analyze...');
-        
-        // Call detection API
-        const response = await fetch('/api/upload/analyze', {
-            method: 'POST',
-            body: formData
+        // Click to upload
+        uploadZone.addEventListener('click', () => {
+            fileInput.click();
         });
-        
-        console.log('Response status:', response.status);
-        
-        const result = await response.json();
-        console.log('Response data:', result);
-        
-        if (!response.ok) {
-            // Show debug info if available
-            if (result.debug) {
-                console.error('Debug info:', result.debug);
+
+        // Drag & Drop
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileSelect(files[0]);
             }
-            throw new Error(result.error || 'Analysis failed');
-        }
-        
-        // Store detected data
-        detectedData = result.detected;
-        
-        // Show results
-        const typeMap = {
-            'mc': 'Master (MC)',
-            'mb': 'Belum Bayar (MB)',
-            'collection': 'Collection',
-            'mainbill': 'Mainbill',
-            'sbrs': 'SBRS',
-            'ardebt': 'Ardebt'
-        };
-        
-        document.getElementById('detectedType').textContent = typeMap[detectedData.file_type] || detectedData.file_type;
-        document.getElementById('detectedPeriode').textContent = `${detectedData.month}/${detectedData.year}`;
-        document.getElementById('detectedDateCol').textContent = detectedData.date_column || 'N/A';
-        
-        // Show warning if any
-        if (detectedData.warning) {
-            App.toast(detectedData.warning, 'warning', 5000);
-        } else {
-            App.toast('✓ File detected successfully!', 'success');
-        }
-        
-    } catch (error) {
-        console.error('Analysis error:', error);
-        App.toast('Auto-detect gagal: ' + error.message + '. Gunakan manual mode.', 'error', 5000);
-        
-        // Switch to manual mode
-        document.getElementById('autoDetect').checked = false;
-        document.getElementById('autoDetect').dispatchEvent(new Event('change'));
-        document.getElementById('detectionResult').style.display = 'none';
-    }
-}
-
-// Form submit
-document.getElementById('uploadForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const formData = new FormData(this);
-    const uploadBtn = document.getElementById('uploadBtn');
-    
-    try {
-        uploadBtn.disabled = true;
-        uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
-        
-        // Add detected data if auto-detect enabled
-        if (autoDetectEnabled && detectedData) {
-            formData.append('file_type', detectedData.file_type);
-            formData.append('bulan', detectedData.month);
-            formData.append('tahun', detectedData.year);
-        }
-        
-        // Upload
-        const response = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData
         });
-        
-        const result = await response.json();
-        
-        if (response.ok) {
-            App.toast('Upload berhasil! Rows: ' + result.rows_processed, 'success');
-            this.reset();
-            document.getElementById('fileName').textContent = 'Pilih file...';
-            document.getElementById('detectionResult').style.display = 'none';
-            detectedData = null;
-            loadRecentUploads();
-        } else {
-            throw new Error(result.error || 'Upload failed');
-        }
-        
-    } catch (error) {
-        App.toast('Upload gagal: ' + error.message, 'error');
-    } finally {
-        uploadBtn.disabled = false;
-        uploadBtn.innerHTML = '<i class="fas fa-upload"></i> <span>Upload File</span>';
-    }
-});
 
-// Load recent uploads
-async function loadRecentUploads() {
-    try {
-        const response = await fetch('/api/history/uploads?limit=5');
-        const data = await response.json();
-        
-        const tbody = document.querySelector('#recentUploads tbody');
-        
-        if (data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Belum ada upload</td></tr>';
-            return;
-        }
-        
-        tbody.innerHTML = data.map(item => `
-            <tr>
-                <td>${item.upload_time}</td>
-                <td><span class="badge badge-info">${item.file_type}</span></td>
-                <td>${item.periode_bulan}/${item.periode_tahun}</td>
-                <td><span class="badge badge-success">Success</span></td>
-            </tr>
-        `).join('');
-        
-    } catch (error) {
-        console.error('Error loading uploads:', error);
-    }
-}
+        // File input change
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
 
-// Load on page load
-window.addEventListener('DOMContentLoaded', loadRecentUploads);
-</script>
-{% endblock %}
+        // Handle file selection
+        function handleFileSelect(file) {
+            selectedFileData = file;
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            selectedFile.classList.add('show');
+        }
+
+        // Cancel button
+        cancelBtn.addEventListener('click', () => {
+            selectedFileData = null;
+            fileInput.value = '';
+            selectedFile.classList.remove('show');
+        });
+
+        // Upload button
+        uploadBtn.addEventListener('click', async () => {
+            if (!selectedFileData) return;
+
+            // Hide upload card, show loader
+            uploadCard.style.display = 'none';
+            loader.classList.add('show');
+            clearAlerts();
+
+            const formData = new FormData();
+            formData.append('file', selectedFileData);
+
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                loader.classList.remove('show');
+
+                if (response.ok && data.success) {
+                    displayResult(data);
+                } else {
+                    displayError(data.error || 'Upload gagal');
+                    uploadCard.style.display = 'block';
+                }
+
+            } catch (error) {
+                loader.classList.remove('show');
+                displayError('Error: ' + error.message);
+                uploadCard.style.display = 'block';
+            }
+        });
+
+        // Upload another file
+        uploadAnotherBtn.addEventListener('click', () => {
+            resetUpload();
+        });
+
+        // Display result
+        function displayResult(data) {
+            const { detection, processing, statistics } = data;
+
+            // Subtitle
+            document.getElementById('resultSubtitle').textContent = 
+                `File: ${data.filename} | Type: ${detection.file_type.toUpperCase()} | Periode: ${detection.periode_label}`;
+
+            // Show warning if MC doesn't exist
+            if (processing.mc_warning) {
+                showAlert('warning', processing.mc_warning);
+            }
+
+            // Stats grid
+            const statsGrid = document.getElementById('statsGrid');
+            statsGrid.innerHTML = '';
+
+            const stats = [
+                { label: 'Rows Inserted', value: processing.rows_inserted.toLocaleString() },
+                { label: 'Total Records', value: statistics.total_records?.toLocaleString() || '-' },
+            ];
+
+            // Add specific stats based on file type
+            if (statistics.total_bayar) {
+                stats.push({ label: 'Total Bayar', value: 'Rp ' + statistics.total_bayar.toLocaleString() });
+            }
+            if (statistics.total_piutang) {
+                stats.push({ label: 'Total Piutang', value: 'Rp ' + statistics.total_piutang.toLocaleString() });
+            }
+            if (statistics.linked_to_mc !== undefined) {
+                stats.push({ label: 'Linked to MC', value: statistics.linked_to_mc.toLocaleString() });
+            }
+            if (statistics.unlinked && statistics.unlinked > 0) {
+                stats.push({ 
+                    label: 'Unlinked', 
+                    value: statistics.unlinked.toLocaleString(),
+                    color: 'var(--warning)' 
+                });
+            }
+
+            stats.forEach(stat => {
+                const statCard = document.createElement('div');
+                statCard.className = 'stat-card';
+                statCard.innerHTML = `
+                    <div class="stat-label">${stat.label}</div>
+                    <div class="stat-value" style="${stat.color ? 'color:' + stat.color : ''}">${stat.value}</div>
+                `;
+                statsGrid.appendChild(statCard);
+            });
+
+            // Sample data
+            if (statistics.sample_data && statistics.sample_data.length > 0) {
+                displaySampleData(statistics.sample_data);
+            }
+
+            resultCard.classList.add('show');
+        }
+
+        // Display sample data table
+        function displaySampleData(sampleData) {
+            const sampleDataDiv = document.getElementById('sampleData');
+            
+            const columns = Object.keys(sampleData[0]);
+            
+            let tableHTML = `
+                <h4>Sample Data (${sampleData.length} rows):</h4>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                ${columns.map(col => `<th>${col}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            sampleData.forEach(row => {
+                tableHTML += '<tr>';
+                columns.forEach(col => {
+                    let value = row[col];
+                    if (value === null || value === undefined) {
+                        value = '-';
+                    } else if (typeof value === 'number') {
+                        value = value.toLocaleString();
+                    }
+                    tableHTML += `<td>${value}</td>`;
+                });
+                tableHTML += '</tr>';
+            });
+
+            tableHTML += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            sampleDataDiv.innerHTML = tableHTML;
+        }
+
+        // Helper functions
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        function showAlert(type, message) {
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type} show`;
+            alert.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}"></i> ${message}`;
+            alertContainer.appendChild(alert);
+        }
+
+        function displayError(message) {
+            showAlert('danger', message);
+        }
+
+        function clearAlerts() {
+            alertContainer.innerHTML = '';
+        }
+
+        function resetUpload() {
+            selectedFileData = null;
+            fileInput.value = '';
+            selectedFile.classList.remove('show');
+            resultCard.classList.remove('show');
+            uploadCard.style.display = 'block';
+            clearAlerts();
+        }
+    </script>
+</body>
+</html>
