@@ -1,267 +1,149 @@
-<!-- 
-SBRS Table Component
-Reusable component dengan kolom yang BENAR: nomen, volume, nama, rayon
-BUKAN: cmr_account, SB_Stand, cmr_name, cmr_route
--->
-
 <div class="card">
-    <div class="card-header py-2 d-flex justify-content-between align-items-center">
-        <h6 class="mb-0" style="font-size: 14px; font-weight: 600;">
-            <i class="fas fa-water"></i> SBRS Data
-        </h6>
-        <div>
-            <button class="btn btn-sm btn-outline-primary" id="filterSBRS">
-                <i class="fas fa-filter"></i> Filter
-            </button>
-            <button class="btn btn-sm btn-primary" id="refreshSBRSComponent">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h3 class="card-title">
+            <i class="fas fa- database text-primary"></i> Data SBRS
+        </h3>
+        <div class="d-flex gap-2">
+            <button class="btn btn-icon btn-sm btn-outline" onclick="SBRS.refresh()" title="Muat Ulang">
                 <i class="fas fa-sync-alt"></i>
+            </button>
+            <button class="btn btn-icon btn-sm btn-outline" onclick="TableHelpers.exportToCSV('sbrsTable', 'data_sbrs.csv')" title="Export CSV">
+                <i class="fas fa-download"></i>
             </button>
         </div>
     </div>
     
-    <!-- Filter Section (Collapsible) -->
-    <div class="card-body border-bottom" id="sbrsFilterSection" style="display: none;">
-        <form id="sbrsFilterForm" class="form-inline">
-            <div class="form-group mr-2 mb-2">
-                <label class="mr-2" style="font-size: 13px;">Rayon:</label>
-                <select class="form-control form-control-sm" id="filterRayon">
-                    <option value="">All</option>
-                    <option value="34">34</option>
-                    <option value="35">35</option>
-                </select>
-            </div>
-            <div class="form-group mr-2 mb-2">
-                <label class="mr-2" style="font-size: 13px;">Min Volume:</label>
-                <input type="number" class="form-control form-control-sm" id="filterMinVolume" style="width: 100px;" placeholder="0">
-            </div>
-            <div class="form-group mr-2 mb-2">
-                <label class="mr-2" style="font-size: 13px;">Max Volume:</label>
-                <input type="number" class="form-control form-control-sm" id="filterMaxVolume" style="width: 100px;" placeholder="1000">
-            </div>
-            <button type="button" class="btn btn-sm btn-primary mb-2" id="applySBRSFilter">
-                Apply
-            </button>
-            <button type="button" class="btn btn-sm btn-secondary mb-2 ml-2" id="resetSBRSFilter">
-                Reset
-            </button>
-        </form>
-    </div>
-    
     <div class="card-body p-0">
-        <div class="table-responsive">
-            <table id="sbrsComponentTable" class="table table-sm table-hover mb-0" style="font-size: 13px;">
-                <thead class="thead-light">
+        <div class="p-3 border-bottom bg-light">
+            <div class="input-group">
+                <span class="input-group-text bg-transparent border-end-0">
+                    <i class="fas fa-search text-low"></i>
+                </span>
+                <input type="text" id="sbrsSearch" class="form-control border-start-0" placeholder="Cari Nomen, Nama, atau Alamat...">
+            </div>
+        </div>
+
+        <div class="table-container" style="position: relative;">
+            <table class="table" id="sbrsTable">
+                <thead>
                     <tr>
-                        <th>Nomen</th>
-                        <th>Nama</th>
-                        <th>Alamat</th>
-                        <th>Rayon</th>
-                        <th>Volume</th>
-                        <th>Stand Awal</th>
-                        <th>Stand Akhir</th>
-                        <th>Read Method</th>
-                        <th>Skip</th>
-                        <th>Trouble</th>
-                        <th>Action</th>
+                        <th style="width: 50px;" class="text-center">No</th>
+                        <th data-field="nomen">Nomen</th>
+                        <th data-field="nama">Nama Pelanggan</th>
+                        <th data-field="rayon">Rayon</th>
+                        <th data-field="stand_awal" class="text-right">Awal</th>
+                        <th data-field="stand_akhir" class="text-right">Akhir</th>
+                        <th data-field="volume" class="text-right">Volume</th>
+                        <th data-field="readmethod">Metode</th>
+                        <th class="text-center">Aksi</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <tr>
-                        <td colspan="11" class="text-center text-muted py-3">
-                            <i class="fas fa-info-circle"></i> No data available
-                        </td>
-                    </tr>
-                </tbody>
+                <tbody id="sbrsTableBody">
+                    </tbody>
             </table>
         </div>
     </div>
     
-    <div class="card-footer py-2 text-right" style="font-size: 13px;">
-        <span class="text-muted">Total: <strong id="sbrsTotal">0</strong> records</span>
+    <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+        <div class="text-low" style="font-size: 0.75rem;">
+            Menampilkan <span id="sbrs-count" class="font-bold">0</span> data
+        </div>
+        <div class="pagination-hint text-low" style="font-size: 0.7rem;">
+            <i class="fas fa-arrows-alt-h"></i> Geser untuk lihat detail
+        </div>
     </div>
 </div>
 
-<!-- SBRS Component JavaScript -->
 <script>
-(function() {
-    let sbrsComponentTable = null;
-    let sbrsData = [];
-    
-    // Load SBRS Data
-    async function loadSBRSComponentData(bulan, tahun) {
+/**
+ * SBRS Component Logic v2.1
+ * Standalone Vanilla JS integration
+ */
+const SBRS = {
+    // Definisi Kolom
+    columns: [
+        { field: 'nomen', class: 'font-bold' },
+        { field: 'nama', class: 'text-truncate', style: 'max-width: 150px;' },
+        { field: 'rayon', formatter: v => `<span class="badge badge-info">${v}</span>` },
+        { field: 'stand_awal', class: 'text-right', formatter: v => App.formatNumber(v) },
+        { field: 'stand_akhir', class: 'text-right', formatter: v => App.formatNumber(v) },
+        { field: 'volume', class: 'text-right font-bold', formatter: (v) => {
+            const color = v > 100 ? 'text-danger' : (v === 0 ? 'text-warning' : 'text-primary');
+            return `<span class="${color}">${App.formatNumber(v)} m³</span>`;
+        }},
+        { field: 'readmethod', formatter: v => `<small class="text-muted">${v || '-'}</small>` },
+        { 
+            field: 'nomen', 
+            class: 'text-center',
+            formatter: (v) => `<button class="btn btn-sm btn-icon" onclick="App.toast('Detail ${v}', 'info')"><i class="fas fa-eye text-primary"></i></button>` 
+        }
+    ],
+
+    init: function() {
+        this.loadData();
+        
+        // Search Listener with Debounce
+        document.getElementById('sbrsSearch').addEventListener('input', App.debounce((e) => {
+            TableHelpers.filter('sbrsTable', e.target.value);
+            const visibleCount = document.querySelectorAll('#sbrsTableBody tr:not(.d-none):not(.filter-empty)').length;
+            document.getElementById('sbrs-count').textContent = visibleCount;
+        }, 300));
+    },
+
+    loadData: async function() {
+        TableHelpers.showLoading('sbrsTable', 8);
         try {
-            const response = await fetch(`/api/sbrs/data?bulan=${bulan}&tahun=${tahun}`);
-            if (!response.ok) {
-                throw new Error('Failed to load SBRS data');
-            }
+            // Mengambil bulan/tahun dari filter global jika ada
+            const bulan = document.getElementById('bulan')?.value || new Date().getMonth() + 1;
+            const tahun = document.getElementById('tahun')?.value || new Date().getFullYear();
             
-            sbrsData = await response.json();
-            renderSBRSTable(sbrsData);
+            const response = await App.api(`/api/sbrs/list?bulan=${bulan}&tahun=${tahun}`);
             
-        } catch (error) {
-            console.error('Error loading SBRS:', error);
-            $('#sbrsComponentTable tbody').html(`
-                <tr>
-                    <td colspan="11" class="text-center text-danger py-3">
-                        <i class="fas fa-exclamation-triangle"></i> ${error.message}
-                    </td>
-                </tr>
-            `);
+            TableHelpers.render('sbrsTable', response.data || response, this.columns, {
+                showRowNumber: true,
+                sortable: true,
+                emptyMessage: "Data SBRS periode ini belum tersedia."
+            });
+            
+            document.getElementById('sbrs-count').textContent = (response.data || response).length;
+
+        } catch (err) {
+            console.error("SBRS Load Error:", err);
+            TableHelpers.showEmpty('sbrsTable', "Gagal memuat data. Periksa koneksi internet.");
         }
+    },
+
+    refresh: function() {
+        this.loadData();
     }
-    
-    // Render SBRS Table
-    function renderSBRSTable(data) {
-        // Destroy existing table
-        if (sbrsComponentTable) {
-            sbrsComponentTable.destroy();
-        }
-        
-        const tbody = $('#sbrsComponentTable tbody');
-        
-        if (!data || data.length === 0) {
-            tbody.html(`
-                <tr>
-                    <td colspan="11" class="text-center text-muted py-3">
-                        <i class="fas fa-inbox"></i> No data available
-                    </td>
-                </tr>
-            `);
-            $('#sbrsTotal').text('0');
-            return;
-        }
-        
-        // CRITICAL: Use correct column names (nomen, volume, nama, rayon)
-        tbody.html(data.map(item => `
-            <tr>
-                <td><code style="font-size: 12px;">${item.nomen || '-'}</code></td>
-                <td>${item.nama || '-'}</td>
-                <td style="max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${item.alamat || '-'}">${item.alamat || '-'}</td>
-                <td><span class="badge badge-info badge-sm">${item.rayon || '-'}</span></td>
-                <td><strong>${parseFloat(item.volume || 0).toFixed(2)}</strong></td>
-                <td>${parseFloat(item.stand_awal || 0).toFixed(2)}</td>
-                <td>${parseFloat(item.stand_akhir || 0).toFixed(2)}</td>
-                <td><small>${item.readmethod || '-'}</small></td>
-                <td>${item.skip_status ? '<span class="badge badge-warning badge-sm">Yes</span>' : '-'}</td>
-                <td>${item.trouble_status ? '<span class="badge badge-danger badge-sm">Yes</span>' : '-'}</td>
-                <td>
-                    <button class="btn btn-xs btn-outline-primary" onclick="viewSBRSDetail('${item.nomen}')" title="View Detail">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                </td>
-            </tr>
-        `).join(''));
-        
-        $('#sbrsTotal').text(data.length);
-        
-        // Initialize DataTable
-        sbrsComponentTable = $('#sbrsComponentTable').DataTable({
-            pageLength: 25,
-            responsive: true,
-            order: [[0, 'asc']],
-            language: {
-                search: "Cari:",
-                lengthMenu: "Show _MENU_",
-                info: "_START_-_END_ of _TOTAL_",
-                paginate: {
-                    previous: "<",
-                    next: ">"
-                }
-            },
-            columnDefs: [
-                { targets: [10], orderable: false }  // Action column
-            ]
-        });
-    }
-    
-    // Apply Filter
-    function applySBRSFilter() {
-        const rayon = $('#filterRayon').val();
-        const minVolume = parseFloat($('#filterMinVolume').val()) || 0;
-        const maxVolume = parseFloat($('#filterMaxVolume').val()) || Infinity;
-        
-        let filtered = sbrsData;
-        
-        if (rayon) {
-            filtered = filtered.filter(item => item.rayon === rayon);
-        }
-        
-        filtered = filtered.filter(item => {
-            const vol = parseFloat(item.volume || 0);
-            return vol >= minVolume && vol <= maxVolume;
-        });
-        
-        renderSBRSTable(filtered);
-    }
-    
-    // Reset Filter
-    function resetSBRSFilter() {
-        $('#filterRayon').val('');
-        $('#filterMinVolume').val('');
-        $('#filterMaxVolume').val('');
-        renderSBRSTable(sbrsData);
-    }
-    
-    // View Detail (placeholder)
-    window.viewSBRSDetail = function(nomen) {
-        alert('View detail for nomen: ' + nomen);
-        // Implement modal or redirect to detail page
-    };
-    
-    // Event Listeners
-    $(document).ready(function() {
-        // Toggle filter
-        $('#filterSBRS').on('click', function() {
-            $('#sbrsFilterSection').slideToggle();
-        });
-        
-        // Apply filter
-        $('#applySBRSFilter').on('click', applySBRSFilter);
-        
-        // Reset filter
-        $('#resetSBRSFilter').on('click', resetSBRSFilter);
-        
-        // Refresh data
-        $('#refreshSBRSComponent').on('click', function() {
-            const bulan = $('#bulan').val() || 12;
-            const tahun = $('#tahun').val() || 2024;
-            loadSBRSComponentData(bulan, tahun);
-        });
-        
-        // Auto-load if bulan/tahun available
-        const bulan = $('#bulan').val() || 12;
-        const tahun = $('#tahun').val() || 2024;
-        loadSBRSComponentData(bulan, tahun);
-    });
-    
-    // Export for external use
-    window.SBRSComponent = {
-        load: loadSBRSComponentData,
-        refresh: function() {
-            const bulan = $('#bulan').val() || 12;
-            const tahun = $('#tahun').val() || 2024;
-            loadSBRSComponentData(bulan, tahun);
-        }
-    };
-})();
+};
+
+// Auto-run on load
+document.addEventListener('DOMContentLoaded', () => SBRS.init());
 </script>
 
 <style>
-/* Component-specific styles */
-.btn-xs {
-    padding: 2px 6px;
-    font-size: 11px;
+/* SBRS Specific UI */
+#sbrsTable thead th {
+    white-space: nowrap;
+    background: var(--bg-main);
 }
 
+.text-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Memperjelas indikasi scroll horizontal di mobile */
 @media (max-width: 768px) {
-    #sbrsComponentTable {
-        font-size: 11px !important;
-    }
-    
-    #sbrsComponentTable th,
-    #sbrsComponentTable td {
-        padding: 6px 4px !important;
+    .table-container::after {
+        content: '';
+        position: absolute;
+        top: 0; right: 0; bottom: 0;
+        width: 20px;
+        background: linear-gradient(to right, transparent, rgba(0,0,0,0.03));
+        pointer-events: none;
     }
 }
 </style>
-
