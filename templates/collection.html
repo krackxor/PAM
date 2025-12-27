@@ -1,533 +1,934 @@
-{% extends "base.html" %}
-
-{% block title %}Collection - SUNTER{% endblock %}
-
-{% block content %}
-<!-- Filter Bar -->
-<div class="filter-bar">
-    <div class="filter-row">
-        <div class="filter-item">
-            <div class="filter-label">Bulan</div>
-            <select class="filter-select" id="bulan">
-                <option value="1">Januari</option>
-                <option value="2">Februari</option>
-                <option value="3">Maret</option>
-                <option value="4">April</option>
-                <option value="5">Mei</option>
-                <option value="6">Juni</option>
-                <option value="7">Juli</option>
-                <option value="8">Agustus</option>
-                <option value="9">September</option>
-                <option value="10">Oktober</option>
-                <option value="11">November</option>
-                <option value="12" selected>Desember</option>
-            </select>
-        </div>
-        <div class="filter-item">
-            <div class="filter-label">Tahun</div>
-            <select class="filter-select" id="tahun">
-                <option value="2023">2023</option>
-                <option value="2024" selected>2024</option>
-                <option value="2025">2025</option>
-            </select>
-        </div>
-    </div>
-    <button class="btn btn-primary btn-block" id="loadDataBtn" style="margin-top: 12px;">
-        <i class="fas fa-search"></i>
-        <span>Tampilkan Data</span>
-    </button>
-</div>
-
-<!-- KPI Cards -->
-<div class="row kpi-cards">
-    <div class="col-6 col-md-3">
-        <div class="kpi-card">
-            <div class="kpi-label">
-                <i class="fas fa-bullseye text-primary"></i>
-                Target MC
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collection Management - PAM Monitoring</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 2px 4px rgba(0,0,0,.1);
+        }
+        
+        .section {
+            padding: 2rem 0;
+            display: none;
+        }
+        
+        .section.active {
+            display: block;
+        }
+        
+        .section-header {
+            margin-bottom: 2rem;
+        }
+        
+        .section-header h2 {
+            color: #333;
+            font-weight: 600;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.08);
+            margin-bottom: 1.5rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,.12);
+        }
+        
+        .nav-tabs {
+            border-bottom: 2px solid #dee2e6;
+            margin-bottom: 2rem;
+        }
+        
+        .nav-tabs .nav-link {
+            color: #666;
+            border: none;
+            padding: 1rem 1.5rem;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .nav-tabs .nav-link:hover {
+            border: none;
+            color: #667eea;
+        }
+        
+        .nav-tabs .nav-link.active {
+            color: #667eea;
+            background: none;
+            border: none;
+            border-bottom: 3px solid #667eea;
+        }
+        
+        .stat-card {
+            text-align: center;
+            padding: 1.5rem;
+        }
+        
+        .stat-card h3 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0.5rem 0;
+        }
+        
+        .stat-card p {
+            color: #666;
+            margin: 0;
+        }
+        
+        .table-responsive {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        #pcez-table thead th {
+            position: sticky;
+            top: 0;
+            background-color: white;
+            z-index: 10;
+            box-shadow: 0 2px 2px rgba(0,0,0,.05);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5568d3 0%, #663a8e 100%);
+        }
+        
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+        
+        .badge {
+            padding: 0.5em 0.8em;
+            font-weight: 500;
+        }
+        
+        .empty-state {
+            padding: 4rem 2rem;
+            text-align: center;
+        }
+        
+        .empty-state i {
+            font-size: 4rem;
+            color: #dee2e6;
+            margin-bottom: 1rem;
+        }
+        
+        .progress {
+            height: 25px;
+        }
+        
+        .progress-bar {
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-droplet-fill"></i>
+                PAM Collection Monitoring
+            </a>
+            <div class="d-flex">
+                <a href="/" class="btn btn-outline-light btn-sm">
+                    <i class="bi bi-house"></i> Dashboard
+                </a>
             </div>
-            <div class="kpi-value" id="kpi-target">Rp 0</div>
-            <div class="kpi-change up">
-                <i class="fas fa-arrow-up"></i> 0%
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container-fluid mt-4">
+        <!-- Tab Navigation -->
+        <ul class="nav nav-tabs" role="tablist">
+            <li class="nav-item">
+                <a class="nav-link active" href="#" onclick="showSection('overview'); return false;">
+                    <i class="bi bi-bar-chart"></i> Overview
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" onclick="showSection('upload'); return false;">
+                    <i class="bi bi-upload"></i> Upload Data
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" onclick="showSection('monitoring'); return false;">
+                    <i class="bi bi-graph-up"></i> Monitoring
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" onclick="showSection('pcez-performance'); return false;">
+                    <i class="bi bi-pie-chart"></i> Performance per PCEZ
+                </a>
+            </li>
+        </ul>
+
+        <!-- ==================== SECTION: OVERVIEW ==================== -->
+        <div class="section active" id="section-overview">
+            <div class="container">
+                <div class="section-header">
+                    <h2>📊 Collection Overview</h2>
+                    <p class="text-muted">Ringkasan data collection dan pembayaran</p>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="card stat-card bg-primary text-white">
+                            <i class="bi bi-people" style="font-size: 2rem;"></i>
+                            <h3 id="overview-total-pelanggan">-</h3>
+                            <p>Total Pelanggan</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card stat-card bg-success text-white">
+                            <i class="bi bi-wallet2" style="font-size: 2rem;"></i>
+                            <h3 id="overview-total-target">-</h3>
+                            <p>Total Target</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card stat-card bg-info text-white">
+                            <i class="bi bi-cash-coin" style="font-size: 2rem;"></i>
+                            <h3 id="overview-total-collection">-</h3>
+                            <p>Total Collection</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card stat-card bg-warning text-dark">
+                            <i class="bi bi-exclamation-triangle" style="font-size: 2rem;"></i>
+                            <h3 id="overview-total-outstanding">-</h3>
+                            <p>Outstanding</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <p class="text-muted">Overview dashboard akan segera tersedia</p>
+                        <p class="text-muted">Silakan gunakan tab Upload atau Performance per PCEZ</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== SECTION: UPLOAD DATA ==================== -->
+        <div class="section" id="section-upload">
+            <div class="container">
+                <div class="section-header">
+                    <h2>📤 Upload Collection Data</h2>
+                    <p class="text-muted">Upload file MC, MB, Collection, atau ARDEBT</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Supported Files:</strong> MC (Master Cetak), MB (Master Bayar), Collection (Bayar Harian), ARDEBT (Tunggakan)
+                        </div>
+
+                        <form id="upload-form">
+                            <div class="mb-3">
+                                <label for="file-input" class="form-label">Pilih File Excel</label>
+                                <input type="file" class="form-control" id="file-input" accept=".xls,.xlsx" required>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-upload"></i> Upload File
+                            </button>
+                        </form>
+
+                        <div id="upload-progress" class="mt-4" style="display: none;">
+                            <p>Uploading...</p>
+                            <div class="progress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" style="width: 100%"></div>
+                            </div>
+                        </div>
+
+                        <div id="upload-result" class="mt-4" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== SECTION: MONITORING ==================== -->
+        <div class="section" id="section-monitoring">
+            <div class="container">
+                <div class="section-header">
+                    <h2>📈 Collection Monitoring</h2>
+                    <p class="text-muted">Monitor pembayaran real-time</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <p class="text-muted">Monitoring dashboard akan segera tersedia</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== SECTION: PCEZ PERFORMANCE ==================== -->
+        <div class="section" id="section-pcez-performance">
+            <div class="container">
+                <div class="section-header">
+                    <h2>📊 Monitoring Performance per PCEZ</h2>
+                    <p class="text-muted">Performance pembayaran collection berdasarkan PC (Pembagian Cabang) dan EZ (Ekonomi Zone)</p>
+                </div>
+
+                <!-- Filter Controls -->
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="row align-items-end">
+                            <div class="col-md-3">
+                                <label class="form-label">Bulan</label>
+                                <select class="form-select" id="pcez-bulan">
+                                    <option value="1">Januari</option>
+                                    <option value="2">Februari</option>
+                                    <option value="3">Maret</option>
+                                    <option value="4">April</option>
+                                    <option value="5">Mei</option>
+                                    <option value="6">Juni</option>
+                                    <option value="7">Juli</option>
+                                    <option value="8">Agustus</option>
+                                    <option value="9">September</option>
+                                    <option value="10">Oktober</option>
+                                    <option value="11">November</option>
+                                    <option value="12" selected>Desember</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Tahun</label>
+                                <select class="form-select" id="pcez-tahun">
+                                    <option value="2024">2024</option>
+                                    <option value="2025" selected>2025</option>
+                                    <option value="2026">2026</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">View Mode</label>
+                                <select class="form-select" id="pcez-view-mode">
+                                    <option value="pcez" selected>Per PCEZ (Detail)</option>
+                                    <option value="pc">Per PC (Summary)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <button class="btn btn-primary w-100" onclick="loadPCEZPerformance()">
+                                    <i class="bi bi-search"></i> Load Data
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loading State -->
+                <div id="pcez-loading" class="text-center py-5" style="display: none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-3">Loading PCEZ performance data...</p>
+                </div>
+
+                <!-- Summary Cards -->
+                <div id="pcez-summary-cards" style="display: none;">
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="card bg-primary text-white stat-card">
+                                <i class="bi bi-people" style="font-size: 2rem;"></i>
+                                <h3 id="pcez-total-pelanggan">-</h3>
+                                <p>Total Pelanggan</p>
+                                <small class="opacity-75"><span id="pcez-pelanggan-bayar">-</span> bayar (<span id="pcez-paying-rate">-</span>%)</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-success text-white stat-card">
+                                <i class="bi bi-wallet2" style="font-size: 2rem;"></i>
+                                <h3 id="pcez-total-target">-</h3>
+                                <p>Target</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-info text-white stat-card">
+                                <i class="bi bi-cash-coin" style="font-size: 2rem;"></i>
+                                <h3 id="pcez-total-realisasi">-</h3>
+                                <p>Realisasi</p>
+                                <small class="opacity-75"><span id="pcez-collection-rate">-</span>%</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-warning text-dark stat-card">
+                                <i class="bi bi-exclamation-triangle" style="font-size: 2rem;"></i>
+                                <h3 id="pcez-total-outstanding">-</h3>
+                                <p>Outstanding</p>
+                                <small><span id="pcez-outstanding-rate">-</span>%</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top & Worst Performers -->
+                <div id="pcez-performers" style="display: none;">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card border-success">
+                                <div class="card-header bg-success text-white">
+                                    <h5 class="mb-0">🏆 Top 5 Performers</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>PCEZ</th>
+                                                    <th class="text-end">Target</th>
+                                                    <th class="text-end">Realisasi</th>
+                                                    <th class="text-end">Rate</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="pcez-top-performers"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card border-danger">
+                                <div class="card-header bg-danger text-white">
+                                    <h5 class="mb-0">⚠️ Bottom 5 Performers</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>PCEZ</th>
+                                                    <th class="text-end">Target</th>
+                                                    <th class="text-end">Realisasi</th>
+                                                    <th class="text-end">Rate</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="pcez-worst-performers"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PCEZ Data Table -->
+                <div class="card" id="pcez-data-card" style="display: none;">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">PCEZ Performance Data</h5>
+                        <div>
+                            <button class="btn btn-sm btn-success" onclick="exportPCEZToExcel()">
+                                <i class="bi bi-file-earmark-excel"></i> Export Excel
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover" id="pcez-table">
+                                <thead>
+                                    <tr>
+                                        <th>PC</th>
+                                        <th>EZ</th>
+                                        <th class="text-end">Pelanggan</th>
+                                        <th class="text-end">Bayar</th>
+                                        <th class="text-end">Paying %</th>
+                                        <th class="text-end">Target</th>
+                                        <th class="text-end">Realisasi</th>
+                                        <th class="text-end">Collection %</th>
+                                        <th class="text-end">Outstanding</th>
+                                        <th class="text-end">Gap</th>
+                                        <th class="text-center">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pcez-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div id="pcez-empty-state" class="empty-state" style="display: none;">
+                    <i class="bi bi-inbox"></i>
+                    <h4 class="mt-3">No Data Available</h4>
+                    <p class="text-muted">Data PCEZ belum tersedia untuk periode ini.</p>
+                    <p class="text-muted">Pastikan data MC, Collection, dan ARDEBT sudah di-upload.</p>
+                </div>
             </div>
         </div>
     </div>
-    
-    <div class="col-6 col-md-3">
-        <div class="kpi-card">
-            <div class="kpi-label">
-                <i class="fas fa-check-circle text-success"></i>
-                Collection
+
+    <!-- Modal: PCEZ Detail -->
+    <div class="modal fade" id="pcezDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="pcezDetailTitle">PCEZ Detail</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Summary -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="card stat-card">
+                                <small class="text-muted">Total Pelanggan</small>
+                                <h4 id="detail-total-pelanggan">-</h4>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card stat-card">
+                                <small class="text-muted">Target</small>
+                                <h4 id="detail-target">-</h4>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card stat-card">
+                                <small class="text-muted">Realisasi</small>
+                                <h4 id="detail-realisasi">-</h4>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card stat-card">
+                                <small class="text-muted">Collection Rate</small>
+                                <h4 id="detail-collection-rate">-</h4>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pelanggan List -->
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Nomen</th>
+                                    <th>Nama</th>
+                                    <th>Rayon</th>
+                                    <th class="text-end">Target</th>
+                                    <th class="text-end">Bayar</th>
+                                    <th class="text-end">Tunggakan</th>
+                                    <th class="text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pcez-detail-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
-            <div class="kpi-value" id="kpi-collection">Rp 0</div>
-            <div class="kpi-change up" id="kpi-collection-change">
-                <i class="fas fa-arrow-up"></i> 0%
-            </div>
         </div>
     </div>
-    
-    <div class="col-6 col-md-3">
-        <div class="kpi-card">
-            <div class="kpi-label">
-                <i class="fas fa-percent text-info"></i>
-                Achievement
-            </div>
-            <div class="kpi-value" id="kpi-percentage">0%</div>
-            <div class="kpi-change" id="kpi-percentage-change">
-                vs target
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-6 col-md-3">
-        <div class="kpi-card">
-            <div class="kpi-label">
-                <i class="fas fa-clock text-warning"></i>
-                Tunggakan
-            </div>
-            <div class="kpi-value" id="kpi-tunggakan">Rp 0</div>
-            <div class="kpi-change down">
-                <i class="fas fa-arrow-down"></i> 0%
-            </div>
-        </div>
-    </div>
-</div>
 
-<!-- Monitoring Collection Table (Excel Style) -->
-<div class="card">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-table"></i>
-            Monitoring Collection Harian
-        </div>
-        <button class="btn btn-sm btn-success" id="exportExcelBtn">
-            <i class="fas fa-file-excel"></i> Export
-        </button>
-    </div>
-    <div class="card-body" style="padding: 0;">
-        <div class="table-responsive">
-            <table class="table" id="monitoringTable" style="font-size: 11px;">
-                <thead style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color: white;">
-                    <tr>
-                        <th rowspan="2" style="vertical-align: middle; text-align: center; border-right: 2px solid white;">TGL</th>
-                        <th colspan="5" style="text-align: center; border-right: 2px solid white; background: #ef4444;">UNDUE</th>
-                        <th colspan="5" style="text-align: center; border-right: 2px solid white; background: #10b981;">CURRENT</th>
-                        <th colspan="5" style="text-align: center; background: #8b5cf6;">TOTAL (U+C)</th>
-                    </tr>
-                    <tr style="font-size: 10px;">
-                        <!-- UNDUE columns -->
-                        <th style="background: #fee2e2; color: #991b1b;">CUST</th>
-                        <th style="background: #fee2e2; color: #991b1b;">Rp</th>
-                        <th style="background: #fee2e2; color: #991b1b;">Komulatif</th>
-                        <th style="background: #fee2e2; color: #991b1b;">COLL %</th>
-                        <th style="background: #fee2e2; color: #991b1b; border-right: 2px solid white;">Prev %</th>
-                        
-                        <!-- CURRENT columns -->
-                        <th style="background: #d1fae5; color: #065f46;">CUST</th>
-                        <th style="background: #d1fae5; color: #065f46;">Rp</th>
-                        <th style="background: #d1fae5; color: #065f46;">Komulatif</th>
-                        <th style="background: #d1fae5; color: #065f46;">COLL %</th>
-                        <th style="background: #d1fae5; color: #065f46; border-right: 2px solid white;">Prev %</th>
-                        
-                        <!-- TOTAL columns -->
-                        <th style="background: #ede9fe; color: #5b21b6;">TRX</th>
-                        <th style="background: #ede9fe; color: #5b21b6;">Rp</th>
-                        <th style="background: #ede9fe; color: #5b21b6;">Komulatif</th>
-                        <th style="background: #ede9fe; color: #5b21b6;">COLL %</th>
-                        <th style="background: #ede9fe; color: #5b21b6;">Prev %</th>
-                    </tr>
-                </thead>
-                <tbody id="monitoringTableBody">
-                    <tr>
-                        <td colspan="16" class="loading">
-                            <div class="spinner"></div>
-                            <p>Loading...</p>
-                        </td>
-                    </tr>
-                </tbody>
-                <tfoot id="monitoringTableFooter" style="background: var(--bg-tertiary); font-weight: 700;">
-                </tfoot>
-            </table>
-        </div>
-    </div>
-</div>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-<!-- PCEZ Performance Table (NEW) -->
-<div class="card">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-building"></i>
-            Monitoring Performance per PCEZ
-        </div>
-        <div style="display: flex; gap: 8px;">
-            <select class="filter-select" id="pcezPeriod" style="width: 120px; font-size: 12px;">
-                <option value="daily">Harian</option>
-                <option value="weekly">Mingguan</option>
-                <option value="monthly" selected>Bulanan</option>
-            </select>
-            <button class="btn btn-sm btn-success" id="exportPcezBtn">
-                <i class="fas fa-file-excel"></i> Export
-            </button>
-        </div>
-    </div>
-    <div class="card-body" style="padding: 0;">
-        <div class="table-responsive">
-            <table class="table" id="pcezTable" style="font-size: 12px;">
-                <thead style="background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%); color: white;">
-                    <tr>
-                        <th style="text-align: center;">PCEZ</th>
-                        <th style="text-align: center;">NOMEN<br><small style="opacity: 0.8;">(dari MC)</small></th>
-                        <th style="text-align: center;">NOMINAL<br><small style="opacity: 0.8;">(dari MC)</small></th>
-                        <th style="text-align: center;">BAYAR<br><small style="opacity: 0.8;">(Collection + Tunggakan)</small></th>
-                        <th style="text-align: center;">PERFORMANCE<br><small style="opacity: 0.8;">(Bayar / Nominal)</small></th>
-                        <th style="text-align: center;">SELISIH<br><small style="opacity: 0.8;">(Nominal - Bayar)</small></th>
-                        <th style="text-align: center;">%<br><small style="opacity: 0.8;">(Selisih / Nominal)</small></th>
-                    </tr>
-                </thead>
-                <tbody id="pcezTableBody">
-                    <tr>
-                        <td colspan="7" class="loading">
-                            <div class="spinner"></div>
-                            <p>Loading...</p>
-                        </td>
-                    </tr>
-                </tbody>
-                <tfoot id="pcezTableFooter" style="background: var(--bg-tertiary); font-weight: 700; font-size: 13px;">
-                </tfoot>
-            </table>
-        </div>
-    </div>
-</div>
+    <!-- Main JavaScript -->
+    <script>
+        let pcezData = null;
 
-<!-- Chart -->
-<div class="card">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-chart-line"></i>
-            Trend Collection
-        </div>
-    </div>
-    <div class="card-body">
-        <div class="chart-container">
-            <canvas id="collectionChart"></canvas>
-        </div>
-    </div>
-</div>
-
-<!-- Tabs -->
-<div class="tabs">
-    <button class="tab active" data-tab="rayon">Per Rayon</button>
-    <button class="tab" data-tab="top">Top 10</button>
-</div>
-
-<!-- Tab: Rayon -->
-<div class="card tab-content" id="tab-rayon">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-map-marked-alt"></i>
-            Per Rayon
-        </div>
-    </div>
-    <div class="card-body" style="padding: 0;">
-        <div class="table-responsive">
-            <table class="table" id="rayonTable">
-                <thead>
-                    <tr>
-                        <th>Rayon</th>
-                        <th>Pelanggan</th>
-                        <th>Collection</th>
-                        <th>%</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr><td colspan="4" class="loading"><div class="spinner"></div></td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<!-- Tab: Top 10 -->
-<div class="card tab-content" id="tab-top" style="display: none;">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-trophy"></i>
-            Top 10 Pembayar
-        </div>
-    </div>
-    <div class="card-body" style="padding: 0;">
-        <div class="table-responsive">
-            <table class="table" id="topTable">
-                <thead>
-                    <tr>
-                        <th>Rank</th>
-                        <th>Nomen</th>
-                        <th>Nama</th>
-                        <th>Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr><td colspan="4" class="loading"><div class="spinner"></div></td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-let collectionChart = null;
-
-// Tab switching
-document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', function() {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        this.classList.add('active');
-        document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
-        document.getElementById('tab-' + this.getAttribute('data-tab')).style.display = 'block';
-    });
-});
-
-// Load data
-document.getElementById('loadDataBtn').addEventListener('click', loadData);
-window.addEventListener('DOMContentLoaded', loadData);
-
-async function loadData() {
-    const bulan = document.getElementById('bulan').value;
-    const tahun = document.getElementById('tahun').value;
-    
-    try {
-        const kpiData = await App.api(`/api/kpi?bulan=${bulan}&tahun=${tahun}`);
-        updateKPI(kpiData);
+        // ==================== UTILITY FUNCTIONS ====================
         
-        const dailyData = await App.api(`/api/collection/daily?bulan=${bulan}&tahun=${tahun}`);
-        updateMonitoringTable(dailyData);
-        updateChart(dailyData);
-        
-        const rayonData = await App.api(`/api/collection/by-rayon?bulan=${bulan}&tahun=${tahun}`);
-        updateRayonTable(rayonData);
-        
-        const topData = await App.api(`/api/collection/top-payers?bulan=${bulan}&tahun=${tahun}&limit=10`);
-        updateTopTable(topData);
-        
-        // Load PCEZ data
-        loadPcezData();
-    } catch (error) {
-        console.error('Error:', error);
-    }
-}
+        function formatRupiah(amount) {
+            return new Intl.NumberFormat('id-ID', {
+                style: 'currency',
+                currency: 'IDR',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(amount);
+        }
 
-// PCEZ data loading
-async function loadPcezData() {
-    const bulan = document.getElementById('bulan').value;
-    const tahun = document.getElementById('tahun').value;
-    const period = document.getElementById('pcezPeriod').value;
-    
-    try {
-        const pcezData = await App.api(`/api/collection/pcez?bulan=${bulan}&tahun=${tahun}&period=${period}`);
-        updatePcezTable(pcezData);
-    } catch (error) {
-        console.error('PCEZ Error:', error);
-        // Show empty state if API not ready
-        const tbody = document.getElementById('pcezTableBody');
-        tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><i class="fas fa-info-circle"></i><p>API belum tersedia</p></td></tr>';
-    }
-}
+        function formatNumber(num) {
+            return new Intl.NumberFormat('id-ID').format(num);
+        }
 
-document.getElementById('pcezPeriod').addEventListener('change', loadPcezData);
-
-function updatePcezTable(data) {
-    const tbody = document.getElementById('pcezTableBody');
-    const tfoot = document.getElementById('pcezTableFooter');
-    
-    if (!data || data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Tidak ada data</td></tr>';
-        tfoot.innerHTML = '';
-        return;
-    }
-    
-    let totalNomen = 0, totalNominal = 0, totalBayar = 0;
-    
-    tbody.innerHTML = data.map((item, index) => {
-        totalNomen += (item.nomen || 0);
-        totalNominal += (item.nominal || 0);
-        totalBayar += (item.bayar || 0);
+        // ==================== NAVIGATION ====================
         
-        const performance = item.nominal > 0 ? (item.bayar / item.nominal * 100) : 0;
-        const selisih = item.nominal - item.bayar;
-        const pctSelisih = item.nominal > 0 ? (selisih / item.nominal * 100) : 0;
-        
-        // Color coding for performance
-        let perfColor = '#6b7280'; // gray
-        if (performance >= 90) perfColor = '#10b981'; // green
-        else if (performance >= 75) perfColor = '#f59e0b'; // yellow
-        else perfColor = '#ef4444'; // red
-        
-        return `
-            <tr style="border-bottom: 1px solid var(--border-color);">
-                <td style="text-align: center;"><span class="badge badge-info">${item.pcez || '-'}</span></td>
-                <td style="text-align: right;">${App.formatNumber(item.nomen || 0)}</td>
-                <td style="text-align: right; font-weight: 600;">${App.formatRupiah(item.nominal || 0)}</td>
-                <td style="text-align: right; font-weight: 600; color: ${perfColor};">${App.formatRupiah(item.bayar || 0)}</td>
-                <td style="text-align: center;">
-                    <span style="padding: 4px 8px; border-radius: 4px; background: ${perfColor}22; color: ${perfColor}; font-weight: 700;">
-                        ${performance.toFixed(1)}%
-                    </span>
-                </td>
-                <td style="text-align: right; color: ${selisih > 0 ? '#ef4444' : '#10b981'};">${App.formatRupiah(selisih)}</td>
-                <td style="text-align: center; font-weight: 600;">${pctSelisih.toFixed(1)}%</td>
-            </tr>
-        `;
-    }).join('');
-    
-    // Calculate totals
-    const totalPerformance = totalNominal > 0 ? (totalBayar / totalNominal * 100) : 0;
-    const totalSelisih = totalNominal - totalBayar;
-    const totalPctSelisih = totalNominal > 0 ? (totalSelisih / totalNominal * 100) : 0;
-    
-    tfoot.innerHTML = `
-        <tr>
-            <td style="text-align: center;">TOTAL</td>
-            <td style="text-align: right;">${App.formatNumber(totalNomen)}</td>
-            <td style="text-align: right;">${App.formatRupiah(totalNominal)}</td>
-            <td style="text-align: right;">${App.formatRupiah(totalBayar)}</td>
-            <td style="text-align: center; font-size: 14px;">
-                <span style="padding: 6px 12px; border-radius: 6px; background: #0891b2; color: white;">
-                    ${totalPerformance.toFixed(1)}%
-                </span>
-            </td>
-            <td style="text-align: right;">${App.formatRupiah(totalSelisih)}</td>
-            <td style="text-align: center;">${totalPctSelisih.toFixed(1)}%</td>
-        </tr>
-    `;
-}
+        function showSection(sectionName) {
+            // Hide all sections
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.remove('active');
+            });
 
-document.getElementById('exportPcezBtn').addEventListener('click', function() {
-    App.exportTableToCSV('pcezTable', 'pcez_performance.csv');
-});
+            // Remove active class from all nav links
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
 
-function updateKPI(data) {
-    document.getElementById('kpi-target').textContent = App.formatRupiah(data.target_mc || 0);
-    document.getElementById('kpi-collection').textContent = App.formatRupiah(data.collection_total || 0);
-    document.getElementById('kpi-percentage').textContent = (data.collection_pct || 0).toFixed(1) + '%';
-    document.getElementById('kpi-tunggakan').textContent = App.formatRupiah(data.collection_tunggakan || 0);
-}
+            // Show selected section
+            const section = document.getElementById('section-' + sectionName);
+            if (section) {
+                section.classList.add('active');
+            }
 
-function updateMonitoringTable(data) {
-    const tbody = document.getElementById('monitoringTableBody');
-    const tfoot = document.getElementById('monitoringTableFooter');
-    
-    if (!data || data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="16" class="empty-state">Tidak ada data</td></tr>';
-        return;
-    }
-    
-    let komulatifUndue = 0, komulatifCurrent = 0, komulatifTotal = 0;
-    
-    tbody.innerHTML = data.map(item => {
-        komulatifUndue += (item.rp_undue || 0);
-        komulatifCurrent += (item.rp_current || 0);
-        komulatifTotal += (item.total || 0);
+            // Add active class to clicked nav link
+            event.target.classList.add('active');
+        }
+
+        // ==================== UPLOAD FUNCTIONS ====================
         
-        const collPctUndue = ((komulatifUndue / 1000000000) * 100).toFixed(2);
-        const collPctCurrent = ((komulatifCurrent / 1000000000) * 100).toFixed(2);
-        const collPctTotal = ((komulatifTotal / 1000000000) * 100).toFixed(2);
-        
-        return `
-            <tr style="border-bottom: 1px solid var(--border-color);">
-                <td style="text-align: center; font-weight: 600; border-right: 2px solid var(--border-color);">${item.date}</td>
-                <td style="text-align: right; background: #fef2f2;">${App.formatNumber(item.cust_undue || 0)}</td>
-                <td style="text-align: right; background: #fef2f2;">${App.formatRupiah(item.rp_undue || 0)}</td>
-                <td style="text-align: right; background: #fef2f2; font-weight: 600;">${App.formatRupiah(komulatifUndue)}</td>
-                <td style="text-align: right; background: #fef2f2;">${collPctUndue}%</td>
-                <td style="text-align: right; background: #fef2f2; border-right: 2px solid var(--border-color);">-</td>
-                <td style="text-align: right; background: #f0fdf4;">${App.formatNumber(item.cust_current || 0)}</td>
-                <td style="text-align: right; background: #f0fdf4;">${App.formatRupiah(item.rp_current || 0)}</td>
-                <td style="text-align: right; background: #f0fdf4; font-weight: 600;">${App.formatRupiah(komulatifCurrent)}</td>
-                <td style="text-align: right; background: #f0fdf4;">${collPctCurrent}%</td>
-                <td style="text-align: right; background: #f0fdf4; border-right: 2px solid var(--border-color);">-</td>
-                <td style="text-align: right; background: #faf5ff;">${App.formatNumber(item.transactions || 0)}</td>
-                <td style="text-align: right; background: #faf5ff;">${App.formatRupiah(item.total || 0)}</td>
-                <td style="text-align: right; background: #faf5ff; font-weight: 600;">${App.formatRupiah(komulatifTotal)}</td>
-                <td style="text-align: right; background: #faf5ff;">${collPctTotal}%</td>
-                <td style="text-align: right; background: #faf5ff;">-</td>
-            </tr>
-        `;
-    }).join('');
-    
-    tfoot.innerHTML = `
-        <tr>
-            <td style="text-align: center;">TOTAL</td>
-            <td colspan="3" style="text-align: right;">${App.formatRupiah(komulatifUndue)}</td>
-            <td colspan="2"></td>
-            <td colspan="3" style="text-align: right;">${App.formatRupiah(komulatifCurrent)}</td>
-            <td colspan="2"></td>
-            <td colspan="3" style="text-align: right;">${App.formatRupiah(komulatifTotal)}</td>
-            <td colspan="2"></td>
-        </tr>
-    `;
-}
+        document.getElementById('upload-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('file-input');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
 
-function updateChart(data) {
-    const ctx = document.getElementById('collectionChart');
-    if (collectionChart) collectionChart.destroy();
-    
-    collectionChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.map(d => d.date),
-            datasets: [{
-                label: 'Collection',
-                data: data.map(d => d.total),
-                borderColor: '#1e40af',
-                backgroundColor: 'rgba(30, 64, 175, 0.1)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: { callback: v => 'Rp ' + (v / 1000000).toFixed(0) + 'M' }
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // Show progress
+            document.getElementById('upload-progress').style.display = 'block';
+            document.getElementById('upload-result').style.display = 'none';
+
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                // Hide progress
+                document.getElementById('upload-progress').style.display = 'none';
+
+                // Show result
+                const resultDiv = document.getElementById('upload-result');
+                resultDiv.style.display = 'block';
+
+                if (result.success) {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <h5><i class="bi bi-check-circle"></i> Upload Berhasil!</h5>
+                            <p><strong>File:</strong> ${result.filename}</p>
+                            <p><strong>Type:</strong> ${result.detection.file_type.toUpperCase()}</p>
+                            <p><strong>Periode:</strong> ${result.detection.periode_label}</p>
+                            <p><strong>Records:</strong> ${result.processing.rows_inserted.toLocaleString()}</p>
+                            ${result.processing.mc_warning ? `<p class="text-warning mb-0"><i class="bi bi-exclamation-triangle"></i> ${result.processing.mc_warning}</p>` : ''}
+                        </div>
+                    `;
+
+                    // Reset form
+                    fileInput.value = '';
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-danger">
+                            <h5><i class="bi bi-x-circle"></i> Upload Gagal</h5>
+                            <p>${result.error || 'Unknown error'}</p>
+                        </div>
+                    `;
                 }
+            } catch (error) {
+                document.getElementById('upload-progress').style.display = 'none';
+                document.getElementById('upload-result').innerHTML = `
+                    <div class="alert alert-danger">
+                        <h5><i class="bi bi-x-circle"></i> Error</h5>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        });
+
+        // ==================== PCEZ PERFORMANCE FUNCTIONS ====================
+        
+        async function loadPCEZPerformance() {
+            const bulan = document.getElementById('pcez-bulan').value;
+            const tahun = document.getElementById('pcez-tahun').value;
+            const viewMode = document.getElementById('pcez-view-mode').value;
+
+            // Show loading
+            document.getElementById('pcez-loading').style.display = 'block';
+            document.getElementById('pcez-summary-cards').style.display = 'none';
+            document.getElementById('pcez-performers').style.display = 'none';
+            document.getElementById('pcez-data-card').style.display = 'none';
+            document.getElementById('pcez-empty-state').style.display = 'none';
+
+            try {
+                const endpoint = viewMode === 'pc' 
+                    ? `/api/collection/performance/pc?bulan=${bulan}&tahun=${tahun}`
+                    : `/api/collection/performance/pcez?bulan=${bulan}&tahun=${tahun}`;
+
+                const response = await fetch(endpoint);
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to load data');
+                }
+
+                if (viewMode === 'pcez') {
+                    displayPCEZPerformance(result);
+                } else {
+                    displayPCPerformance(result);
+                }
+
+            } catch (error) {
+                console.error('Error loading PCEZ performance:', error);
+                alert('Error: ' + error.message);
+                document.getElementById('pcez-empty-state').style.display = 'block';
+            } finally {
+                document.getElementById('pcez-loading').style.display = 'none';
             }
         }
-    });
-}
 
-function updateRayonTable(data) {
-    const tbody = document.querySelector('#rayonTable tbody');
-    tbody.innerHTML = data.length === 0 ? '<tr><td colspan="4" class="empty-state">Tidak ada data</td></tr>' :
-        data.map(item => `
-            <tr>
-                <td><span class="badge badge-info">${item.rayon}</span></td>
-                <td>${App.formatNumber(item.pelanggan || 0)}</td>
-                <td>${App.formatRupiah(item.collection || 0)}</td>
-                <td><strong>${(item.percentage || 0).toFixed(1)}%</strong></td>
-            </tr>
-        `).join('');
-}
+        function displayPCEZPerformance(result) {
+            pcezData = result;
 
-function updateTopTable(data) {
-    const tbody = document.querySelector('#topTable tbody');
-    tbody.innerHTML = data.length === 0 ? '<tr><td colspan="4" class="empty-state">Tidak ada data</td></tr>' :
-        data.map((item, i) => `
-            <tr>
-                <td>${i < 3 ? `<i class="fas fa-medal" style="color: ${['#FFD700', '#C0C0C0', '#CD7F32'][i]};"></i>` : (i + 1)}</td>
-                <td><code>${item.nomen}</code></td>
-                <td>${item.nama}</td>
-                <td><strong>${App.formatRupiah(item.total || 0)}</strong></td>
-            </tr>
-        `).join('');
-}
+            if (!result.data || result.data.length === 0) {
+                document.getElementById('pcez-empty-state').style.display = 'block';
+                return;
+            }
 
-document.getElementById('exportExcelBtn').addEventListener('click', function() {
-    App.exportTableToCSV('monitoringTable', 'monitoring_collection.csv');
-});
-</script>
-{% endblock %}
+            // Show sections
+            document.getElementById('pcez-summary-cards').style.display = 'block';
+            document.getElementById('pcez-performers').style.display = 'block';
+            document.getElementById('pcez-data-card').style.display = 'block';
+
+            // Update summary cards
+            const summary = result.summary;
+            document.getElementById('pcez-total-pelanggan').textContent = formatNumber(summary.total_pelanggan);
+            document.getElementById('pcez-pelanggan-bayar').textContent = formatNumber(summary.pelanggan_bayar);
+            document.getElementById('pcez-paying-rate').textContent = summary.paying_rate.toFixed(2);
+            document.getElementById('pcez-total-target').textContent = formatRupiah(summary.total_target);
+            document.getElementById('pcez-total-realisasi').textContent = formatRupiah(summary.total_realisasi);
+            document.getElementById('pcez-collection-rate').textContent = summary.collection_rate.toFixed(2);
+            document.getElementById('pcez-total-outstanding').textContent = formatRupiah(summary.total_outstanding);
+            document.getElementById('pcez-outstanding-rate').textContent = summary.outstanding_rate.toFixed(2);
+
+            // Display top performers
+            const topBody = document.getElementById('pcez-top-performers');
+            topBody.innerHTML = '';
+            result.top_performers.forEach((item, idx) => {
+                const rate = item.collection_rate.toFixed(2);
+                const rateClass = rate >= 90 ? 'text-success fw-bold' : rate >= 80 ? 'text-primary' : '';
+                topBody.innerHTML += `
+                    <tr>
+                        <td>${idx + 1}. ${item.pcez}</td>
+                        <td class="text-end">${formatRupiah(item.target)}</td>
+                        <td class="text-end">${formatRupiah(item.realisasi)}</td>
+                        <td class="text-end ${rateClass}">${rate}%</td>
+                    </tr>
+                `;
+            });
+
+            // Display worst performers
+            const worstBody = document.getElementById('pcez-worst-performers');
+            worstBody.innerHTML = '';
+            result.worst_performers.forEach((item, idx) => {
+                const rate = item.collection_rate.toFixed(2);
+                const rateClass = rate < 50 ? 'text-danger fw-bold' : rate < 70 ? 'text-warning' : '';
+                worstBody.innerHTML += `
+                    <tr>
+                        <td>${idx + 1}. ${item.pcez}</td>
+                        <td class="text-end">${formatRupiah(item.target)}</td>
+                        <td class="text-end">${formatRupiah(item.realisasi)}</td>
+                        <td class="text-end ${rateClass}">${rate}%</td>
+                    </tr>
+                `;
+            });
+
+            // Display data table
+            const tbody = document.getElementById('pcez-table-body');
+            tbody.innerHTML = '';
+            
+            result.data.forEach(item => {
+                const collectionRate = item.collection_rate.toFixed(2);
+                const rateClass = collectionRate >= 90 ? 'text-success fw-bold' : 
+                                 collectionRate >= 80 ? 'text-primary' :
+                                 collectionRate >= 70 ? 'text-warning' : 'text-danger fw-bold';
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${item.pc}</td>
+                        <td>${item.ez}</td>
+                        <td class="text-end">${formatNumber(item.total_pelanggan)}</td>
+                        <td class="text-end">${formatNumber(item.pelanggan_bayar)}</td>
+                        <td class="text-end">${item.paying_rate.toFixed(1)}%</td>
+                        <td class="text-end">${formatRupiah(item.target)}</td>
+                        <td class="text-end">${formatRupiah(item.realisasi)}</td>
+                        <td class="text-end ${rateClass}">${collectionRate}%</td>
+                        <td class="text-end">${formatRupiah(item.outstanding)}</td>
+                        <td class="text-end">${formatRupiah(item.gap)}</td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-info" onclick="showPCEZDetail('${item.pc}', '${item.ez}')">
+                                <i class="bi bi-eye"></i> Detail
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function displayPCPerformance(result) {
+            if (!result.data || result.data.length === 0) {
+                document.getElementById('pcez-empty-state').style.display = 'block';
+                return;
+            }
+
+            document.getElementById('pcez-data-card').style.display = 'block';
+
+            // Update table header for PC view
+            document.querySelector('#pcez-table thead tr').innerHTML = `
+                <th>PC</th>
+                <th class="text-end">Total Pelanggan</th>
+                <th class="text-end">Pelanggan Bayar</th>
+                <th class="text-end">Target</th>
+                <th class="text-end">Realisasi</th>
+                <th class="text-end">Collection Rate</th>
+                <th class="text-end">Gap</th>
+            `;
+
+            const tbody = document.getElementById('pcez-table-body');
+            tbody.innerHTML = '';
+            
+            result.data.forEach(item => {
+                const collectionRate = item.collection_rate.toFixed(2);
+                const rateClass = collectionRate >= 90 ? 'text-success fw-bold' : 
+                                 collectionRate >= 80 ? 'text-primary' :
+                                 collectionRate >= 70 ? 'text-warning' : 'text-danger fw-bold';
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>${item.pc}</strong></td>
+                        <td class="text-end">${formatNumber(item.total_pelanggan)}</td>
+                        <td class="text-end">${formatNumber(item.pelanggan_bayar)}</td>
+                        <td class="text-end">${formatRupiah(item.target)}</td>
+                        <td class="text-end">${formatRupiah(item.realisasi)}</td>
+                        <td class="text-end ${rateClass}">${collectionRate}%</td>
+                        <td class="text-end">${formatRupiah(item.gap)}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        async function showPCEZDetail(pc, ez) {
+            const bulan = document.getElementById('pcez-bulan').value;
+            const tahun = document.getElementById('pcez-tahun').value;
+
+            document.getElementById('pcezDetailTitle').textContent = `PCEZ ${pc}/${ez} - Detail`;
+
+            try {
+                const response = await fetch(`/api/collection/performance/pcez/${pc}/${ez}?bulan=${bulan}&tahun=${tahun}`);
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to load detail');
+                }
+
+                // Update summary
+                const summary = result.summary;
+                document.getElementById('detail-total-pelanggan').textContent = formatNumber(summary.total_pelanggan);
+                document.getElementById('detail-target').textContent = formatRupiah(summary.total_target);
+                document.getElementById('detail-realisasi').textContent = formatRupiah(summary.total_realisasi);
+                document.getElementById('detail-collection-rate').textContent = summary.collection_rate.toFixed(2) + '%';
+
+                // Display pelanggan list
+                const tbody = document.getElementById('pcez-detail-table-body');
+                tbody.innerHTML = '';
+
+                result.pelanggan.forEach(p => {
+                    const statusClass = p.status === 'BAYAR' ? 'badge bg-success' : 'badge bg-danger';
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${p.nomen}</td>
+                            <td>${p.nama}</td>
+                            <td>${p.rayon}</td>
+                            <td class="text-end">${formatRupiah(p.target_mc)}</td>
+                            <td class="text-end">${formatRupiah(p.total_bayar)}</td>
+                            <td class="text-end">${formatRupiah(p.tunggakan)}</td>
+                            <td class="text-center"><span class="${statusClass}">${p.status}</span></td>
+                        </tr>
+                    `;
+                });
+
+                // Show modal
+                const modal = new bootstrap.Modal(document.getElementById('pcezDetailModal'));
+                modal.show();
+
+            } catch (error) {
+                console.error('Error loading PCEZ detail:', error);
+                alert('Error: ' + error.message);
+            }
+        }
+
+        function exportPCEZToExcel() {
+            if (!pcezData || !pcezData.data) {
+                alert('No data to export');
+                return;
+            }
+
+            // Prepare data for export
+            const exportData = pcezData.data.map(item => ({
+                'PC': item.pc,
+                'EZ': item.ez,
+                'PCEZ': item.pcez,
+                'Total Pelanggan': item.total_pelanggan,
+                'Pelanggan Bayar': item.pelanggan_bayar,
+                'Pelanggan Tidak Bayar': item.pelanggan_tidak_bayar,
+                'Paying Rate (%)': item.paying_rate,
+                'Total Rayon': item.total_rayon,
+                'Target': item.target,
+                'Realisasi': item.realisasi,
+                'Realisasi Current': item.realisasi_current,
+                'Realisasi Tunggakan': item.realisasi_tunggakan,
+                'Outstanding': item.outstanding,
+                'Collection Rate (%)': item.collection_rate,
+                'Outstanding Rate (%)': item.outstanding_rate,
+                'Gap': item.gap
+            }));
+
+            // Create CSV
+            const headers = Object.keys(exportData[0]);
+            let csv = headers.join(',') + '\n';
+            
+            exportData.forEach(row => {
+                csv += headers.map(h => row[h]).join(',') + '\n';
+            });
+
+            // Download
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `PCEZ_Performance_${pcezData.periode.label.replace('/', '-')}.csv`;
+            a.click();
+        }
+
+        // ==================== INITIALIZATION ====================
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set current month/year as default
+            const now = new Date();
+            document.getElementById('pcez-bulan').value = now.getMonth() + 1;
+            document.getElementById('pcez-tahun').value = now.getFullYear();
+        });
+    </script>
+</body>
+</html>
