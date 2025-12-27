@@ -1,14 +1,20 @@
 {% extends "base.html" %}
 
-{% block title %}Belum Bayar - SUNTER{% endblock %}
+{% block title %}Tunggakan - SUNTER{% endblock %}
 
 {% block content %}
-<!-- Filter Bar -->
+<div class="page-header">
+    <div class="page-title">
+        <h1>Daftar Tunggakan</h1>
+        <p class="page-subtitle">Monitoring pelanggan yang belum menyelesaikan pembayaran</p>
+    </div>
+</div>
+
 <div class="filter-bar">
     <div class="filter-row">
         <div class="filter-item">
             <div class="filter-label">Bulan</div>
-            <select class="filter-select" id="bulan">
+            <select class="form-select" id="bulan">
                 <option value="1">Januari</option>
                 <option value="2">Februari</option>
                 <option value="3">Maret</option>
@@ -25,215 +31,147 @@
         </div>
         <div class="filter-item">
             <div class="filter-label">Tahun</div>
-            <select class="filter-select" id="tahun">
+            <select class="form-select" id="tahun">
                 <option value="2023">2023</option>
                 <option value="2024" selected>2024</option>
                 <option value="2025">2025</option>
             </select>
         </div>
     </div>
-    <button class="btn btn-primary btn-block" id="loadDataBtn" style="margin-top: 12px;">
+    <button class="btn btn-primary btn-block mt-3" id="loadDataBtn">
         <i class="fas fa-search"></i>
         <span>Tampilkan Data</span>
     </button>
 </div>
 
-<!-- Alert Info -->
-<div class="card" style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); border: none;">
-    <div class="card-body" style="padding: var(--space-3);">
-        <div style="display: flex; align-items: center; gap: var(--space-3);">
-            <i class="fas fa-exclamation-triangle" style="font-size: 32px; color: #dc2626;"></i>
+<div class="card mb-4" style="background: rgba(239, 68, 68, 0.1); border: 1px solid var(--danger);">
+    <div class="card-body">
+        <div class="d-flex align-items-center gap-3">
+            <i class="fas fa-exclamation-triangle text-danger" style="font-size: 24px;"></i>
             <div>
-                <div style="font-weight: 700; color: #991b1b; margin-bottom: 4px;">Perhatian</div>
-                <div style="font-size: 13px; color: #7f1d1d;">
-                    <span id="alertCount">0</span> pelanggan belum membayar tagihan bulan ini
+                <div class="font-bold text-danger">Peringatan Tunggakan</div>
+                <div class="text-med" style="font-size: 13px;">
+                    Ditemukan <span id="alertCount" class="font-bold">0</span> pelanggan belum melunasi tagihan periode ini.
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- KPI Cards (Horizontal Scroll) -->
 <div class="kpi-container">
     <div class="kpi-card">
-        <div class="kpi-label">
-            <i class="fas fa-users" style="color: var(--danger);"></i>
-            Total Belum Bayar
-        </div>
+        <span class="kpi-label"><i class="fas fa-user-clock text-danger"></i> Total Pelanggan</span>
         <div class="kpi-value" id="kpi-total-unpaid">0</div>
-        <div class="kpi-change down">
-            <i class="fas fa-user-times"></i> pelanggan
-        </div>
+        <div class="kpi-change negative">Belum Bayar</div>
     </div>
     
     <div class="kpi-card">
-        <div class="kpi-label">
-            <i class="fas fa-money-bill-wave" style="color: var(--danger);"></i>
-            Nominal Belum Bayar
-        </div>
-        <div class="kpi-value" id="kpi-amount-unpaid">Rp 0</div>
-        <div class="kpi-change down" id="kpi-amount-change">
-            <i class="fas fa-arrow-down"></i> 0%
-        </div>
+        <span class="kpi-label"><i class="fas fa-money-bill-wave text-danger"></i> Total Nominal</span>
+        <div class="kpi-value" id="kpi-amount-unpaid" style="font-size: 1.1rem;">Rp 0</div>
+        <div class="kpi-change negative" id="kpi-amount-change">Tunggakan Aktif</div>
     </div>
     
     <div class="kpi-card">
-        <div class="kpi-label">
-            <i class="fas fa-percent" style="color: var(--warning);"></i>
-            % Belum Bayar
-        </div>
+        <span class="kpi-label"><i class="fas fa-percent text-warning"></i> Rasio Tunggakan</span>
         <div class="kpi-value" id="kpi-percentage-unpaid">0%</div>
-        <div class="kpi-change" id="kpi-percentage-change">
-            dari total
-        </div>
+        <div class="kpi-change" id="kpi-percentage-change">Dari Total Tagihan</div>
     </div>
     
     <div class="kpi-card">
-        <div class="kpi-label">
-            <i class="fas fa-chart-bar" style="color: var(--info);"></i>
-            Rata-rata Tunggakan
-        </div>
-        <div class="kpi-value" id="kpi-avg-unpaid">Rp 0</div>
-        <div class="kpi-change">
-            <i class="fas fa-calculator"></i> per pelanggan
-        </div>
+        <span class="kpi-label"><i class="fas fa-chart-bar text-info"></i> Rata-rata</span>
+        <div class="kpi-value" id="kpi-avg-unpaid" style="font-size: 1.1rem;">Rp 0</div>
+        <div class="kpi-change">Per Pelanggan</div>
     </div>
 </div>
 
-<!-- Chart Section -->
 <div class="card">
     <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-chart-pie"></i>
-            Distribusi Per Rayon
-        </div>
+        <h3 class="card-title"><i class="fas fa-chart-pie"></i> Distribusi per Rayon</h3>
     </div>
     <div class="card-body">
-        <div class="chart-container">
+        <div class="chart-container" style="height: 250px;">
             <canvas id="unpaidChart"></canvas>
         </div>
     </div>
 </div>
 
-<!-- Tabs -->
 <div class="tabs">
-    <button class="tab active" data-tab="list">Daftar</button>
-    <button class="tab" data-tab="rayon">Per Rayon</button>
-    <button class="tab" data-tab="critical">Kritis</button>
+    <button class="tab-item active" data-tab="list">Daftar Pelanggan</button>
+    <button class="tab-item" data-tab="rayon">Analisa Rayon</button>
+    <button class="tab-item" data-tab="critical">Kondisi Kritis</button>
 </div>
 
-<!-- Tab Content: List -->
-<div class="card tab-content" id="tab-list">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-list"></i>
-            Daftar Belum Bayar
+<div id="tab-list" class="tab-pane">
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title"><i class="fas fa-list"></i> Data Tunggakan</h3>
+            <button class="btn btn-sm btn-outline" id="exportListBtn">
+                <i class="fas fa-download"></i> Export
+            </button>
         </div>
-        <button class="btn btn-sm btn-outline" id="exportListBtn">
-            <i class="fas fa-download"></i>
-        </button>
-    </div>
-    <div class="card-body" style="padding: 0;">
-        <!-- Search Box -->
-        <div style="padding: var(--space-3); border-bottom: 1px solid var(--border-color);">
-            <input type="text" id="searchInput" placeholder="Cari nomen atau nama..." 
-                   style="width: 100%; padding: var(--space-2) var(--space-3); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+        <div class="card-body p-0">
+            <div class="p-3 border-bottom">
+                <input type="text" id="searchInput" class="form-control" placeholder="Cari Nomen atau Nama...">
+            </div>
+            <div class="table-container">
+                <table class="table" id="unpaidTable">
+                    <thead>
+                        <tr>
+                            <th data-field="nomen">Nomen</th>
+                            <th data-field="nama">Nama</th>
+                            <th data-field="rayon">Rayon</th>
+                            <th data-field="tagihan">Tagihan</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        </tbody>
+                </table>
+            </div>
         </div>
-        
-        <div class="table-container">
-            <table class="table" id="unpaidTable">
-                <thead>
-                    <tr>
-                        <th>Nomen</th>
-                        <th>Nama</th>
-                        <th>Rayon</th>
-                        <th>Tagihan</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td colspan="5" class="loading">
-                            <div class="spinner"></div>
-                            <p>Loading...</p>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-    <div class="card-footer">
-        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-muted);">
-            <span>Total: <strong id="totalCount">0</strong> records</span>
-            <span>Halaman <strong id="currentPage">1</strong> dari <strong id="totalPages">1</strong></span>
+        <div class="card-footer text-muted text-center" style="font-size: 11px;">
+            Halaman <span id="currentPage">1</span> dari <span id="totalPages">1</span>
         </div>
     </div>
 </div>
 
-<!-- Tab Content: By Rayon -->
-<div class="card tab-content" id="tab-rayon" style="display: none;">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-map-marked-alt"></i>
-            Belum Bayar Per Rayon
-        </div>
-    </div>
-    <div class="card-body" style="padding: 0;">
+<div id="tab-rayon" class="tab-pane d-none">
+    <div class="card">
+        <div class="card-header"><h3 class="card-title"><i class="fas fa-map-marked-alt"></i> Ringkasan Rayon</h3></div>
         <div class="table-container">
             <table class="table" id="rayonTable">
                 <thead>
                     <tr>
                         <th>Rayon</th>
-                        <th>Jumlah</th>
-                        <th>Total</th>
-                        <th>%</th>
+                        <th>Jumlah Pelanggan</th>
+                        <th>Total Nominal</th>
+                        <th>Kontribusi %</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <tr>
-                        <td colspan="4" class="loading">
-                            <div class="spinner"></div>
-                            <p>Loading...</p>
-                        </td>
-                    </tr>
-                </tbody>
+                <tbody></tbody>
             </table>
         </div>
     </div>
 </div>
 
-<!-- Tab Content: Critical -->
-<div class="card tab-content" id="tab-critical" style="display: none;">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-exclamation-triangle"></i>
-            Pelanggan Kritis (>3 Bulan)
-        </div>
-    </div>
-    <div class="card-body" style="padding: 0;">
+<div id="tab-critical" class="tab-pane d-none">
+    <div class="card">
+        <div class="card-header"><h3 class="card-title text-danger"><i class="fas fa-exclamation-circle"></i> Pelanggan Kritis (>3 Bulan)</h3></div>
         <div class="table-container">
             <table class="table" id="criticalTable">
                 <thead>
                     <tr>
                         <th>Nomen</th>
                         <th>Nama</th>
-                        <th>Tunggakan</th>
+                        <th>Nominal Tunggakan</th>
                         <th>Durasi</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <tr>
-                        <td colspan="4" class="loading">
-                            <div class="spinner"></div>
-                            <p>Loading...</p>
-                        </td>
-                    </tr>
-                </tbody>
+                <tbody></tbody>
             </table>
         </div>
     </div>
 </div>
-
 {% endblock %}
 
 {% block extra_js %}
@@ -241,39 +179,38 @@
 let unpaidChart = null;
 let allUnpaidData = [];
 
-// Tab switching
-document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', function() {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        this.classList.add('active');
-        
-        document.querySelectorAll('.tab-content').forEach(content => {
-            content.style.display = 'none';
-        });
-        
-        const tabName = this.getAttribute('data-tab');
-        document.getElementById('tab-' + tabName).style.display = 'block';
-    });
+document.addEventListener('DOMContentLoaded', () => {
+    loadUnpaidData();
+    initTabActions();
 });
 
-// Load data
+function initTabActions() {
+    document.querySelectorAll('.tab-item').forEach(tab => {
+        tab.addEventListener('click', function() {
+            document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+            
+            const target = this.getAttribute('data-tab');
+            document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('d-none'));
+            document.getElementById('tab-' + target).classList.remove('d-none');
+        });
+    });
+}
+
 document.getElementById('loadDataBtn').addEventListener('click', loadUnpaidData);
-window.addEventListener('DOMContentLoaded', loadUnpaidData);
 
 async function loadUnpaidData() {
     const bulan = document.getElementById('bulan').value;
     const tahun = document.getElementById('tahun').value;
     
     try {
-        // Load unpaid data from API
+        TableHelpers.showLoading('unpaidTable');
         const unpaidData = await App.api(`/api/belum-bayar/list?bulan=${bulan}&tahun=${tahun}`);
         allUnpaidData = unpaidData;
         
         updateKPI(unpaidData);
-        updateUnpaidTable(unpaidData);
-        updateChart(unpaidData);
-        updateRayonTable(unpaidData);
-        updateCriticalTable(unpaidData);
+        renderTables(unpaidData);
+        renderChart(unpaidData);
         
     } catch (error) {
         console.error('Error loading data:', error);
@@ -289,160 +226,59 @@ function updateKPI(data) {
     document.getElementById('kpi-total-unpaid').textContent = App.formatNumber(totalUnpaid);
     document.getElementById('kpi-amount-unpaid').textContent = App.formatRupiah(totalAmount);
     document.getElementById('kpi-avg-unpaid').textContent = App.formatRupiah(avgAmount);
-    
-    // Calculate percentage (assuming total customers from KPI)
-    // This would need actual total customer data from API
-    const percentageUnpaid = 0; // Placeholder
-    document.getElementById('kpi-percentage-unpaid').textContent = percentageUnpaid.toFixed(1) + '%';
 }
 
-function updateChart(data) {
-    const ctx = document.getElementById('unpaidChart');
-    
-    // Group by rayon
+function renderTables(data) {
+    // 1. Unpaid Table
+    const unpaidCols = [
+        { field: 'nomen', class: 'font-semibold' },
+        { field: 'nama' },
+        { field: 'rayon', formatter: v => `<span class="badge badge-info">${v}</span>` },
+        { field: 'tagihan', class: 'font-bold text-danger', formatter: v => App.formatRupiah(v) },
+        { field: 'id', formatter: (v, row) => `<button class="btn btn-sm btn-outline" onclick="App.toast('ID: ${row.nomen}', 'info')"><i class="fas fa-eye"></i></button>` }
+    ];
+    TableHelpers.render('unpaidTable', data, unpaidCols, { sortable: true });
+
+    // 2. Rayon Summary Table
     const byRayon = {};
     data.forEach(item => {
-        const rayon = item.rayon || 'Unknown';
-        byRayon[rayon] = (byRayon[rayon] || 0) + 1;
+        const r = item.rayon || 'Unknown';
+        if (!byRayon[r]) byRayon[r] = { rayon: r, count: 0, total: 0 };
+        byRayon[r].count++;
+        byRayon[r].total += (item.tagihan || 0);
     });
     
-    if (unpaidChart) {
-        unpaidChart.destroy();
-    }
+    const rayonList = Object.values(byRayon);
+    const totalAll = rayonList.reduce((s, r) => s + r.total, 0);
     
-    unpaidChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: Object.keys(byRayon),
-            datasets: [{
-                data: Object.values(byRayon),
-                backgroundColor: [
-                    '#ef4444',
-                    '#f59e0b',
-                    '#3b82f6',
-                    '#10b981',
-                    '#8b5cf6',
-                    '#ec4899'
-                ]
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom'
-                }
-            }
-        }
+    const rayonCols = [
+        { field: 'rayon', class: 'font-bold' },
+        { field: 'count', formatter: v => App.formatNumber(v) },
+        { field: 'total', class: 'font-bold', formatter: v => App.formatRupiah(v) },
+        { field: 'total', formatter: v => (totalAll > 0 ? (v/totalAll*100).toFixed(1) : 0) + '%' }
+    ];
+    TableHelpers.render('rayonTable', rayonList, rayonCols, { sortable: true });
+}
+
+function renderChart(data) {
+    const ctx = document.getElementById('unpaidChart').getContext('2d');
+    const grouped = {};
+    data.forEach(i => grouped[i.rayon] = (grouped[i.rayon] || 0) + 1);
+
+    if (unpaidChart) unpaidChart.destroy();
+    
+    unpaidChart = ChartHelpers.createPieChart(ctx, {
+        labels: Object.keys(grouped),
+        data: Object.values(grouped)
     });
 }
 
-function updateUnpaidTable(data) {
-    const tbody = document.querySelector('#unpaidTable tbody');
-    
-    if (data.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="5" class="empty-state">
-                    <i class="fas fa-check-circle" style="color: var(--success);"></i>
-                    <p>Semua pelanggan sudah membayar!</p>
-                </td>
-            </tr>
-        `;
-        document.getElementById('totalCount').textContent = '0';
-        return;
-    }
-    
-    tbody.innerHTML = data.map(item => `
-        <tr onclick="showDetail('${item.nomen}')">
-            <td><code>${item.nomen}</code></td>
-            <td>${item.nama || '-'}</td>
-            <td><span class="badge badge-info">${item.rayon || '-'}</span></td>
-            <td><strong>${App.formatRupiah(item.tagihan || 0)}</strong></td>
-            <td><span class="badge badge-danger">Belum Bayar</span></td>
-        </tr>
-    `).join('');
-    
-    document.getElementById('totalCount').textContent = App.formatNumber(data.length);
-    document.getElementById('totalPages').textContent = '1';
-}
+document.getElementById('searchInput').addEventListener('input', App.debounce(function() {
+    TableHelpers.filter('unpaidTable', this.value);
+}, 300));
 
-function updateRayonTable(data) {
-    const tbody = document.querySelector('#rayonTable tbody');
-    
-    // Group by rayon
-    const byRayon = {};
-    data.forEach(item => {
-        const rayon = item.rayon || 'Unknown';
-        if (!byRayon[rayon]) {
-            byRayon[rayon] = { count: 0, total: 0 };
-        }
-        byRayon[rayon].count++;
-        byRayon[rayon].total += (item.tagihan || 0);
-    });
-    
-    const totalAmount = Object.values(byRayon).reduce((sum, r) => sum + r.total, 0);
-    
-    tbody.innerHTML = Object.entries(byRayon).map(([rayon, stats]) => {
-        const percentage = totalAmount > 0 ? (stats.total / totalAmount * 100) : 0;
-        return `
-            <tr>
-                <td><span class="badge badge-info">${rayon}</span></td>
-                <td>${App.formatNumber(stats.count)}</td>
-                <td><strong>${App.formatRupiah(stats.total)}</strong></td>
-                <td>${percentage.toFixed(1)}%</td>
-            </tr>
-        `;
-    }).join('');
-}
-
-function updateCriticalTable(data) {
-    const tbody = document.querySelector('#criticalTable tbody');
-    
-    // Filter critical (>3 months) - this would need actual data from API
-    const critical = data.filter(item => item.durasi_bulan >= 3).slice(0, 20);
-    
-    if (critical.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="4" class="empty-state">
-                    <i class="fas fa-thumbs-up" style="color: var(--success);"></i>
-                    <p>Tidak ada pelanggan kritis</p>
-                </td>
-            </tr>
-        `;
-        return;
-    }
-    
-    tbody.innerHTML = critical.map(item => `
-        <tr onclick="showDetail('${item.nomen}')">
-            <td><code>${item.nomen}</code></td>
-            <td>${item.nama || '-'}</td>
-            <td><strong class="text-danger">${App.formatRupiah(item.tagihan || 0)}</strong></td>
-            <td><span class="badge badge-danger">${item.durasi_bulan || 0} bulan</span></td>
-        </tr>
-    `).join('');
-}
-
-// Search functionality
-document.getElementById('searchInput').addEventListener('input', function() {
-    const search = this.value.toLowerCase();
-    const filtered = allUnpaidData.filter(item => 
-        (item.nomen || '').toLowerCase().includes(search) ||
-        (item.nama || '').toLowerCase().includes(search)
-    );
-    updateUnpaidTable(filtered);
-});
-
-// Show detail (placeholder)
-function showDetail(nomen) {
-    App.toast('Detail untuk nomen: ' + nomen, 'info');
-}
-
-// Export button
-document.getElementById('exportListBtn').addEventListener('click', function() {
-    App.toast('Fitur export akan segera tersedia', 'info');
+document.getElementById('exportListBtn').addEventListener('click', () => {
+    TableHelpers.exportToCSV('unpaidTable', 'daftar_tunggakan.csv');
 });
 </script>
 {% endblock %}
