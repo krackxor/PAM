@@ -1,259 +1,147 @@
-<!-- 
-KPI Cards Component
-Reusable responsive KPI cards
--->
-
-<div class="row" id="kpiCardsComponent">
-    <div class="col-6 col-md-3 mb-3">
-        <div class="card h-100 kpi-card-item">
-            <div class="card-body p-3">
-                <div class="kpi-icon mb-2">
-                    <i class="fas fa-bullseye text-primary"></i>
-                </div>
-                <div class="kpi-label" style="font-size: 13px; color: #6c757d; margin-bottom: 8px;">
-                    Target MC
-                </div>
-                <div class="kpi-value" style="font-size: 20px; font-weight: 700; color: #212529;" id="kpi-target-component">
-                    Rp 0
-                </div>
-                <div class="kpi-change" style="font-size: 12px; margin-top: 4px;" id="kpi-target-change">
-                    <i class="fas fa-minus"></i> <span>0%</span>
-                </div>
-            </div>
+<div class="kpi-container" id="kpiCardsComponent">
+    <div class="kpi-card" id="card-target">
+        <span class="kpi-label">
+            <i class="fas fa-bullseye text-primary"></i> Target MC
+        </span>
+        <div class="kpi-value" id="kpi-target-val">Rp 0</div>
+        <div class="kpi-change" id="kpi-target-indicator">
+            <i class="fas fa-calendar-check"></i> <span class="label-text">Periode Berjalan</span>
         </div>
     </div>
     
-    <div class="col-6 col-md-3 mb-3">
-        <div class="card h-100 kpi-card-item">
-            <div class="card-body p-3">
-                <div class="kpi-icon mb-2">
-                    <i class="fas fa-dollar-sign text-success"></i>
-                </div>
-                <div class="kpi-label" style="font-size: 13px; color: #6c757d; margin-bottom: 8px;">
-                    Collection
-                </div>
-                <div class="kpi-value" style="font-size: 20px; font-weight: 700; color: #212529;" id="kpi-collection-component">
-                    Rp 0
-                </div>
-                <div class="kpi-change" style="font-size: 12px; margin-top: 4px;" id="kpi-collection-change">
-                    <i class="fas fa-minus"></i> <span>0%</span>
-                </div>
-            </div>
+    <div class="kpi-card" id="card-collection">
+        <span class="kpi-label">
+            <i class="fas fa-wallet text-success"></i> Penagihan
+        </span>
+        <div class="kpi-value text-success" id="kpi-collection-val">Rp 0</div>
+        <div class="kpi-change positive" id="kpi-collection-indicator">
+            <i class="fas fa-chart-line"></i> <span class="label-text">Realisasi</span>
         </div>
     </div>
     
-    <div class="col-6 col-md-3 mb-3">
-        <div class="card h-100 kpi-card-item">
-            <div class="card-body p-3">
-                <div class="kpi-icon mb-2">
-                    <i class="fas fa-percentage text-info"></i>
-                </div>
-                <div class="kpi-label" style="font-size: 13px; color: #6c757d; margin-bottom: 8px;">
-                    Achievement
-                </div>
-                <div class="kpi-value" style="font-size: 20px; font-weight: 700; color: #212529;" id="kpi-percentage-component">
-                    0%
-                </div>
-                <div class="kpi-change" style="font-size: 12px; margin-top: 4px;" id="kpi-percentage-change">
-                    <i class="fas fa-minus"></i> <span>vs target</span>
-                </div>
-            </div>
+    <div class="kpi-card" id="card-achievement">
+        <span class="kpi-label">
+            <i class="fas fa-percentage text-info"></i> Capaian
+        </span>
+        <div class="kpi-value" id="kpi-achievement-val">0%</div>
+        <div class="kpi-change" id="kpi-achievement-indicator">
+            <i class="fas fa-tasks"></i> <span class="label-text">vs Target</span>
         </div>
     </div>
     
-    <div class="col-6 col-md-3 mb-3">
-        <div class="card h-100 kpi-card-item">
-            <div class="card-body p-3">
-                <div class="kpi-icon mb-2">
-                    <i class="fas fa-users text-warning"></i>
-                </div>
-                <div class="kpi-label" style="font-size: 13px; color: #6c757d; margin-bottom: 8px;">
-                    Customers
-                </div>
-                <div class="kpi-value" style="font-size: 20px; font-weight: 700; color: #212529;" id="kpi-customers-component">
-                    0
-                </div>
-                <div class="kpi-change" style="font-size: 12px; margin-top: 4px;" id="kpi-customers-change">
-                    <i class="fas fa-minus"></i> <span>active</span>
-                </div>
-            </div>
+    <div class="kpi-card" id="card-customers">
+        <span class="kpi-label">
+            <i class="fas fa-users text-warning"></i> Pelanggan
+        </span>
+        <div class="kpi-value text-high" id="kpi-customers-val">0</div>
+        <div class="kpi-change" id="kpi-customers-indicator">
+            <i class="fas fa-user-check"></i> <span class="label-text">Aktif</span>
         </div>
     </div>
 </div>
 
-<!-- KPI Component JavaScript -->
 <script>
+/**
+ * KPI Component Logic v2.1
+ * Standalone Vanilla JS integration
+ */
 (function() {
-    // Format functions
-    function formatRupiah(amount) {
-        return new Intl.NumberFormat('id-ID', {
-            style: 'currency',
-            currency: 'IDR',
-            minimumFractionDigits: 0
-        }).format(amount);
-    }
-    
-    function formatNumber(num) {
-        return new Intl.NumberFormat('id-ID').format(num);
-    }
-    
-    function formatPercentage(num, decimals = 1) {
-        return parseFloat(num).toFixed(decimals) + '%';
-    }
-    
-    // Update KPI Cards
-    async function updateKPICards(bulan, tahun) {
-        try {
-            // Add loading state
-            $('.kpi-card-item').addClass('loading');
-            
-            const response = await fetch(`/api/kpi?bulan=${bulan}&tahun=${tahun}`);
-            if (!response.ok) {
-                throw new Error('Failed to load KPI data');
-            }
-            
-            const data = await response.json();
-            
-            // Update Target MC
-            $('#kpi-target-component').text(formatRupiah(data.target_mc || 0));
-            updateChangeIndicator('#kpi-target-change', 5.2, true);
-            
-            // Update Collection
-            $('#kpi-collection-component').text(formatRupiah(data.collection_total || 0));
-            updateChangeIndicator('#kpi-collection-change', 12.5, true);
-            
-            // Update Achievement
-            $('#kpi-percentage-component').text(formatPercentage(data.collection_pct || 0));
-            const achievementStatus = data.collection_pct >= 100;
-            $('#kpi-percentage-change').html(
-                `<i class="fas fa-${achievementStatus ? 'check-circle' : 'exclamation-circle'}"></i> <span>${achievementStatus ? 'Target met' : 'Below target'}</span>`
-            ).css('color', achievementStatus ? '#28a745' : '#dc3545');
-            
-            // Update Customers
-            $('#kpi-customers-component').text(formatNumber(data.jumlah_pelanggan || 0));
-            $('#kpi-customers-change').html(
-                `<i class="fas fa-user-check"></i> <span>active</span>`
-            ).css('color', '#6c757d');
-            
-            // Remove loading state
-            $('.kpi-card-item').removeClass('loading');
-            
-            // Add animation
-            animateKPICards();
-            
-        } catch (error) {
-            console.error('Error loading KPI:', error);
-            $('.kpi-card-item').removeClass('loading');
-            
-            // Show error state
-            $('.kpi-value').text('Error');
-            $('.kpi-change').html('<i class="fas fa-exclamation-triangle"></i> Failed to load').css('color', '#dc3545');
-        }
-    }
-    
-    // Update change indicator
-    function updateChangeIndicator(selector, value, isPositive) {
-        const icon = isPositive ? 'arrow-up' : 'arrow-down';
-        const color = isPositive ? '#28a745' : '#dc3545';
-        const prefix = isPositive ? '+' : '';
-        
-        $(selector).html(
-            `<i class="fas fa-${icon}"></i> <span>${prefix}${value.toFixed(1)}%</span>`
-        ).css('color', color);
-    }
-    
-    // Animate KPI cards on load
-    function animateKPICards() {
-        $('.kpi-card-item').each(function(index) {
-            $(this).css({
-                opacity: 0,
-                transform: 'translateY(20px)'
+    const KPI = {
+        // Elements mapping
+        el: {
+            target: document.getElementById('kpi-target-val'),
+            collection: document.getElementById('kpi-collection-val'),
+            achievement: document.getElementById('kpi-achievement-val'),
+            customers: document.getElementById('kpi-customers-val'),
+            cards: document.querySelectorAll('.kpi-card')
+        },
+
+        setLoading: function(isLoading) {
+            this.el.cards.forEach(card => {
+                if (isLoading) {
+                    card.classList.add('skeleton');
+                    card.querySelectorAll('.kpi-value, .kpi-change').forEach(i => i.style.visibility = 'hidden');
+                } else {
+                    card.classList.remove('skeleton');
+                    card.querySelectorAll('.kpi-value, .kpi-change').forEach(i => i.style.visibility = 'visible');
+                }
             });
-            
-            setTimeout(() => {
-                $(this).css({
-                    transition: 'all 0.3s ease',
-                    opacity: 1,
-                    transform: 'translateY(0)'
-                });
-            }, index * 100);
-        });
-    }
-    
-    // Export for external use
-    window.KPIComponent = {
-        update: updateKPICards,
-        refresh: function() {
-            const bulan = $('#bulan').val() || 12;
-            const tahun = $('#tahun').val() || 2024;
-            updateKPICards(bulan, tahun);
+        },
+
+        update: async function(bulan, tahun) {
+            this.setLoading(true);
+            try {
+                // Use the Global App API Wrapper from app.js
+                const data = await App.api(`/api/kpi?bulan=${bulan}&tahun=${tahun}`);
+                
+                // Update UI with Formatted Data
+                this.el.target.textContent = App.formatValue(data.target_mc || 0);
+                this.el.collection.textContent = App.formatValue(data.collection_total || 0);
+                this.el.achievement.textContent = (data.collection_pct || 0).toFixed(1) + '%';
+                this.el.customers.textContent = App.formatNumber(data.jumlah_pelanggan || 0);
+
+                // Update dynamic indicators
+                this.updateAchievementUI(data.collection_pct);
+
+            } catch (err) {
+                console.error("KPI Update Error:", err);
+                this.el.target.textContent = "Error";
+            } finally {
+                this.setLoading(false);
+            }
+        },
+
+        updateAchievementUI: function(pct) {
+            const indicator = document.getElementById('kpi-achievement-indicator');
+            if (pct >= 100) {
+                indicator.className = 'kpi-change positive';
+                indicator.innerHTML = '<i class="fas fa-check-circle"></i> Target Tercapai';
+            } else if (pct >= 75) {
+                indicator.className = 'kpi-change';
+                indicator.innerHTML = '<i class="fas fa-hourglass-half text-warning"></i> Mendekati';
+            } else {
+                indicator.className = 'kpi-change negative';
+                indicator.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Di bawah target';
+            }
         }
     };
-    
-    // Auto-load on page ready
-    $(document).ready(function() {
-        const bulan = $('#bulan').val() || 12;
-        const tahun = $('#tahun').val() || 2024;
-        updateKPICards(bulan, tahun);
+
+    // Bind to Global Object for external access (e.g., from filters)
+    window.KPIComponent = KPI;
+
+    // Auto-init on load if period selector exists
+    document.addEventListener('DOMContentLoaded', () => {
+        const selBulan = document.getElementById('bulan');
+        const selTahun = document.getElementById('tahun');
+        
+        if (selBulan && selTahun) {
+            KPI.update(selBulan.value, selTahun.value);
+        }
     });
 })();
 </script>
 
 <style>
-/* KPI Component Styles */
-.kpi-card-item {
-    transition: all 0.2s ease;
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+/* CSS Extra for Micro-Interactions in KPI Cards */
+.kpi-card {
+    transition: var(--transition);
+    cursor: default;
 }
 
-.kpi-card-item:hover {
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    transform: translateY(-2px);
+.kpi-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-float);
+    border-color: var(--primary-light);
 }
 
-.kpi-card-item.loading {
-    opacity: 0.6;
-    pointer-events: none;
+.label-text {
+    font-weight: 500;
 }
 
-.kpi-card-item.loading .kpi-value::after {
-    content: '';
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    border: 2px solid #ccc;
-    border-top-color: #2563eb;
-    border-radius: 50%;
-    animation: spin 0.6s linear infinite;
-    margin-left: 8px;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-.kpi-icon i {
-    font-size: 24px;
-}
-
-/* Mobile optimization */
-@media (max-width: 576px) {
+@media (max-width: 768px) {
+    /* Optimize font size for very small mobile screens */
     .kpi-value {
-        font-size: 18px !important;
-    }
-    
-    .kpi-icon i {
-        font-size: 20px;
-    }
-    
-    .kpi-label {
-        font-size: 12px !important;
-    }
-    
-    .kpi-change {
-        font-size: 11px !important;
+        font-size: 1.15rem !important;
     }
 }
 </style>
-kpi_cards
