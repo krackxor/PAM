@@ -56,61 +56,121 @@ def register_pcez_performance_routes(app, get_db):
             print(f"PCEZ PERFORMANCE MONITORING - {bulan:02d}/{tahun}")
             print(f"{'='*70}")
             
-            # Main query: Aggregate by PC and EZ
-            query = """
-            WITH mc_data AS (
-                SELECT 
-                    m.nomen,
-                    m.rayon,
-                    m.target_mc,
-                    COALESCE(a.pc, 'UNKNOWN') as pc,
-                    COALESCE(a.ez, 'UNKNOWN') as ez
-                FROM master_pelanggan m
-                LEFT JOIN ardebt a 
-                    ON m.nomen = a.nomen 
-                    AND m.periode_bulan = a.periode_bulan 
-                    AND m.periode_tahun = a.periode_tahun
-                WHERE m.periode_bulan = ? AND m.periode_tahun = ?
-            ),
-            collection_data AS (
-                SELECT 
-                    c.nomen,
-                    SUM(c.jumlah_bayar) as total_bayar,
-                    SUM(CASE WHEN c.tipe_bayar = 'current' THEN c.jumlah_bayar ELSE 0 END) as bayar_current,
-                    SUM(CASE WHEN c.tipe_bayar = 'tunggakan' THEN c.jumlah_bayar ELSE 0 END) as bayar_tunggakan,
-                    SUM(c.volume_air) as total_volume
-                FROM collection_harian c
-                WHERE c.periode_bulan = ? AND c.periode_tahun = ?
-                GROUP BY c.nomen
-            ),
-            tunggakan_data AS (
-                SELECT 
-                    nomen,
-                    SUM(saldo_tunggakan) as total_tunggakan
-                FROM ardebt
-                WHERE periode_bulan = ? AND periode_tahun = ?
-                GROUP BY nomen
-            )
-            SELECT 
-                mc.pc,
-                mc.ez,
-                COUNT(DISTINCT mc.nomen) as total_pelanggan,
-                SUM(mc.target_mc) as total_target,
-                SUM(COALESCE(c.total_bayar, 0)) as total_realisasi,
-                SUM(COALESCE(c.bayar_current, 0)) as realisasi_current,
-                SUM(COALESCE(c.bayar_tunggakan, 0)) as realisasi_tunggakan,
-                SUM(COALESCE(c.total_volume, 0)) as total_volume,
-                SUM(COALESCE(t.total_tunggakan, 0)) as total_outstanding,
-                COUNT(DISTINCT CASE WHEN c.nomen IS NOT NULL THEN mc.nomen END) as pelanggan_bayar,
-                COUNT(DISTINCT mc.rayon) as total_rayon
-            FROM mc_data mc
-            LEFT JOIN collection_data c ON mc.nomen = c.nomen
-            LEFT JOIN tunggakan_data t ON mc.nomen = t.nomen
-            GROUP BY mc.pc, mc.ez
-            ORDER BY mc.pc, mc.ez
-            """
+            # Check if ardebt has pc and ez columns
+            cursor.execute("PRAGMA table_info(ardebt)")
+            ardebt_columns = [row['name'] for row in cursor.fetchall()]
+            has_pc_ez = 'pc' in ardebt_columns and 'ez' in ardebt_columns
             
-            cursor.execute(query, (bulan, tahun, bulan, tahun, bulan, tahun))
+            if not has_pc_ez:
+                print("⚠️  WARNING: ardebt table doesn't have pc/ez columns")
+                print("   Using rayon as grouping instead")
+                
+                # Alternative query using rayon instead of PCEZ
+                query = """
+                WITH mc_data AS (
+                    SELECT 
+                        m.nomen,
+                        m.rayon,
+                        m.target_mc
+                    FROM master_pelanggan m
+                    WHERE m.periode_bulan = ? AND m.periode_tahun = ?
+                ),
+                collection_data AS (
+                    SELECT 
+                        c.nomen,
+                        SUM(c.jumlah_bayar) as total_bayar,
+                        SUM(CASE WHEN c.tipe_bayar = 'current' THEN c.jumlah_bayar ELSE 0 END) as bayar_current,
+                        SUM(CASE WHEN c.tipe_bayar = 'tunggakan' THEN c.jumlah_bayar ELSE 0 END) as bayar_tunggakan,
+                        SUM(c.volume_air) as total_volume
+                    FROM collection_harian c
+                    WHERE c.periode_bulan = ? AND c.periode_tahun = ?
+                    GROUP BY c.nomen
+                ),
+                tunggakan_data AS (
+                    SELECT 
+                        nomen,
+                        SUM(saldo_tunggakan) as total_tunggakan
+                    FROM ardebt
+                    WHERE periode_bulan = ? AND periode_tahun = ?
+                    GROUP BY nomen
+                )
+                SELECT 
+                    SUBSTR(mc.rayon, 1, 3) as pc,
+                    SUBSTR(mc.rayon, 4, 2) as ez,
+                    COUNT(DISTINCT mc.nomen) as total_pelanggan,
+                    SUM(mc.target_mc) as total_target,
+                    SUM(COALESCE(c.total_bayar, 0)) as total_realisasi,
+                    SUM(COALESCE(c.bayar_current, 0)) as realisasi_current,
+                    SUM(COALESCE(c.bayar_tunggakan, 0)) as realisasi_tunggakan,
+                    SUM(COALESCE(c.total_volume, 0)) as total_volume,
+                    SUM(COALESCE(t.total_tunggakan, 0)) as total_outstanding,
+                    COUNT(DISTINCT CASE WHEN c.nomen IS NOT NULL THEN mc.nomen END) as pelanggan_bayar,
+                    COUNT(DISTINCT mc.rayon) as total_rayon
+                FROM mc_data mc
+                LEFT JOIN collection_data c ON mc.nomen = c.nomen
+                LEFT JOIN tunggakan_data t ON mc.nomen = t.nomen
+                GROUP BY SUBSTR(mc.rayon, 1, 3), SUBSTR(mc.rayon, 4, 2)
+                ORDER BY SUBSTR(mc.rayon, 1, 3), SUBSTR(mc.rayon, 4, 2)
+                """
+                
+                cursor.execute(query, (bulan, tahun, bulan, tahun, bulan, tahun))
+            else:
+                # Original query with pc/ez from ardebt
+                query = """
+                WITH mc_data AS (
+                    SELECT 
+                        m.nomen,
+                        m.rayon,
+                        m.target_mc,
+                        COALESCE(a.pc, 'UNKNOWN') as pc,
+                        COALESCE(a.ez, 'UNKNOWN') as ez
+                    FROM master_pelanggan m
+                    LEFT JOIN ardebt a 
+                        ON m.nomen = a.nomen 
+                        AND m.periode_bulan = a.periode_bulan 
+                        AND m.periode_tahun = a.periode_tahun
+                    WHERE m.periode_bulan = ? AND m.periode_tahun = ?
+                ),
+                collection_data AS (
+                    SELECT 
+                        c.nomen,
+                        SUM(c.jumlah_bayar) as total_bayar,
+                        SUM(CASE WHEN c.tipe_bayar = 'current' THEN c.jumlah_bayar ELSE 0 END) as bayar_current,
+                        SUM(CASE WHEN c.tipe_bayar = 'tunggakan' THEN c.jumlah_bayar ELSE 0 END) as bayar_tunggakan,
+                        SUM(c.volume_air) as total_volume
+                    FROM collection_harian c
+                    WHERE c.periode_bulan = ? AND c.periode_tahun = ?
+                    GROUP BY c.nomen
+                ),
+                tunggakan_data AS (
+                    SELECT 
+                        nomen,
+                        SUM(saldo_tunggakan) as total_tunggakan
+                    FROM ardebt
+                    WHERE periode_bulan = ? AND periode_tahun = ?
+                    GROUP BY nomen
+                )
+                SELECT 
+                    mc.pc,
+                    mc.ez,
+                    COUNT(DISTINCT mc.nomen) as total_pelanggan,
+                    SUM(mc.target_mc) as total_target,
+                    SUM(COALESCE(c.total_bayar, 0)) as total_realisasi,
+                    SUM(COALESCE(c.bayar_current, 0)) as realisasi_current,
+                    SUM(COALESCE(c.bayar_tunggakan, 0)) as realisasi_tunggakan,
+                    SUM(COALESCE(c.total_volume, 0)) as total_volume,
+                    SUM(COALESCE(t.total_tunggakan, 0)) as total_outstanding,
+                    COUNT(DISTINCT CASE WHEN c.nomen IS NOT NULL THEN mc.nomen END) as pelanggan_bayar,
+                    COUNT(DISTINCT mc.rayon) as total_rayon
+                FROM mc_data mc
+                LEFT JOIN collection_data c ON mc.nomen = c.nomen
+                LEFT JOIN tunggakan_data t ON mc.nomen = t.nomen
+                GROUP BY mc.pc, mc.ez
+                ORDER BY mc.pc, mc.ez
+                """
+                
+                cursor.execute(query, (bulan, tahun, bulan, tahun, bulan, tahun))
+            
             results = cursor.fetchall()
             
             # Process results
@@ -135,10 +195,13 @@ def register_pcez_performance_routes(app, get_db):
                 outstanding_rate = (outstanding / target * 100) if target > 0 else 0
                 paying_rate = (pelanggan_bayar / pelanggan * 100) if pelanggan > 0 else 0
                 
+                pc = str(row['pc'] or 'UNKNOWN')
+                ez = str(row['ez'] or 'UNKNOWN')
+                
                 pcez_item = {
-                    'pc': row['pc'],
-                    'ez': row['ez'],
-                    'pcez': f"{row['pc']}/{row['ez']}",
+                    'pc': pc,
+                    'ez': ez,
+                    'pcez': f"{pc}/{ez}",
                     'total_pelanggan': pelanggan,
                     'pelanggan_bayar': pelanggan_bayar,
                     'pelanggan_tidak_bayar': pelanggan - pelanggan_bayar,
@@ -219,7 +282,8 @@ def register_pcez_performance_routes(app, get_db):
                 'worst_performers': worst_performers,
                 'metadata': {
                     'total_pcez': len(pcez_list),
-                    'query_time': 'calculated'
+                    'query_time': 'calculated',
+                    'grouping_method': 'rayon' if not has_pc_ez else 'ardebt_pc_ez'
                 }
             })
             
@@ -257,40 +321,77 @@ def register_pcez_performance_routes(app, get_db):
             db = get_db()
             cursor = db.cursor()
             
-            # Get pelanggan list for this PCEZ
-            query = """
-            SELECT 
-                m.nomen,
-                m.nama,
-                m.alamat,
-                m.rayon,
-                m.target_mc,
-                COALESCE(SUM(c.jumlah_bayar), 0) as total_bayar,
-                COALESCE(SUM(c.volume_air), 0) as total_volume,
-                COALESCE(t.saldo_tunggakan, 0) as tunggakan,
-                CASE WHEN SUM(c.jumlah_bayar) > 0 THEN 'BAYAR' ELSE 'TIDAK BAYAR' END as status
-            FROM master_pelanggan m
-            LEFT JOIN ardebt a 
-                ON m.nomen = a.nomen 
-                AND m.periode_bulan = a.periode_bulan 
-                AND m.periode_tahun = a.periode_tahun
-            LEFT JOIN collection_harian c 
-                ON m.nomen = c.nomen 
-                AND m.periode_bulan = c.periode_bulan 
-                AND m.periode_tahun = c.periode_tahun
-            LEFT JOIN (
-                SELECT nomen, SUM(saldo_tunggakan) as saldo_tunggakan
-                FROM ardebt
-                WHERE periode_bulan = ? AND periode_tahun = ?
-                GROUP BY nomen
-            ) t ON m.nomen = t.nomen
-            WHERE m.periode_bulan = ? AND m.periode_tahun = ?
-                AND a.pc = ? AND a.ez = ?
-            GROUP BY m.nomen
-            ORDER BY m.rayon, m.nomen
-            """
+            # Check if ardebt has pc/ez columns
+            cursor.execute("PRAGMA table_info(ardebt)")
+            ardebt_columns = [row['name'] for row in cursor.fetchall()]
+            has_pc_ez = 'pc' in ardebt_columns and 'ez' in ardebt_columns
             
-            cursor.execute(query, (bulan, tahun, bulan, tahun, pc, ez))
+            if not has_pc_ez:
+                # Use rayon-based filtering
+                query = """
+                SELECT 
+                    m.nomen,
+                    m.nama,
+                    m.alamat,
+                    m.rayon,
+                    m.target_mc,
+                    COALESCE(SUM(c.jumlah_bayar), 0) as total_bayar,
+                    COALESCE(SUM(c.volume_air), 0) as total_volume,
+                    COALESCE(t.saldo_tunggakan, 0) as tunggakan,
+                    CASE WHEN SUM(c.jumlah_bayar) > 0 THEN 'BAYAR' ELSE 'TIDAK BAYAR' END as status
+                FROM master_pelanggan m
+                LEFT JOIN collection_harian c 
+                    ON m.nomen = c.nomen 
+                    AND m.periode_bulan = c.periode_bulan 
+                    AND m.periode_tahun = c.periode_tahun
+                LEFT JOIN (
+                    SELECT nomen, SUM(saldo_tunggakan) as saldo_tunggakan
+                    FROM ardebt
+                    WHERE periode_bulan = ? AND periode_tahun = ?
+                    GROUP BY nomen
+                ) t ON m.nomen = t.nomen
+                WHERE m.periode_bulan = ? AND m.periode_tahun = ?
+                    AND SUBSTR(m.rayon, 1, 3) = ? 
+                    AND SUBSTR(m.rayon, 4, 2) = ?
+                GROUP BY m.nomen
+                ORDER BY m.rayon, m.nomen
+                """
+                cursor.execute(query, (bulan, tahun, bulan, tahun, pc, ez))
+            else:
+                # Use ardebt pc/ez
+                query = """
+                SELECT 
+                    m.nomen,
+                    m.nama,
+                    m.alamat,
+                    m.rayon,
+                    m.target_mc,
+                    COALESCE(SUM(c.jumlah_bayar), 0) as total_bayar,
+                    COALESCE(SUM(c.volume_air), 0) as total_volume,
+                    COALESCE(t.saldo_tunggakan, 0) as tunggakan,
+                    CASE WHEN SUM(c.jumlah_bayar) > 0 THEN 'BAYAR' ELSE 'TIDAK BAYAR' END as status
+                FROM master_pelanggan m
+                LEFT JOIN ardebt a 
+                    ON m.nomen = a.nomen 
+                    AND m.periode_bulan = a.periode_bulan 
+                    AND m.periode_tahun = a.periode_tahun
+                LEFT JOIN collection_harian c 
+                    ON m.nomen = c.nomen 
+                    AND m.periode_bulan = c.periode_bulan 
+                    AND m.periode_tahun = c.periode_tahun
+                LEFT JOIN (
+                    SELECT nomen, SUM(saldo_tunggakan) as saldo_tunggakan
+                    FROM ardebt
+                    WHERE periode_bulan = ? AND periode_tahun = ?
+                    GROUP BY nomen
+                ) t ON m.nomen = t.nomen
+                WHERE m.periode_bulan = ? AND m.periode_tahun = ?
+                    AND a.pc = ? AND a.ez = ?
+                GROUP BY m.nomen
+                ORDER BY m.rayon, m.nomen
+                """
+                cursor.execute(query, (bulan, tahun, bulan, tahun, pc, ez))
+            
             pelanggan_list = [dict(row) for row in cursor.fetchall()]
             
             # Calculate summary
@@ -345,39 +446,75 @@ def register_pcez_performance_routes(app, get_db):
             db = get_db()
             cursor = db.cursor()
             
-            # Aggregate by PC only
-            query = """
-            WITH mc_data AS (
+            # Check if ardebt has pc column
+            cursor.execute("PRAGMA table_info(ardebt)")
+            ardebt_columns = [row['name'] for row in cursor.fetchall()]
+            has_pc = 'pc' in ardebt_columns
+            
+            if not has_pc:
+                # Use rayon prefix as PC
+                query = """
+                WITH mc_data AS (
+                    SELECT 
+                        m.nomen,
+                        m.target_mc,
+                        SUBSTR(m.rayon, 1, 3) as pc
+                    FROM master_pelanggan m
+                    WHERE m.periode_bulan = ? AND m.periode_tahun = ?
+                ),
+                collection_data AS (
+                    SELECT 
+                        nomen,
+                        SUM(jumlah_bayar) as total_bayar
+                    FROM collection_harian
+                    WHERE periode_bulan = ? AND periode_tahun = ?
+                    GROUP BY nomen
+                )
                 SELECT 
-                    m.nomen,
-                    m.target_mc,
-                    COALESCE(a.pc, 'UNKNOWN') as pc
-                FROM master_pelanggan m
-                LEFT JOIN ardebt a 
-                    ON m.nomen = a.nomen 
-                    AND m.periode_bulan = a.periode_bulan 
-                    AND m.periode_tahun = a.periode_tahun
-                WHERE m.periode_bulan = ? AND m.periode_tahun = ?
-            ),
-            collection_data AS (
+                    mc.pc,
+                    COUNT(DISTINCT mc.nomen) as total_pelanggan,
+                    SUM(mc.target_mc) as total_target,
+                    SUM(COALESCE(c.total_bayar, 0)) as total_realisasi,
+                    COUNT(DISTINCT CASE WHEN c.nomen IS NOT NULL THEN mc.nomen END) as pelanggan_bayar
+                FROM mc_data mc
+                LEFT JOIN collection_data c ON mc.nomen = c.nomen
+                GROUP BY mc.pc
+                ORDER BY mc.pc
+                """
+            else:
+                # Use ardebt.pc
+                query = """
+                WITH mc_data AS (
+                    SELECT 
+                        m.nomen,
+                        m.target_mc,
+                        COALESCE(a.pc, 'UNKNOWN') as pc
+                    FROM master_pelanggan m
+                    LEFT JOIN ardebt a 
+                        ON m.nomen = a.nomen 
+                        AND m.periode_bulan = a.periode_bulan 
+                        AND m.periode_tahun = a.periode_tahun
+                    WHERE m.periode_bulan = ? AND m.periode_tahun = ?
+                ),
+                collection_data AS (
+                    SELECT 
+                        nomen,
+                        SUM(jumlah_bayar) as total_bayar
+                    FROM collection_harian
+                    WHERE periode_bulan = ? AND periode_tahun = ?
+                    GROUP BY nomen
+                )
                 SELECT 
-                    nomen,
-                    SUM(jumlah_bayar) as total_bayar
-                FROM collection_harian
-                WHERE periode_bulan = ? AND periode_tahun = ?
-                GROUP BY nomen
-            )
-            SELECT 
-                mc.pc,
-                COUNT(DISTINCT mc.nomen) as total_pelanggan,
-                SUM(mc.target_mc) as total_target,
-                SUM(COALESCE(c.total_bayar, 0)) as total_realisasi,
-                COUNT(DISTINCT CASE WHEN c.nomen IS NOT NULL THEN mc.nomen END) as pelanggan_bayar
-            FROM mc_data mc
-            LEFT JOIN collection_data c ON mc.nomen = c.nomen
-            GROUP BY mc.pc
-            ORDER BY mc.pc
-            """
+                    mc.pc,
+                    COUNT(DISTINCT mc.nomen) as total_pelanggan,
+                    SUM(mc.target_mc) as total_target,
+                    SUM(COALESCE(c.total_bayar, 0)) as total_realisasi,
+                    COUNT(DISTINCT CASE WHEN c.nomen IS NOT NULL THEN mc.nomen END) as pelanggan_bayar
+                FROM mc_data mc
+                LEFT JOIN collection_data c ON mc.nomen = c.nomen
+                GROUP BY mc.pc
+                ORDER BY mc.pc
+                """
             
             cursor.execute(query, (bulan, tahun, bulan, tahun))
             results = cursor.fetchall()
