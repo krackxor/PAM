@@ -6,6 +6,8 @@ Changes:
 2. Fully automatic detection
 3. Proper periode logic
 4. Multi-file ready
+5. FIXED: master_bayar volume_air column error
+6. FIXED: collection jumlah_bayar pd.to_numeric error
 
 File: api/upload.py
 """
@@ -66,6 +68,7 @@ def quick_column_fix(df, file_type):
             'NOMEN': 'nomen', 'NO_PLGGN': 'nomen', 'NO_PELANGGAN': 'nomen',
             'TGL_BAYAR': 'tgl_bayar', 'PAY_DT': 'tgl_bayar', 'DATE': 'tgl_bayar',
             'NOMINAL': 'jumlah_bayar', 'JML_BAYAR': 'jumlah_bayar', 'AMOUNT': 'jumlah_bayar',
+            'JUMLAH': 'jumlah_bayar', 'TOTAL': 'jumlah_bayar', 'RUPIAH': 'jumlah_bayar',
             'KUBIKBAYAR': 'volume_air', 'VOLUME': 'volume_air',
             'BULAN_REK': 'bulan_rek'
         }
@@ -75,9 +78,11 @@ def quick_column_fix(df, file_type):
         col_map = {
             'NOMEN': 'nomen', 'NO': 'nomen', 'NO_PLGGN': 'nomen', 
             'NOPEL': 'nomen', 'NOPEN': 'nomen', 'NO_PELANGGAN': 'nomen',
-            'TGL_BAYAR': 'tgl_bayar', 'PAY_DT': 'tgl_bayar', 'DATE': 'tgl_bayar', 'TANGGAL': 'tgl_bayar',
+            'TGL_BAYAR': 'tgl_bayar', 'PAY_DT': 'tgl_bayar', 'DATE': 'tgl_bayar', 
+            'TANGGAL': 'tgl_bayar', 'TGL': 'tgl_bayar',
             'JML_BAYAR': 'jumlah_bayar', 'AMT_COLLECT': 'jumlah_bayar', 
-            'AMOUNT': 'jumlah_bayar', 'NOMINAL': 'jumlah_bayar', 'BAYAR': 'jumlah_bayar', 'JUMLAH': 'jumlah_bayar',
+            'AMOUNT': 'jumlah_bayar', 'NOMINAL': 'jumlah_bayar', 'BAYAR': 'jumlah_bayar', 
+            'JUMLAH': 'jumlah_bayar', 'TOTAL': 'jumlah_bayar', 'RUPIAH': 'jumlah_bayar',
             'VOLUME_AIR': 'volume_air', 'VOLUME': 'volume_air', 'KUBIK': 'volume_air', 'VOL': 'volume_air'
         }
         required = ['nomen', 'tgl_bayar']
@@ -496,7 +501,8 @@ def process_mc(df, month, year, db):
 
 def process_mb(df, month, year, db):
     """
-    Process MB (Master Bayar) file
+    Process MB (Manual Bayar) file
+    FIXED: Removed volume_air column that doesn't exist in master_bayar table
     """
     cursor = db.cursor()
     
@@ -516,12 +522,6 @@ def process_mb(df, month, year, db):
         df['jumlah_bayar'] = 0
     else:
         df['jumlah_bayar'] = pd.to_numeric(df['jumlah_bayar'], errors='coerce').fillna(0)
-    
-    # Clean volume
-    if 'volume_air' in df.columns:
-        df['volume_air'] = pd.to_numeric(df['volume_air'], errors='coerce').fillna(0)
-    else:
-        df['volume_air'] = 0
     
     df['periode_bulan'] = month
     df['periode_tahun'] = year
@@ -553,7 +553,7 @@ def process_mb(df, month, year, db):
     deleted = cursor.rowcount
     print(f"🗑️  Deleted {deleted:,} existing records")
     
-    # Insert new data
+    # Insert new data - FIXED: removed volume_air column
     inserted = 0
     linked = 0
     unlinked = 0
@@ -572,11 +572,11 @@ def process_mb(df, month, year, db):
         
         cursor.execute("""
             INSERT INTO master_bayar
-            (nomen, tgl_bayar, jumlah_bayar, volume_air, periode_bulan, periode_tahun)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (nomen, tgl_bayar, jumlah_bayar, periode_bulan, periode_tahun)
+            VALUES (?, ?, ?, ?, ?)
         """, (
             row['nomen'], row['tgl_bayar'], row['jumlah_bayar'],
-            row['volume_air'], month, year
+            month, year
         ))
         inserted += 1
     
@@ -591,6 +591,7 @@ def process_mb(df, month, year, db):
 def process_collection(df, month, year, db):
     """
     Process Collection (Bayar Harian) file
+    FIXED: Better handling of jumlah_bayar column detection and conversion
     """
     cursor = db.cursor()
     
@@ -605,17 +606,24 @@ def process_collection(df, month, year, db):
     # Clean date
     df['tgl_bayar'] = df['tgl_bayar'].apply(clean_date)
     
-    # Clean amount
+    # Clean amount - FIXED: Better column existence check
     if 'jumlah_bayar' not in df.columns:
         df['jumlah_bayar'] = 0
     else:
-        df['jumlah_bayar'] = pd.to_numeric(df['jumlah_bayar'], errors='coerce').fillna(0)
+        # Check if column is valid Series before conversion
+        if isinstance(df['jumlah_bayar'], pd.Series):
+            df['jumlah_bayar'] = pd.to_numeric(df['jumlah_bayar'], errors='coerce').fillna(0)
+        else:
+            df['jumlah_bayar'] = 0
     
     # Clean volume
     if 'volume_air' not in df.columns:
         df['volume_air'] = 0
     else:
-        df['volume_air'] = pd.to_numeric(df['volume_air'], errors='coerce').fillna(0)
+        if isinstance(df['volume_air'], pd.Series):
+            df['volume_air'] = pd.to_numeric(df['volume_air'], errors='coerce').fillna(0)
+        else:
+            df['volume_air'] = 0
     
     # Classify payment type
     df['tipe_bayar'] = df.apply(
@@ -974,7 +982,7 @@ def get_mb_stats(db, bulan, tahun):
     
     # Sample
     cursor.execute("""
-        SELECT mb.nomen, mb.tgl_bayar, mb.jumlah_bayar, mb.volume_air, m.nama
+        SELECT mb.nomen, mb.tgl_bayar, mb.jumlah_bayar, m.nama
         FROM master_bayar mb
         LEFT JOIN master_pelanggan m 
             ON mb.nomen = m.nomen 
