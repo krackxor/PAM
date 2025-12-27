@@ -80,10 +80,15 @@ def quick_column_fix(df, file_type):
             'NOPEL': 'nomen', 'NOPEN': 'nomen', 'NO_PELANGGAN': 'nomen',
             'TGL_BAYAR': 'tgl_bayar', 'PAY_DT': 'tgl_bayar', 'DATE': 'tgl_bayar', 
             'TANGGAL': 'tgl_bayar', 'TGL': 'tgl_bayar',
-            'JML_BAYAR': 'jumlah_bayar', 'AMT_COLLECT': 'jumlah_bayar', 
+            # Prioritize AMT_COLLECT over NOMINAL for collection files
+            'AMT_COLLECT': 'jumlah_bayar',
+            'JML_BAYAR': 'jumlah_bayar', 
             'AMOUNT': 'jumlah_bayar', 'NOMINAL': 'jumlah_bayar', 'BAYAR': 'jumlah_bayar', 
             'JUMLAH': 'jumlah_bayar', 'TOTAL': 'jumlah_bayar', 'RUPIAH': 'jumlah_bayar',
-            'VOLUME_AIR': 'volume_air', 'VOLUME': 'volume_air', 'KUBIK': 'volume_air', 'VOL': 'volume_air'
+            # Prioritize VOL_COLLECT for collection files
+            'VOL_COLLECT': 'volume_air',
+            'VOLUME_AIR': 'volume_air', 'VOLUME': 'volume_air', 'KUBIK': 'volume_air', 
+            'VOL': 'volume_air'
         }
         required = ['nomen', 'tgl_bayar']
         
@@ -625,11 +630,9 @@ def process_collection(df, month, year, db):
         else:
             df['volume_air'] = 0
     
-    # Classify payment type
-    df['tipe_bayar'] = df.apply(
-        lambda row: 'tunggakan' if row['jumlah_bayar'] > 0 and row['volume_air'] == 0 else 'current',
-        axis=1
-    )
+    # Classify payment type - using vectorized operation
+    df['tipe_bayar'] = 'current'
+    df.loc[(df['jumlah_bayar'] > 0) & (df['volume_air'] == 0), 'tipe_bayar'] = 'tunggakan'
     
     df['periode_bulan'] = month
     df['periode_tahun'] = year
