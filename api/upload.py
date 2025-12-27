@@ -132,12 +132,15 @@ def quick_column_fix(df, file_type):
     for old_name, new_name in col_map.items():
         if old_name.upper() in upper_cols:
             original_col = upper_cols[old_name.upper()]
-            if original_col not in rename_dict:  # Avoid duplicate mapping
-                rename_dict[original_col] = new_name
+            # Only map if new_name doesn't exist yet (priority to first match)
+            if new_name not in rename_dict.values():
+                if original_col not in rename_dict:  # Avoid duplicate mapping
+                    rename_dict[original_col] = new_name
     
     if rename_dict:
         df = df.rename(columns=rename_dict)
         print(f"✅ Mapped {len(rename_dict)} columns")
+        print(f"   Mapping: {rename_dict}")
     
     # Step 2: Auto-detect missing required columns
     for req_col in required:
@@ -631,6 +634,11 @@ def process_collection(df, month, year, db):
     if 'jumlah_bayar' not in df.columns:
         df['jumlah_bayar'] = 0
     else:
+        # If multiple columns were mapped to jumlah_bayar, take first one
+        if isinstance(df['jumlah_bayar'], pd.DataFrame):
+            print(f"⚠️  Multiple columns mapped to 'jumlah_bayar', taking first column")
+            df['jumlah_bayar'] = df['jumlah_bayar'].iloc[:, 0]
+        
         # Check if column is valid Series before conversion
         if isinstance(df['jumlah_bayar'], pd.Series):
             df['jumlah_bayar'] = pd.to_numeric(df['jumlah_bayar'], errors='coerce').fillna(0)
@@ -641,6 +649,11 @@ def process_collection(df, month, year, db):
     if 'volume_air' not in df.columns:
         df['volume_air'] = 0
     else:
+        # If multiple columns were mapped to volume_air, take first one
+        if isinstance(df['volume_air'], pd.DataFrame):
+            print(f"⚠️  Multiple columns mapped to 'volume_air', taking first column")
+            df['volume_air'] = df['volume_air'].iloc[:, 0]
+        
         if isinstance(df['volume_air'], pd.Series):
             df['volume_air'] = pd.to_numeric(df['volume_air'], errors='coerce').fillna(0)
         else:
@@ -648,8 +661,17 @@ def process_collection(df, month, year, db):
     
     # Classify payment type - SIMPLIFIED using numpy
     import numpy as np
+    
+    # Debug: Check shapes
+    print(f"📊 jumlah_bayar shape: {df['jumlah_bayar'].shape}, type: {type(df['jumlah_bayar'])}")
+    print(f"📊 volume_air shape: {df['volume_air'].shape}, type: {type(df['volume_air'])}")
+    
+    # Safety: Ensure both are 1D arrays
+    jumlah_arr = np.array(df['jumlah_bayar']).flatten()
+    volume_arr = np.array(df['volume_air']).flatten()
+    
     df['tipe_bayar'] = np.where(
-        (df['jumlah_bayar'].values > 0) & (df['volume_air'].values == 0),
+        (jumlah_arr > 0) & (volume_arr == 0),
         'tunggakan',
         'current'
     )
