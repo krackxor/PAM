@@ -1,244 +1,565 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - SUNTER</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-{% block title %}Home - SUNTER{% endblock %}
+        :root {
+            --primary: #2563eb;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --text: #1f2937;
+            --text-muted: #6b7280;
+            --border: #e5e7eb;
+            --bg: #f9fafb;
+        }
 
-{% block content %}
-<!-- Welcome Section -->
-<div class="card" style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color: white; border: none;">
-    <div class="card-body" style="padding: var(--space-5);">
-        <h1 style="font-size: 28px; font-weight: 700; margin-bottom: var(--space-2);">
-            <i class="fas fa-tint"></i> SUNTER Dashboard
-        </h1>
-        <p style="font-size: 14px; opacity: 0.9; margin: 0;">
-            Sistem Monitoring Collection & Analisa PDAM Sunter
-        </p>
-    </div>
-</div>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
 
-<!-- Quick Stats -->
-<div class="row kpi-cards">
-    <div class="col-6 col-md-3">
-        <div class="kpi-card" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none;">
-            <div class="kpi-label" style="color: rgba(255,255,255,0.8);">
-                <i class="fas fa-users"></i>
-                Total Pelanggan
-            </div>
-            <div class="kpi-value" id="total-pelanggan">-</div>
-            <div class="kpi-change" style="color: rgba(255,255,255,0.8);">
-                <i class="fas fa-database"></i> Data bulan ini
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-6 col-md-3">
-        <div class="kpi-card" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none;">
-            <div class="kpi-label" style="color: rgba(255,255,255,0.8);">
-                <i class="fas fa-check-circle"></i>
-                Sudah Bayar
-            </div>
-            <div class="kpi-value" id="sudah-bayar">-</div>
-            <div class="kpi-change" style="color: rgba(255,255,255,0.8);">
-                <i class="fas fa-percentage"></i> <span id="persen-bayar">0</span>%
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-6 col-md-3">
-        <div class="kpi-card" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; border: none;">
-            <div class="kpi-label" style="color: rgba(255,255,255,0.8);">
-                <i class="fas fa-exclamation-circle"></i>
-                Belum Bayar
-            </div>
-            <div class="kpi-value" id="belum-bayar">-</div>
-            <div class="kpi-change" style="color: rgba(255,255,255,0.8);">
-                <i class="fas fa-user-times"></i> Pelanggan
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-6 col-md-3">
-        <div class="kpi-card" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; border: none;">
-            <div class="kpi-label" style="color: rgba(255,255,255,0.8);">
-                <i class="fas fa-money-bill-wave"></i>
-                Collection
-            </div>
-            <div class="kpi-value" id="total-collection">-</div>
-            <div class="kpi-change" style="color: rgba(255,255,255,0.8);">
-                <i class="fas fa-arrow-up"></i> Bulan ini
-            </div>
-        </div>
-    </div>
-</div>
+        .header {
+            background: white;
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 0;
+        }
 
-<!-- Quick Menu -->
-<div class="card">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-rocket"></i>
-            Menu Cepat
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .nav {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .nav a {
+            padding: 0.5rem 1rem;
+            color: var(--text);
+            text-decoration: none;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .nav a:hover, .nav a.active {
+            background: var(--bg);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .page-title h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .page-subtitle {
+            color: var(--text-muted);
+        }
+
+        .periode-selector {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background: white;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .periode-selector label {
+            font-weight: 500;
+        }
+
+        .periode-selector select {
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .stat-icon {
+            font-size: 2.5rem;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+        }
+
+        .stat-icon.blue { background: #dbeafe; color: var(--primary); }
+        .stat-icon.green { background: #d1fae5; color: var(--success); }
+        .stat-icon.red { background: #fee2e2; color: var(--danger); }
+        .stat-icon.yellow { background: #fef3c7; color: var(--warning); }
+
+        .stat-content {
+            flex: 1;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 600;
+        }
+
+        .stat-subvalue {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-top: 0.25rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1e40af;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--bg);
+            font-weight: 600;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        tr:hover {
+            background: var(--bg);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-muted);
+        }
+
+        .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .loader {
+            text-align: center;
+            padding: 3rem 1rem;
+        }
+
+        .spinner {
+            border: 4px solid var(--border);
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">
+                <i class="fas fa-tint"></i> SUNTER Dashboard
+            </div>
+            <nav class="nav">
+                <a href="/" class="active"><i class="fas fa-home"></i> Dashboard</a>
+                <a href="/collection"><i class="fas fa-money-bill-wave"></i> Collection</a>
+                <a href="/belum-bayar"><i class="fas fa-exclamation-circle"></i> Belum Bayar</a>
+                <a href="/upload" class="btn btn-primary"><i class="fas fa-upload"></i> Upload</a>
+            </nav>
         </div>
     </div>
-    <div class="card-body">
-        <div class="row" style="gap: var(--space-3);">
-            <div class="col-6 col-md-3" style="padding: 0;">
-                <a href="/collection" style="text-decoration: none;">
-                    <div class="kpi-card" style="text-align: center; cursor: pointer; transition: transform 0.2s;">
-                        <i class="fas fa-wallet" style="font-size: 32px; color: var(--primary); margin-bottom: var(--space-2);"></i>
-                        <div style="font-weight: 600; color: var(--text-primary);">Collection</div>
-                        <div style="font-size: 11px; color: var(--text-muted); margin-top: var(--space-1);">Lihat data collection</div>
-                    </div>
+
+    <div class="container">
+        <div class="page-header">
+            <div class="page-title">
+                <h1>Dashboard</h1>
+                <p class="page-subtitle">Overview pembayaran dan collection</p>
+            </div>
+            <div class="periode-selector">
+                <label><i class="fas fa-calendar"></i> Periode:</label>
+                <select id="periodeSelect">
+                    <option value="">Loading...</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="card" style="display: none;">
+            <div class="loader">
+                <div class="spinner"></div>
+                <p>Memuat data...</p>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="card" style="display: none;">
+            <div class="empty-state">
+                <div class="empty-icon">
+                    <i class="fas fa-inbox"></i>
+                </div>
+                <h3>Belum Ada Data</h3>
+                <p>Upload file MC terlebih dahulu untuk mulai melihat data</p>
+                <a href="/upload" class="btn btn-primary" style="margin-top: 1rem;">
+                    <i class="fas fa-upload"></i> Upload File
                 </a>
             </div>
-            
-            <div class="col-6 col-md-3" style="padding: 0;">
-                <a href="/belum-bayar" style="text-decoration: none;">
-                    <div class="kpi-card" style="text-align: center; cursor: pointer; transition: transform 0.2s;">
-                        <i class="fas fa-exclamation-triangle" style="font-size: 32px; color: var(--warning); margin-bottom: var(--space-2);"></i>
-                        <div style="font-weight: 600; color: var(--text-primary);">Belum Bayar</div>
-                        <div style="font-size: 11px; color: var(--text-muted); margin-top: var(--space-1);">Cek tunggakan</div>
-                    </div>
-                </a>
-            </div>
-            
-            <div class="col-6 col-md-3" style="padding: 0;">
-                <a href="/upload" style="text-decoration: none;">
-                    <div class="kpi-card" style="text-align: center; cursor: pointer; transition: transform 0.2s;">
-                        <i class="fas fa-cloud-upload-alt" style="font-size: 32px; color: var(--success); margin-bottom: var(--space-2);"></i>
-                        <div style="font-weight: 600; color: var(--text-primary);">Upload</div>
-                        <div style="font-size: 11px; color: var(--text-muted); margin-top: var(--space-1);">Upload data baru</div>
-                    </div>
-                </a>
-            </div>
-            
-            <div class="col-6 col-md-3" style="padding: 0;">
-                <a href="/menu" style="text-decoration: none;">
-                    <div class="kpi-card" style="text-align: center; cursor: pointer; transition: transform 0.2s;">
-                        <i class="fas fa-bars" style="font-size: 32px; color: var(--info); margin-bottom: var(--space-2);"></i>
-                        <div style="font-weight: 600; color: var(--text-primary);">Menu Lainnya</div>
-                        <div style="font-size: 11px; color: var(--text-muted); margin-top: var(--space-1);">Fitur lengkap</div>
-                    </div>
-                </a>
-            </div>
         </div>
-    </div>
-</div>
 
-<!-- Recent Activity -->
-<div class="card">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-history"></i>
-            Aktivitas Terbaru
-        </div>
-    </div>
-    <div class="card-body" style="padding: 0;">
-        <div class="table-responsive">
-            <table class="table" id="recentActivity">
-                <thead>
-                    <tr>
-                        <th>Waktu</th>
-                        <th>Aktivitas</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td colspan="3" class="loading">
-                            <div class="spinner"></div>
-                            <p>Loading...</p>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
+        <!-- Stats Grid -->
+        <div id="statsContainer">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon blue">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-label">Total Pelanggan</div>
+                        <div class="stat-value" id="totalPelanggan">-</div>
+                    </div>
+                </div>
 
-<!-- Info Card -->
-<div class="card" style="background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%); border: none;">
-    <div class="card-body">
-        <div style="display: flex; align-items: center; gap: var(--space-3);">
-            <i class="fas fa-info-circle" style="font-size: 32px; color: var(--primary);"></i>
-            <div>
-                <div style="font-weight: 700; margin-bottom: var(--space-1);">Sistem Informasi PDAM</div>
-                <div style="font-size: 13px; color: var(--text-secondary);">
-                    Dashboard monitoring collection dan analisa data pelanggan PDAM Sunter. 
-                    Gunakan menu di bawah untuk navigasi cepat.
+                <div class="stat-card">
+                    <div class="stat-icon green">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-label">Sudah Bayar</div>
+                        <div class="stat-value" id="sudahBayar">-</div>
+                        <div class="stat-subvalue" id="pctBayar">-</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon red">
+                        <i class="fas fa-exclamation-circle"></i>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-label">Belum Bayar</div>
+                        <div class="stat-value" id="belumBayar">-</div>
+                        <div class="stat-subvalue" id="pctBelum">-</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon yellow">
+                        <i class="fas fa-money-bill-wave"></i>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-label">Realisasi Collection</div>
+                        <div class="stat-value" id="totalRealisasi" style="font-size: 1.25rem;">-</div>
+                        <div class="stat-subvalue">
+                            <span id="pctRealisasi">-</span> dari target
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressRealisasi" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- By Rayon -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Performance by Rayon</h3>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Rayon</th>
+                                <th>Total</th>
+                                <th>Sudah Bayar</th>
+                                <th>Belum Bayar</th>
+                                <th>% Bayar</th>
+                                <th>Target</th>
+                                <th>Realisasi</th>
+                                <th>% Realisasi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rayonTableBody">
+                            <tr>
+                                <td colspan="8" style="text-align: center; color: var(--text-muted);">
+                                    Loading...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </div>
-</div>
-{% endblock %}
 
-{% block extra_js %}
-<script>
-// Load dashboard stats
-async function loadStats() {
-    try {
-        // Get current month/year
-        const now = new Date();
-        const bulan = now.getMonth() + 1;
-        const tahun = now.getFullYear();
-        
-        // Load KPI data
-        const kpi = await App.api(`/api/kpi?bulan=${bulan}&tahun=${tahun}`);
-        
-        // Update stats
-        document.getElementById('total-pelanggan').textContent = App.formatNumber(kpi.pelanggan_aktif || 0);
-        
-        const sudahBayar = kpi.pelanggan_aktif - (kpi.pelanggan_belum_bayar || 0);
-        document.getElementById('sudah-bayar').textContent = App.formatNumber(sudahBayar);
-        document.getElementById('belum-bayar').textContent = App.formatNumber(kpi.pelanggan_belum_bayar || 0);
-        
-        const persenBayar = kpi.pelanggan_aktif > 0 ? (sudahBayar / kpi.pelanggan_aktif * 100) : 0;
-        document.getElementById('persen-bayar').textContent = persenBayar.toFixed(1);
-        
-        document.getElementById('total-collection').textContent = App.formatRupiah(kpi.collection_total || 0);
-        
-        // Load recent activity (placeholder)
-        loadRecentActivity();
-        
-    } catch (error) {
-        console.error('Error loading stats:', error);
-        // Show default values
-        document.getElementById('total-pelanggan').textContent = '-';
-        document.getElementById('sudah-bayar').textContent = '-';
-        document.getElementById('belum-bayar').textContent = '-';
-        document.getElementById('total-collection').textContent = '-';
-    }
-}
+    <script>
+        let currentPeriode = null;
 
-function loadRecentActivity() {
-    const tbody = document.querySelector('#recentActivity tbody');
-    
-    // Placeholder data
-    const activities = [
-        { time: '10 menit lalu', activity: 'Upload data collection', status: 'success' },
-        { time: '1 jam lalu', activity: 'Generate report bulanan', status: 'success' },
-        { time: '2 jam lalu', activity: 'Update master pelanggan', status: 'success' }
-    ];
-    
-    tbody.innerHTML = activities.map(item => `
-        <tr>
-            <td style="white-space: nowrap;">${item.time}</td>
-            <td>${item.activity}</td>
-            <td><span class="badge badge-success">Sukses</span></td>
-        </tr>
-    `).join('');
-}
+        // Load periodes on page load
+        async function loadPeriodes() {
+            try {
+                const response = await fetch('/api/periodes');
+                const data = await response.json();
 
-// Add hover effect to menu cards
-document.querySelectorAll('.kpi-card').forEach(card => {
-    card.addEventListener('mouseenter', function() {
-        this.style.transform = 'scale(1.02)';
-    });
-    card.addEventListener('mouseleave', function() {
-        this.style.transform = 'scale(1)';
-    });
-});
+                const select = document.getElementById('periodeSelect');
+                select.innerHTML = '';
 
-// Load on page load
-window.addEventListener('DOMContentLoaded', loadStats);
-</script>
-{% endblock %}
+                if (data.periodes && data.periodes.length > 0) {
+                    data.periodes.forEach(p => {
+                        const option = document.createElement('option');
+                        option.value = `${p.bulan},${p.tahun}`;
+                        option.textContent = p.label;
+                        select.appendChild(option);
+                    });
+
+                    // Load first periode automatically
+                    const [bulan, tahun] = select.value.split(',').map(Number);
+                    currentPeriode = { bulan, tahun };
+                    loadDashboardData(bulan, tahun);
+                } else {
+                    showEmptyState();
+                }
+
+            } catch (error) {
+                console.error('Error loading periodes:', error);
+                showEmptyState();
+            }
+        }
+
+        // Periode change handler
+        document.getElementById('periodeSelect').addEventListener('change', (e) => {
+            const [bulan, tahun] = e.target.value.split(',').map(Number);
+            currentPeriode = { bulan, tahun };
+            loadDashboardData(bulan, tahun);
+        });
+
+        // Load dashboard data
+        async function loadDashboardData(bulan, tahun) {
+            showLoading();
+
+            try {
+                const response = await fetch(`/api/home/stats?periode_bulan=${bulan}&periode_tahun=${tahun}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    console.error('Error:', data.error);
+                    showEmptyState();
+                    return;
+                }
+
+                displayStats(data);
+
+            } catch (error) {
+                console.error('Error loading data:', error);
+                showEmptyState();
+            }
+        }
+
+        // Display stats
+        function displayStats(data) {
+            hideLoading();
+            hideEmptyState();
+            document.getElementById('statsContainer').style.display = 'block';
+
+            // Main stats
+            document.getElementById('totalPelanggan').textContent = data.total_pelanggan.toLocaleString();
+            document.getElementById('sudahBayar').textContent = data.sudah_bayar.toLocaleString();
+            document.getElementById('pctBayar').textContent = `${data.pct_bayar}% dari total`;
+            document.getElementById('belumBayar').textContent = data.belum_bayar.toLocaleString();
+            document.getElementById('pctBelum').textContent = `${(100 - data.pct_bayar).toFixed(1)}% dari total`;
+            
+            // Realisasi
+            const realisasi = data.total_realisasi;
+            document.getElementById('totalRealisasi').textContent = formatRupiah(realisasi);
+            document.getElementById('pctRealisasi').textContent = `${data.pct_realisasi}%`;
+            document.getElementById('progressRealisasi').style.width = `${data.pct_realisasi}%`;
+
+            // By rayon table
+            const tbody = document.getElementById('rayonTableBody');
+            tbody.innerHTML = '';
+
+            if (data.by_rayon && data.by_rayon.length > 0) {
+                data.by_rayon.forEach(r => {
+                    const belum = r.total - (r.sudah_bayar || 0);
+                    const pctBayar = r.total > 0 ? ((r.sudah_bayar || 0) / r.total * 100).toFixed(1) : 0;
+                    const pctRealisasi = (r.target || 0) > 0 ? ((r.realisasi || 0) / r.target * 100).toFixed(1) : 0;
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><strong>${r.rayon}</strong></td>
+                        <td>${r.total.toLocaleString()}</td>
+                        <td>${(r.sudah_bayar || 0).toLocaleString()}</td>
+                        <td>${belum.toLocaleString()}</td>
+                        <td>${pctBayar}%</td>
+                        <td>${formatRupiah(r.target || 0)}</td>
+                        <td>${formatRupiah(r.realisasi || 0)}</td>
+                        <td>${pctRealisasi}%</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Tidak ada data</td></tr>';
+            }
+        }
+
+        // Helper functions
+        function formatRupiah(number) {
+            if (number >= 1000000000) {
+                return 'Rp ' + (number / 1000000000).toFixed(1) + ' M';
+            } else if (number >= 1000000) {
+                return 'Rp ' + (number / 1000000).toFixed(1) + ' Jt';
+            } else {
+                return 'Rp ' + number.toLocaleString();
+            }
+        }
+
+        function showLoading() {
+            document.getElementById('loadingState').style.display = 'block';
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('statsContainer').style.display = 'none';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingState').style.display = 'none';
+        }
+
+        function showEmptyState() {
+            hideLoading();
+            document.getElementById('emptyState').style.display = 'block';
+            document.getElementById('statsContainer').style.display = 'none';
+        }
+
+        function hideEmptyState() {
+            document.getElementById('emptyState').style.display = 'none';
+        }
+
+        // Initialize
+        loadPeriodes();
+    </script>
+</body>
+</html>
