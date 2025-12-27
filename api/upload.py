@@ -1,89 +1,91 @@
 """
-Upload API - UPDATED dengan business rules yang benar
-UPDATE file yang sudah ada: api/upload.py
+Upload API - FINAL VERSION dengan Periode Logic yang Benar
 
-Aturan Periode:
-- MC: TGL_CATAT → periode dari tanggal (data bulan N keluar bulan N+1)
-- MB: TGL_BAYAR → periode dari tanggal (data bulan N keluar bulan N+1)
-- Collection: PAY_DT → periode dari tanggal
-- Mainbill: FREEZE_DT → periode dari tanggal
-- SBRS: cmr_rd_date → periode dari tanggal
-- Ardebt: TGL_CATAT → periode dari tanggal (data bulan N keluar bulan N+1)
+PERIODE RULES:
+1. MC       → TGL_CATAT (19/06/2025) = Periode 06/2025 (data Juni, file keluar Juli)
+2. MB       → TGL_BAYAR (04/06/2025) = Periode 06/2025 (data Juni, file keluar Juli)  
+3. Collection → PAY_DT (01-07-2025) = Periode 07/2025 (data Juli)
+4. Mainbill → FREEZE_DT (12/07/2025) = Periode 07/2025 (data Juli)
+5. SBRS     → cmr_rd_date (22072025) = Periode 07/2025 (data Juli)
+6. Ardebt   → PERIODE_BILL (kolom periode) = Periode dari kolom
+
+LINKING DATA:
+- MC adalah INDUK (master)
+- Semua data linked by: NOMEN + PERIODE_BULAN + PERIODE_TAHUN
+- Harus ada MC dulu sebelum upload data lain
 """
 
 import os
 import pandas as pd
 from flask import jsonify, request, current_app
-from werkzeug.utils import secure_filename
 from datetime import datetime
 import re
 
-# Column patterns untuk detection
+# Column patterns
 COLUMN_PATTERNS = {
     'mc': {
-        'date_column': ['TGL_CATAT', 'tgl_catat', 'TANGGAL_CATAT'],
+        'date_column': ['TGL_CATAT', 'tgl_catat'],
+        'periode_from': 'date',  # Periode dari tanggal
         'keywords': ['mc', 'master', 'catat'],
         'required': ['NOMEN', 'NAMA']
     },
     'mb': {
-        'date_column': ['TGL_BAYAR', 'tgl_bayar', 'TANGGAL_BAYAR'],
+        'date_column': ['TGL_BAYAR', 'tgl_bayar'],
+        'periode_from': 'date',
         'keywords': ['mb', 'belum', 'bayar'],
         'required': ['NOMEN', 'TGL_BAYAR']
     },
     'collection': {
-        'date_column': ['PAY_DT', 'pay_dt', 'TANGGAL_BAYAR'],
+        'date_column': ['PAY_DT', 'pay_dt'],
+        'periode_from': 'date',
         'keywords': ['collection', 'coll', 'pay'],
         'required': ['NOMEN', 'PAY_DT']
     },
     'mainbill': {
-        'date_column': ['FREEZE_DT', 'freeze_dt', 'TANGGAL_FREEZE'],
+        'date_column': ['FREEZE_DT', 'freeze_dt'],
+        'periode_from': 'date',
         'keywords': ['mainbill', 'bill', 'freeze'],
         'required': ['NOMEN', 'FREEZE_DT']
     },
     'sbrs': {
-        'date_column': ['cmr_rd_date', 'CMR_RD_DATE', 'READ_DATE'],
+        'date_column': ['cmr_rd_date', 'CMR_RD_DATE'],
+        'periode_from': 'date',
         'keywords': ['sbrs', 'sbr', 'cmr'],
         'required': ['RAYON']
     },
     'ardebt': {
-        'date_column': ['TGL_CATAT', 'tgl_catat'],
-        'keywords': ['ardebt', 'debt', 'piutang'],
-        'required': ['NOMEN', 'TOTAL_PIUTANG']
+        'date_column': ['PERIODE_BILL', 'periode_bill'],  # Hanya untuk info
+        'periode_from': 'universal',  # TIDAK ADA PERIODE - Universal
+        'keywords': ['ardebt', 'debt', 'piutang', 'ar'],
+        'required': ['NOMEN']
     }
 }
 
 
 def detect_file_type(filename, columns):
-    """Detect file type dari filename dan columns - CASE INSENSITIVE"""
+    """Detect file type - case insensitive"""
     filename_lower = filename.lower()
     columns_lower = [str(col).lower().strip() for col in columns]
     
-    print(f"DEBUG detect_file_type:")
+    print(f"DEBUG: Detecting file type")
     print(f"  Filename: {filename_lower}")
-    print(f"  Columns (first 10): {columns_lower[:10]}")
+    print(f"  Columns: {columns_lower[:10]}")
     
     for file_type, patterns in COLUMN_PATTERNS.items():
-        print(f"  Checking {file_type}...")
-        
-        # Check filename keywords
         has_keyword = any(kw in filename_lower for kw in patterns['keywords'])
-        print(f"    Keyword match: {has_keyword}")
         
         if has_keyword:
-            # Verify with columns (case insensitive)
             required_lower = [req.lower() for req in patterns['required']]
             has_columns = all(
                 any(req_lower in col_lower for col_lower in columns_lower)
                 for req_lower in required_lower
             )
-            print(f"    Column match: {has_columns}")
             
             if has_columns:
                 print(f"  ✓ Matched: {file_type}")
                 return file_type
     
-    # Fallback: check only columns
-    print("  No filename match, checking columns only...")
+    # Fallback: check columns only
     for file_type, patterns in COLUMN_PATTERNS.items():
         required_lower = [req.lower() for req in patterns['required']]
         has_columns = all(
@@ -95,21 +97,59 @@ def detect_file_type(filename, columns):
             print(f"  ✓ Matched by columns: {file_type}")
             return file_type
     
-    print("  ✗ No match found")
     return None
 
 
 def extract_periode_from_data(df, file_type):
     """
-    Extract periode dari date column
-    PENTING: Periode adalah dari tanggal di data, bukan dari filename!
+    Extract periode sesuai business rules
+    
+    Returns: (month, year, method)
+    
+    SPECIAL: Ardebt tidak punya periode (universal)
     """
     if file_type not in COLUMN_PATTERNS:
-        return None, None
+        return None, None, 'unknown'
     
-    date_columns = COLUMN_PATTERNS[file_type]['date_column']
+    patterns = COLUMN_PATTERNS[file_type]
     
-    # Find date column
+    # ARDEBT: Universal (no periode) - return current month/year for display only
+    if patterns['periode_from'] == 'universal':
+        now = datetime.now()
+        return now.month, now.year, 'universal_no_periode'
+    
+    # For Ardebt: periode from column (OLD - not used anymore)
+    if patterns['periode_from'] == 'column':
+        periode_col = None
+        for col in patterns['date_column']:
+            if col in df.columns:
+                periode_col = col
+                break
+        
+        if periode_col:
+            try:
+                # PERIODE_BILL format: "062025" atau "06/2025"
+                periode_val = str(df[periode_col].iloc[0])
+                
+                # Try parse: 062025
+                match = re.search(r'(\d{2})(\d{4})', periode_val)
+                if match:
+                    month = int(match.group(1))
+                    year = int(match.group(2))
+                    return month, year, 'periode_column'
+                
+                # Try parse: 06/2025
+                match = re.search(r'(\d{2})/(\d{4})', periode_val)
+                if match:
+                    month = int(match.group(1))
+                    year = int(match.group(2))
+                    return month, year, 'periode_column'
+                    
+            except Exception as e:
+                print(f"Error parsing periode column: {e}")
+    
+    # For others: periode from date
+    date_columns = patterns['date_column']
     date_col = None
     for col in date_columns:
         if col in df.columns:
@@ -117,115 +157,130 @@ def extract_periode_from_data(df, file_type):
             break
     
     if not date_col:
-        return None, None
+        return None, None, 'no_date_column'
     
     try:
-        # Parse dates - support multiple formats
+        # Parse dates
         dates = pd.to_datetime(df[date_col], errors='coerce', infer_datetime_format=True)
         dates = dates.dropna()
         
         if len(dates) == 0:
-            return None, None
+            return None, None, 'no_valid_dates'
         
-        # Get first date as reference
+        # Get first date
         first_date = dates.iloc[0]
-        return first_date.month, first_date.year
+        month = first_date.month
+        year = first_date.year
+        
+        return month, year, 'from_date'
         
     except Exception as e:
         print(f"Error parsing date: {e}")
-        return None, None
+        return None, None, 'parse_error'
+
+
+def validate_mc_exists(db, periode_bulan, periode_tahun):
+    """
+    Validate bahwa MC (master) sudah ada untuk periode ini
+    Harus upload MC dulu sebelum upload data lain
+    """
+    cursor = db.cursor()
+    cursor.execute("""
+        SELECT COUNT(*) as cnt 
+        FROM master_pelanggan 
+        WHERE periode_bulan = ? AND periode_tahun = ?
+    """, (periode_bulan, periode_tahun))
+    
+    result = cursor.fetchone()
+    return result['cnt'] > 0
+
+
+def get_available_periodes(db, direction='all'):
+    """
+    Get available periode di database
+    direction: 'previous', 'next', 'all'
+    """
+    cursor = db.cursor()
+    cursor.execute("""
+        SELECT DISTINCT periode_bulan, periode_tahun
+        FROM master_pelanggan
+        ORDER BY periode_tahun DESC, periode_bulan DESC
+    """)
+    
+    periodes = cursor.fetchall()
+    return [f"{p['periode_bulan']:02d}/{p['periode_tahun']}" for p in periodes]
 
 
 def find_header_row(filepath, max_rows=20):
-    """Find actual header row in Excel"""
+    """Find header row"""
     df = pd.read_excel(filepath, header=None, nrows=max_rows)
     
     for i in range(len(df)):
         row = df.iloc[i]
         row_str = ' '.join([str(val).lower() for val in row if pd.notna(val)])
         
-        if any(keyword in row_str for keyword in ['nomen', 'nama', 'rayon', 'tgl', 'pay', 'freeze', 'cmr']):
+        if any(kw in row_str for kw in ['nomen', 'nama', 'rayon', 'tgl', 'pay', 'freeze', 'cmr', 'periode']):
             return i
     
     return 0
 
 
 def register_upload_routes(app, get_db):
-    """Register upload routes - UPDATED VERSION"""
+    """Register upload routes"""
     
-    # Set max file size to 10GB
-    app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024 * 1024  # 10GB
+    # Max 10GB
+    app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024 * 1024
     
     @app.route('/api/upload/analyze', methods=['POST'])
     def analyze_file():
-        """
-        Analyze file untuk auto-detection
-        Return detection result without processing
-        """
+        """Analyze file for auto-detection"""
         try:
-            print("=" * 70)
-            print("DEBUG: Analyze endpoint called")
+            print("="*70)
+            print("ANALYZE FILE")
+            print("="*70)
             
             if 'file' not in request.files:
-                print("ERROR: No file in request")
                 return jsonify({'error': 'No file uploaded'}), 400
             
             file = request.files['file']
-            print(f"DEBUG: File received: {file.filename}")
-            
             if file.filename == '':
-                print("ERROR: Empty filename")
                 return jsonify({'error': 'No file selected'}), 400
             
-            # Save temp
-            filename = file.filename  # Don't use secure_filename to preserve original
+            filename = file.filename
             temp_path = os.path.join('/tmp', f"analyze_{datetime.now().timestamp()}_{filename}")
-            print(f"DEBUG: Saving to {temp_path}")
-            
             file.save(temp_path)
-            print(f"DEBUG: File saved, size: {os.path.getsize(temp_path)} bytes")
+            
+            print(f"File: {filename}")
+            print(f"Size: {os.path.getsize(temp_path)} bytes")
             
             # Find header
-            print("DEBUG: Finding header row...")
             header_row = find_header_row(temp_path)
-            print(f"DEBUG: Header row: {header_row}")
+            print(f"Header row: {header_row}")
             
             # Read Excel
-            print("DEBUG: Reading Excel...")
             df = pd.read_excel(temp_path, header=header_row)
-            columns = [str(col).strip() for col in df.columns]  # Clean columns
-            print(f"DEBUG: Columns found: {columns[:5]}...")  # Show first 5
+            columns = [str(col).strip() for col in df.columns]
+            print(f"Columns: {columns[:10]}")
             
-            # Detect file type
-            print("DEBUG: Detecting file type...")
+            # Detect type
             file_type = detect_file_type(filename, columns)
-            print(f"DEBUG: Detected type: {file_type}")
-            
             if not file_type:
-                # Show available columns for debugging
-                print(f"ERROR: Cannot detect. Available columns: {columns}")
                 return jsonify({
                     'error': 'Cannot detect file type',
-                    'debug': {
-                        'filename': filename,
-                        'columns': columns
-                    }
+                    'debug': {'columns': columns}
                 }), 400
+            
+            print(f"Type: {file_type}")
             
             # Extract periode
-            print("DEBUG: Extracting periode...")
-            month, year = extract_periode_from_data(df, file_type)
-            print(f"DEBUG: Periode: {month}/{year}")
-            
+            month, year, method = extract_periode_from_data(df, file_type)
             if not month or not year:
-                print("ERROR: Cannot extract periode")
                 return jsonify({
-                    'error': 'Cannot extract periode from date column',
-                    'debug': {
-                        'file_type': file_type,
-                        'expected_columns': COLUMN_PATTERNS[file_type]['date_column']
-                    }
+                    'error': f'Cannot extract periode (method: {method})',
+                    'debug': {'expected_columns': COLUMN_PATTERNS[file_type]['date_column']}
                 }), 400
+            
+            print(f"Periode: {month:02d}/{year} (method: {method})")
             
             # Find date column
             date_col = None
@@ -234,27 +289,28 @@ def register_upload_routes(app, get_db):
                     date_col = col
                     break
             
-            # Validate periode
-            current = datetime.now()
+            # Validate MC exists (kecuali upload MC sendiri atau Ardebt)
+            db = get_db()
             warning = None
             
-            if file_type in ['mc', 'mb', 'ardebt']:
-                # Expected: data bulan lalu
-                expected_month = current.month - 1
-                expected_year = current.year
-                if expected_month == 0:
-                    expected_month = 12
-                    expected_year -= 1
-                
-                if month != expected_month or year != expected_year:
-                    warning = f"⚠️ {file_type.upper()}: Expected periode {expected_month:02d}/{expected_year}, got {month:02d}/{year}"
+            if file_type not in ['mc', 'ardebt']:
+                mc_exists = validate_mc_exists(db, month, year)
+                if not mc_exists:
+                    warning = f"⚠️ MC belum ada untuk periode {month:02d}/{year}. Upload MC dulu!"
             
-            # Clean up temp file
+            # Special message for Ardebt
+            if file_type == 'ardebt':
+                warning = "ℹ️ Ardebt adalah data universal (tanpa periode). Upload baru akan replace semua data lama."
+            
+            # Get available periodes
+            available_periodes = get_available_periodes(db)
+            
+            # Clean up
             if os.path.exists(temp_path):
                 os.remove(temp_path)
             
-            print("DEBUG: Analysis complete!")
-            print("=" * 70)
+            print("✓ Analysis complete")
+            print("="*70)
             
             return jsonify({
                 'success': True,
@@ -265,65 +321,63 @@ def register_upload_routes(app, get_db):
                     'date_column': date_col,
                     'columns': columns,
                     'total_rows': len(df),
-                    'warning': warning
+                    'warning': warning,
+                    'available_periodes': available_periodes,
+                    'detection_method': method
                 }
             })
             
         except Exception as e:
             import traceback
-            error_trace = traceback.format_exc()
-            print("ERROR in analyze:")
-            print(error_trace)
-            return jsonify({
-                'error': str(e),
-                'trace': error_trace
-            }), 500
+            print("ERROR:", traceback.format_exc())
+            return jsonify({'error': str(e)}), 500
     
     @app.route('/api/upload', methods=['POST'])
     def upload_file():
-        """
-        Upload and process file
-        UPDATED: Gunakan detection yang benar
-        """
+        """Upload and process file"""
         try:
             if 'file' not in request.files:
-                return jsonify({'error': 'No file part'}), 400
+                return jsonify({'error': 'No file'}), 400
             
             file = request.files['file']
             if file.filename == '':
-                return jsonify({'error': 'No selected file'}), 400
+                return jsonify({'error': 'No file selected'}), 400
             
-            # Get parameters
             file_type = request.form.get('file_type')
             bulan = request.form.get('bulan', type=int)
             tahun = request.form.get('tahun', type=int)
             
-            # Save file
-            filename = secure_filename(file.filename)
-            upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+            if not all([file_type, bulan, tahun]):
+                return jsonify({'error': 'Missing parameters'}), 400
             
-            if not os.path.exists(upload_folder):
-                os.makedirs(upload_folder)
+            # Save file
+            filename = file.filename
+            upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+            os.makedirs(upload_folder, exist_ok=True)
             
             filepath = os.path.join(upload_folder, filename)
             file.save(filepath)
             
             print(f"\n{'='*70}")
-            print(f"📁 Processing: {filename}")
-            print(f"📊 Type: {file_type}")
-            print(f"📅 Periode: {bulan}/{tahun}")
+            print(f"UPLOAD: {filename}")
+            print(f"Type: {file_type}")
+            print(f"Periode: {bulan:02d}/{tahun}")
             print(f"{'='*70}")
             
-            # Find header
-            header_row = find_header_row(filepath)
-            
-            # Read Excel
-            df = pd.read_excel(filepath, header=header_row)
-            
-            # Get database
+            # Validate MC exists (kecuali upload MC atau Ardebt)
             db = get_db()
             
-            # Process based on file type
+            if file_type not in ['mc', 'ardebt']:
+                if not validate_mc_exists(db, bulan, tahun):
+                    return jsonify({
+                        'error': f'MC belum ada untuk periode {bulan:02d}/{tahun}. Upload MC dulu!'
+                    }), 400
+            
+            # Find header & read
+            header_row = find_header_row(filepath)
+            df = pd.read_excel(filepath, header=header_row)
+            
+            # Process
             if file_type == 'mc':
                 rows = process_mc(df, bulan, tahun, db)
             elif file_type == 'mb':
@@ -335,33 +389,35 @@ def register_upload_routes(app, get_db):
             elif file_type == 'sbrs':
                 rows = process_sbrs(df, bulan, tahun, db)
             elif file_type == 'ardebt':
-                rows = process_ardebt(df, bulan, tahun, db)
+                # Ardebt: DELETE ALL old data first, then insert new
+                rows = process_ardebt(df, bulan, tahun, db)  # bulan/tahun just for logging
             else:
-                return jsonify({'error': f'Unknown file type: {file_type}'}), 400
+                return jsonify({'error': f'Unknown type: {file_type}'}), 400
             
             db.commit()
             
-            print(f"✅ Success: {rows} rows processed")
+            print(f"✓ Processed: {rows} rows")
+            print("="*70)
             
             return jsonify({
                 'success': True,
                 'filename': filename,
                 'file_type': file_type,
-                'periode': f"{bulan}/{tahun}",
+                'periode': f"{bulan:02d}/{tahun}",
                 'rows_processed': rows
             })
             
         except Exception as e:
             import traceback
-            traceback.print_exc()
+            print("ERROR:", traceback.format_exc())
             return jsonify({'error': str(e)}), 500
     
-    print("✅ Upload routes registered (UPDATED)")
+    print("✅ Upload routes registered (FINAL VERSION)")
 
 
 # Processing functions
 def process_mc(df, month, year, db):
-    """Process MC"""
+    """Process MC - MASTER/INDUK"""
     cursor = db.cursor()
     rows = 0
     
@@ -389,7 +445,6 @@ def process_mc(df, month, year, db):
 
 
 def process_mb(df, month, year, db):
-    """Process MB"""
     cursor = db.cursor()
     rows = 0
     
@@ -407,14 +462,13 @@ def process_mb(df, month, year, db):
                 year
             ))
             rows += 1
-        except Exception as e:
-            print(f"Error row {rows}: {e}")
+        except:
+            pass
     
     return rows
 
 
 def process_collection(df, month, year, db):
-    """Process Collection"""
     cursor = db.cursor()
     rows = 0
     
@@ -435,14 +489,13 @@ def process_collection(df, month, year, db):
                 year
             ))
             rows += 1
-        except Exception as e:
-            print(f"Error row {rows}: {e}")
+        except:
+            pass
     
     return rows
 
 
 def process_mainbill(df, month, year, db):
-    """Process Mainbill"""
     cursor = db.cursor()
     rows = 0
     
@@ -460,14 +513,13 @@ def process_mainbill(df, month, year, db):
                 year
             ))
             rows += 1
-        except Exception as e:
-            print(f"Error row {rows}: {e}")
+        except:
+            pass
     
     return rows
 
 
 def process_sbrs(df, month, year, db):
-    """Process SBRS"""
     cursor = db.cursor()
     rows = 0
     
@@ -486,32 +538,46 @@ def process_sbrs(df, month, year, db):
                 year
             ))
             rows += 1
-        except Exception as e:
-            print(f"Error row {rows}: {e}")
+        except:
+            pass
     
     return rows
 
 
 def process_ardebt(df, month, year, db):
-    """Process Ardebt"""
+    """
+    Process Ardebt - UNIVERSAL (no periode)
+    DELETE ALL old data, then INSERT new data
+    """
     cursor = db.cursor()
-    rows = 0
     
+    # DELETE ALL old data first
+    print("Ardebt: Deleting all old data...")
+    cursor.execute("DELETE FROM ardebt")
+    deleted = cursor.rowcount
+    print(f"Ardebt: Deleted {deleted} old rows")
+    
+    # INSERT new data
+    rows = 0
     for _, row in df.iterrows():
         try:
+            # Ardebt has PERIODE_BILL column for reference
+            periode_bill = row.get('PERIODE_BILL', '')
+            
             cursor.execute("""
-                INSERT OR REPLACE INTO ardebt 
-                (nomen, nama, total_piutang, periode_bulan, periode_tahun)
+                INSERT INTO ardebt 
+                (nomen, nama, total_piutang, periode_bill, umur_piutang)
                 VALUES (?, ?, ?, ?, ?)
             """, (
                 row.get('NOMEN'),
                 row.get('NAMA'),
                 row.get('TOTAL_PIUTANG', 0),
-                month,
-                year
+                periode_bill,
+                row.get('UMUR_PIUTANG', 0)
             ))
             rows += 1
         except Exception as e:
-            print(f"Error row {rows}: {e}")
+            print(f"Error inserting Ardebt row: {e}")
     
+    print(f"Ardebt: Inserted {rows} new rows")
     return rows
