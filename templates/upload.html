@@ -22,50 +22,16 @@
             <i class="fas fa-file-excel"></i>
             Upload File Excel
         </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <label style="display: flex; align-items: center; gap: 4px; font-size: 12px; margin: 0; cursor: pointer;">
+                <input type="checkbox" id="autoDetect" checked style="margin: 0;">
+                <span>Auto Detect</span>
+            </label>
+        </div>
     </div>
     <div class="card-body">
         <form id="uploadForm" enctype="multipart/form-data">
-            <!-- File Type Selection -->
-            <div style="margin-bottom: var(--space-4);">
-                <label class="filter-label">Tipe File</label>
-                <select class="filter-select" id="fileType" name="file_type" required>
-                    <option value="">-- Pilih Tipe File --</option>
-                    <option value="master">Master Pelanggan</option>
-                    <option value="collection">Collection Harian</option>
-                    <option value="sbrs">SBRS (Summary By Rayon)</option>
-                </select>
-            </div>
-            
-            <!-- Periode Selection -->
-            <div class="filter-row" style="margin-bottom: var(--space-4);">
-                <div class="filter-item">
-                    <label class="filter-label">Bulan</label>
-                    <select class="filter-select" id="bulan" name="bulan" required>
-                        <option value="1">Januari</option>
-                        <option value="2">Februari</option>
-                        <option value="3">Maret</option>
-                        <option value="4">April</option>
-                        <option value="5">Mei</option>
-                        <option value="6">Juni</option>
-                        <option value="7">Juli</option>
-                        <option value="8">Agustus</option>
-                        <option value="9">September</option>
-                        <option value="10">Oktober</option>
-                        <option value="11">November</option>
-                        <option value="12" selected>Desember</option>
-                    </select>
-                </div>
-                <div class="filter-item">
-                    <label class="filter-label">Tahun</label>
-                    <select class="filter-select" id="tahun" name="tahun" required>
-                        <option value="2023">2023</option>
-                        <option value="2024" selected>2024</option>
-                        <option value="2025">2025</option>
-                    </select>
-                </div>
-            </div>
-            
-            <!-- File Input -->
+            <!-- File Input FIRST -->
             <div style="margin-bottom: var(--space-4);">
                 <label class="filter-label">File Excel (.xlsx, .xls)</label>
                 <div style="position: relative;">
@@ -89,6 +55,65 @@
                 </div>
                 <div style="font-size: 11px; color: var(--text-muted); margin-top: var(--space-1);">
                     <i class="fas fa-info-circle"></i> Max 10MB, format .xlsx atau .xls
+                </div>
+            </div>
+            
+            <!-- Auto Detection Result (shown after file selected) -->
+            <div id="detectionResult" style="display: none; margin-bottom: var(--space-4); padding: var(--space-3); background: var(--bg-secondary); border-radius: var(--radius-md);">
+                <div style="display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2);">
+                    <i class="fas fa-robot" style="color: var(--primary);"></i>
+                    <span style="font-weight: 600;">Auto Detection</span>
+                </div>
+                <div style="font-size: 13px; color: var(--text-secondary);">
+                    <div><strong>File Type:</strong> <span id="detectedType">-</span></div>
+                    <div><strong>Periode:</strong> <span id="detectedPeriode">-</span></div>
+                    <div><strong>Date Column:</strong> <span id="detectedDateCol">-</span></div>
+                </div>
+            </div>
+            
+            <!-- Manual Override (initially hidden, shown when auto-detect off or user wants to change) -->
+            <div id="manualFields" style="display: none;">
+                <!-- File Type Selection -->
+                <div style="margin-bottom: var(--space-4);">
+                    <label class="filter-label">Tipe File</label>
+                    <select class="filter-select" id="fileType" name="file_type" required>
+                        <option value="">-- Pilih Tipe File --</option>
+                        <option value="mc">Master (MC)</option>
+                        <option value="collection">Collection</option>
+                        <option value="mb">Belum Bayar (MB)</option>
+                        <option value="mainbill">Mainbill</option>
+                        <option value="sbrs">SBRS</option>
+                        <option value="ardebt">Ardebt</option>
+                    </select>
+                </div>
+                
+                <!-- Periode Selection -->
+                <div class="filter-row" style="margin-bottom: var(--space-4);">
+                    <div class="filter-item">
+                        <label class="filter-label">Bulan</label>
+                        <select class="filter-select" id="bulan" name="bulan" required>
+                            <option value="1">Januari</option>
+                            <option value="2">Februari</option>
+                            <option value="3">Maret</option>
+                            <option value="4">April</option>
+                            <option value="5">Mei</option>
+                            <option value="6">Juni</option>
+                            <option value="7">Juli</option>
+                            <option value="8">Agustus</option>
+                            <option value="9">September</option>
+                            <option value="10">Oktober</option>
+                            <option value="11">November</option>
+                            <option value="12" selected>Desember</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label class="filter-label">Tahun</label>
+                        <select class="filter-select" id="tahun" name="tahun" required>
+                            <option value="2023">2023</option>
+                            <option value="2024" selected>2024</option>
+                            <option value="2025">2025</option>
+                        </select>
+                    </div>
                 </div>
             </div>
             
@@ -217,23 +242,87 @@
 
 {% block extra_js %}
 <script>
-// Tab switching
-document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', function() {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        this.classList.add('active');
-        document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
-        document.getElementById('tab-' + this.getAttribute('data-tab')).style.display = 'block';
-    });
+// Auto detect state
+let autoDetectEnabled = true;
+let detectedData = null;
+
+// Toggle auto detect
+document.getElementById('autoDetect').addEventListener('change', function() {
+    autoDetectEnabled = this.checked;
+    document.getElementById('manualFields').style.display = autoDetectEnabled ? 'none' : 'block';
+    
+    if (!autoDetectEnabled) {
+        document.getElementById('detectionResult').style.display = 'none';
+    }
 });
 
-// File input
-document.getElementById('fileInput').addEventListener('change', function(e) {
+// File input change
+document.getElementById('fileInput').addEventListener('change', async function(e) {
     const file = e.target.files[0];
     if (file) {
         document.getElementById('fileName').textContent = file.name;
+        
+        // Auto detect if enabled
+        if (autoDetectEnabled) {
+            await analyzeFile(file);
+        }
     }
 });
+
+async function analyzeFile(file) {
+    try {
+        // Show loading in detection result
+        const detectionResult = document.getElementById('detectionResult');
+        detectionResult.style.display = 'block';
+        document.getElementById('detectedType').textContent = 'Analyzing...';
+        document.getElementById('detectedPeriode').textContent = 'Analyzing...';
+        document.getElementById('detectedDateCol').textContent = 'Analyzing...';
+        
+        // Prepare form data
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        // Call detection API
+        const response = await fetch('/api/upload/analyze', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.error || 'Analysis failed');
+        }
+        
+        // Store detected data
+        detectedData = result.detected;
+        
+        // Show results
+        const typeMap = {
+            'mc': 'Master (MC)',
+            'mb': 'Belum Bayar (MB)',
+            'collection': 'Collection',
+            'mainbill': 'Mainbill',
+            'sbrs': 'SBRS',
+            'ardebt': 'Ardebt'
+        };
+        
+        document.getElementById('detectedType').textContent = typeMap[detectedData.file_type] || detectedData.file_type;
+        document.getElementById('detectedPeriode').textContent = `${detectedData.month}/${detectedData.year}`;
+        document.getElementById('detectedDateCol').textContent = detectedData.date_column || 'N/A';
+        
+        // Show warning if any
+        if (detectedData.warning) {
+            App.toast(detectedData.warning, 'warning', 5000);
+        }
+        
+    } catch (error) {
+        console.error('Analysis error:', error);
+        App.toast('Auto-detect gagal. Gunakan manual mode.', 'error');
+        document.getElementById('autoDetect').checked = false;
+        document.getElementById('autoDetect').dispatchEvent(new Event('change'));
+    }
+}
 
 // Form submit
 document.getElementById('uploadForm').addEventListener('submit', async function(e) {
@@ -241,13 +330,17 @@ document.getElementById('uploadForm').addEventListener('submit', async function(
     
     const formData = new FormData(this);
     const uploadBtn = document.getElementById('uploadBtn');
-    const progressCard = document.getElementById('progressCard');
     
     try {
-        // Show progress
         uploadBtn.disabled = true;
         uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
-        progressCard.style.display = 'block';
+        
+        // Add detected data if auto-detect enabled
+        if (autoDetectEnabled && detectedData) {
+            formData.append('file_type', detectedData.file_type);
+            formData.append('bulan', detectedData.month);
+            formData.append('tahun', detectedData.year);
+        }
         
         // Upload
         const response = await fetch('/api/upload', {
@@ -258,26 +351,21 @@ document.getElementById('uploadForm').addEventListener('submit', async function(
         const result = await response.json();
         
         if (response.ok) {
-            // Success
-            alert('✅ Upload berhasil!\n\nFile: ' + result.filename + '\nRows: ' + result.rows_processed);
-            
-            // Reset form
+            App.toast('Upload berhasil! Rows: ' + result.rows_processed, 'success');
             this.reset();
             document.getElementById('fileName').textContent = 'Pilih file...';
-            
-            // Reload recent uploads
+            document.getElementById('detectionResult').style.display = 'none';
+            detectedData = null;
             loadRecentUploads();
         } else {
             throw new Error(result.error || 'Upload failed');
         }
         
     } catch (error) {
-        alert('❌ Upload gagal!\n\n' + error.message);
+        App.toast('Upload gagal: ' + error.message, 'error');
     } finally {
-        // Hide progress
         uploadBtn.disabled = false;
         uploadBtn.innerHTML = '<i class="fas fa-upload"></i> <span>Upload File</span>';
-        progressCard.style.display = 'none';
     }
 });
 
