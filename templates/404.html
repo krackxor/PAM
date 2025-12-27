@@ -3,89 +3,81 @@
 {% block title %}404 - Halaman Tidak Ditemukan{% endblock %}
 
 {% block content %}
-<div class="card" style="margin-top: var(--space-6); text-align: center; border: none; box-shadow: none;">
+<div class="card" style="margin-top: 2rem; text-align: center; border: none; box-shadow: none; background: transparent;">
     <div class="card-body" style="padding: var(--space-6);">
-        <!-- Error Icon -->
-        <div style="margin-bottom: var(--space-4);">
-            <i class="fas fa-exclamation-triangle" style="font-size: 96px; color: var(--warning); opacity: 0.5;"></i>
+        <div class="mb-4">
+            <div class="btn-icon bg-warning-light mx-auto" style="width: 120px; height: 120px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(245, 158, 11, 0.1);">
+                <i class="fas fa-map-signs" style="font-size: 64px; color: var(--warning);"></i>
+            </div>
         </div>
         
-        <!-- Error Code -->
-        <h1 style="font-size: 72px; font-weight: 700; color: var(--text-primary); margin: 0; line-height: 1;">
-            404
-        </h1>
+        <h1 class="text-high font-bold" style="font-size: 4rem; line-height: 1; margin-bottom: 0.5rem;">404</h1>
+        <h2 class="text-high font-bold mb-3" style="font-size: 1.25rem;">Halaman Tidak Ditemukan</h2>
         
-        <!-- Error Message -->
-        <h2 style="font-size: 24px; font-weight: 600; color: var(--text-primary); margin: var(--space-3) 0;">
-            Halaman Tidak Ditemukan
-        </h2>
-        
-        <p style="font-size: 14px; color: var(--text-secondary); max-width: 400px; margin: 0 auto var(--space-5);">
-            Maaf, halaman yang Anda cari tidak ditemukan. 
-            Mungkin halaman telah dipindahkan atau URL salah.
+        <p class="text-med mx-auto mb-5" style="max-width: 450px; font-size: 0.9rem;">
+            Maaf, halaman yang Anda cari tidak tersedia atau mungkin telah dipindahkan. 
+            Pastikan URL yang Anda masukkan sudah benar.
         </p>
         
-        <!-- Action Buttons -->
-        <div style="display: flex; gap: var(--space-3); justify-content: center; flex-wrap: wrap;">
+        <div class="d-flex gap-3 justify-content: center; flex-wrap: wrap;" style="justify-content: center;">
             <a href="/" class="btn btn-primary">
                 <i class="fas fa-home"></i>
-                <span>Kembali ke Home</span>
+                <span>Beranda</span>
             </a>
             
             <button onclick="history.back()" class="btn btn-outline">
                 <i class="fas fa-arrow-left"></i>
-                <span>Halaman Sebelumnya</span>
+                <span>Kembali</span>
             </button>
-        </div>
-        
-        <!-- Quick Links -->
-        <div style="margin-top: var(--space-6); padding-top: var(--space-4); border-top: 1px solid var(--border-color);">
-            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: var(--space-3);">
-                Atau coba link berikut:
-            </div>
-            <div style="display: flex; gap: var(--space-2); justify-content: center; flex-wrap: wrap;">
-                <a href="/" style="text-decoration: none; color: var(--primary); font-size: 13px;">
-                    <i class="fas fa-home"></i> Home
-                </a>
-                <span style="color: var(--text-muted);">•</span>
-                <a href="/collection" style="text-decoration: none; color: var(--primary); font-size: 13px;">
-                    <i class="fas fa-wallet"></i> Collection
-                </a>
-                <span style="color: var(--text-muted);">•</span>
-                <a href="/belum-bayar" style="text-decoration: none; color: var(--primary); font-size: 13px;">
-                    <i class="fas fa-exclamation-circle"></i> Belum Bayar
-                </a>
-                <span style="color: var(--text-muted);">•</span>
-                <a href="/upload" style="text-decoration: none; color: var(--primary); font-size: 13px;">
-                    <i class="fas fa-cloud-upload-alt"></i> Upload
-                </a>
-            </div>
         </div>
     </div>
 </div>
 
-<!-- Info Card -->
-<div class="card" style="background: var(--bg-tertiary); border: none;">
-    <div class="card-body" style="display: flex; align-items: center; gap: var(--space-3);">
-        <i class="fas fa-info-circle" style="font-size: 32px; color: var(--info);"></i>
-        <div>
-            <div style="font-weight: 600; margin-bottom: var(--space-1);">Butuh Bantuan?</div>
-            <div style="font-size: 13px; color: var(--text-secondary);">
-                Gunakan menu navigasi di bawah untuk mengakses halaman lain
-            </div>
+<div class="card mt-4">
+    <div class="card-header">
+        <h3 class="card-title"><i class="fas fa-compass text-primary"></i> Navigasi Cepat</h3>
+    </div>
+    <div class="card-body p-0">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--border-color);">
+            <a href="/collection" class="p-4 text-center border-bottom border-end text-decoration-none color-inherit">
+                <i class="fas fa-wallet text-success d-block mb-2" style="font-size: 1.5rem;"></i>
+                <span class="font-bold" style="font-size: 0.8rem;">Penagihan</span>
+            </a>
+            <a href="/belum-bayar" class="p-4 text-center border-bottom text-decoration-none color-inherit">
+                <i class="fas fa-exclamation-circle text-danger d-block mb-2" style="font-size: 1.5rem;"></i>
+                <span class="font-bold" style="font-size: 0.8rem;">Tunggakan</span>
+            </a>
+            <a href="/upload" class="p-4 text-center border-end text-decoration-none color-inherit">
+                <i class="fas fa-cloud-upload-alt text-info d-block mb-2" style="font-size: 1.5rem;"></i>
+                <span class="font-bold" style="font-size: 0.8rem;">Unggah</span>
+            </a>
+            <a href="/menu" class="p-4 text-center text-decoration-none color-inherit">
+                <i class="fas fa-bars text-muted d-block mb-2" style="font-size: 1.5rem;"></i>
+                <span class="font-bold" style="font-size: 0.8rem;">Menu</span>
+            </a>
         </div>
     </div>
+</div>
+
+<div class="text-center p-4 mt-2">
+    <p class="text-low" style="font-size: 0.8rem;">
+        <i class="fas fa-info-circle"></i> Butuh bantuan lebih lanjut? Hubungi Admin Sistem.
+    </p>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// Log 404 error (optional)
-console.error('404 Error: Page not found -', window.location.pathname);
-
-// Auto-focus on back button after delay
-setTimeout(() => {
-    document.querySelector('.btn-primary').focus();
-}, 500);
+    console.warn('⚠️ [404] Halaman tidak ditemukan:', window.location.pathname);
+    
+    // Memberikan efek tap pada navigasi cepat
+    document.querySelectorAll('.card-body a').forEach(link => {
+        link.addEventListener('touchstart', function() {
+            this.style.background = 'rgba(0,0,0,0.03)';
+        });
+        link.addEventListener('touchend', function() {
+            this.style.background = 'transparent';
+        });
+    });
 </script>
 {% endblock %}
