@@ -1,14 +1,20 @@
 {% extends "base.html" %}
 
-{% block title %}Collection - SUNTER{% endblock %}
+{% block title %}Penagihan - SUNTER{% endblock %}
 
 {% block content %}
-<!-- Filter Bar -->
+<div class="page-header">
+    <div class="page-title">
+        <h1>Monitoring Penagihan</h1>
+        <p class="page-subtitle">Analisa realisasi collection harian dan performa wilayah</p>
+    </div>
+</div>
+
 <div class="filter-bar">
     <div class="filter-row">
         <div class="filter-item">
             <div class="filter-label">Bulan</div>
-            <select class="filter-select" id="bulan">
+            <select class="form-select" id="bulan">
                 <option value="1">Januari</option>
                 <option value="2">Februari</option>
                 <option value="3">Maret</option>
@@ -25,250 +31,144 @@
         </div>
         <div class="filter-item">
             <div class="filter-label">Tahun</div>
-            <select class="filter-select" id="tahun">
+            <select class="form-select" id="tahun">
                 <option value="2023">2023</option>
                 <option value="2024" selected>2024</option>
                 <option value="2025">2025</option>
             </select>
         </div>
     </div>
-    <button class="btn btn-primary btn-block" id="loadDataBtn" style="margin-top: 12px;">
-        <i class="fas fa-search"></i>
-        <span>Tampilkan Data</span>
+    <button class="btn btn-primary btn-block mt-3" id="loadDataBtn">
+        <i class="fas fa-sync-alt"></i>
+        <span>Perbarui Data</span>
     </button>
 </div>
 
-<!-- KPI Cards -->
-<div class="row kpi-cards">
-    <div class="col-6 col-md-3">
-        <div class="kpi-card">
-            <div class="kpi-label">
-                <i class="fas fa-bullseye text-primary"></i>
-                Target MC
-            </div>
-            <div class="kpi-value" id="kpi-target">Rp 0</div>
-            <div class="kpi-change up">
-                <i class="fas fa-arrow-up"></i> 0%
-            </div>
-        </div>
+<div class="kpi-container">
+    <div class="kpi-card">
+        <span class="kpi-label"><i class="fas fa-bullseye text-primary"></i> Target MC</span>
+        <div class="kpi-value" id="kpi-target">Rp 0</div>
+        <div class="kpi-change">Periode Aktif</div>
     </div>
     
-    <div class="col-6 col-md-3">
-        <div class="kpi-card">
-            <div class="kpi-label">
-                <i class="fas fa-check-circle text-success"></i>
-                Collection
-            </div>
-            <div class="kpi-value" id="kpi-collection">Rp 0</div>
-            <div class="kpi-change up" id="kpi-collection-change">
-                <i class="fas fa-arrow-up"></i> 0%
-            </div>
-        </div>
+    <div class="kpi-card">
+        <span class="kpi-label"><i class="fas fa-check-circle text-success"></i> Collection</span>
+        <div class="kpi-value text-success" id="kpi-collection">Rp 0</div>
+        <div class="kpi-change positive" id="kpi-collection-change">0% Progress</div>
     </div>
     
-    <div class="col-6 col-md-3">
-        <div class="kpi-card">
-            <div class="kpi-label">
-                <i class="fas fa-percent text-info"></i>
-                Achievement
-            </div>
-            <div class="kpi-value" id="kpi-percentage">0%</div>
-            <div class="kpi-change" id="kpi-percentage-change">
-                vs target
-            </div>
-        </div>
+    <div class="kpi-card">
+        <span class="kpi-label"><i class="fas fa-percent text-info"></i> Achievement</span>
+        <div class="kpi-value" id="kpi-percentage">0%</div>
+        <div class="kpi-change" id="kpi-percentage-change">vs Target</div>
     </div>
     
-    <div class="col-6 col-md-3">
-        <div class="kpi-card">
-            <div class="kpi-label">
-                <i class="fas fa-clock text-warning"></i>
-                Tunggakan
-            </div>
-            <div class="kpi-value" id="kpi-tunggakan">Rp 0</div>
-            <div class="kpi-change down">
-                <i class="fas fa-arrow-down"></i> 0%
-            </div>
-        </div>
+    <div class="kpi-card">
+        <span class="kpi-label"><i class="fas fa-clock text-warning"></i> Tunggakan</span>
+        <div class="kpi-value text-danger" id="kpi-tunggakan">Rp 0</div>
+        <div class="kpi-change negative">Belum Terbayar</div>
     </div>
 </div>
 
-<!-- Monitoring Collection Table (Excel Style) -->
-<div class="card">
+<div class="card mb-4">
     <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-table"></i>
-            Monitoring Collection Harian
-        </div>
-        <button class="btn btn-sm btn-success" id="exportExcelBtn">
-            <i class="fas fa-file-excel"></i> Export
-        </button>
-    </div>
-    <div class="card-body" style="padding: 0;">
-        <div class="table-responsive">
-            <table class="table" id="monitoringTable" style="font-size: 11px;">
-                <thead style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color: white;">
-                    <tr>
-                        <th rowspan="2" style="vertical-align: middle; text-align: center; border-right: 2px solid white;">TGL</th>
-                        <th colspan="5" style="text-align: center; border-right: 2px solid white; background: #ef4444;">UNDUE</th>
-                        <th colspan="5" style="text-align: center; border-right: 2px solid white; background: #10b981;">CURRENT</th>
-                        <th colspan="5" style="text-align: center; background: #8b5cf6;">TOTAL (U+C)</th>
-                    </tr>
-                    <tr style="font-size: 10px;">
-                        <!-- UNDUE columns -->
-                        <th style="background: #fee2e2; color: #991b1b;">CUST</th>
-                        <th style="background: #fee2e2; color: #991b1b;">Rp</th>
-                        <th style="background: #fee2e2; color: #991b1b;">Komulatif</th>
-                        <th style="background: #fee2e2; color: #991b1b;">COLL %</th>
-                        <th style="background: #fee2e2; color: #991b1b; border-right: 2px solid white;">Prev %</th>
-                        
-                        <!-- CURRENT columns -->
-                        <th style="background: #d1fae5; color: #065f46;">CUST</th>
-                        <th style="background: #d1fae5; color: #065f46;">Rp</th>
-                        <th style="background: #d1fae5; color: #065f46;">Komulatif</th>
-                        <th style="background: #d1fae5; color: #065f46;">COLL %</th>
-                        <th style="background: #d1fae5; color: #065f46; border-right: 2px solid white;">Prev %</th>
-                        
-                        <!-- TOTAL columns -->
-                        <th style="background: #ede9fe; color: #5b21b6;">TRX</th>
-                        <th style="background: #ede9fe; color: #5b21b6;">Rp</th>
-                        <th style="background: #ede9fe; color: #5b21b6;">Komulatif</th>
-                        <th style="background: #ede9fe; color: #5b21b6;">COLL %</th>
-                        <th style="background: #ede9fe; color: #5b21b6;">Prev %</th>
-                    </tr>
-                </thead>
-                <tbody id="monitoringTableBody">
-                    <tr>
-                        <td colspan="16" class="loading">
-                            <div class="spinner"></div>
-                            <p>Loading...</p>
-                        </td>
-                    </tr>
-                </tbody>
-                <tfoot id="monitoringTableFooter" style="background: var(--bg-tertiary); font-weight: 700;">
-                </tfoot>
-            </table>
-        </div>
-    </div>
-</div>
-
-<!-- PCEZ Performance Table (NEW) -->
-<div class="card">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-building"></i>
-            Monitoring Performance per PCEZ
-        </div>
-        <div style="display: flex; gap: 8px;">
-            <select class="filter-select" id="pcezPeriod" style="width: 120px; font-size: 12px;">
+        <h3 class="card-title"><i class="fas fa-building"></i> Monitoring Performa PCEZ</h3>
+        <div class="d-flex gap-2">
+            <select class="form-select form-select-sm" id="pcezPeriod" style="width: 110px;">
                 <option value="daily">Harian</option>
-                <option value="weekly">Mingguan</option>
                 <option value="monthly" selected>Bulanan</option>
             </select>
-            <button class="btn btn-sm btn-success" id="exportPcezBtn">
-                <i class="fas fa-file-excel"></i> Export
+            <button class="btn btn-sm btn-success" onclick="TableHelpers.exportToCSV('pcezTable', 'performa_pcez.csv')">
+                <i class="fas fa-file-excel"></i>
             </button>
         </div>
     </div>
-    <div class="card-body" style="padding: 0;">
-        <div class="table-responsive">
-            <table class="table" id="pcezTable" style="font-size: 12px;">
-                <thead style="background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%); color: white;">
-                    <tr>
-                        <th style="text-align: center;">PCEZ</th>
-                        <th style="text-align: center;">NOMEN<br><small style="opacity: 0.8;">(dari MC)</small></th>
-                        <th style="text-align: center;">NOMINAL<br><small style="opacity: 0.8;">(dari MC)</small></th>
-                        <th style="text-align: center;">BAYAR<br><small style="opacity: 0.8;">(Collection + Tunggakan)</small></th>
-                        <th style="text-align: center;">PERFORMANCE<br><small style="opacity: 0.8;">(Bayar / Nominal)</small></th>
-                        <th style="text-align: center;">SELISIH<br><small style="opacity: 0.8;">(Nominal - Bayar)</small></th>
-                        <th style="text-align: center;">%<br><small style="opacity: 0.8;">(Selisih / Nominal)</small></th>
-                    </tr>
-                </thead>
-                <tbody id="pcezTableBody">
-                    <tr>
-                        <td colspan="7" class="loading">
-                            <div class="spinner"></div>
-                            <p>Loading...</p>
-                        </td>
-                    </tr>
-                </tbody>
-                <tfoot id="pcezTableFooter" style="background: var(--bg-tertiary); font-weight: 700; font-size: 13px;">
-                </tfoot>
-            </table>
+    <div class="table-container">
+        <table class="table" id="pcezTable">
+            <thead class="bg-light">
+                <tr>
+                    <th>PCEZ</th>
+                    <th class="text-right">Nomen</th>
+                    <th class="text-right">Nominal MC</th>
+                    <th class="text-right">Bayar (Total)</th>
+                    <th class="text-center">Performance</th>
+                    <th class="text-right">Selisih</th>
+                </tr>
+            </thead>
+            <tbody id="pcezTableBody"></tbody>
+            <tfoot class="bg-tertiary font-bold" id="pcezTableFooter"></tfoot>
+        </table>
+    </div>
+</div>
+
+<div class="tabs mt-4">
+    <button class="tab-item active" data-tab="monitoring">Monitoring Harian</button>
+    <button class="tab-item" data-tab="rayon">Analisa Rayon</button>
+    <button class="tab-item" data-tab="top">Top 10 Pembayar</button>
+</div>
+
+<div id="tab-monitoring" class="tab-pane">
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title"><i class="fas fa-calendar-day"></i> Realisasi Harian</h3>
+        </div>
+        <div class="card-body">
+            <div class="chart-container mb-4" style="height: 250px;">
+                <canvas id="collectionChart"></canvas>
+            </div>
+            <div class="table-container">
+                <table class="table table-sm" id="monitoringTable" style="font-size: 11px;">
+                    <thead class="bg-primary text-white">
+                        <tr>
+                            <th rowspan="2" class="text-center align-middle border-end">TGL</th>
+                            <th colspan="3" class="text-center bg-danger">UNDUE</th>
+                            <th colspan="3" class="text-center bg-success">CURRENT</th>
+                            <th colspan="2" class="text-center bg-purple">TOTAL</th>
+                        </tr>
+                        <tr class="bg-light text-dark">
+                            <th>Cust</th><th>Rp</th><th class="border-end">Komp</th>
+                            <th>Cust</th><th>Rp</th><th class="border-end">Komp</th>
+                            <th>Rp</th><th>Komp</th>
+                        </tr>
+                    </thead>
+                    <tbody id="monitoringTableBody"></tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Chart -->
-<div class="card">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-chart-line"></i>
-            Trend Collection
-        </div>
-    </div>
-    <div class="card-body">
-        <div class="chart-container">
-            <canvas id="collectionChart"></canvas>
-        </div>
-    </div>
-</div>
-
-<!-- Tabs -->
-<div class="tabs">
-    <button class="tab active" data-tab="rayon">Per Rayon</button>
-    <button class="tab" data-tab="top">Top 10</button>
-</div>
-
-<!-- Tab: Rayon -->
-<div class="card tab-content" id="tab-rayon">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-map-marked-alt"></i>
-            Per Rayon
-        </div>
-    </div>
-    <div class="card-body" style="padding: 0;">
-        <div class="table-responsive">
+<div id="tab-rayon" class="tab-pane d-none">
+    <div class="card">
+        <div class="table-container">
             <table class="table" id="rayonTable">
                 <thead>
                     <tr>
                         <th>Rayon</th>
-                        <th>Pelanggan</th>
-                        <th>Collection</th>
-                        <th>%</th>
+                        <th class="text-right">Pelanggan</th>
+                        <th class="text-right">Collection</th>
+                        <th class="text-right">Achievement %</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <tr><td colspan="4" class="loading"><div class="spinner"></div></td></tr>
-                </tbody>
+                <tbody></tbody>
             </table>
         </div>
     </div>
 </div>
 
-<!-- Tab: Top 10 -->
-<div class="card tab-content" id="tab-top" style="display: none;">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-trophy"></i>
-            Top 10 Pembayar
-        </div>
-    </div>
-    <div class="card-body" style="padding: 0;">
-        <div class="table-responsive">
+<div id="tab-top" class="tab-pane d-none">
+    <div class="card">
+        <div class="table-container">
             <table class="table" id="topTable">
                 <thead>
                     <tr>
                         <th>Rank</th>
                         <th>Nomen</th>
-                        <th>Nama</th>
-                        <th>Total</th>
+                        <th>Nama Pelanggan</th>
+                        <th class="text-right">Total Bayar</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <tr><td colspan="4" class="loading"><div class="spinner"></div></td></tr>
-                </tbody>
+                <tbody></tbody>
             </table>
         </div>
     </div>
@@ -279,255 +179,137 @@
 <script>
 let collectionChart = null;
 
-// Tab switching
-document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', function() {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        this.classList.add('active');
-        document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
-        document.getElementById('tab-' + this.getAttribute('data-tab')).style.display = 'block';
-    });
+document.addEventListener('DOMContentLoaded', () => {
+    initTabActions();
+    loadData();
+    
+    document.getElementById('loadDataBtn').addEventListener('click', loadData);
+    document.getElementById('pcezPeriod').addEventListener('change', loadPcezData);
 });
 
-// Load data
-document.getElementById('loadDataBtn').addEventListener('click', loadData);
-window.addEventListener('DOMContentLoaded', loadData);
+function initTabActions() {
+    document.querySelectorAll('.tab-item').forEach(tab => {
+        tab.addEventListener('click', function() {
+            document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+            
+            const target = this.getAttribute('data-tab');
+            document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('d-none'));
+            document.getElementById('tab-' + target).classList.remove('d-none');
+        });
+    });
+}
 
 async function loadData() {
     const bulan = document.getElementById('bulan').value;
     const tahun = document.getElementById('tahun').value;
     
     try {
-        const kpiData = await App.api(`/api/kpi?bulan=${bulan}&tahun=${tahun}`);
-        updateKPI(kpiData);
+        const kpi = await App.api(`/api/kpi?bulan=${bulan}&tahun=${tahun}`);
+        updateKPI(kpi);
         
-        const dailyData = await App.api(`/api/collection/daily?bulan=${bulan}&tahun=${tahun}`);
-        updateMonitoringTable(dailyData);
-        updateChart(dailyData);
+        const daily = await App.api(`/api/collection/daily?bulan=${bulan}&tahun=${tahun}`);
+        renderMonitoring(daily);
+        renderChart(daily);
         
-        const rayonData = await App.api(`/api/collection/by-rayon?bulan=${bulan}&tahun=${tahun}`);
-        updateRayonTable(rayonData);
+        const rayon = await App.api(`/api/collection/by-rayon?bulan=${bulan}&tahun=${tahun}`);
+        renderRayonTable(rayon);
         
-        const topData = await App.api(`/api/collection/top-payers?bulan=${bulan}&tahun=${tahun}&limit=10`);
-        updateTopTable(topData);
+        const top = await App.api(`/api/collection/top-payers?bulan=${bulan}&tahun=${tahun}&limit=10`);
+        renderTopTable(top);
         
-        // Load PCEZ data
         loadPcezData();
-    } catch (error) {
-        console.error('Error:', error);
+    } catch (e) {
+        App.toast("Gagal memuat data penagihan", "error");
     }
 }
 
-// PCEZ data loading
+function updateKPI(data) {
+    document.getElementById('kpi-target').textContent = App.formatRupiah(data.target_mc);
+    document.getElementById('kpi-collection').textContent = App.formatRupiah(data.collection_total);
+    document.getElementById('kpi-percentage').textContent = data.collection_pct.toFixed(1) + '%';
+    document.getElementById('kpi-tunggakan').textContent = App.formatRupiah(data.collection_tunggakan);
+}
+
+function renderMonitoring(data) {
+    const tbody = document.getElementById('monitoringTableBody');
+    let kUndue = 0, kCurrent = 0, kTotal = 0;
+    
+    tbody.innerHTML = data.map(item => {
+        kUndue += item.rp_undue || 0;
+        kCurrent += item.rp_current || 0;
+        kTotal += item.total || 0;
+        
+        return `<tr>
+            <td class="text-center font-bold border-end">${item.date}</td>
+            <td class="text-right bg-danger-light">${App.formatNumber(item.cust_undue)}</td>
+            <td class="text-right bg-danger-light">${App.formatValue(item.rp_undue)}</td>
+            <td class="text-right bg-danger-light border-end font-semibold">${App.formatValue(kUndue)}</td>
+            <td class="text-right bg-success-light">${App.formatNumber(item.cust_current)}</td>
+            <td class="text-right bg-success-light">${App.formatValue(item.rp_current)}</td>
+            <td class="text-right bg-success-light border-end font-semibold">${App.formatValue(kCurrent)}</td>
+            <td class="text-right bg-purple-light">${App.formatValue(item.total)}</td>
+            <td class="text-right bg-purple-light font-bold">${App.formatValue(kTotal)}</td>
+        </tr>`;
+    }).join('');
+}
+
+function renderChart(data) {
+    const ctx = document.getElementById('collectionChart');
+    if (collectionChart) collectionChart.destroy();
+    
+    collectionChart = ChartHelpers.createLineChart(ctx, {
+        labels: data.map(d => d.date),
+        datasets: [{
+            label: 'Collection Harian',
+            data: data.map(d => d.total),
+            color: '#2563eb'
+        }]
+    });
+}
+
 async function loadPcezData() {
     const bulan = document.getElementById('bulan').value;
     const tahun = document.getElementById('tahun').value;
     const period = document.getElementById('pcezPeriod').value;
     
-    try {
-        const pcezData = await App.api(`/api/collection/pcez?bulan=${bulan}&tahun=${tahun}&period=${period}`);
-        updatePcezTable(pcezData);
-    } catch (error) {
-        console.error('PCEZ Error:', error);
-        // Show empty state if API not ready
-        const tbody = document.getElementById('pcezTableBody');
-        tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><i class="fas fa-info-circle"></i><p>API belum tersedia</p></td></tr>';
-    }
-}
-
-document.getElementById('pcezPeriod').addEventListener('change', loadPcezData);
-
-function updatePcezTable(data) {
     const tbody = document.getElementById('pcezTableBody');
-    const tfoot = document.getElementById('pcezTableFooter');
-    
-    if (!data || data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Tidak ada data</td></tr>';
-        tfoot.innerHTML = '';
-        return;
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center p-4"><div class="spinner"></div></td></tr>';
+
+    try {
+        const data = await App.api(`/api/collection/pcez?bulan=${bulan}&tahun=${tahun}&period=${period}`);
+        const cols = [
+            { field: 'pcez', class: 'font-bold' },
+            { field: 'nomen', class: 'text-right', formatter: v => App.formatNumber(v) },
+            { field: 'nominal', class: 'text-right font-semibold', formatter: v => App.formatRupiah(v) },
+            { field: 'bayar', class: 'text-right font-bold text-primary', formatter: v => App.formatRupiah(v) },
+            { field: 'performance', class: 'text-center', formatter: v => `<span class="badge ${v >= 90 ? 'badge-success' : 'badge-warning'}">${v.toFixed(1)}%</span>` },
+            { field: 'selisih', class: 'text-right', formatter: v => `<span class="${v > 0 ? 'text-danger' : 'text-success'}">${App.formatRupiah(v)}</span>` }
+        ];
+        TableHelpers.render('pcezTable', data, cols);
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Data performa PCEZ tidak tersedia</td></tr>';
     }
-    
-    let totalNomen = 0, totalNominal = 0, totalBayar = 0;
-    
-    tbody.innerHTML = data.map((item, index) => {
-        totalNomen += (item.nomen || 0);
-        totalNominal += (item.nominal || 0);
-        totalBayar += (item.bayar || 0);
-        
-        const performance = item.nominal > 0 ? (item.bayar / item.nominal * 100) : 0;
-        const selisih = item.nominal - item.bayar;
-        const pctSelisih = item.nominal > 0 ? (selisih / item.nominal * 100) : 0;
-        
-        // Color coding for performance
-        let perfColor = '#6b7280'; // gray
-        if (performance >= 90) perfColor = '#10b981'; // green
-        else if (performance >= 75) perfColor = '#f59e0b'; // yellow
-        else perfColor = '#ef4444'; // red
-        
-        return `
-            <tr style="border-bottom: 1px solid var(--border-color);">
-                <td style="text-align: center;"><span class="badge badge-info">${item.pcez || '-'}</span></td>
-                <td style="text-align: right;">${App.formatNumber(item.nomen || 0)}</td>
-                <td style="text-align: right; font-weight: 600;">${App.formatRupiah(item.nominal || 0)}</td>
-                <td style="text-align: right; font-weight: 600; color: ${perfColor};">${App.formatRupiah(item.bayar || 0)}</td>
-                <td style="text-align: center;">
-                    <span style="padding: 4px 8px; border-radius: 4px; background: ${perfColor}22; color: ${perfColor}; font-weight: 700;">
-                        ${performance.toFixed(1)}%
-                    </span>
-                </td>
-                <td style="text-align: right; color: ${selisih > 0 ? '#ef4444' : '#10b981'};">${App.formatRupiah(selisih)}</td>
-                <td style="text-align: center; font-weight: 600;">${pctSelisih.toFixed(1)}%</td>
-            </tr>
-        `;
-    }).join('');
-    
-    // Calculate totals
-    const totalPerformance = totalNominal > 0 ? (totalBayar / totalNominal * 100) : 0;
-    const totalSelisih = totalNominal - totalBayar;
-    const totalPctSelisih = totalNominal > 0 ? (totalSelisih / totalNominal * 100) : 0;
-    
-    tfoot.innerHTML = `
-        <tr>
-            <td style="text-align: center;">TOTAL</td>
-            <td style="text-align: right;">${App.formatNumber(totalNomen)}</td>
-            <td style="text-align: right;">${App.formatRupiah(totalNominal)}</td>
-            <td style="text-align: right;">${App.formatRupiah(totalBayar)}</td>
-            <td style="text-align: center; font-size: 14px;">
-                <span style="padding: 6px 12px; border-radius: 6px; background: #0891b2; color: white;">
-                    ${totalPerformance.toFixed(1)}%
-                </span>
-            </td>
-            <td style="text-align: right;">${App.formatRupiah(totalSelisih)}</td>
-            <td style="text-align: center;">${totalPctSelisih.toFixed(1)}%</td>
-        </tr>
-    `;
 }
 
-document.getElementById('exportPcezBtn').addEventListener('click', function() {
-    App.exportTableToCSV('pcezTable', 'pcez_performance.csv');
-});
-
-function updateKPI(data) {
-    document.getElementById('kpi-target').textContent = App.formatRupiah(data.target_mc || 0);
-    document.getElementById('kpi-collection').textContent = App.formatRupiah(data.collection_total || 0);
-    document.getElementById('kpi-percentage').textContent = (data.collection_pct || 0).toFixed(1) + '%';
-    document.getElementById('kpi-tunggakan').textContent = App.formatRupiah(data.collection_tunggakan || 0);
+function renderRayonTable(data) {
+    const cols = [
+        { field: 'rayon', class: 'font-bold' },
+        { field: 'pelanggan', class: 'text-right', formatter: v => App.formatNumber(v) },
+        { field: 'collection', class: 'text-right font-bold', formatter: v => App.formatRupiah(v) },
+        { field: 'percentage', class: 'text-right font-bold', formatter: v => `<span class="text-primary">${v.toFixed(1)}%</span>` }
+    ];
+    TableHelpers.render('rayonTable', data, cols, { sortable: true });
 }
 
-function updateMonitoringTable(data) {
-    const tbody = document.getElementById('monitoringTableBody');
-    const tfoot = document.getElementById('monitoringTableFooter');
-    
-    if (!data || data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="16" class="empty-state">Tidak ada data</td></tr>';
-        return;
-    }
-    
-    let komulatifUndue = 0, komulatifCurrent = 0, komulatifTotal = 0;
-    
-    tbody.innerHTML = data.map(item => {
-        komulatifUndue += (item.rp_undue || 0);
-        komulatifCurrent += (item.rp_current || 0);
-        komulatifTotal += (item.total || 0);
-        
-        const collPctUndue = ((komulatifUndue / 1000000000) * 100).toFixed(2);
-        const collPctCurrent = ((komulatifCurrent / 1000000000) * 100).toFixed(2);
-        const collPctTotal = ((komulatifTotal / 1000000000) * 100).toFixed(2);
-        
-        return `
-            <tr style="border-bottom: 1px solid var(--border-color);">
-                <td style="text-align: center; font-weight: 600; border-right: 2px solid var(--border-color);">${item.date}</td>
-                <td style="text-align: right; background: #fef2f2;">${App.formatNumber(item.cust_undue || 0)}</td>
-                <td style="text-align: right; background: #fef2f2;">${App.formatRupiah(item.rp_undue || 0)}</td>
-                <td style="text-align: right; background: #fef2f2; font-weight: 600;">${App.formatRupiah(komulatifUndue)}</td>
-                <td style="text-align: right; background: #fef2f2;">${collPctUndue}%</td>
-                <td style="text-align: right; background: #fef2f2; border-right: 2px solid var(--border-color);">-</td>
-                <td style="text-align: right; background: #f0fdf4;">${App.formatNumber(item.cust_current || 0)}</td>
-                <td style="text-align: right; background: #f0fdf4;">${App.formatRupiah(item.rp_current || 0)}</td>
-                <td style="text-align: right; background: #f0fdf4; font-weight: 600;">${App.formatRupiah(komulatifCurrent)}</td>
-                <td style="text-align: right; background: #f0fdf4;">${collPctCurrent}%</td>
-                <td style="text-align: right; background: #f0fdf4; border-right: 2px solid var(--border-color);">-</td>
-                <td style="text-align: right; background: #faf5ff;">${App.formatNumber(item.transactions || 0)}</td>
-                <td style="text-align: right; background: #faf5ff;">${App.formatRupiah(item.total || 0)}</td>
-                <td style="text-align: right; background: #faf5ff; font-weight: 600;">${App.formatRupiah(komulatifTotal)}</td>
-                <td style="text-align: right; background: #faf5ff;">${collPctTotal}%</td>
-                <td style="text-align: right; background: #faf5ff;">-</td>
-            </tr>
-        `;
-    }).join('');
-    
-    tfoot.innerHTML = `
-        <tr>
-            <td style="text-align: center;">TOTAL</td>
-            <td colspan="3" style="text-align: right;">${App.formatRupiah(komulatifUndue)}</td>
-            <td colspan="2"></td>
-            <td colspan="3" style="text-align: right;">${App.formatRupiah(komulatifCurrent)}</td>
-            <td colspan="2"></td>
-            <td colspan="3" style="text-align: right;">${App.formatRupiah(komulatifTotal)}</td>
-            <td colspan="2"></td>
-        </tr>
-    `;
+function renderTopTable(data) {
+    const cols = [
+        { field: 'rank', formatter: (v, r, i) => i + 1 },
+        { field: 'nomen', class: 'font-semibold' },
+        { field: 'nama' },
+        { field: 'total', class: 'text-right font-bold', formatter: v => App.formatRupiah(v) }
+    ];
+    TableHelpers.render('topTable', data, cols);
 }
-
-function updateChart(data) {
-    const ctx = document.getElementById('collectionChart');
-    if (collectionChart) collectionChart.destroy();
-    
-    collectionChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.map(d => d.date),
-            datasets: [{
-                label: 'Collection',
-                data: data.map(d => d.total),
-                borderColor: '#1e40af',
-                backgroundColor: 'rgba(30, 64, 175, 0.1)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: { callback: v => 'Rp ' + (v / 1000000).toFixed(0) + 'M' }
-                }
-            }
-        }
-    });
-}
-
-function updateRayonTable(data) {
-    const tbody = document.querySelector('#rayonTable tbody');
-    tbody.innerHTML = data.length === 0 ? '<tr><td colspan="4" class="empty-state">Tidak ada data</td></tr>' :
-        data.map(item => `
-            <tr>
-                <td><span class="badge badge-info">${item.rayon}</span></td>
-                <td>${App.formatNumber(item.pelanggan || 0)}</td>
-                <td>${App.formatRupiah(item.collection || 0)}</td>
-                <td><strong>${(item.percentage || 0).toFixed(1)}%</strong></td>
-            </tr>
-        `).join('');
-}
-
-function updateTopTable(data) {
-    const tbody = document.querySelector('#topTable tbody');
-    tbody.innerHTML = data.length === 0 ? '<tr><td colspan="4" class="empty-state">Tidak ada data</td></tr>' :
-        data.map((item, i) => `
-            <tr>
-                <td>${i < 3 ? `<i class="fas fa-medal" style="color: ${['#FFD700', '#C0C0C0', '#CD7F32'][i]};"></i>` : (i + 1)}</td>
-                <td><code>${item.nomen}</code></td>
-                <td>${item.nama}</td>
-                <td><strong>${App.formatRupiah(item.total || 0)}</strong></td>
-            </tr>
-        `).join('');
-}
-
-document.getElementById('exportExcelBtn').addEventListener('click', function() {
-    App.exportTableToCSV('monitoringTable', 'monitoring_collection.csv');
-});
 </script>
 {% endblock %}
