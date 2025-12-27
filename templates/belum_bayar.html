@@ -1,6 +1,6 @@
-{% extends "base_mobile.html" %}
+{% extends "base.html" %}
 
-{% block title %}Collection - SUNTER{% endblock %}
+{% block title %}Belum Bayar - SUNTER{% endblock %}
 
 {% block content %}
 <!-- Filter Bar -->
@@ -38,49 +38,64 @@
     </button>
 </div>
 
+<!-- Alert Info -->
+<div class="card" style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); border: none;">
+    <div class="card-body" style="padding: var(--space-3);">
+        <div style="display: flex; align-items: center; gap: var(--space-3);">
+            <i class="fas fa-exclamation-triangle" style="font-size: 32px; color: #dc2626;"></i>
+            <div>
+                <div style="font-weight: 700; color: #991b1b; margin-bottom: 4px;">Perhatian</div>
+                <div style="font-size: 13px; color: #7f1d1d;">
+                    <span id="alertCount">0</span> pelanggan belum membayar tagihan bulan ini
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- KPI Cards (Horizontal Scroll) -->
 <div class="kpi-container">
     <div class="kpi-card">
         <div class="kpi-label">
-            <i class="fas fa-bullseye text-primary"></i>
-            Target MC
+            <i class="fas fa-users" style="color: var(--danger);"></i>
+            Total Belum Bayar
         </div>
-        <div class="kpi-value" id="kpi-target">Rp 0</div>
-        <div class="kpi-change up">
-            <i class="fas fa-arrow-up"></i> 0%
-        </div>
-    </div>
-    
-    <div class="kpi-card">
-        <div class="kpi-label">
-            <i class="fas fa-check-circle" style="color: var(--success);"></i>
-            Collection
-        </div>
-        <div class="kpi-value" id="kpi-collection">Rp 0</div>
-        <div class="kpi-change up" id="kpi-collection-change">
-            <i class="fas fa-arrow-up"></i> 0%
+        <div class="kpi-value" id="kpi-total-unpaid">0</div>
+        <div class="kpi-change down">
+            <i class="fas fa-user-times"></i> pelanggan
         </div>
     </div>
     
     <div class="kpi-card">
         <div class="kpi-label">
-            <i class="fas fa-percent" style="color: var(--info);"></i>
-            Achievement
+            <i class="fas fa-money-bill-wave" style="color: var(--danger);"></i>
+            Nominal Belum Bayar
         </div>
-        <div class="kpi-value" id="kpi-percentage">0%</div>
-        <div class="kpi-change" id="kpi-percentage-change">
-            vs target
-        </div>
-    </div>
-    
-    <div class="kpi-card">
-        <div class="kpi-label">
-            <i class="fas fa-clock" style="color: var(--warning);"></i>
-            Tunggakan
-        </div>
-        <div class="kpi-value" id="kpi-tunggakan">Rp 0</div>
-        <div class="kpi-change down" id="kpi-tunggakan-change">
+        <div class="kpi-value" id="kpi-amount-unpaid">Rp 0</div>
+        <div class="kpi-change down" id="kpi-amount-change">
             <i class="fas fa-arrow-down"></i> 0%
+        </div>
+    </div>
+    
+    <div class="kpi-card">
+        <div class="kpi-label">
+            <i class="fas fa-percent" style="color: var(--warning);"></i>
+            % Belum Bayar
+        </div>
+        <div class="kpi-value" id="kpi-percentage-unpaid">0%</div>
+        <div class="kpi-change" id="kpi-percentage-change">
+            dari total
+        </div>
+    </div>
+    
+    <div class="kpi-card">
+        <div class="kpi-label">
+            <i class="fas fa-chart-bar" style="color: var(--info);"></i>
+            Rata-rata Tunggakan
+        </div>
+        <div class="kpi-value" id="kpi-avg-unpaid">Rp 0</div>
+        <div class="kpi-change">
+            <i class="fas fa-calculator"></i> per pelanggan
         </div>
     </div>
 </div>
@@ -89,45 +104,51 @@
 <div class="card">
     <div class="card-header">
         <div class="card-title">
-            <i class="fas fa-chart-line"></i>
-            Trend Collection
+            <i class="fas fa-chart-pie"></i>
+            Distribusi Per Rayon
         </div>
     </div>
     <div class="card-body">
         <div class="chart-container">
-            <canvas id="collectionChart"></canvas>
+            <canvas id="unpaidChart"></canvas>
         </div>
     </div>
 </div>
 
-<!-- Tabs for different views -->
+<!-- Tabs -->
 <div class="tabs">
-    <button class="tab active" data-tab="daily">Harian</button>
+    <button class="tab active" data-tab="list">Daftar</button>
     <button class="tab" data-tab="rayon">Per Rayon</button>
-    <button class="tab" data-tab="top">Top 10</button>
+    <button class="tab" data-tab="critical">Kritis</button>
 </div>
 
-<!-- Tab Content: Daily -->
-<div class="card tab-content" id="tab-daily">
+<!-- Tab Content: List -->
+<div class="card tab-content" id="tab-list">
     <div class="card-header">
         <div class="card-title">
-            <i class="fas fa-calendar-day"></i>
-            Collection Harian
+            <i class="fas fa-list"></i>
+            Daftar Belum Bayar
         </div>
-        <button class="btn btn-sm btn-outline" id="exportDailyBtn">
+        <button class="btn btn-sm btn-outline" id="exportListBtn">
             <i class="fas fa-download"></i>
         </button>
     </div>
     <div class="card-body" style="padding: 0;">
+        <!-- Search Box -->
+        <div style="padding: var(--space-3); border-bottom: 1px solid var(--border-color);">
+            <input type="text" id="searchInput" placeholder="Cari nomen atau nama..." 
+                   style="width: 100%; padding: var(--space-2) var(--space-3); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+        </div>
+        
         <div class="table-container">
-            <table class="table" id="dailyTable">
+            <table class="table" id="unpaidTable">
                 <thead>
                     <tr>
-                        <th>Tanggal</th>
-                        <th>Transaksi</th>
-                        <th>Current</th>
-                        <th>Tunggakan</th>
-                        <th>Total</th>
+                        <th>Nomen</th>
+                        <th>Nama</th>
+                        <th>Rayon</th>
+                        <th>Tagihan</th>
+                        <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -141,6 +162,12 @@
             </table>
         </div>
     </div>
+    <div class="card-footer">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-muted);">
+            <span>Total: <strong id="totalCount">0</strong> records</span>
+            <span>Halaman <strong id="currentPage">1</strong> dari <strong id="totalPages">1</strong></span>
+        </div>
+    </div>
 </div>
 
 <!-- Tab Content: By Rayon -->
@@ -148,7 +175,7 @@
     <div class="card-header">
         <div class="card-title">
             <i class="fas fa-map-marked-alt"></i>
-            Collection Per Rayon
+            Belum Bayar Per Rayon
         </div>
     </div>
     <div class="card-body" style="padding: 0;">
@@ -157,8 +184,8 @@
                 <thead>
                     <tr>
                         <th>Rayon</th>
-                        <th>Pelanggan</th>
-                        <th>Collection</th>
+                        <th>Jumlah</th>
+                        <th>Total</th>
                         <th>%</th>
                     </tr>
                 </thead>
@@ -175,23 +202,23 @@
     </div>
 </div>
 
-<!-- Tab Content: Top 10 -->
-<div class="card tab-content" id="tab-top" style="display: none;">
+<!-- Tab Content: Critical -->
+<div class="card tab-content" id="tab-critical" style="display: none;">
     <div class="card-header">
         <div class="card-title">
-            <i class="fas fa-trophy"></i>
-            Top 10 Pembayar
+            <i class="fas fa-exclamation-triangle"></i>
+            Pelanggan Kritis (>3 Bulan)
         </div>
     </div>
     <div class="card-body" style="padding: 0;">
         <div class="table-container">
-            <table class="table" id="topTable">
+            <table class="table" id="criticalTable">
                 <thead>
                     <tr>
-                        <th>Rank</th>
                         <th>Nomen</th>
                         <th>Nama</th>
-                        <th>Total</th>
+                        <th>Tunggakan</th>
+                        <th>Durasi</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -211,54 +238,42 @@
 
 {% block extra_js %}
 <script>
-let collectionChart = null;
+let unpaidChart = null;
+let allUnpaidData = [];
 
 // Tab switching
 document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', function() {
-        // Remove active class from all tabs
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        // Add active class to clicked tab
         this.classList.add('active');
         
-        // Hide all tab content
         document.querySelectorAll('.tab-content').forEach(content => {
             content.style.display = 'none';
         });
         
-        // Show selected tab content
         const tabName = this.getAttribute('data-tab');
         document.getElementById('tab-' + tabName).style.display = 'block';
     });
 });
 
-// Load data when button clicked
-document.getElementById('loadDataBtn').addEventListener('click', loadCollectionData);
+// Load data
+document.getElementById('loadDataBtn').addEventListener('click', loadUnpaidData);
+window.addEventListener('DOMContentLoaded', loadUnpaidData);
 
-// Load data on page load
-window.addEventListener('DOMContentLoaded', loadCollectionData);
-
-async function loadCollectionData() {
+async function loadUnpaidData() {
     const bulan = document.getElementById('bulan').value;
     const tahun = document.getElementById('tahun').value;
     
     try {
-        // Load KPI
-        const kpiData = await App.api(`/api/kpi?bulan=${bulan}&tahun=${tahun}`);
-        updateKPI(kpiData);
+        // Load unpaid data from API
+        const unpaidData = await App.api(`/api/belum-bayar/list?bulan=${bulan}&tahun=${tahun}`);
+        allUnpaidData = unpaidData;
         
-        // Load daily collection
-        const dailyData = await App.api(`/api/collection/daily?bulan=${bulan}&tahun=${tahun}`);
-        updateDailyTable(dailyData);
-        updateChart(dailyData);
-        
-        // Load by rayon
-        const rayonData = await App.api(`/api/collection/by-rayon?bulan=${bulan}&tahun=${tahun}`);
-        updateRayonTable(rayonData);
-        
-        // Load top payers
-        const topData = await App.api(`/api/collection/top-payers?bulan=${bulan}&tahun=${tahun}&limit=10`);
-        updateTopTable(topData);
+        updateKPI(unpaidData);
+        updateUnpaidTable(unpaidData);
+        updateChart(unpaidData);
+        updateRayonTable(unpaidData);
+        updateCriticalTable(unpaidData);
         
     } catch (error) {
         console.error('Error loading data:', error);
@@ -266,40 +281,49 @@ async function loadCollectionData() {
 }
 
 function updateKPI(data) {
-    document.getElementById('kpi-target').textContent = App.formatRupiah(data.target_mc || 0);
-    document.getElementById('kpi-collection').textContent = App.formatRupiah(data.collection_total || 0);
-    document.getElementById('kpi-percentage').textContent = (data.collection_pct || 0).toFixed(1) + '%';
-    document.getElementById('kpi-tunggakan').textContent = App.formatRupiah(data.collection_tunggakan || 0);
+    const totalUnpaid = data.length;
+    const totalAmount = data.reduce((sum, item) => sum + (item.tagihan || 0), 0);
+    const avgAmount = totalUnpaid > 0 ? totalAmount / totalUnpaid : 0;
     
-    // Update percentage indicator
-    const pctChange = document.getElementById('kpi-percentage-change');
-    if (data.collection_pct >= 100) {
-        pctChange.className = 'kpi-change up';
-        pctChange.innerHTML = '<i class="fas fa-check-circle"></i> Target tercapai';
-    } else {
-        pctChange.className = 'kpi-change down';
-        pctChange.innerHTML = '<i class="fas fa-exclamation-circle"></i> vs target';
-    }
+    document.getElementById('alertCount').textContent = App.formatNumber(totalUnpaid);
+    document.getElementById('kpi-total-unpaid').textContent = App.formatNumber(totalUnpaid);
+    document.getElementById('kpi-amount-unpaid').textContent = App.formatRupiah(totalAmount);
+    document.getElementById('kpi-avg-unpaid').textContent = App.formatRupiah(avgAmount);
+    
+    // Calculate percentage (assuming total customers from KPI)
+    // This would need actual total customer data from API
+    const percentageUnpaid = 0; // Placeholder
+    document.getElementById('kpi-percentage-unpaid').textContent = percentageUnpaid.toFixed(1) + '%';
 }
 
 function updateChart(data) {
-    const ctx = document.getElementById('collectionChart');
+    const ctx = document.getElementById('unpaidChart');
     
-    if (collectionChart) {
-        collectionChart.destroy();
+    // Group by rayon
+    const byRayon = {};
+    data.forEach(item => {
+        const rayon = item.rayon || 'Unknown';
+        byRayon[rayon] = (byRayon[rayon] || 0) + 1;
+    });
+    
+    if (unpaidChart) {
+        unpaidChart.destroy();
     }
     
-    collectionChart = new Chart(ctx, {
-        type: 'line',
+    unpaidChart = new Chart(ctx, {
+        type: 'doughnut',
         data: {
-            labels: data.map(d => d.date),
+            labels: Object.keys(byRayon),
             datasets: [{
-                label: 'Collection',
-                data: data.map(d => d.total),
-                borderColor: '#1e40af',
-                backgroundColor: 'rgba(30, 64, 175, 0.1)',
-                tension: 0.4,
-                fill: true
+                data: Object.values(byRayon),
+                backgroundColor: [
+                    '#ef4444',
+                    '#f59e0b',
+                    '#3b82f6',
+                    '#10b981',
+                    '#8b5cf6',
+                    '#ec4899'
+                ]
             }]
         },
         options: {
@@ -307,110 +331,117 @@ function updateChart(data) {
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    display: false
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return 'Total: ' + App.formatRupiah(context.parsed.y);
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return 'Rp ' + (value / 1000000).toFixed(0) + 'M';
-                        }
-                    }
+                    position: 'bottom'
                 }
             }
         }
     });
 }
 
-function updateDailyTable(data) {
-    const tbody = document.querySelector('#dailyTable tbody');
+function updateUnpaidTable(data) {
+    const tbody = document.querySelector('#unpaidTable tbody');
     
     if (data.length === 0) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="5" class="empty-state">
-                    <i class="fas fa-inbox"></i>
-                    <p>Tidak ada data</p>
+                    <i class="fas fa-check-circle" style="color: var(--success);"></i>
+                    <p>Semua pelanggan sudah membayar!</p>
                 </td>
             </tr>
         `;
+        document.getElementById('totalCount').textContent = '0';
         return;
     }
     
     tbody.innerHTML = data.map(item => `
-        <tr>
-            <td>${item.date}</td>
-            <td>${item.transactions || 0}</td>
-            <td>${App.formatRupiah(item.current || 0)}</td>
-            <td>${App.formatRupiah(item.tunggakan || 0)}</td>
-            <td><strong>${App.formatRupiah(item.total || 0)}</strong></td>
+        <tr onclick="showDetail('${item.nomen}')">
+            <td><code>${item.nomen}</code></td>
+            <td>${item.nama || '-'}</td>
+            <td><span class="badge badge-info">${item.rayon || '-'}</span></td>
+            <td><strong>${App.formatRupiah(item.tagihan || 0)}</strong></td>
+            <td><span class="badge badge-danger">Belum Bayar</span></td>
         </tr>
     `).join('');
+    
+    document.getElementById('totalCount').textContent = App.formatNumber(data.length);
+    document.getElementById('totalPages').textContent = '1';
 }
 
 function updateRayonTable(data) {
     const tbody = document.querySelector('#rayonTable tbody');
     
-    if (data.length === 0) {
+    // Group by rayon
+    const byRayon = {};
+    data.forEach(item => {
+        const rayon = item.rayon || 'Unknown';
+        if (!byRayon[rayon]) {
+            byRayon[rayon] = { count: 0, total: 0 };
+        }
+        byRayon[rayon].count++;
+        byRayon[rayon].total += (item.tagihan || 0);
+    });
+    
+    const totalAmount = Object.values(byRayon).reduce((sum, r) => sum + r.total, 0);
+    
+    tbody.innerHTML = Object.entries(byRayon).map(([rayon, stats]) => {
+        const percentage = totalAmount > 0 ? (stats.total / totalAmount * 100) : 0;
+        return `
+            <tr>
+                <td><span class="badge badge-info">${rayon}</span></td>
+                <td>${App.formatNumber(stats.count)}</td>
+                <td><strong>${App.formatRupiah(stats.total)}</strong></td>
+                <td>${percentage.toFixed(1)}%</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function updateCriticalTable(data) {
+    const tbody = document.querySelector('#criticalTable tbody');
+    
+    // Filter critical (>3 months) - this would need actual data from API
+    const critical = data.filter(item => item.durasi_bulan >= 3).slice(0, 20);
+    
+    if (critical.length === 0) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="4" class="empty-state">
-                    <i class="fas fa-inbox"></i>
-                    <p>Tidak ada data</p>
+                    <i class="fas fa-thumbs-up" style="color: var(--success);"></i>
+                    <p>Tidak ada pelanggan kritis</p>
                 </td>
             </tr>
         `;
         return;
     }
     
-    tbody.innerHTML = data.map(item => `
-        <tr>
-            <td><span class="badge badge-info">${item.rayon}</span></td>
-            <td>${App.formatNumber(item.pelanggan || 0)}</td>
-            <td>${App.formatRupiah(item.collection || 0)}</td>
-            <td><strong>${(item.percentage || 0).toFixed(1)}%</strong></td>
+    tbody.innerHTML = critical.map(item => `
+        <tr onclick="showDetail('${item.nomen}')">
+            <td><code>${item.nomen}</code></td>
+            <td>${item.nama || '-'}</td>
+            <td><strong class="text-danger">${App.formatRupiah(item.tagihan || 0)}</strong></td>
+            <td><span class="badge badge-danger">${item.durasi_bulan || 0} bulan</span></td>
         </tr>
     `).join('');
 }
 
-function updateTopTable(data) {
-    const tbody = document.querySelector('#topTable tbody');
-    
-    if (data.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="4" class="empty-state">
-                    <i class="fas fa-inbox"></i>
-                    <p>Tidak ada data</p>
-                </td>
-            </tr>
-        `;
-        return;
-    }
-    
-    tbody.innerHTML = data.map((item, index) => `
-        <tr>
-            <td>
-                ${index < 3 ? `<i class="fas fa-medal" style="color: ${['#FFD700', '#C0C0C0', '#CD7F32'][index]};"></i>` : (index + 1)}
-            </td>
-            <td><code>${item.nomen}</code></td>
-            <td>${item.nama}</td>
-            <td><strong>${App.formatRupiah(item.total || 0)}</strong></td>
-        </tr>
-    `).join('');
+// Search functionality
+document.getElementById('searchInput').addEventListener('input', function() {
+    const search = this.value.toLowerCase();
+    const filtered = allUnpaidData.filter(item => 
+        (item.nomen || '').toLowerCase().includes(search) ||
+        (item.nama || '').toLowerCase().includes(search)
+    );
+    updateUnpaidTable(filtered);
+});
+
+// Show detail (placeholder)
+function showDetail(nomen) {
+    App.toast('Detail untuk nomen: ' + nomen, 'info');
 }
 
 // Export button
-document.getElementById('exportDailyBtn').addEventListener('click', function() {
+document.getElementById('exportListBtn').addEventListener('click', function() {
     App.toast('Fitur export akan segera tersedia', 'info');
 });
 </script>
