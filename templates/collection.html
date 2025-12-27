@@ -1,4 +1,4 @@
-{% extends "base_mobile.html" %}
+{% extends "base.html" %}
 
 {% block title %}Collection - SUNTER{% endblock %}
 
@@ -38,54 +38,168 @@
     </button>
 </div>
 
-<!-- KPI Cards (Horizontal Scroll) -->
-<div class="kpi-container">
-    <div class="kpi-card">
-        <div class="kpi-label">
-            <i class="fas fa-bullseye text-primary"></i>
-            Target MC
-        </div>
-        <div class="kpi-value" id="kpi-target">Rp 0</div>
-        <div class="kpi-change up">
-            <i class="fas fa-arrow-up"></i> 0%
-        </div>
-    </div>
-    
-    <div class="kpi-card">
-        <div class="kpi-label">
-            <i class="fas fa-check-circle" style="color: var(--success);"></i>
-            Collection
-        </div>
-        <div class="kpi-value" id="kpi-collection">Rp 0</div>
-        <div class="kpi-change up" id="kpi-collection-change">
-            <i class="fas fa-arrow-up"></i> 0%
+<!-- KPI Cards -->
+<div class="row kpi-cards">
+    <div class="col-6 col-md-3">
+        <div class="kpi-card">
+            <div class="kpi-label">
+                <i class="fas fa-bullseye text-primary"></i>
+                Target MC
+            </div>
+            <div class="kpi-value" id="kpi-target">Rp 0</div>
+            <div class="kpi-change up">
+                <i class="fas fa-arrow-up"></i> 0%
+            </div>
         </div>
     </div>
     
-    <div class="kpi-card">
-        <div class="kpi-label">
-            <i class="fas fa-percent" style="color: var(--info);"></i>
-            Achievement
-        </div>
-        <div class="kpi-value" id="kpi-percentage">0%</div>
-        <div class="kpi-change" id="kpi-percentage-change">
-            vs target
+    <div class="col-6 col-md-3">
+        <div class="kpi-card">
+            <div class="kpi-label">
+                <i class="fas fa-check-circle text-success"></i>
+                Collection
+            </div>
+            <div class="kpi-value" id="kpi-collection">Rp 0</div>
+            <div class="kpi-change up" id="kpi-collection-change">
+                <i class="fas fa-arrow-up"></i> 0%
+            </div>
         </div>
     </div>
     
-    <div class="kpi-card">
-        <div class="kpi-label">
-            <i class="fas fa-clock" style="color: var(--warning);"></i>
-            Tunggakan
+    <div class="col-6 col-md-3">
+        <div class="kpi-card">
+            <div class="kpi-label">
+                <i class="fas fa-percent text-info"></i>
+                Achievement
+            </div>
+            <div class="kpi-value" id="kpi-percentage">0%</div>
+            <div class="kpi-change" id="kpi-percentage-change">
+                vs target
+            </div>
         </div>
-        <div class="kpi-value" id="kpi-tunggakan">Rp 0</div>
-        <div class="kpi-change down" id="kpi-tunggakan-change">
-            <i class="fas fa-arrow-down"></i> 0%
+    </div>
+    
+    <div class="col-6 col-md-3">
+        <div class="kpi-card">
+            <div class="kpi-label">
+                <i class="fas fa-clock text-warning"></i>
+                Tunggakan
+            </div>
+            <div class="kpi-value" id="kpi-tunggakan">Rp 0</div>
+            <div class="kpi-change down">
+                <i class="fas fa-arrow-down"></i> 0%
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Chart Section -->
+<!-- Monitoring Collection Table (Excel Style) -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">
+            <i class="fas fa-table"></i>
+            Monitoring Collection Harian
+        </div>
+        <button class="btn btn-sm btn-success" id="exportExcelBtn">
+            <i class="fas fa-file-excel"></i> Export
+        </button>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        <div class="table-responsive">
+            <table class="table" id="monitoringTable" style="font-size: 11px;">
+                <thead style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color: white;">
+                    <tr>
+                        <th rowspan="2" style="vertical-align: middle; text-align: center; border-right: 2px solid white;">TGL</th>
+                        <th colspan="5" style="text-align: center; border-right: 2px solid white; background: #ef4444;">UNDUE</th>
+                        <th colspan="5" style="text-align: center; border-right: 2px solid white; background: #10b981;">CURRENT</th>
+                        <th colspan="5" style="text-align: center; background: #8b5cf6;">TOTAL (U+C)</th>
+                    </tr>
+                    <tr style="font-size: 10px;">
+                        <!-- UNDUE columns -->
+                        <th style="background: #fee2e2; color: #991b1b;">CUST</th>
+                        <th style="background: #fee2e2; color: #991b1b;">Rp</th>
+                        <th style="background: #fee2e2; color: #991b1b;">Komulatif</th>
+                        <th style="background: #fee2e2; color: #991b1b;">COLL %</th>
+                        <th style="background: #fee2e2; color: #991b1b; border-right: 2px solid white;">Prev %</th>
+                        
+                        <!-- CURRENT columns -->
+                        <th style="background: #d1fae5; color: #065f46;">CUST</th>
+                        <th style="background: #d1fae5; color: #065f46;">Rp</th>
+                        <th style="background: #d1fae5; color: #065f46;">Komulatif</th>
+                        <th style="background: #d1fae5; color: #065f46;">COLL %</th>
+                        <th style="background: #d1fae5; color: #065f46; border-right: 2px solid white;">Prev %</th>
+                        
+                        <!-- TOTAL columns -->
+                        <th style="background: #ede9fe; color: #5b21b6;">TRX</th>
+                        <th style="background: #ede9fe; color: #5b21b6;">Rp</th>
+                        <th style="background: #ede9fe; color: #5b21b6;">Komulatif</th>
+                        <th style="background: #ede9fe; color: #5b21b6;">COLL %</th>
+                        <th style="background: #ede9fe; color: #5b21b6;">Prev %</th>
+                    </tr>
+                </thead>
+                <tbody id="monitoringTableBody">
+                    <tr>
+                        <td colspan="16" class="loading">
+                            <div class="spinner"></div>
+                            <p>Loading...</p>
+                        </td>
+                    </tr>
+                </tbody>
+                <tfoot id="monitoringTableFooter" style="background: var(--bg-tertiary); font-weight: 700;">
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- PCEZ Performance Table (NEW) -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">
+            <i class="fas fa-building"></i>
+            Monitoring Performance per PCEZ
+        </div>
+        <div style="display: flex; gap: 8px;">
+            <select class="filter-select" id="pcezPeriod" style="width: 120px; font-size: 12px;">
+                <option value="daily">Harian</option>
+                <option value="weekly">Mingguan</option>
+                <option value="monthly" selected>Bulanan</option>
+            </select>
+            <button class="btn btn-sm btn-success" id="exportPcezBtn">
+                <i class="fas fa-file-excel"></i> Export
+            </button>
+        </div>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        <div class="table-responsive">
+            <table class="table" id="pcezTable" style="font-size: 12px;">
+                <thead style="background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%); color: white;">
+                    <tr>
+                        <th style="text-align: center;">PCEZ</th>
+                        <th style="text-align: center;">NOMEN<br><small style="opacity: 0.8;">(dari MC)</small></th>
+                        <th style="text-align: center;">NOMINAL<br><small style="opacity: 0.8;">(dari MC)</small></th>
+                        <th style="text-align: center;">BAYAR<br><small style="opacity: 0.8;">(Collection + Tunggakan)</small></th>
+                        <th style="text-align: center;">PERFORMANCE<br><small style="opacity: 0.8;">(Bayar / Nominal)</small></th>
+                        <th style="text-align: center;">SELISIH<br><small style="opacity: 0.8;">(Nominal - Bayar)</small></th>
+                        <th style="text-align: center;">%<br><small style="opacity: 0.8;">(Selisih / Nominal)</small></th>
+                    </tr>
+                </thead>
+                <tbody id="pcezTableBody">
+                    <tr>
+                        <td colspan="7" class="loading">
+                            <div class="spinner"></div>
+                            <p>Loading...</p>
+                        </td>
+                    </tr>
+                </tbody>
+                <tfoot id="pcezTableFooter" style="background: var(--bg-tertiary); font-weight: 700; font-size: 13px;">
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Chart -->
 <div class="card">
     <div class="card-header">
         <div class="card-title">
@@ -100,59 +214,22 @@
     </div>
 </div>
 
-<!-- Tabs for different views -->
+<!-- Tabs -->
 <div class="tabs">
-    <button class="tab active" data-tab="daily">Harian</button>
-    <button class="tab" data-tab="rayon">Per Rayon</button>
+    <button class="tab active" data-tab="rayon">Per Rayon</button>
     <button class="tab" data-tab="top">Top 10</button>
 </div>
 
-<!-- Tab Content: Daily -->
-<div class="card tab-content" id="tab-daily">
-    <div class="card-header">
-        <div class="card-title">
-            <i class="fas fa-calendar-day"></i>
-            Collection Harian
-        </div>
-        <button class="btn btn-sm btn-outline" id="exportDailyBtn">
-            <i class="fas fa-download"></i>
-        </button>
-    </div>
-    <div class="card-body" style="padding: 0;">
-        <div class="table-container">
-            <table class="table" id="dailyTable">
-                <thead>
-                    <tr>
-                        <th>Tanggal</th>
-                        <th>Transaksi</th>
-                        <th>Current</th>
-                        <th>Tunggakan</th>
-                        <th>Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td colspan="5" class="loading">
-                            <div class="spinner"></div>
-                            <p>Loading...</p>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<!-- Tab Content: By Rayon -->
-<div class="card tab-content" id="tab-rayon" style="display: none;">
+<!-- Tab: Rayon -->
+<div class="card tab-content" id="tab-rayon">
     <div class="card-header">
         <div class="card-title">
             <i class="fas fa-map-marked-alt"></i>
-            Collection Per Rayon
+            Per Rayon
         </div>
     </div>
     <div class="card-body" style="padding: 0;">
-        <div class="table-container">
+        <div class="table-responsive">
             <table class="table" id="rayonTable">
                 <thead>
                     <tr>
@@ -163,19 +240,14 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td colspan="4" class="loading">
-                            <div class="spinner"></div>
-                            <p>Loading...</p>
-                        </td>
-                    </tr>
+                    <tr><td colspan="4" class="loading"><div class="spinner"></div></td></tr>
                 </tbody>
             </table>
         </div>
     </div>
 </div>
 
-<!-- Tab Content: Top 10 -->
+<!-- Tab: Top 10 -->
 <div class="card tab-content" id="tab-top" style="display: none;">
     <div class="card-header">
         <div class="card-title">
@@ -184,7 +256,7 @@
         </div>
     </div>
     <div class="card-body" style="padding: 0;">
-        <div class="table-container">
+        <div class="table-responsive">
             <table class="table" id="topTable">
                 <thead>
                     <tr>
@@ -195,18 +267,12 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td colspan="4" class="loading">
-                            <div class="spinner"></div>
-                            <p>Loading...</p>
-                        </td>
-                    </tr>
+                    <tr><td colspan="4" class="loading"><div class="spinner"></div></td></tr>
                 </tbody>
             </table>
         </div>
     </div>
 </div>
-
 {% endblock %}
 
 {% block extra_js %}
@@ -216,78 +282,196 @@ let collectionChart = null;
 // Tab switching
 document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', function() {
-        // Remove active class from all tabs
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        // Add active class to clicked tab
         this.classList.add('active');
-        
-        // Hide all tab content
-        document.querySelectorAll('.tab-content').forEach(content => {
-            content.style.display = 'none';
-        });
-        
-        // Show selected tab content
-        const tabName = this.getAttribute('data-tab');
-        document.getElementById('tab-' + tabName).style.display = 'block';
+        document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+        document.getElementById('tab-' + this.getAttribute('data-tab')).style.display = 'block';
     });
 });
 
-// Load data when button clicked
-document.getElementById('loadDataBtn').addEventListener('click', loadCollectionData);
+// Load data
+document.getElementById('loadDataBtn').addEventListener('click', loadData);
+window.addEventListener('DOMContentLoaded', loadData);
 
-// Load data on page load
-window.addEventListener('DOMContentLoaded', loadCollectionData);
-
-async function loadCollectionData() {
+async function loadData() {
     const bulan = document.getElementById('bulan').value;
     const tahun = document.getElementById('tahun').value;
     
     try {
-        // Load KPI
         const kpiData = await App.api(`/api/kpi?bulan=${bulan}&tahun=${tahun}`);
         updateKPI(kpiData);
         
-        // Load daily collection
         const dailyData = await App.api(`/api/collection/daily?bulan=${bulan}&tahun=${tahun}`);
-        updateDailyTable(dailyData);
+        updateMonitoringTable(dailyData);
         updateChart(dailyData);
         
-        // Load by rayon
         const rayonData = await App.api(`/api/collection/by-rayon?bulan=${bulan}&tahun=${tahun}`);
         updateRayonTable(rayonData);
         
-        // Load top payers
         const topData = await App.api(`/api/collection/top-payers?bulan=${bulan}&tahun=${tahun}&limit=10`);
         updateTopTable(topData);
         
+        // Load PCEZ data
+        loadPcezData();
     } catch (error) {
-        console.error('Error loading data:', error);
+        console.error('Error:', error);
     }
 }
+
+// PCEZ data loading
+async function loadPcezData() {
+    const bulan = document.getElementById('bulan').value;
+    const tahun = document.getElementById('tahun').value;
+    const period = document.getElementById('pcezPeriod').value;
+    
+    try {
+        const pcezData = await App.api(`/api/collection/pcez?bulan=${bulan}&tahun=${tahun}&period=${period}`);
+        updatePcezTable(pcezData);
+    } catch (error) {
+        console.error('PCEZ Error:', error);
+        // Show empty state if API not ready
+        const tbody = document.getElementById('pcezTableBody');
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><i class="fas fa-info-circle"></i><p>API belum tersedia</p></td></tr>';
+    }
+}
+
+document.getElementById('pcezPeriod').addEventListener('change', loadPcezData);
+
+function updatePcezTable(data) {
+    const tbody = document.getElementById('pcezTableBody');
+    const tfoot = document.getElementById('pcezTableFooter');
+    
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Tidak ada data</td></tr>';
+        tfoot.innerHTML = '';
+        return;
+    }
+    
+    let totalNomen = 0, totalNominal = 0, totalBayar = 0;
+    
+    tbody.innerHTML = data.map((item, index) => {
+        totalNomen += (item.nomen || 0);
+        totalNominal += (item.nominal || 0);
+        totalBayar += (item.bayar || 0);
+        
+        const performance = item.nominal > 0 ? (item.bayar / item.nominal * 100) : 0;
+        const selisih = item.nominal - item.bayar;
+        const pctSelisih = item.nominal > 0 ? (selisih / item.nominal * 100) : 0;
+        
+        // Color coding for performance
+        let perfColor = '#6b7280'; // gray
+        if (performance >= 90) perfColor = '#10b981'; // green
+        else if (performance >= 75) perfColor = '#f59e0b'; // yellow
+        else perfColor = '#ef4444'; // red
+        
+        return `
+            <tr style="border-bottom: 1px solid var(--border-color);">
+                <td style="text-align: center;"><span class="badge badge-info">${item.pcez || '-'}</span></td>
+                <td style="text-align: right;">${App.formatNumber(item.nomen || 0)}</td>
+                <td style="text-align: right; font-weight: 600;">${App.formatRupiah(item.nominal || 0)}</td>
+                <td style="text-align: right; font-weight: 600; color: ${perfColor};">${App.formatRupiah(item.bayar || 0)}</td>
+                <td style="text-align: center;">
+                    <span style="padding: 4px 8px; border-radius: 4px; background: ${perfColor}22; color: ${perfColor}; font-weight: 700;">
+                        ${performance.toFixed(1)}%
+                    </span>
+                </td>
+                <td style="text-align: right; color: ${selisih > 0 ? '#ef4444' : '#10b981'};">${App.formatRupiah(selisih)}</td>
+                <td style="text-align: center; font-weight: 600;">${pctSelisih.toFixed(1)}%</td>
+            </tr>
+        `;
+    }).join('');
+    
+    // Calculate totals
+    const totalPerformance = totalNominal > 0 ? (totalBayar / totalNominal * 100) : 0;
+    const totalSelisih = totalNominal - totalBayar;
+    const totalPctSelisih = totalNominal > 0 ? (totalSelisih / totalNominal * 100) : 0;
+    
+    tfoot.innerHTML = `
+        <tr>
+            <td style="text-align: center;">TOTAL</td>
+            <td style="text-align: right;">${App.formatNumber(totalNomen)}</td>
+            <td style="text-align: right;">${App.formatRupiah(totalNominal)}</td>
+            <td style="text-align: right;">${App.formatRupiah(totalBayar)}</td>
+            <td style="text-align: center; font-size: 14px;">
+                <span style="padding: 6px 12px; border-radius: 6px; background: #0891b2; color: white;">
+                    ${totalPerformance.toFixed(1)}%
+                </span>
+            </td>
+            <td style="text-align: right;">${App.formatRupiah(totalSelisih)}</td>
+            <td style="text-align: center;">${totalPctSelisih.toFixed(1)}%</td>
+        </tr>
+    `;
+}
+
+document.getElementById('exportPcezBtn').addEventListener('click', function() {
+    App.exportTableToCSV('pcezTable', 'pcez_performance.csv');
+});
 
 function updateKPI(data) {
     document.getElementById('kpi-target').textContent = App.formatRupiah(data.target_mc || 0);
     document.getElementById('kpi-collection').textContent = App.formatRupiah(data.collection_total || 0);
     document.getElementById('kpi-percentage').textContent = (data.collection_pct || 0).toFixed(1) + '%';
     document.getElementById('kpi-tunggakan').textContent = App.formatRupiah(data.collection_tunggakan || 0);
+}
+
+function updateMonitoringTable(data) {
+    const tbody = document.getElementById('monitoringTableBody');
+    const tfoot = document.getElementById('monitoringTableFooter');
     
-    // Update percentage indicator
-    const pctChange = document.getElementById('kpi-percentage-change');
-    if (data.collection_pct >= 100) {
-        pctChange.className = 'kpi-change up';
-        pctChange.innerHTML = '<i class="fas fa-check-circle"></i> Target tercapai';
-    } else {
-        pctChange.className = 'kpi-change down';
-        pctChange.innerHTML = '<i class="fas fa-exclamation-circle"></i> vs target';
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="16" class="empty-state">Tidak ada data</td></tr>';
+        return;
     }
+    
+    let komulatifUndue = 0, komulatifCurrent = 0, komulatifTotal = 0;
+    
+    tbody.innerHTML = data.map(item => {
+        komulatifUndue += (item.rp_undue || 0);
+        komulatifCurrent += (item.rp_current || 0);
+        komulatifTotal += (item.total || 0);
+        
+        const collPctUndue = ((komulatifUndue / 1000000000) * 100).toFixed(2);
+        const collPctCurrent = ((komulatifCurrent / 1000000000) * 100).toFixed(2);
+        const collPctTotal = ((komulatifTotal / 1000000000) * 100).toFixed(2);
+        
+        return `
+            <tr style="border-bottom: 1px solid var(--border-color);">
+                <td style="text-align: center; font-weight: 600; border-right: 2px solid var(--border-color);">${item.date}</td>
+                <td style="text-align: right; background: #fef2f2;">${App.formatNumber(item.cust_undue || 0)}</td>
+                <td style="text-align: right; background: #fef2f2;">${App.formatRupiah(item.rp_undue || 0)}</td>
+                <td style="text-align: right; background: #fef2f2; font-weight: 600;">${App.formatRupiah(komulatifUndue)}</td>
+                <td style="text-align: right; background: #fef2f2;">${collPctUndue}%</td>
+                <td style="text-align: right; background: #fef2f2; border-right: 2px solid var(--border-color);">-</td>
+                <td style="text-align: right; background: #f0fdf4;">${App.formatNumber(item.cust_current || 0)}</td>
+                <td style="text-align: right; background: #f0fdf4;">${App.formatRupiah(item.rp_current || 0)}</td>
+                <td style="text-align: right; background: #f0fdf4; font-weight: 600;">${App.formatRupiah(komulatifCurrent)}</td>
+                <td style="text-align: right; background: #f0fdf4;">${collPctCurrent}%</td>
+                <td style="text-align: right; background: #f0fdf4; border-right: 2px solid var(--border-color);">-</td>
+                <td style="text-align: right; background: #faf5ff;">${App.formatNumber(item.transactions || 0)}</td>
+                <td style="text-align: right; background: #faf5ff;">${App.formatRupiah(item.total || 0)}</td>
+                <td style="text-align: right; background: #faf5ff; font-weight: 600;">${App.formatRupiah(komulatifTotal)}</td>
+                <td style="text-align: right; background: #faf5ff;">${collPctTotal}%</td>
+                <td style="text-align: right; background: #faf5ff;">-</td>
+            </tr>
+        `;
+    }).join('');
+    
+    tfoot.innerHTML = `
+        <tr>
+            <td style="text-align: center;">TOTAL</td>
+            <td colspan="3" style="text-align: right;">${App.formatRupiah(komulatifUndue)}</td>
+            <td colspan="2"></td>
+            <td colspan="3" style="text-align: right;">${App.formatRupiah(komulatifCurrent)}</td>
+            <td colspan="2"></td>
+            <td colspan="3" style="text-align: right;">${App.formatRupiah(komulatifTotal)}</td>
+            <td colspan="2"></td>
+        </tr>
+    `;
 }
 
 function updateChart(data) {
     const ctx = document.getElementById('collectionChart');
-    
-    if (collectionChart) {
-        collectionChart.destroy();
-    }
+    if (collectionChart) collectionChart.destroy();
     
     collectionChart = new Chart(ctx, {
         type: 'line',
@@ -305,113 +489,45 @@ function updateChart(data) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return 'Total: ' + App.formatRupiah(context.parsed.y);
-                        }
-                    }
-                }
-            },
+            plugins: { legend: { display: false } },
             scales: {
                 y: {
                     beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return 'Rp ' + (value / 1000000).toFixed(0) + 'M';
-                        }
-                    }
+                    ticks: { callback: v => 'Rp ' + (v / 1000000).toFixed(0) + 'M' }
                 }
             }
         }
     });
 }
 
-function updateDailyTable(data) {
-    const tbody = document.querySelector('#dailyTable tbody');
-    
-    if (data.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="5" class="empty-state">
-                    <i class="fas fa-inbox"></i>
-                    <p>Tidak ada data</p>
-                </td>
-            </tr>
-        `;
-        return;
-    }
-    
-    tbody.innerHTML = data.map(item => `
-        <tr>
-            <td>${item.date}</td>
-            <td>${item.transactions || 0}</td>
-            <td>${App.formatRupiah(item.current || 0)}</td>
-            <td>${App.formatRupiah(item.tunggakan || 0)}</td>
-            <td><strong>${App.formatRupiah(item.total || 0)}</strong></td>
-        </tr>
-    `).join('');
-}
-
 function updateRayonTable(data) {
     const tbody = document.querySelector('#rayonTable tbody');
-    
-    if (data.length === 0) {
-        tbody.innerHTML = `
+    tbody.innerHTML = data.length === 0 ? '<tr><td colspan="4" class="empty-state">Tidak ada data</td></tr>' :
+        data.map(item => `
             <tr>
-                <td colspan="4" class="empty-state">
-                    <i class="fas fa-inbox"></i>
-                    <p>Tidak ada data</p>
-                </td>
+                <td><span class="badge badge-info">${item.rayon}</span></td>
+                <td>${App.formatNumber(item.pelanggan || 0)}</td>
+                <td>${App.formatRupiah(item.collection || 0)}</td>
+                <td><strong>${(item.percentage || 0).toFixed(1)}%</strong></td>
             </tr>
-        `;
-        return;
-    }
-    
-    tbody.innerHTML = data.map(item => `
-        <tr>
-            <td><span class="badge badge-info">${item.rayon}</span></td>
-            <td>${App.formatNumber(item.pelanggan || 0)}</td>
-            <td>${App.formatRupiah(item.collection || 0)}</td>
-            <td><strong>${(item.percentage || 0).toFixed(1)}%</strong></td>
-        </tr>
-    `).join('');
+        `).join('');
 }
 
 function updateTopTable(data) {
     const tbody = document.querySelector('#topTable tbody');
-    
-    if (data.length === 0) {
-        tbody.innerHTML = `
+    tbody.innerHTML = data.length === 0 ? '<tr><td colspan="4" class="empty-state">Tidak ada data</td></tr>' :
+        data.map((item, i) => `
             <tr>
-                <td colspan="4" class="empty-state">
-                    <i class="fas fa-inbox"></i>
-                    <p>Tidak ada data</p>
-                </td>
+                <td>${i < 3 ? `<i class="fas fa-medal" style="color: ${['#FFD700', '#C0C0C0', '#CD7F32'][i]};"></i>` : (i + 1)}</td>
+                <td><code>${item.nomen}</code></td>
+                <td>${item.nama}</td>
+                <td><strong>${App.formatRupiah(item.total || 0)}</strong></td>
             </tr>
-        `;
-        return;
-    }
-    
-    tbody.innerHTML = data.map((item, index) => `
-        <tr>
-            <td>
-                ${index < 3 ? `<i class="fas fa-medal" style="color: ${['#FFD700', '#C0C0C0', '#CD7F32'][index]};"></i>` : (index + 1)}
-            </td>
-            <td><code>${item.nomen}</code></td>
-            <td>${item.nama}</td>
-            <td><strong>${App.formatRupiah(item.total || 0)}</strong></td>
-        </tr>
-    `).join('');
+        `).join('');
 }
 
-// Export button
-document.getElementById('exportDailyBtn').addEventListener('click', function() {
-    App.toast('Fitur export akan segera tersedia', 'info');
+document.getElementById('exportExcelBtn').addEventListener('click', function() {
+    App.exportTableToCSV('monitoringTable', 'monitoring_collection.csv');
 });
 </script>
 {% endblock %}
