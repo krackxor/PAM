@@ -54,16 +54,48 @@ COLUMN_PATTERNS = {
 
 
 def detect_file_type(filename, columns):
-    """Detect file type dari filename dan columns"""
+    """Detect file type dari filename dan columns - CASE INSENSITIVE"""
     filename_lower = filename.lower()
+    columns_lower = [str(col).lower().strip() for col in columns]
+    
+    print(f"DEBUG detect_file_type:")
+    print(f"  Filename: {filename_lower}")
+    print(f"  Columns (first 10): {columns_lower[:10]}")
     
     for file_type, patterns in COLUMN_PATTERNS.items():
-        # Check filename
-        if any(kw in filename_lower for kw in patterns['keywords']):
-            # Verify columns
-            if all(any(col in columns for col in [req]) for req in patterns['required']):
+        print(f"  Checking {file_type}...")
+        
+        # Check filename keywords
+        has_keyword = any(kw in filename_lower for kw in patterns['keywords'])
+        print(f"    Keyword match: {has_keyword}")
+        
+        if has_keyword:
+            # Verify with columns (case insensitive)
+            required_lower = [req.lower() for req in patterns['required']]
+            has_columns = all(
+                any(req_lower in col_lower for col_lower in columns_lower)
+                for req_lower in required_lower
+            )
+            print(f"    Column match: {has_columns}")
+            
+            if has_columns:
+                print(f"  ✓ Matched: {file_type}")
                 return file_type
     
+    # Fallback: check only columns
+    print("  No filename match, checking columns only...")
+    for file_type, patterns in COLUMN_PATTERNS.items():
+        required_lower = [req.lower() for req in patterns['required']]
+        has_columns = all(
+            any(req_lower in col_lower for col_lower in columns_lower)
+            for req_lower in required_lower
+        )
+        
+        if has_columns:
+            print(f"  ✓ Matched by columns: {file_type}")
+            return file_type
+    
+    print("  ✗ No match found")
     return None
 
 
@@ -121,6 +153,9 @@ def find_header_row(filepath, max_rows=20):
 def register_upload_routes(app, get_db):
     """Register upload routes - UPDATED VERSION"""
     
+    # Set max file size to 10GB
+    app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024 * 1024  # 10GB
+    
     @app.route('/api/upload/analyze', methods=['POST'])
     def analyze_file():
         """
@@ -128,36 +163,69 @@ def register_upload_routes(app, get_db):
         Return detection result without processing
         """
         try:
+            print("=" * 70)
+            print("DEBUG: Analyze endpoint called")
+            
             if 'file' not in request.files:
+                print("ERROR: No file in request")
                 return jsonify({'error': 'No file uploaded'}), 400
             
             file = request.files['file']
+            print(f"DEBUG: File received: {file.filename}")
+            
             if file.filename == '':
+                print("ERROR: Empty filename")
                 return jsonify({'error': 'No file selected'}), 400
             
             # Save temp
-            filename = secure_filename(file.filename)
-            temp_path = os.path.join('/tmp', filename)
+            filename = file.filename  # Don't use secure_filename to preserve original
+            temp_path = os.path.join('/tmp', f"analyze_{datetime.now().timestamp()}_{filename}")
+            print(f"DEBUG: Saving to {temp_path}")
+            
             file.save(temp_path)
+            print(f"DEBUG: File saved, size: {os.path.getsize(temp_path)} bytes")
             
             # Find header
+            print("DEBUG: Finding header row...")
             header_row = find_header_row(temp_path)
+            print(f"DEBUG: Header row: {header_row}")
             
             # Read Excel
+            print("DEBUG: Reading Excel...")
             df = pd.read_excel(temp_path, header=header_row)
-            columns = list(df.columns)
+            columns = [str(col).strip() for col in df.columns]  # Clean columns
+            print(f"DEBUG: Columns found: {columns[:5]}...")  # Show first 5
             
             # Detect file type
+            print("DEBUG: Detecting file type...")
             file_type = detect_file_type(filename, columns)
+            print(f"DEBUG: Detected type: {file_type}")
             
             if not file_type:
-                return jsonify({'error': 'Cannot detect file type'}), 400
+                # Show available columns for debugging
+                print(f"ERROR: Cannot detect. Available columns: {columns}")
+                return jsonify({
+                    'error': 'Cannot detect file type',
+                    'debug': {
+                        'filename': filename,
+                        'columns': columns
+                    }
+                }), 400
             
             # Extract periode
+            print("DEBUG: Extracting periode...")
             month, year = extract_periode_from_data(df, file_type)
+            print(f"DEBUG: Periode: {month}/{year}")
             
             if not month or not year:
-                return jsonify({'error': 'Cannot extract periode from date column'}), 400
+                print("ERROR: Cannot extract periode")
+                return jsonify({
+                    'error': 'Cannot extract periode from date column',
+                    'debug': {
+                        'file_type': file_type,
+                        'expected_columns': COLUMN_PATTERNS[file_type]['date_column']
+                    }
+                }), 400
             
             # Find date column
             date_col = None
@@ -173,15 +241,20 @@ def register_upload_routes(app, get_db):
             if file_type in ['mc', 'mb', 'ardebt']:
                 # Expected: data bulan lalu
                 expected_month = current.month - 1
+                expected_year = current.year
                 if expected_month == 0:
                     expected_month = 12
+                    expected_year -= 1
                 
-                if month != expected_month:
-                    warning = f"⚠️ {file_type.upper()}: Expected periode {expected_month:02d}, got {month:02d}"
+                if month != expected_month or year != expected_year:
+                    warning = f"⚠️ {file_type.upper()}: Expected periode {expected_month:02d}/{expected_year}, got {month:02d}/{year}"
             
             # Clean up temp file
             if os.path.exists(temp_path):
                 os.remove(temp_path)
+            
+            print("DEBUG: Analysis complete!")
+            print("=" * 70)
             
             return jsonify({
                 'success': True,
@@ -198,8 +271,13 @@ def register_upload_routes(app, get_db):
             
         except Exception as e:
             import traceback
-            traceback.print_exc()
-            return jsonify({'error': str(e)}), 500
+            error_trace = traceback.format_exc()
+            print("ERROR in analyze:")
+            print(error_trace)
+            return jsonify({
+                'error': str(e),
+                'trace': error_trace
+            }), 500
     
     @app.route('/api/upload', methods=['POST'])
     def upload_file():
