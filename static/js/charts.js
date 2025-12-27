@@ -1,29 +1,33 @@
 /**
- * SUNTER Dashboard - Professional Chart Helpers
- * Optimized for Charts.js 4.x with Mobile-First Design
+ * SUNTER Dashboard - Chart Helpers
+ * Helper functions for Charts.js
  */
 
 const ChartHelpers = {
     /**
-     * Modern Palette - Sync with CSS Variables
+     * Default chart colors
      */
     colors: {
-        primary: '#2563eb', // Blue
-        success: '#10b981', // Green
-        warning: '#f59e0b', // Amber
-        danger: '#ef4444',  // Red
-        info: '#06b6d4',    // Cyan
+        primary: '#1e40af',
+        success: '#10b981',
+        warning: '#f59e0b',
+        danger: '#ef4444',
+        info: '#06b6d4',
         purple: '#8b5cf6',
-        gray: '#94a3b8'
+        pink: '#ec4899',
+        gray: '#6b7280'
     },
     
+    /**
+     * Color palette for multiple series
+     */
     palette: [
-        '#2563eb', '#10b981', '#f59e0b', '#ef4444', 
-        '#06b6d4', '#8b5cf6', '#ec4899', '#94a3b8'
+        '#1e40af', '#10b981', '#f59e0b', '#ef4444', 
+        '#06b6d4', '#8b5cf6', '#ec4899', '#6b7280'
     ],
     
     /**
-     * Global Default Options for Clean UI
+     * Default chart options
      */
     defaultOptions: {
         responsive: true,
@@ -33,69 +37,67 @@ const ChartHelpers = {
                 display: true,
                 position: 'bottom',
                 labels: {
-                    padding: 20,
+                    padding: 15,
                     usePointStyle: true,
-                    pointStyle: 'circle',
-                    font: { size: 11, weight: '600', family: "'Inter', sans-serif" },
-                    color: '#64748b'
+                    font: {
+                        size: 12
+                    }
                 }
             },
             tooltip: {
-                backgroundColor: '#1e293b',
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
                 padding: 12,
                 cornerRadius: 8,
-                titleFont: { size: 13, weight: 'bold' },
-                bodyFont: { size: 12 },
-                displayColors: true,
-                boxPadding: 6
-            }
-        },
-        scales: {
-            x: {
-                grid: { display: false },
-                ticks: { color: '#94a3b8', font: { size: 10 } }
-            },
-            y: {
-                border: { display: false },
-                grid: { color: '#f1f5f9' },
-                ticks: { color: '#94a3b8', font: { size: 10 } }
+                titleFont: {
+                    size: 13,
+                    weight: 'bold'
+                },
+                bodyFont: {
+                    size: 12
+                }
             }
         }
     },
     
     /**
-     * Create Modern Line Chart (with area gradient)
+     * Create line chart
      */
     createLineChart: function(ctx, data, options = {}) {
         return new Chart(ctx, {
             type: 'line',
             data: {
                 labels: data.labels,
-                datasets: data.datasets.map((dataset, i) => {
-                    const color = dataset.color || this.palette[i % this.palette.length];
-                    return {
-                        label: dataset.label,
-                        data: dataset.data,
-                        borderColor: color,
-                        backgroundColor: this.hexToRgba(color, 0.1),
-                        borderWidth: 3,
-                        tension: 0.4,
-                        fill: true,
-                        pointRadius: 0,
-                        pointHoverRadius: 6,
-                        pointHoverBackgroundColor: color,
-                        pointHoverBorderColor: '#fff',
-                        pointHoverBorderWidth: 2,
-                        ...dataset
-                    };
-                })
+                datasets: data.datasets.map((dataset, i) => ({
+                    label: dataset.label,
+                    data: dataset.data,
+                    borderColor: dataset.color || this.palette[i],
+                    backgroundColor: this.hexToRgba(dataset.color || this.palette[i], 0.1),
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: dataset.fill !== false,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    ...dataset
+                }))
             },
-            options: this.mergeOptions(this.defaultOptions, options)
+            options: this.mergeOptions(this.defaultOptions, {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return options.yFormat ? options.yFormat(value) : value;
+                            }
+                        }
+                    }
+                },
+                ...options
+            })
         });
     },
     
     /**
-     * Create Rounded Bar Chart
+     * Create bar chart
      */
     createBarChart: function(ctx, data, options = {}) {
         return new Chart(ctx, {
@@ -105,18 +107,31 @@ const ChartHelpers = {
                 datasets: data.datasets.map((dataset, i) => ({
                     label: dataset.label,
                     data: dataset.data,
-                    backgroundColor: dataset.color || this.palette[i % this.palette.length],
+                    backgroundColor: dataset.color || this.palette[i],
+                    borderColor: dataset.color || this.palette[i],
+                    borderWidth: 1,
                     borderRadius: 6,
-                    maxBarThickness: 30,
                     ...dataset
                 }))
             },
-            options: this.mergeOptions(this.defaultOptions, options)
+            options: this.mergeOptions(this.defaultOptions, {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return options.yFormat ? options.yFormat(value) : value;
+                            }
+                        }
+                    }
+                },
+                ...options
+            })
         });
     },
     
     /**
-     * Create Professional Doughnut Chart
+     * Create pie/doughnut chart
      */
     createPieChart: function(ctx, data, options = {}, type = 'doughnut') {
         return new Chart(ctx, {
@@ -126,51 +141,147 @@ const ChartHelpers = {
                 datasets: [{
                     data: data.data,
                     backgroundColor: data.colors || this.palette,
-                    borderWidth: 0,
-                    hoverOffset: 10
+                    borderWidth: 2,
+                    borderColor: '#fff'
                 }]
             },
             options: this.mergeOptions(this.defaultOptions, {
-                cutout: type === 'doughnut' ? '75%' : 0,
+                cutout: type === 'doughnut' ? '70%' : 0,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                return `${label}: ${options.valueFormat ? options.valueFormat(value) : value} (${percentage}%)`;
+                            }
+                        }
+                    }
+                },
                 ...options
             })
         });
     },
-
+    
     /**
-     * Helpers: Color & Formatters
+     * Create horizontal bar chart
+     */
+    createHorizontalBarChart: function(ctx, data, options = {}) {
+        return new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: data.labels,
+                datasets: data.datasets.map((dataset, i) => ({
+                    label: dataset.label,
+                    data: dataset.data,
+                    backgroundColor: dataset.color || this.palette[i],
+                    borderColor: dataset.color || this.palette[i],
+                    borderWidth: 1,
+                    borderRadius: 6,
+                    ...dataset
+                }))
+            },
+            options: this.mergeOptions(this.defaultOptions, {
+                indexAxis: 'y',
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return options.xFormat ? options.xFormat(value) : value;
+                            }
+                        }
+                    }
+                },
+                ...options
+            })
+        });
+    },
+    
+    /**
+     * Merge chart options
      */
     mergeOptions: function(defaults, custom) {
         return {
             ...defaults,
             ...custom,
-            plugins: { ...defaults.plugins, ...custom.plugins },
-            scales: { ...defaults.scales, ...custom.scales }
+            plugins: {
+                ...defaults.plugins,
+                ...custom.plugins
+            },
+            scales: {
+                ...defaults.scales,
+                ...custom.scales
+            }
         };
     },
-
+    
+    /**
+     * Convert hex to rgba
+     */
     hexToRgba: function(hex, alpha = 1) {
         const r = parseInt(hex.slice(1, 3), 16);
         const g = parseInt(hex.slice(3, 5), 16);
         const b = parseInt(hex.slice(5, 7), 16);
         return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     },
-
+    
     /**
-     * Smart Value Formatter (ex: 1.5M, 200K)
+     * Destroy chart if exists
      */
-    formatValue: function(value) {
-        if (value >= 1000000000) return (value / 1000000000).toFixed(1) + 'B';
-        if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
-        if (value >= 1000) return (value / 1000).toFixed(0) + 'K';
-        return value;
+    destroyChart: function(chart) {
+        if (chart && typeof chart.destroy === 'function') {
+            chart.destroy();
+        }
+    },
+    
+    /**
+     * Format currency for chart tooltip
+     */
+    formatCurrency: function(value) {
+        if (value >= 1000000) {
+            return 'Rp ' + (value / 1000000).toFixed(1) + 'M';
+        } else if (value >= 1000) {
+            return 'Rp ' + (value / 1000).toFixed(0) + 'K';
+        }
+        return 'Rp ' + value.toFixed(0);
+    },
+    
+    /**
+     * Format number for chart
+     */
+    formatNumber: function(value) {
+        if (value >= 1000000) {
+            return (value / 1000000).toFixed(1) + 'M';
+        } else if (value >= 1000) {
+            return (value / 1000).toFixed(0) + 'K';
+        }
+        return value.toString();
+    },
+    
+    /**
+     * Generate gradient background
+     */
+    createGradient: function(ctx, color1, color2) {
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, color1);
+        gradient.addColorStop(1, color2);
+        return gradient;
     }
 };
 
-// Bind globals
+// Make ChartHelpers global
 window.ChartHelpers = ChartHelpers;
+
+// Quick chart creation functions
 window.createLineChart = ChartHelpers.createLineChart.bind(ChartHelpers);
 window.createBarChart = ChartHelpers.createBarChart.bind(ChartHelpers);
 window.createPieChart = ChartHelpers.createPieChart.bind(ChartHelpers);
+window.createHorizontalBarChart = ChartHelpers.createHorizontalBarChart.bind(ChartHelpers);
 
-console.log('✅ Professional Charts.js Ready');
+console.log('✅ Charts.js loaded successfully');
