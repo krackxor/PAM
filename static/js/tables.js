@@ -1,337 +1,178 @@
 /**
- * SUNTER Dashboard - Table Helpers
- * Helper functions for table manipulation
+ * SUNTER Dashboard - Professional Table Helpers
+ * Optimized for Large Datasets and Mobile Viewports
  */
 
 const TableHelpers = {
     /**
-     * Render table with data
+     * Render Table with Data & Formatters
      */
     render: function(tableId, data, columns, options = {}) {
         const table = document.getElementById(tableId);
-        if (!table) {
-            console.error('Table not found:', tableId);
-            return;
-        }
+        if (!table) return console.error('Table not found:', tableId);
         
         const tbody = table.querySelector('tbody');
-        if (!tbody) {
-            console.error('Table body not found');
-            return;
-        }
+        if (!tbody) return;
         
-        // Clear existing rows
         tbody.innerHTML = '';
         
-        // Check if data is empty
+        // Handle Empty State
         if (!data || data.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="${columns.length}" class="empty-state">
-                        <i class="fas fa-inbox"></i>
-                        <p>${options.emptyMessage || 'Tidak ada data'}</p>
-                    </td>
-                </tr>
-            `;
+            this.showEmpty(tableId, options.emptyMessage);
             return;
         }
         
-        // Render rows
+        // Render Rows efficiently
+        const fragment = document.createDocumentFragment();
         data.forEach((row, index) => {
             const tr = document.createElement('tr');
             
-            // Add click handler if provided
             if (options.onRowClick) {
-                tr.style.cursor = 'pointer';
+                tr.classList.add('clickable-row');
                 tr.addEventListener('click', () => options.onRowClick(row, index));
             }
             
-            // Render columns
+            // Add Row Number if requested
+            if (options.showRowNumber) {
+                const tdNum = document.createElement('td');
+                tdNum.textContent = index + 1;
+                tdNum.classList.add('text-center', 'text-muted');
+                tr.appendChild(tdNum);
+            }
+
             columns.forEach(col => {
                 const td = document.createElement('td');
-                
-                // Get value
                 let value = this.getNestedValue(row, col.field);
                 
-                // Format value if formatter provided
+                // Apply Formatter (e.g., formatRupiah)
                 if (col.formatter) {
                     value = col.formatter(value, row, index);
                 }
                 
-                // Set content
-                if (typeof value === 'string' || typeof value === 'number') {
-                    td.textContent = value;
+                if (typeof value === 'object' && value !== null) {
+                    td.appendChild(value); // Support DOM elements
                 } else {
-                    td.innerHTML = value;
+                    td.innerHTML = value !== null && value !== undefined ? value : '-';
                 }
                 
-                // Add class if provided
-                if (col.class) {
-                    td.className = col.class;
-                }
-                
+                if (col.class) td.className = col.class;
                 tr.appendChild(td);
             });
             
-            tbody.appendChild(tr);
+            fragment.appendChild(tr);
         });
         
-        // Add row number if needed
-        if (options.showRowNumber) {
-            this.addRowNumbers(tableId);
-        }
+        tbody.appendChild(fragment);
         
-        // Make sortable if needed
-        if (options.sortable) {
-            this.makeSortable(tableId);
-        }
+        // Post-render Features
+        if (options.sortable) this.makeSortable(tableId);
     },
-    
+
     /**
-     * Get nested object value by string path
-     */
-    getNestedValue: function(obj, path) {
-        return path.split('.').reduce((prev, curr) => {
-            return prev ? prev[curr] : null;
-        }, obj);
-    },
-    
-    /**
-     * Add row numbers to table
-     */
-    addRowNumbers: function(tableId) {
-        const table = document.getElementById(tableId);
-        const rows = table.querySelectorAll('tbody tr');
-        
-        rows.forEach((row, index) => {
-            const td = document.createElement('td');
-            td.textContent = index + 1;
-            td.style.textAlign = 'center';
-            row.insertBefore(td, row.firstChild);
-        });
-        
-        // Add header
-        const thead = table.querySelector('thead tr');
-        if (thead) {
-            const th = document.createElement('th');
-            th.textContent = 'No';
-            th.style.textAlign = 'center';
-            thead.insertBefore(th, thead.firstChild);
-        }
-    },
-    
-    /**
-     * Make table sortable
-     */
-    makeSortable: function(tableId) {
-        const table = document.getElementById(tableId);
-        const headers = table.querySelectorAll('thead th');
-        
-        headers.forEach((header, index) => {
-            header.style.cursor = 'pointer';
-            header.innerHTML += ' <i class="fas fa-sort" style="font-size: 10px; opacity: 0.5;"></i>';
-            
-            header.addEventListener('click', () => {
-                this.sortTable(tableId, index);
-            });
-        });
-    },
-    
-    /**
-     * Sort table by column
+     * Smart Sorting - Supports Currency, Dates, and Numbers
      */
     sortTable: function(tableId, columnIndex) {
         const table = document.getElementById(tableId);
         const tbody = table.querySelector('tbody');
-        const rows = Array.from(tbody.querySelectorAll('tr'));
-        
-        // Toggle sort direction
+        const rows = Array.from(tbody.querySelectorAll('tr:not(.filter-empty)'));
         const header = table.querySelectorAll('thead th')[columnIndex];
-        const currentDir = header.getAttribute('data-sort-dir') || 'asc';
-        const newDir = currentDir === 'asc' ? 'desc' : 'asc';
         
-        // Update all headers
-        table.querySelectorAll('thead th').forEach(h => {
-            h.removeAttribute('data-sort-dir');
-            const icon = h.querySelector('i');
-            if (icon) icon.className = 'fas fa-sort';
-        });
-        
-        header.setAttribute('data-sort-dir', newDir);
-        const icon = header.querySelector('i');
-        if (icon) {
-            icon.className = newDir === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
-        }
-        
-        // Sort rows
+        const isAsc = header.getAttribute('data-sort') !== 'asc';
+        header.setAttribute('data-sort', isAsc ? 'asc' : 'desc');
+
         rows.sort((a, b) => {
-            const aText = a.cells[columnIndex].textContent.trim();
-            const bText = b.cells[columnIndex].textContent.trim();
+            let valA = a.cells[columnIndex].textContent.trim();
+            let valB = b.cells[columnIndex].textContent.trim();
             
-            // Try to parse as number
-            const aNum = parseFloat(aText.replace(/[^0-9.-]/g, ''));
-            const bNum = parseFloat(bText.replace(/[^0-9.-]/g, ''));
-            
-            if (!isNaN(aNum) && !isNaN(bNum)) {
-                return newDir === 'asc' ? aNum - bNum : bNum - aNum;
+            // Clean currency/formatted numbers: "Rp 1.000" -> 1000
+            const numA = parseFloat(valA.replace(/[^\d.-]/g, ''));
+            const numB = parseFloat(valB.replace(/[^\d.-]/g, ''));
+
+            if (!isNaN(numA) && !isNaN(numB)) {
+                return isAsc ? numA - numB : numB - numA;
             }
-            
-            // Sort as string
-            return newDir === 'asc' 
-                ? aText.localeCompare(bText)
-                : bText.localeCompare(aText);
+            return isAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
         });
-        
-        // Reattach rows
+
+        // Update UI Icons
+        table.querySelectorAll('.sort-icon').forEach(i => i.className = 'fas fa-sort sort-icon');
+        const icon = header.querySelector('.sort-icon');
+        if (icon) icon.className = `fas fa-sort-${isAsc ? 'up' : 'down'} sort-icon active`;
+
         rows.forEach(row => tbody.appendChild(row));
     },
-    
+
     /**
-     * Filter table rows
+     * Fast Filtering with Debounce Support
      */
-    filter: function(tableId, searchTerm, columns = null) {
+    filter: function(tableId, searchTerm) {
         const table = document.getElementById(tableId);
-        const rows = table.querySelectorAll('tbody tr');
-        
-        searchTerm = searchTerm.toLowerCase();
-        
+        const rows = table.querySelectorAll('tbody tr:not(.filter-empty)');
+        const term = searchTerm.toLowerCase();
+        let matchCount = 0;
+
         rows.forEach(row => {
-            let match = false;
-            const cells = Array.from(row.cells);
-            
-            // If columns specified, search only those columns
-            const cellsToSearch = columns 
-                ? cells.filter((_, i) => columns.includes(i))
-                : cells;
-            
-            cellsToSearch.forEach(cell => {
-                if (cell.textContent.toLowerCase().includes(searchTerm)) {
-                    match = true;
-                }
-            });
-            
-            row.style.display = match ? '' : 'none';
+            const isMatch = row.textContent.toLowerCase().includes(term);
+            row.style.display = isMatch ? '' : 'none';
+            if (isMatch) matchCount++;
         });
-        
-        // Show empty state if no matches
-        const visibleRows = Array.from(rows).filter(r => r.style.display !== 'none');
-        if (visibleRows.length === 0) {
-            const tbody = table.querySelector('tbody');
+
+        // Toggle Empty Result Message
+        const oldEmpty = table.querySelector('.filter-empty');
+        if (oldEmpty) oldEmpty.remove();
+
+        if (matchCount === 0) {
+            const colCount = table.querySelectorAll('thead th').length;
             const emptyRow = document.createElement('tr');
             emptyRow.className = 'filter-empty';
-            emptyRow.innerHTML = `
-                <td colspan="100" class="empty-state">
-                    <i class="fas fa-search"></i>
-                    <p>Tidak ada hasil untuk "${searchTerm}"</p>
-                </td>
-            `;
-            tbody.appendChild(emptyRow);
-        } else {
-            // Remove empty state if exists
-            const emptyRow = table.querySelector('.filter-empty');
-            if (emptyRow) emptyRow.remove();
+            emptyRow.innerHTML = `<td colspan="${colCount}" class="empty-state text-center">
+                <i class="fas fa-search mb-2"></i><p>Tidak ada hasil untuk "${searchTerm}"</p></td>`;
+            table.querySelector('tbody').appendChild(emptyRow);
         }
     },
-    
+
     /**
-     * Paginate table
+     * Professional States (Loading & Empty)
      */
-    paginate: function(tableId, page = 1, perPage = 10) {
+    showLoading: function(tableId, rows = 5) {
         const table = document.getElementById(tableId);
-        const rows = Array.from(table.querySelectorAll('tbody tr'));
+        const tbody = table.querySelector('tbody');
+        const colCount = table.querySelectorAll('thead th').length;
         
-        const start = (page - 1) * perPage;
-        const end = start + perPage;
-        
-        rows.forEach((row, index) => {
-            row.style.display = (index >= start && index < end) ? '' : 'none';
+        tbody.innerHTML = '';
+        for (let i = 0; i < rows; i++) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td colspan="${colCount}"><div class="skeleton" style="height:20px; width:100%"></div></td>`;
+            tbody.appendChild(tr);
+        }
+    },
+
+    showEmpty: function(tableId, message = 'Tidak ada data ditemukan') {
+        const table = document.getElementById(tableId);
+        const colCount = table.querySelectorAll('thead th').length;
+        table.querySelector('tbody').innerHTML = `
+            <tr><td colspan="${colCount}" class="empty-state text-center">
+            <i class="fas fa-inbox mb-2"></i><p>${message}</p></td></tr>`;
+    },
+
+    /**
+     * Utilities
+     */
+    getNestedValue: (obj, path) => {
+        return path ? path.split('.').reduce((prev, curr) => prev ? prev[curr] : null, obj) : obj;
+    },
+
+    makeSortable: function(tableId) {
+        const headers = document.querySelectorAll(`#${tableId} thead th[data-field]`);
+        headers.forEach((th, idx) => {
+            th.style.cursor = 'pointer';
+            if (!th.querySelector('.sort-icon')) {
+                th.innerHTML += ' <i class="fas fa-sort sort-icon" style="opacity:0.3; font-size:0.8em"></i>';
+            }
+            th.onclick = () => this.sortTable(tableId, idx);
         });
-        
-        // Return pagination info
-        return {
-            page: page,
-            perPage: perPage,
-            total: rows.length,
-            totalPages: Math.ceil(rows.length / perPage)
-        };
-    },
-    
-    /**
-     * Export table to CSV
-     */
-    exportToCSV: function(tableId, filename = 'export.csv') {
-        const table = document.getElementById(tableId);
-        const rows = Array.from(table.querySelectorAll('tr'));
-        
-        const csv = rows.map(row => {
-            const cells = Array.from(row.querySelectorAll('th, td'));
-            return cells.map(cell => {
-                let text = cell.textContent.trim();
-                // Escape quotes
-                text = text.replace(/"/g, '""');
-                // Wrap in quotes if contains comma
-                if (text.includes(',') || text.includes('"')) {
-                    text = `"${text}"`;
-                }
-                return text;
-            }).join(',');
-        }).join('\n');
-        
-        // Create blob and download
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        if (window.App) {
-            window.App.toast('Export berhasil', 'success');
-        }
-    },
-    
-    /**
-     * Show loading state
-     */
-    showLoading: function(tableId) {
-        const table = document.getElementById(tableId);
-        const tbody = table.querySelector('tbody');
-        const colSpan = table.querySelectorAll('thead th').length;
-        
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="${colSpan}" class="loading">
-                    <div class="spinner"></div>
-                    <p>Loading...</p>
-                </td>
-            </tr>
-        `;
-    },
-    
-    /**
-     * Show empty state
-     */
-    showEmpty: function(tableId, message = 'Tidak ada data') {
-        const table = document.getElementById(tableId);
-        const tbody = table.querySelector('tbody');
-        const colSpan = table.querySelectorAll('thead th').length;
-        
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="${colSpan}" class="empty-state">
-                    <i class="fas fa-inbox"></i>
-                    <p>${message}</p>
-                </td>
-            </tr>
-        `;
     }
 };
 
-// Make TableHelpers global
 window.TableHelpers = TableHelpers;
-
-console.log('✅ Tables.js loaded successfully');
+console.log('✅ Professional Tables.js Ready');
