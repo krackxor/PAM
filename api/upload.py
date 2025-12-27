@@ -32,25 +32,29 @@ from processors.auto_detect import auto_detect_periode, auto_detect_file_type
 
 
 def register_upload_routes(app, get_db):
-    """Register upload routes with proper periode handling"""
+    """Register upload routes - FULLY AUTOMATIC (no manual mode)"""
     
     # Max 10GB
     app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024 * 1024
     
-    @app.route('/api/upload/analyze', methods=['POST'])
-    def analyze_file():
+    @app.route('/api/upload', methods=['POST'])
+    def upload_file():
         """
-        Analyze file for auto-detection
+        Upload and process file - FULLY AUTOMATIC
         
-        Returns detection result with:
-        - file_type
-        - periode (bulan, tahun)
-        - date_column
-        - warnings (if any)
+        Auto-detect file type and periode, then process immediately
+        
+        Required params:
+        - file: File to upload
+        
+        Returns:
+        - Detection info (file_type, periode)
+        - Processing result (rows inserted, linking stats)
+        - Data summary (total records, sample data)
         """
         try:
             print("\n" + "="*70)
-            print("ANALYZE FILE REQUEST")
+            print("UPLOAD FILE REQUEST - AUTO MODE")
             print("="*70)
             
             if 'file' not in request.files:
@@ -61,177 +65,127 @@ def register_upload_routes(app, get_db):
                 return jsonify({'error': 'No file selected'}), 400
             
             filename = file.filename
+            print(f"📄 File: {filename}")
             
-            # Save temporarily
-            temp_path = os.path.join('/tmp', f"analyze_{datetime.now().timestamp()}_{filename}")
+            # Save temporarily for detection
+            temp_path = os.path.join('/tmp', f"temp_{datetime.now().timestamp()}_{filename}")
             file.save(temp_path)
             
-            print(f"📄 File: {filename}")
-            print(f"📦 Size: {os.path.getsize(temp_path):,} bytes")
+            file_size = os.path.getsize(temp_path)
+            print(f"📦 Size: {file_size:,} bytes")
             
-            # Auto-detect using corrected logic
+            # STEP 1: AUTO-DETECT file type and periode
+            print(f"\n🔍 AUTO-DETECTING file type and periode...")
             result = auto_detect_periode(temp_path, filename)
             
             if not result:
+                os.remove(temp_path)
                 return jsonify({
-                    'error': 'Cannot detect file type or periode',
-                    'debug': {'filename': filename}
+                    'error': 'Cannot detect file type or periode. Please check file format.',
+                    'filename': filename
                 }), 400
             
             file_type = result['file_type']
             bulan = result['periode_bulan']
             tahun = result['periode_tahun']
             
-            print(f"\n✅ DETECTION SUCCESSFUL")
+            print(f"\n✅ DETECTION SUCCESS")
             print(f"   Type: {file_type.upper()}")
             print(f"   Periode: {bulan:02d}/{tahun}")
             print(f"   Method: {result['method']}")
+            if result.get('date_column'):
+                print(f"   Date Column: {result['date_column']}")
             
-            # Validate MC exists (except for MC upload itself)
+            # STEP 2: Validate MC exists (except for MC upload itself)
             db = get_db()
-            warning = None
-            mc_exists = False
+            mc_warning = None
             
             if file_type != 'mc':
                 mc_exists = validate_mc_exists(db, bulan, tahun)
                 if not mc_exists:
-                    warning = f"⚠️ MC belum ada untuk periode {bulan:02d}/{tahun}. Upload MC terlebih dahulu!"
-                    print(f"\n{warning}")
-            
-            # Special warning for Ardebt
-            if file_type == 'ardebt':
-                warning = "ℹ️ Ardebt akan mengganti semua data lama (tidak ada periode spesifik)"
-            
-            # Get available periodes
-            available_periodes = get_available_periodes(db)
-            
-            # Cleanup temp file
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-            
-            print(f"{'='*70}\n")
-            
-            response_data = {
-                'success': True,
-                'detected': {
-                    'file_type': file_type,
-                    'month': bulan,
-                    'year': tahun,
-                    'periode_label': result['periode_label'],
-                    'date_column': result.get('date_column'),
-                    'method': result['method'],
-                    'mc_exists': mc_exists,
-                    'warning': warning,
-                    'available_periodes': available_periodes
-                }
-            }
-            
-            return jsonify(response_data)
-            
-        except Exception as e:
-            import traceback
-            print("\n❌ ANALYZE ERROR:")
-            print(traceback.format_exc())
-            print("="*70 + "\n")
-            
-            return jsonify({
-                'error': str(e),
-                'traceback': traceback.format_exc()
-            }), 500
-    
-    @app.route('/api/upload', methods=['POST'])
-    def upload_file():
-        """
-        Upload and process file with proper periode handling
-        
-        Required params:
-        - file: File to upload
-        - file_type: Type of file (mc, mb, collection, etc)
-        - bulan: Periode month
-        - tahun: Periode year
-        """
-        try:
-            print("\n" + "="*70)
-            print("UPLOAD FILE REQUEST")
-            print("="*70)
-            
-            if 'file' not in request.files:
-                return jsonify({'error': 'No file'}), 400
-            
-            file = request.files['file']
-            if file.filename == '':
-                return jsonify({'error': 'No file selected'}), 400
-            
-            file_type = request.form.get('file_type')
-            bulan = request.form.get('bulan', type=int)
-            tahun = request.form.get('tahun', type=int)
-            
-            if not all([file_type, bulan, tahun]):
-                return jsonify({'error': 'Missing parameters (file_type, bulan, tahun)'}), 400
-            
-            filename = file.filename
-            print(f"📄 File: {filename}")
-            print(f"📂 Type: {file_type.upper()}")
-            print(f"📅 Periode: {bulan:02d}/{tahun}")
-            
-            # Validate MC exists (except for MC upload itself)
-            db = get_db()
-            
-            if file_type != 'mc':
-                if not validate_mc_exists(db, bulan, tahun):
-                    error_msg = f'MC belum ada untuk periode {bulan:02d}/{tahun}. Upload MC terlebih dahulu!'
-                    print(f"\n❌ VALIDATION ERROR: {error_msg}")
-                    return jsonify({'error': error_msg}), 400
+                    mc_warning = f"MC belum ada untuk periode {bulan:02d}/{tahun}"
+                    print(f"\n⚠️  WARNING: {mc_warning}")
                 else:
                     print(f"✅ MC validation passed")
             
-            # Save file
+            # STEP 3: Find header row and read data
             upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
             os.makedirs(upload_folder, exist_ok=True)
             
             filepath = os.path.join(upload_folder, filename)
-            file.save(filepath)
+            
+            # Copy from temp to permanent location
+            import shutil
+            shutil.copy(temp_path, filepath)
+            os.remove(temp_path)
             
             print(f"💾 Saved to: {filepath}")
             
-            # Find header row
             header_row = find_header_row(filepath)
             print(f"📋 Header row: {header_row}")
             
-            # Read file
             df = pd.read_excel(filepath, header=header_row)
-            print(f"📊 Total rows: {len(df)}")
+            total_rows = len(df)
+            print(f"📊 Total rows: {total_rows:,}")
             
-            # Process based on type
+            # STEP 4: Process based on type
             print(f"\n🔄 Processing {file_type.upper()}...")
+            
+            process_stats = {}
             
             if file_type == 'mc':
                 rows = process_mc(df, bulan, tahun, db)
+                process_stats = get_mc_stats(db, bulan, tahun)
             elif file_type == 'mb':
                 rows = process_mb(df, bulan, tahun, db)
+                process_stats = get_mb_stats(db, bulan, tahun)
             elif file_type == 'collection':
                 rows = process_collection(df, bulan, tahun, db)
+                process_stats = get_collection_stats(db, bulan, tahun)
             elif file_type == 'mainbill':
                 rows = process_mainbill(df, bulan, tahun, db)
+                process_stats = get_mainbill_stats(db, bulan, tahun)
             elif file_type == 'sbrs':
                 rows = process_sbrs(df, bulan, tahun, db)
+                process_stats = get_sbrs_stats(db, bulan, tahun)
             elif file_type == 'ardebt':
                 rows = process_ardebt(df, bulan, tahun, db)
+                process_stats = get_ardebt_stats(db, bulan, tahun)
             else:
                 return jsonify({'error': f'Unknown file type: {file_type}'}), 400
             
             db.commit()
             
-            print(f"✅ Processed: {rows} rows")
+            print(f"\n✅ UPLOAD COMPLETE")
+            print(f"   Processed: {rows:,} rows")
             print(f"{'='*70}\n")
             
-            return jsonify({
+            # Get available periodes
+            available_periodes = get_available_periodes(db)
+            
+            # Build response
+            response_data = {
                 'success': True,
                 'filename': filename,
-                'file_type': file_type,
-                'periode': f"{bulan:02d}/{tahun}",
-                'rows_processed': rows
-            })
+                'file_size': file_size,
+                'detection': {
+                    'file_type': file_type,
+                    'periode_bulan': bulan,
+                    'periode_tahun': tahun,
+                    'periode_label': f"{bulan:02d}/{tahun}",
+                    'method': result['method'],
+                    'date_column': result.get('date_column')
+                },
+                'processing': {
+                    'total_rows_in_file': total_rows,
+                    'rows_inserted': rows,
+                    'mc_warning': mc_warning
+                },
+                'statistics': process_stats,
+                'available_periodes': available_periodes
+            }
+            
+            return jsonify(response_data)
             
         except Exception as e:
             import traceback
@@ -244,7 +198,7 @@ def register_upload_routes(app, get_db):
                 'traceback': traceback.format_exc()
             }), 500
     
-    print("✅ Upload routes registered (CORRECTED VERSION)")
+    print("✅ Upload routes registered (FULLY AUTO MODE)")
 
 
 # Helper functions
@@ -277,6 +231,304 @@ def get_available_periodes(db, direction='all'):
     
     periodes = cursor.fetchall()
     return [f"{p['periode_bulan']:02d}/{p['periode_tahun']}" for p in periodes]
+
+
+# Statistics functions - return data summary after upload
+
+def get_mc_stats(db, bulan, tahun):
+    """Get MC statistics for periode"""
+    cursor = db.cursor()
+    
+    # Total records
+    cursor.execute("""
+        SELECT COUNT(*) as total FROM master_pelanggan 
+        WHERE periode_bulan = ? AND periode_tahun = ?
+    """, (bulan, tahun))
+    total = cursor.fetchone()['total']
+    
+    # By rayon
+    cursor.execute("""
+        SELECT rayon, COUNT(*) as cnt 
+        FROM master_pelanggan 
+        WHERE periode_bulan = ? AND periode_tahun = ?
+        GROUP BY rayon
+        ORDER BY rayon
+    """, (bulan, tahun))
+    by_rayon = [{'rayon': r['rayon'], 'count': r['cnt']} for r in cursor.fetchall()]
+    
+    # Sample data (first 10)
+    cursor.execute("""
+        SELECT nomen, nama, alamat, rayon, target_mc 
+        FROM master_pelanggan 
+        WHERE periode_bulan = ? AND periode_tahun = ?
+        LIMIT 10
+    """, (bulan, tahun))
+    sample = [dict(row) for row in cursor.fetchall()]
+    
+    return {
+        'total_records': total,
+        'by_rayon': by_rayon,
+        'sample_data': sample
+    }
+
+
+def get_mb_stats(db, bulan, tahun):
+    """Get MB statistics for periode"""
+    cursor = db.cursor()
+    
+    cursor.execute("""
+        SELECT 
+            COUNT(*) as total,
+            SUM(jumlah_bayar) as total_bayar,
+            AVG(jumlah_bayar) as avg_bayar
+        FROM master_bayar 
+        WHERE periode_bulan = ? AND periode_tahun = ?
+    """, (bulan, tahun))
+    result = cursor.fetchone()
+    
+    # Sample data
+    cursor.execute("""
+        SELECT nomen, tgl_bayar, jumlah_bayar 
+        FROM master_bayar 
+        WHERE periode_bulan = ? AND periode_tahun = ?
+        ORDER BY jumlah_bayar DESC
+        LIMIT 10
+    """, (bulan, tahun))
+    sample = [dict(row) for row in cursor.fetchall()]
+    
+    return {
+        'total_records': result['total'],
+        'total_bayar': float(result['total_bayar'] or 0),
+        'avg_bayar': float(result['avg_bayar'] or 0),
+        'sample_data': sample
+    }
+
+
+def get_collection_stats(db, bulan, tahun):
+    """Get Collection statistics for periode"""
+    cursor = db.cursor()
+    
+    cursor.execute("""
+        SELECT 
+            COUNT(*) as total,
+            COUNT(DISTINCT nomen) as unique_nomen,
+            SUM(jumlah_bayar) as total_bayar,
+            SUM(volume_air) as total_volume,
+            COUNT(CASE WHEN tipe_bayar = 'current' THEN 1 END) as current_count,
+            COUNT(CASE WHEN tipe_bayar = 'tunggakan' THEN 1 END) as tunggakan_count
+        FROM collection_harian 
+        WHERE periode_bulan = ? AND periode_tahun = ?
+    """, (bulan, tahun))
+    result = cursor.fetchone()
+    
+    # Check linking to MC
+    cursor.execute("""
+        SELECT 
+            COUNT(CASE WHEN m.nomen IS NOT NULL THEN 1 END) as linked,
+            COUNT(CASE WHEN m.nomen IS NULL THEN 1 END) as unlinked
+        FROM collection_harian c
+        LEFT JOIN master_pelanggan m 
+            ON c.nomen = m.nomen 
+            AND c.periode_bulan = m.periode_bulan 
+            AND c.periode_tahun = m.periode_tahun
+        WHERE c.periode_bulan = ? AND c.periode_tahun = ?
+    """, (bulan, tahun))
+    linking = cursor.fetchone()
+    
+    # Sample data
+    cursor.execute("""
+        SELECT c.nomen, c.tgl_bayar, c.jumlah_bayar, c.volume_air, c.tipe_bayar, m.nama
+        FROM collection_harian c
+        LEFT JOIN master_pelanggan m 
+            ON c.nomen = m.nomen 
+            AND c.periode_bulan = m.periode_bulan 
+            AND c.periode_tahun = m.periode_tahun
+        WHERE c.periode_bulan = ? AND c.periode_tahun = ?
+        ORDER BY c.jumlah_bayar DESC
+        LIMIT 10
+    """, (bulan, tahun))
+    sample = [dict(row) for row in cursor.fetchall()]
+    
+    return {
+        'total_records': result['total'],
+        'unique_customers': result['unique_nomen'],
+        'total_bayar': float(result['total_bayar'] or 0),
+        'total_volume': float(result['total_volume'] or 0),
+        'current_payments': result['current_count'],
+        'tunggakan_payments': result['tunggakan_count'],
+        'linked_to_mc': linking['linked'],
+        'unlinked': linking['unlinked'],
+        'sample_data': sample
+    }
+
+
+def get_mainbill_stats(db, bulan, tahun):
+    """Get Mainbill statistics for periode"""
+    cursor = db.cursor()
+    
+    cursor.execute("""
+        SELECT 
+            COUNT(*) as total,
+            SUM(total_tagihan) as total_tagihan,
+            AVG(total_tagihan) as avg_tagihan
+        FROM mainbill 
+        WHERE periode_bulan = ? AND periode_tahun = ?
+    """, (bulan, tahun))
+    result = cursor.fetchone()
+    
+    # Check linking
+    cursor.execute("""
+        SELECT 
+            COUNT(CASE WHEN m.nomen IS NOT NULL THEN 1 END) as linked,
+            COUNT(CASE WHEN m.nomen IS NULL THEN 1 END) as unlinked
+        FROM mainbill mb
+        LEFT JOIN master_pelanggan m 
+            ON mb.nomen = m.nomen 
+            AND mb.periode_bulan = m.periode_bulan 
+            AND mb.periode_tahun = m.periode_tahun
+        WHERE mb.periode_bulan = ? AND mb.periode_tahun = ?
+    """, (bulan, tahun))
+    linking = cursor.fetchone()
+    
+    # Sample data
+    cursor.execute("""
+        SELECT mb.nomen, mb.total_tagihan, mb.tarif, m.nama
+        FROM mainbill mb
+        LEFT JOIN master_pelanggan m 
+            ON mb.nomen = m.nomen 
+            AND mb.periode_bulan = m.periode_bulan 
+            AND mb.periode_tahun = m.periode_tahun
+        WHERE mb.periode_bulan = ? AND mb.periode_tahun = ?
+        ORDER BY mb.total_tagihan DESC
+        LIMIT 10
+    """, (bulan, tahun))
+    sample = [dict(row) for row in cursor.fetchall()]
+    
+    return {
+        'total_records': result['total'],
+        'total_tagihan': float(result['total_tagihan'] or 0),
+        'avg_tagihan': float(result['avg_tagihan'] or 0),
+        'linked_to_mc': linking['linked'],
+        'unlinked': linking['unlinked'],
+        'sample_data': sample
+    }
+
+
+def get_sbrs_stats(db, bulan, tahun):
+    """Get SBRS statistics for periode"""
+    cursor = db.cursor()
+    
+    cursor.execute("""
+        SELECT 
+            COUNT(*) as total,
+            SUM(volume) as total_volume,
+            AVG(volume) as avg_volume
+        FROM sbrs_data 
+        WHERE periode_bulan = ? AND periode_tahun = ?
+    """, (bulan, tahun))
+    result = cursor.fetchone()
+    
+    # Check linking
+    cursor.execute("""
+        SELECT 
+            COUNT(CASE WHEN m.nomen IS NOT NULL THEN 1 END) as linked,
+            COUNT(CASE WHEN m.nomen IS NULL THEN 1 END) as unlinked
+        FROM sbrs_data s
+        LEFT JOIN master_pelanggan m 
+            ON s.nomen = m.nomen 
+            AND s.periode_bulan = m.periode_bulan 
+            AND s.periode_tahun = m.periode_tahun
+        WHERE s.periode_bulan = ? AND s.periode_tahun = ?
+    """, (bulan, tahun))
+    linking = cursor.fetchone()
+    
+    # Sample data
+    cursor.execute("""
+        SELECT s.nomen, s.volume, s.rayon, m.nama
+        FROM sbrs_data s
+        LEFT JOIN master_pelanggan m 
+            ON s.nomen = m.nomen 
+            AND s.periode_bulan = m.periode_bulan 
+            AND s.periode_tahun = m.periode_tahun
+        WHERE s.periode_bulan = ? AND s.periode_tahun = ?
+        ORDER BY s.volume DESC
+        LIMIT 10
+    """, (bulan, tahun))
+    sample = [dict(row) for row in cursor.fetchall()]
+    
+    return {
+        'total_records': result['total'],
+        'total_volume': float(result['total_volume'] or 0),
+        'avg_volume': float(result['avg_volume'] or 0),
+        'linked_to_mc': linking['linked'],
+        'unlinked': linking['unlinked'],
+        'sample_data': sample
+    }
+
+
+def get_ardebt_stats(db, bulan, tahun):
+    """Get Ardebt statistics for periode"""
+    cursor = db.cursor()
+    
+    cursor.execute("""
+        SELECT 
+            COUNT(*) as total,
+            SUM(saldo_tunggakan) as total_piutang,
+            AVG(saldo_tunggakan) as avg_piutang,
+            AVG(umur_piutang) as avg_umur
+        FROM ardebt 
+        WHERE periode_bulan = ? AND periode_tahun = ?
+    """, (bulan, tahun))
+    result = cursor.fetchone()
+    
+    # Check linking
+    cursor.execute("""
+        SELECT 
+            COUNT(CASE WHEN m.nomen IS NOT NULL THEN 1 END) as linked,
+            COUNT(CASE WHEN m.nomen IS NULL THEN 1 END) as unlinked
+        FROM ardebt a
+        LEFT JOIN master_pelanggan m 
+            ON a.nomen = m.nomen 
+            AND a.periode_bulan = m.periode_bulan 
+            AND a.periode_tahun = m.periode_tahun
+        WHERE a.periode_bulan = ? AND a.periode_tahun = ?
+    """, (bulan, tahun))
+    linking = cursor.fetchone()
+    
+    # Check other periodes
+    cursor.execute("""
+        SELECT periode_bulan, periode_tahun, COUNT(*) as cnt
+        FROM ardebt
+        GROUP BY periode_bulan, periode_tahun
+        ORDER BY periode_tahun DESC, periode_bulan DESC
+    """)
+    all_periodes = [{'periode': f"{r['periode_bulan']:02d}/{r['periode_tahun']}", 'count': r['cnt']} 
+                    for r in cursor.fetchall()]
+    
+    # Sample data
+    cursor.execute("""
+        SELECT a.nomen, a.saldo_tunggakan, a.umur_piutang, m.nama
+        FROM ardebt a
+        LEFT JOIN master_pelanggan m 
+            ON a.nomen = m.nomen 
+            AND a.periode_bulan = m.periode_bulan 
+            AND a.periode_tahun = m.periode_tahun
+        WHERE a.periode_bulan = ? AND a.periode_tahun = ?
+        ORDER BY a.saldo_tunggakan DESC
+        LIMIT 10
+    """, (bulan, tahun))
+    sample = [dict(row) for row in cursor.fetchall()]
+    
+    return {
+        'total_records': result['total'],
+        'total_piutang': float(result['total_piutang'] or 0),
+        'avg_piutang': float(result['avg_piutang'] or 0),
+        'avg_umur': float(result['avg_umur'] or 0),
+        'linked_to_mc': linking['linked'],
+        'unlinked': linking['unlinked'],
+        'all_periodes': all_periodes,
+        'sample_data': sample
+    }
 
 
 def find_header_row(filepath, max_rows=20):
