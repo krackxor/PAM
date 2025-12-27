@@ -605,9 +605,7 @@ def process_mb(df, month, year, db):
 def process_collection(df, month, year, db):
     """
     Process Collection (Bayar Harian) file
-    FIXED: Better handling of jumlah_bayar column detection and conversion
-    FIXED: Reset index to avoid duplicate index errors
-    FIXED: Simpler tipe_bayar classification
+    SPECIAL: jumlah_bayar diambil dari MC.target_mc (bukan dari file Collection)
     """
     cursor = db.cursor()
     
@@ -630,22 +628,24 @@ def process_collection(df, month, year, db):
     # Clean date
     df['tgl_bayar'] = df['tgl_bayar'].apply(clean_date)
     
-    # Clean amount - FIXED: Better column existence check
-    if 'jumlah_bayar' not in df.columns:
-        df['jumlah_bayar'] = 0
-    else:
-        # If multiple columns were mapped to jumlah_bayar, take first one
-        if isinstance(df['jumlah_bayar'], pd.DataFrame):
-            print(f"⚠️  Multiple columns mapped to 'jumlah_bayar', taking first column")
-            df['jumlah_bayar'] = df['jumlah_bayar'].iloc[:, 0]
-        
-        # Check if column is valid Series before conversion
-        if isinstance(df['jumlah_bayar'], pd.Series):
-            df['jumlah_bayar'] = pd.to_numeric(df['jumlah_bayar'], errors='coerce').fillna(0)
-        else:
-            df['jumlah_bayar'] = 0
+    # SPECIAL LOGIC: Ambil jumlah_bayar dari MC.target_mc
+    # Jangan pakai AMT_COLLECT dari file Collection
+    print(f"🔄 Fetching jumlah_bayar from MC.target_mc for {len(df):,} records...")
     
-    # Clean volume
+    # Create temporary lookup dict from MC
+    cursor.execute("""
+        SELECT nomen, target_mc
+        FROM master_pelanggan
+        WHERE periode_bulan = ? AND periode_tahun = ?
+    """, (month, year))
+    
+    mc_lookup = {row['nomen']: row['target_mc'] for row in cursor.fetchall()}
+    print(f"✅ MC lookup created: {len(mc_lookup):,} nomens")
+    
+    # Map jumlah_bayar from MC
+    df['jumlah_bayar'] = df['nomen'].map(mc_lookup).fillna(0)
+    
+    # Clean volume from file (VOL_COLLECT)
     if 'volume_air' not in df.columns:
         df['volume_air'] = 0
     else:
@@ -698,6 +698,13 @@ def process_collection(df, month, year, db):
     else:
         print(f"⚠️  WARNING: No MC data for {month:02d}/{year}")
     
+    # Count how many matched
+    matched = (df['jumlah_bayar'] > 0).sum()
+    unmatched = (df['jumlah_bayar'] == 0).sum()
+    print(f"🔗 Matched to MC: {matched:,}")
+    if unmatched > 0:
+        print(f"⚠️  Unmatched (no MC): {unmatched:,}")
+    
     # Delete existing collection for this periode
     cursor.execute("""
         DELETE FROM collection_harian
@@ -713,12 +720,7 @@ def process_collection(df, month, year, db):
     
     for idx, row in df.iterrows():
         # Check if nomen exists in MC
-        cursor.execute("""
-            SELECT 1 FROM master_pelanggan
-            WHERE nomen = ? AND periode_bulan = ? AND periode_tahun = ?
-        """, (row['nomen'], month, year))
-        
-        if cursor.fetchone():
+        if row['nomen'] in mc_lookup:
             linked += 1
         else:
             unlinked += 1
