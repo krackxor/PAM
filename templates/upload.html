@@ -54,7 +54,7 @@
                     </button>
                 </div>
                 <div style="font-size: 11px; color: var(--text-muted); margin-top: var(--space-1);">
-                    <i class="fas fa-info-circle"></i> Max 10MB, format .xlsx atau .xls
+                    <i class="fas fa-info-circle"></i> Max 10GB, format .xlsx atau .xls
                 </div>
             </div>
             
@@ -260,7 +260,15 @@ document.getElementById('autoDetect').addEventListener('change', function() {
 document.getElementById('fileInput').addEventListener('change', async function(e) {
     const file = e.target.files[0];
     if (file) {
-        document.getElementById('fileName').textContent = file.name;
+        // Validate file size (10GB)
+        const maxSize = 10 * 1024 * 1024 * 1024; // 10GB in bytes
+        if (file.size > maxSize) {
+            App.toast('File terlalu besar! Max 10GB', 'error');
+            this.value = '';
+            return;
+        }
+        
+        document.getElementById('fileName').textContent = file.name + ' (' + formatFileSize(file.size) + ')';
         
         // Auto detect if enabled
         if (autoDetectEnabled) {
@@ -269,8 +277,17 @@ document.getElementById('fileInput').addEventListener('change', async function(e
     }
 });
 
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+}
+
 async function analyzeFile(file) {
     try {
+        console.log('Analyzing file:', file.name, 'Size:', file.size);
+        
         // Show loading in detection result
         const detectionResult = document.getElementById('detectionResult');
         detectionResult.style.display = 'block';
@@ -282,15 +299,24 @@ async function analyzeFile(file) {
         const formData = new FormData();
         formData.append('file', file);
         
+        console.log('Sending to /api/upload/analyze...');
+        
         // Call detection API
         const response = await fetch('/api/upload/analyze', {
             method: 'POST',
             body: formData
         });
         
+        console.log('Response status:', response.status);
+        
         const result = await response.json();
+        console.log('Response data:', result);
         
         if (!response.ok) {
+            // Show debug info if available
+            if (result.debug) {
+                console.error('Debug info:', result.debug);
+            }
             throw new Error(result.error || 'Analysis failed');
         }
         
@@ -314,13 +340,18 @@ async function analyzeFile(file) {
         // Show warning if any
         if (detectedData.warning) {
             App.toast(detectedData.warning, 'warning', 5000);
+        } else {
+            App.toast('✓ File detected successfully!', 'success');
         }
         
     } catch (error) {
         console.error('Analysis error:', error);
-        App.toast('Auto-detect gagal. Gunakan manual mode.', 'error');
+        App.toast('Auto-detect gagal: ' + error.message + '. Gunakan manual mode.', 'error', 5000);
+        
+        // Switch to manual mode
         document.getElementById('autoDetect').checked = false;
         document.getElementById('autoDetect').dispatchEvent(new Event('change'));
+        document.getElementById('detectionResult').style.display = 'none';
     }
 }
 
